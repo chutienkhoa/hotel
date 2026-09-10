@@ -5,7 +5,7 @@
       "type": "java",
       "name": "Debug HotelApplication",
       "request": "launch",
-      "mainClass": "com.hotel.HotelApplication",
+      "mainClass": "com.example.hotel.HotelApplication",
       "projectName": "hotel-management",
       "preLaunchTask": "Maven: Build"
     }
