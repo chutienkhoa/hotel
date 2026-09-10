@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hotel}
-    username: ${DATABASE_USERNAME:hotel}
-    password: ${DATABASE_PASSWORD:hotel}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -10,7 +10,7 @@ spring:
   flyway:
     enabled: true
 security:
-  jwt-secret: ${JWT_SECRET:change-this-development-secret-to-a-32-byte-minimum}
+  jwt-secret: ${JWT_SECRET}
   jwt-expiration: PT8H
-  bootstrap-admin-username: ${BOOTSTRAP_ADMIN_USERNAME:}
-  bootstrap-admin-password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+  bootstrap-admin-username: ${BOOTSTRAP_ADMIN_USERNAME}
+  bootstrap-admin-password: ${BOOTSTRAP_ADMIN_PASSWORD}

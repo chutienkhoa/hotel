@@ -7,6 +7,7 @@
       "request": "launch",
       "mainClass": "com.example.hotel.HotelApplication",
       "projectName": "hotel-management",
+      "envFile": "${workspaceFolder}/.env",
       "preLaunchTask": "Maven: Build"
     }
   ]

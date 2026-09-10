@@ -5,4 +5,4 @@ import java.util.UUID;
 
 /** Dữ liệu phản hồi rút gọn của reservation. */
 public record Response(
-    UUID id, UUID reservationNumber, String status, BigDecimal totalAmount, String currency) {}
+        UUID id, UUID reservationNumber, String status, BigDecimal totalAmount, String currency) {}

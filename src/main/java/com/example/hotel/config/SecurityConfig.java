@@ -1,32 +1,104 @@
 package com.example.hotel.config;
 
 import com.example.hotel.security.JwtFilter;
-import org.springframework.context.annotation.*;
+import com.example.hotel.security.SessionUserDetailsService;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.*;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-/** Cấu hình Spring Security và chuỗi lọc JWT không trạng thái. */
+/**
+ * Configures separate stateless API security and session-backed Thymeleaf MVC security.
+ */
 @Configuration
 @EnableMethodSecurity
 public class SecurityConfig {
-  /**
-   * Tạo security filter chain cho API.
-   *
-   * @param http builder cấu hình HTTP security
-   * @param filter bộ lọc JWT
-   * @return filter chain đã cấu hình
-   * @throws Exception nếu Spring Security không thể tạo filter chain
-   */
-  @Bean
-  SecurityFilterChain chain(HttpSecurity http, JwtFilter filter) throws Exception {
-    return http.csrf(c -> c.disable())
-        .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        .authorizeHttpRequests(
-            a -> a.requestMatchers("/api/auth/login").permitAll().anyRequest().authenticated())
-        .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class)
-        .build();
-  }
+
+    /**
+     * Creates the shared BCrypt password encoder used by API, bootstrap, and session login flows.
+     *
+     * @return the BCrypt password encoder
+     */
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Creates the authentication provider used only by browser form login.
+     *
+     * @param sessionUserDetailsService service that loads session users and authorities
+     * @param passwordEncoder encoder used to verify submitted passwords
+     * @return the configured DAO authentication provider
+     */
+    @Bean
+    DaoAuthenticationProvider sessionAuthenticationProvider(
+            SessionUserDetailsService sessionUserDetailsService, PasswordEncoder passwordEncoder) {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(sessionUserDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return provider;
+    }
+
+    /**
+     * Configures the existing JWT-protected API as a stateless security chain.
+     *
+     * @param http builder used to configure HTTP security
+     * @param filter filter that establishes authentication from a JWT
+     * @return the configured API security filter chain
+     * @throws Exception if Spring Security cannot build the filter chain
+     */
+    @Bean
+    @Order(1)
+    SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, JwtFilter filter) throws Exception {
+        return http
+                .securityMatcher("/api/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptionHandling -> exceptionHandling
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .authorizeHttpRequests(authorization -> authorization
+                        .requestMatchers("/api/auth/login")
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
+                .addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class)
+                .build();
+    }
+
+    /**
+     * Configures browser routes to authenticate through a Spring Security session and form login.
+     *
+     * @param http builder used to configure HTTP security
+     * @param sessionAuthenticationProvider provider used for browser form login
+     * @return the configured MVC security filter chain
+     * @throws Exception if Spring Security cannot build the filter chain
+     */
+    @Bean
+    @Order(2)
+    SecurityFilterChain mvcSecurityFilterChain(
+            HttpSecurity http, DaoAuthenticationProvider sessionAuthenticationProvider)
+            throws Exception {
+        return http
+                .securityMatcher("/**")
+                .authenticationProvider(sessionAuthenticationProvider)
+                .authorizeHttpRequests(authorization -> authorization
+                        .requestMatchers("/login", "/css/**", "/js/**", "/images/**")
+                        .permitAll()
+                        .anyRequest()
+                        .authenticated())
+                .formLogin(formLogin -> formLogin
+                        .loginPage("/login")
+                        .defaultSuccessUrl("/reservations", true)
+                        .permitAll())
+                .build();
+    }
 }

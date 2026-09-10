@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Guest detail')}"></head>
+<body>
+<div class="app-shell">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/guests}">Back to guests</a>
+        <div class="page-heading">
+            <div>
+                <h1 th:text="${guest.guestCode}">G000001</h1>
+                <p>Guest profile</p>
+            </div>
+            <a class="button button-primary" th:href="@{/guests/{id}/edit(id=${guest.id})}">Edit Guest</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+
+        <dl class="detail-list">
+            <dt>First name</dt>
+            <dd th:text="${guest.firstName}">First name</dd>
+            <dt>Last name</dt>
+            <dd th:text="${guest.lastName}">Last name</dd>
+            <dt>Email</dt>
+            <dd th:text="${guest.email}">email@example.com</dd>
+            <dt>Phone</dt>
+            <dd th:text="${guest.phone}">Phone number</dd>
+            <dt>Nationality</dt>
+            <dd th:text="${guest.nationality}">Nationality</dd>
+            <dt>Date of birth</dt>
+            <dd th:text="${guest.dateOfBirth}">Date of birth</dd>
+            <dt>Address</dt>
+            <dd th:text="${guest.address}">Address</dd>
+        </dl>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

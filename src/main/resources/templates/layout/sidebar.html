@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<body>
+<nav aria-label="Main navigation" class="sidebar" th:fragment="sidebar">
+    <a th:href="@{/reservations}">Reservations</a>
+    <a th:if="${canManageBooking}" th:href="@{/reservations/new}">Create Reservation</a>
+    <a th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
+</nav>
+</body>
+</html>

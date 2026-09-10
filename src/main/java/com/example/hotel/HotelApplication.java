@@ -6,8 +6,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /** Khởi tạo ứng dụng quản lý khách sạn bằng Spring Boot. */
 @SpringBootApplication
 public class HotelApplication {
-  /** Khởi chạy ngữ cảnh Spring Boot của ứng dụng. */
-  public static void main(String[] args) {
-    SpringApplication.run(HotelApplication.class, args);
-  }
+    /**
+     * Starts the Spring Boot application context.
+     *
+     * @param args command-line arguments supplied when starting the application
+     */
+    public static void main(String[] args) {
+        SpringApplication.run(HotelApplication.class, args);
+    }
 }

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Guests')}"></head>
+<body>
+<div class="app-shell">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-heading">
+            <div>
+                <h1>Guests</h1>
+                <p>Manage guest profiles used by reservations.</p>
+            </div>
+            <a class="button button-primary" th:href="@{/guests/new}">Create Guest</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+
+        <p th:if="${#lists.isEmpty(guests)}">No guests found.</p>
+
+        <table th:unless="${#lists.isEmpty(guests)}">
+            <thead>
+            <tr>
+                <th scope="col">Guest Code</th>
+                <th scope="col">First Name</th>
+                <th scope="col">Last Name</th>
+                <th scope="col">Email</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="guest : ${guests}">
+                <td>
+                    <a th:href="@{/guests/{id}(id=${guest.id})}" th:text="${guest.guestCode}">G000001</a>
+                </td>
+                <td th:text="${guest.firstName}">First name</td>
+                <td th:text="${guest.lastName}">Last name</td>
+                <td th:text="${guest.email}">email@example.com</td>
+            </tr>
+            </tbody>
+        </table>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

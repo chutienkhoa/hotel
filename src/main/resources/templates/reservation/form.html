@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Create reservation')}"></head>
+<body>
+<div class="app-shell">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations}">Back to reservations</a>
+        <h1>Create reservation</h1>
+        <p>Required fields are validated by the server after submission.</p>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <form method="post" th:action="@{/reservations}" th:object="${reservationForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <div class="form-field">
+                <label for="guestId">Guest</label>
+                <select id="guestId" required th:field="*{guestId}">
+                    <option value="">Select a guest</option>
+                    <option th:each="guest : ${guests}"
+                            th:text="${guest.guestCode}"
+                            th:value="${guest.id}">
+                        Guest code
+                    </option>
+                </select>
+                <p class="field-error" th:errors="*{guestId}"></p>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="checkInDate">Check-in date</label>
+                    <input id="checkInDate" required th:field="*{checkInDate}" type="date" />
+                    <p class="field-error" th:errors="*{checkInDate}"></p>
+                </div>
+
+                <div class="form-field">
+                    <label for="checkOutDate">Check-out date</label>
+                    <input id="checkOutDate" required th:field="*{checkOutDate}" type="date" />
+                    <p class="field-error" th:errors="*{checkOutDate}"></p>
+                </div>
+
+                <div class="form-field">
+                    <label for="currency">Currency</label>
+                    <input id="currency" maxlength="3" pattern="[A-Z]{3}" required th:field="*{currency}" type="text" />
+                    <p class="field-error" th:errors="*{currency}"></p>
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label for="notes">Notes</label>
+                <textarea id="notes" maxlength="5000" rows="4" th:field="*{notes}"></textarea>
+                <p class="field-error" th:errors="*{notes}"></p>
+            </div>
+
+            <fieldset>
+                <legend>Rooms</legend>
+                <p class="field-error" th:errors="*{rooms}"></p>
+                <div id="room-rows">
+                    <div class="room-row" th:each="roomRequest, roomRowStat : *{rooms}">
+                        <div class="form-field">
+                            <label th:for="${'room-' + roomRowStat.index}">Room</label>
+                            <select required th:field="*{rooms[__${roomRowStat.index}__].roomId}"
+                                    th:id="${'room-' + roomRowStat.index}">
+                                <option value="">Select a room</option>
+                                <option th:each="room : ${rooms}"
+                                        th:disabled="${!room.active}"
+                                        th:text="${room.roomNumber + ' — ' + room.status}"
+                                        th:value="${room.id}">
+                                    Room
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label th:for="${'nightly-rate-' + roomRowStat.index}">Nightly rate</label>
+                            <input min="0.01" required step="0.000001"
+                                   th:field="*{rooms[__${roomRowStat.index}__].nightlyRate}"
+                                   th:id="${'nightly-rate-' + roomRowStat.index}"
+                                   type="number" />
+                        </div>
+                        <button aria-label="Remove room" class="button button-link remove-room" type="button">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                <button class="button button-secondary" id="add-room" type="button">Add room</button>
+            </fieldset>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations}">Cancel</a>
+                <button class="button button-primary" type="submit">Create Reservation</button>
+            </div>
+        </form>
+
+        <template id="room-row-template">
+            <div class="room-row">
+                <div class="form-field">
+                    <label>Room
+                        <select data-room-id required>
+                            <option value="">Select a room</option>
+                            <option th:each="room : ${rooms}"
+                                    th:disabled="${!room.active}"
+                                    th:text="${room.roomNumber + ' — ' + room.status}"
+                                    th:value="${room.id}">
+                                Room
+                            </option>
+                        </select>
+                    </label>
+                </div>
+                <div class="form-field">
+                    <label>Nightly rate
+                        <input data-nightly-rate min="0.01" required step="0.000001" type="number" />
+                    </label>
+                </div>
+                <button aria-label="Remove room" class="button button-link remove-room" type="button">
+                    Remove
+                </button>
+            </div>
+        </template>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+<script defer th:src="@{/js/reservation/form.js}"></script>
+</body>
+</html>

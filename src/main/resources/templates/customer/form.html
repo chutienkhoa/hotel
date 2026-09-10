@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${guest == null} ? 'Create guest' : 'Edit guest')}"></head>
+<body>
+<div class="app-shell">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/guests}">Back to guests</a>
+        <h1 th:text="${guest == null} ? 'Create guest' : 'Edit guest'">Guest form</h1>
+        <p th:if="${guest == null}">The guest code is generated automatically after creation.</p>
+        <p th:unless="${guest == null}">
+            Guest code: <span th:text="${guest.guestCode}">G000001</span>
+        </p>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form method="post"
+              th:action="${guest == null} ? @{/guests} : @{/guests/{id}(id=${guest.id})}"
+              th:object="${guestForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="firstName">First name</label>
+                    <input id="firstName" maxlength="100" th:field="*{firstName}" type="text" />
+                    <p class="field-error" th:errors="*{firstName}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="lastName">Last name</label>
+                    <input id="lastName" maxlength="100" th:field="*{lastName}" type="text" />
+                    <p class="field-error" th:errors="*{lastName}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="email">Email</label>
+                    <input id="email" maxlength="255" th:field="*{email}" type="text" />
+                    <p class="field-error" th:errors="*{email}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="phone">Phone</label>
+                    <input id="phone" maxlength="100" th:field="*{phone}" type="text" />
+                    <p class="field-error" th:errors="*{phone}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="nationality">Nationality</label>
+                    <input id="nationality" maxlength="100" th:field="*{nationality}" type="text" />
+                    <p class="field-error" th:errors="*{nationality}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="dateOfBirth">Date of birth</label>
+                    <input id="dateOfBirth" th:field="*{dateOfBirth}" type="date" />
+                    <p class="field-error" th:errors="*{dateOfBirth}"></p>
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label for="address">Address</label>
+                <textarea id="address" rows="4" th:field="*{address}"></textarea>
+                <p class="field-error" th:errors="*{address}"></p>
+            </div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/guests}">Cancel</a>
+                <button class="button button-primary" th:text="${guest == null} ? 'Create Guest' : 'Update Guest'" type="submit">
+                    Save Guest
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

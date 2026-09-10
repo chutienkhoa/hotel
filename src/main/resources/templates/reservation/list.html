@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Reservations')}"></head>
+<body>
+<div class="app-shell">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-heading">
+            <div>
+                <h1>Reservations</h1>
+                <p>View reservation status and planned stay dates.</p>
+            </div>
+            <a class="button button-primary" th:if="${canManageBooking}" th:href="@{/reservations/new}">
+                Create Reservation
+            </a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <p class="empty-state" th:if="${#lists.isEmpty(reservations)}">No reservations found.</p>
+
+        <div class="table-wrap" th:unless="${#lists.isEmpty(reservations)}">
+            <table>
+                <thead>
+                <tr>
+                    <th scope="col">Reservation number</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Check-in</th>
+                    <th scope="col">Check-out</th>
+                    <th scope="col">Total</th>
+                    <th scope="col"><span class="visually-hidden">View details</span></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="reservation : ${reservations}">
+                    <td th:text="${reservation.reservationNumber}">Reservation number</td>
+                    <td><span class="status" th:text="${reservation.status}">DRAFT</span></td>
+                    <td th:text="${reservation.checkInDate}">2027-01-10</td>
+                    <td th:text="${reservation.checkOutDate}">2027-01-12</td>
+                    <td th:text="${reservation.totalAmount + ' ' + reservation.currency}">0 JPY</td>
+                    <td>
+                        <a th:href="@{/reservations/{id}(id=${reservation.id})}">View</a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

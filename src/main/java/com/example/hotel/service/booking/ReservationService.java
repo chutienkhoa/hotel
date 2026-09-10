@@ -10,16 +10,24 @@ import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
+import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
+import com.example.hotel.security.SessionUserPrincipal;
 import jakarta.transaction.Transactional;
-import java.math.*;
-import java.time.*;
-import java.util.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.Currency;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -28,283 +36,315 @@ import org.springframework.web.server.ResponseStatusException;
 /** Điều phối các thao tác nghiệp vụ và transaction của reservation. */
 @Service
 public class ReservationService {
-  private final ReservationRepository reservations;
-  private final GuestRepository guests;
-  private final RoomRepository rooms;
-  private final StayRepository stays;
-  private final AuditLogRepository audits;
+    private final ReservationRepository reservations;
+    private final GuestRepository guests;
+    private final RoomRepository rooms;
+    private final StayRepository stays;
+    private final AuditLogRepository audits;
+    private final ReservationMapper reservationMapper;
 
-  /**
-   * Tạo dịch vụ với các repository phụ thuộc.
-   *
-   * @param reservations repository reservation
-   * @param guests repository khách
-   * @param rooms repository phòng
-   * @param stays repository lưu trú
-   * @param audits repository audit
-   */
-  ReservationService(
-      ReservationRepository reservations,
-      GuestRepository guests,
-      RoomRepository rooms,
-      StayRepository stays,
-      AuditLogRepository audits) {
-    this.reservations = reservations;
-    this.guests = guests;
-    this.rooms = rooms;
-    this.stays = stays;
-    this.audits = audits;
-  }
-
-  @Transactional
-  /**
-   * Tạo một reservation nháp hoàn chỉnh từ request.
-   *
-   * @param request dữ liệu đặt phòng
-   * @return reservation vừa tạo
-   */
-  public Response create(CreateRequest request) {
-    if (!request.checkOutDate().isAfter(request.checkInDate()))
-      throw bad("check_out_date must be after check_in_date");
-    Currency currency;
-    try {
-      currency = Currency.getInstance(request.currency());
-    } catch (IllegalArgumentException e) {
-      throw bad("Unsupported currency");
+    /**
+     * Tạo dịch vụ với các repository phụ thuộc.
+     *
+     * @param reservations repository reservation
+     * @param guests repository khách
+     * @param rooms repository phòng
+     * @param stays repository lưu trú
+     * @param audits repository audit
+     * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
+     */
+    ReservationService(
+            ReservationRepository reservations,
+            GuestRepository guests,
+            RoomRepository rooms,
+            StayRepository stays,
+            AuditLogRepository audits,
+            ReservationMapper reservationMapper) {
+        this.reservations = reservations;
+        this.guests = guests;
+        this.rooms = rooms;
+        this.stays = stays;
+        this.audits = audits;
+        this.reservationMapper = reservationMapper;
     }
-    Guest guest = guests.findById(request.guestId()).orElseThrow(() -> notFound("Guest"));
-    Set<UUID> ids = new HashSet<>();
-    for (var r : request.rooms())
-      if (!ids.add(r.roomId())) throw bad("A room may be assigned once per reservation");
-    Map<UUID, Room> available =
-        rooms.findAllById(ids).stream()
-            .collect(java.util.stream.Collectors.toMap(Room::getId, r -> r));
-    if (available.size() != ids.size()) throw notFound("Room");
-    CurrentUser user = currentUser();
-    Reservation reservation =
-        new Reservation(
-            UUID.randomUUID(),
-            guest,
-            request.checkInDate(),
-            request.checkOutDate(),
-            currency.getCurrencyCode(),
-            request.notes());
-    reservation.audit(user.id());
-    for (var input : request.rooms()) {
-      BigDecimal rate = scale(input.nightlyRate(), currency);
-      ReservationRoom line =
-          new ReservationRoom(
-              reservation,
-              available.get(input.roomId()),
-              request.checkInDate(),
-              request.checkOutDate(),
-              rate);
-      line.audit(user.id());
-      reservation.addRoom(line);
+
+    /**
+     * Tạo một reservation nháp hoàn chỉnh từ request.
+     *
+     * @param request dữ liệu đặt phòng
+     * @return reservation vừa tạo
+     */
+    @Transactional
+    public Response create(CreateRequest request) {
+        if (!request.checkOutDate().isAfter(request.checkInDate())) {
+            throw bad("check_out_date must be after check_in_date");
+        }
+        Currency currency;
+        try {
+            currency = Currency.getInstance(request.currency());
+        } catch (IllegalArgumentException exception) {
+            throw bad("Unsupported currency");
+        }
+        Guest guest = guests.findById(request.guestId()).orElseThrow(() -> notFound("Guest"));
+        Set<UUID> roomIds = new HashSet<>();
+        for (var roomRequest : request.rooms()) {
+            if (!roomIds.add(roomRequest.roomId())) {
+                throw bad("A room may be assigned once per reservation");
+            }
+        }
+        Map<UUID, Room> roomsById =
+                rooms.findAllById(roomIds).stream()
+                        .collect(Collectors.toMap(Room::getId, room -> room));
+        if (roomsById.size() != roomIds.size()) {
+            throw notFound("Room");
+        }
+        CurrentUser user = currentUser();
+        Reservation reservation =
+                new Reservation(
+                        UUID.randomUUID(),
+                        guest,
+                        request.checkInDate(),
+                        request.checkOutDate(),
+                        currency.getCurrencyCode(),
+                        request.notes());
+        reservation.audit(user.id());
+        for (var roomRequest : request.rooms()) {
+            BigDecimal nightlyRate = scale(roomRequest.nightlyRate(), currency);
+            ReservationRoom reservationRoom =
+                    new ReservationRoom(
+                            reservation,
+                            roomsById.get(roomRequest.roomId()),
+                            request.checkInDate(),
+                            request.checkOutDate(),
+                            nightlyRate);
+            reservationRoom.audit(user.id());
+            reservation.addRoom(reservationRoom);
+        }
+        reservation.calculateTotal();
+        reservations.save(reservation);
+        audit(user, "CREATE", reservation, null, "DRAFT");
+        return response(reservation);
     }
-    reservation.calculateTotal();
-    reservations.save(reservation);
-    audit(user, "CREATE", reservation, null, "DRAFT");
-    return response(reservation);
-  }
 
-  @Transactional
-  /**
-   * Xác nhận reservation sau khi khóa phòng và kiểm tra xung đột.
-   *
-   * @param id định danh reservation
-   * @return reservation sau khi xác nhận
-   */
-  public Response confirm(UUID id) {
-    Reservation r = load(id);
-    CurrentUser user = currentUser();
-    if (r.getStatus() != ReservationStatus.DRAFT)
-      throw conflict("Invalid reservation state transition");
-    List<UUID> ids = r.getRooms().stream().map(x -> x.getRoom().getId()).sorted().toList();
-    List<Room> locked = rooms.lockAllByIdIn(ids);
-    if (locked.size() != ids.size()) throw notFound("Room");
-    for (ReservationRoom line : r.getRooms())
-      if (reservations.hasOverlap(
-          line.getRoom().getId(),
-          r.getCheckInDate(),
-          r.getCheckOutDate(),
-          List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN)))
-        throw conflict("Room is already booked for these dates");
-    r.confirm();
-    r.audit(user.id());
-    audit(user, "CONFIRM", r, "DRAFT", "CONFIRMED");
-    return response(r);
-  }
-
-  @Transactional
-  /**
-   * Hủy reservation đã xác nhận.
-   *
-   * @param id định danh reservation
-   * @return reservation sau khi hủy
-   */
-  public Response cancel(UUID id) {
-    Reservation r = load(id);
-    CurrentUser u = currentUser();
-    ReservationStatus old = r.getStatus();
-    try {
-      r.cancel();
-    } catch (IllegalStateException e) {
-      throw conflict(e.getMessage());
+    /**
+     * Xác nhận reservation sau khi khóa phòng và kiểm tra xung đột.
+     *
+     * @param id định danh reservation
+     * @return reservation sau khi xác nhận
+     */
+    @Transactional
+    public Response confirm(UUID id) {
+        Reservation reservation = load(id);
+        CurrentUser user = currentUser();
+        if (reservation.getStatus() != ReservationStatus.DRAFT) {
+            throw conflict("Invalid reservation state transition");
+        }
+        List<UUID> roomIds = reservation.getRooms().stream()
+                .map(reservationRoom -> reservationRoom.getRoom().getId())
+                .sorted()
+                .toList();
+        List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
+        if (lockedRooms.size() != roomIds.size()) {
+            throw notFound("Room");
+        }
+        for (ReservationRoom reservationRoom : reservation.getRooms()) {
+            if (reservations.hasOverlap(
+                    reservationRoom.getRoom().getId(),
+                    reservation.getCheckInDate(),
+                    reservation.getCheckOutDate(),
+                    List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN))) {
+                throw conflict("Room is already booked for these dates");
+            }
+        }
+        reservation.confirm();
+        reservation.audit(user.id());
+        audit(user, "CONFIRM", reservation, "DRAFT", "CONFIRMED");
+        return response(reservation);
     }
-    r.audit(u.id());
-    audit(u, "CANCEL", r, old.name(), r.getStatus().name());
-    return response(r);
-  }
 
-  @Transactional
-  /**
-   * Đánh dấu reservation đã xác nhận là no-show.
-   *
-   * @param id định danh reservation
-   * @return reservation sau khi cập nhật
-   */
-  public Response noShow(UUID id) {
-    Reservation r = load(id);
-    CurrentUser u = currentUser();
-    ReservationStatus old = r.getStatus();
-    try {
-      r.noShow();
-    } catch (IllegalStateException e) {
-      throw conflict(e.getMessage());
+    /**
+     * Hủy reservation đã xác nhận.
+     *
+     * @param id định danh reservation
+     * @return reservation sau khi hủy
+     */
+    @Transactional
+    public Response cancel(UUID id) {
+        Reservation reservation = load(id);
+        CurrentUser user = currentUser();
+        ReservationStatus previousStatus = reservation.getStatus();
+        try {
+            reservation.cancel();
+        } catch (IllegalStateException exception) {
+            throw conflict(exception.getMessage());
+        }
+        reservation.audit(user.id());
+        audit(user, "CANCEL", reservation, previousStatus.name(), reservation.getStatus().name());
+        return response(reservation);
     }
-    r.audit(u.id());
-    audit(u, "NO_SHOW", r, old.name(), r.getStatus().name());
-    return response(r);
-  }
 
-  @Transactional
-  /**
-   * Check-in reservation, tạo Stay và chuyển phòng sang OCCUPIED.
-   *
-   * @param id định danh reservation
-   * @return reservation sau khi check-in
-   */
-  public Response checkIn(UUID id) {
-    Reservation r = load(id);
-    CurrentUser u = currentUser();
-    if (r.getStatus() != ReservationStatus.CONFIRMED)
-      throw conflict("Invalid reservation state transition");
-    if (stays.existsByReservationId(id)) throw conflict("Stay already exists");
-    List<UUID> ids = r.getRooms().stream().map(x -> x.getRoom().getId()).sorted().toList();
-    List<Room> locked = rooms.lockAllByIdIn(ids);
-    if (locked.size() != ids.size()) throw notFound("Room");
-    for (Room room : locked)
-      if (!room.isActive() || room.getStatus() != RoomStatus.AVAILABLE)
-        throw conflict("Room is not available for check-in");
-    for (Room room : locked) {
-      room.occupy();
-      room.audit(u.id());
+    /**
+     * Đánh dấu reservation đã xác nhận là no-show.
+     *
+     * @param id định danh reservation
+     * @return reservation sau khi cập nhật
+     */
+    @Transactional
+    public Response noShow(UUID id) {
+        Reservation reservation = load(id);
+        CurrentUser user = currentUser();
+        ReservationStatus previousStatus = reservation.getStatus();
+        try {
+            reservation.noShow();
+        } catch (IllegalStateException exception) {
+            throw conflict(exception.getMessage());
+        }
+        reservation.audit(user.id());
+        audit(user, "NO_SHOW", reservation, previousStatus.name(), reservation.getStatus().name());
+        return response(reservation);
     }
-    r.checkIn();
-    r.audit(u.id());
-    Stay stay = new Stay(r);
-    stay.audit(u.id());
-    stays.save(stay);
-    audit(u, "CHECK_IN", r, "CONFIRMED", "CHECKED_IN");
-    return response(r);
-  }
 
-  /**
-   * Tải reservation theo định danh.
-   *
-   * @param id định danh reservation
-   * @return reservation được tìm thấy
-   * @throws ResponseStatusException nếu reservation không tồn tại
-   */
-  private Reservation load(UUID id) {
-    return reservations.findById(id).orElseThrow(() -> notFound("Reservation"));
-  }
-
-  /**
-   * Lấy người dùng đã được xác thực từ security context.
-   *
-   * @return người dùng hiện tại
-   * @throws ResponseStatusException nếu không có principal hợp lệ
-   */
-  private CurrentUser currentUser() {
-    Object p = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-    if (p instanceof CurrentUser u) return u;
-    throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
-  }
-
-  /**
-   * Ghi một sự kiện audit cho reservation.
-   *
-   * @param u người thực hiện
-   * @param action thao tác được ghi nhận
-   * @param r reservation liên quan
-   * @param oldValue giá trị trước thao tác
-   * @param newValue giá trị sau thao tác
-   */
-  private void audit(
-      CurrentUser u, String action, Reservation r, String oldValue, String newValue) {
-    audits.save(new AuditLog(u.id(), action, r.getId(), oldValue, newValue));
-  }
-
-  /**
-   * Chuyển thực thể reservation thành DTO phản hồi.
-   *
-   * @param r reservation nguồn
-   * @return DTO phản hồi
-   */
-  private Response response(Reservation r) {
-    return new Response(
-        r.getId(),
-        r.getReservationNumber(),
-        r.getStatus().name(),
-        r.getTotalAmount(),
-        r.getCurrency());
-  }
-
-  /**
-   * Chuẩn hóa giá theo số chữ số thập phân của tiền tệ.
-   *
-   * @param value giá cần chuẩn hóa
-   * @param currency tiền tệ áp dụng
-   * @return giá đã chuẩn hóa
-   * @throws ResponseStatusException nếu giá vượt độ chính xác tiền tệ
-   */
-  private BigDecimal scale(BigDecimal value, Currency currency) {
-    try {
-      return value.setScale(currency.getDefaultFractionDigits(), RoundingMode.UNNECESSARY);
-    } catch (ArithmeticException e) {
-      throw bad("Rate exceeds currency precision");
+    /**
+     * Check-in reservation, tạo Stay và chuyển phòng sang OCCUPIED.
+     *
+     * @param id định danh reservation
+     * @return reservation sau khi check-in
+     */
+    @Transactional
+    public Response checkIn(UUID id) {
+        Reservation reservation = load(id);
+        CurrentUser user = currentUser();
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw conflict("Invalid reservation state transition");
+        }
+        if (stays.existsByReservationId(id)) {
+            throw conflict("Stay already exists");
+        }
+        List<UUID> roomIds = reservation.getRooms().stream()
+                .map(reservationRoom -> reservationRoom.getRoom().getId())
+                .sorted()
+                .toList();
+        List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
+        if (lockedRooms.size() != roomIds.size()) {
+            throw notFound("Room");
+        }
+        for (Room room : lockedRooms) {
+            if (!room.isActive() || room.getStatus() != RoomStatus.AVAILABLE) {
+                throw conflict("Room is not available for check-in");
+            }
+        }
+        for (Room room : lockedRooms) {
+            room.occupy();
+            room.audit(user.id());
+        }
+        reservation.checkIn();
+        reservation.audit(user.id());
+        Stay stay = new Stay(reservation);
+        stay.audit(user.id());
+        stays.save(stay);
+        audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
+        return response(reservation);
     }
-  }
 
-  /**
-   * Tạo lỗi HTTP 400.
-   *
-   * @param m thông điệp lỗi
-   * @return ngoại lệ phản hồi lỗi dữ liệu
-   */
-  private ResponseStatusException bad(String m) {
-    return new ResponseStatusException(HttpStatus.BAD_REQUEST, m);
-  }
+    /**
+     * Tải reservation theo định danh.
+     *
+     * @param id định danh reservation
+     * @return reservation được tìm thấy
+     * @throws ResponseStatusException nếu reservation không tồn tại
+     */
+    private Reservation load(UUID id) {
+        return reservations.findById(id).orElseThrow(() -> notFound("Reservation"));
+    }
 
-  /**
-   * Tạo lỗi HTTP 404.
-   *
-   * @param m tên tài nguyên không tìm thấy
-   * @return ngoại lệ phản hồi không tìm thấy
-   */
-  private ResponseStatusException notFound(String m) {
-    return new ResponseStatusException(HttpStatus.NOT_FOUND, m + " not found");
-  }
+    /**
+     * Lấy người dùng đã được xác thực từ security context.
+     *
+     * @return người dùng hiện tại
+     * @throws ResponseStatusException nếu không có principal hợp lệ
+     */
+    private CurrentUser currentUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        if (principal instanceof CurrentUser currentUser) {
+            return currentUser;
+        }
+        if (principal instanceof SessionUserPrincipal sessionUserPrincipal) {
+            return new CurrentUser(sessionUserPrincipal.id(), sessionUserPrincipal.username());
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+    }
 
-  /**
-   * Tạo lỗi HTTP 409.
-   *
-   * @param m thông điệp xung đột
-   * @return ngoại lệ phản hồi xung đột
-   */
-  private ResponseStatusException conflict(String m) {
-    return new ResponseStatusException(HttpStatus.CONFLICT, m);
-  }
+    /**
+     * Ghi một sự kiện audit cho reservation.
+     *
+     * @param u người thực hiện
+     * @param action thao tác được ghi nhận
+     * @param r reservation liên quan
+     * @param oldValue giá trị trước thao tác
+     * @param newValue giá trị sau thao tác
+     */
+    private void audit(
+            CurrentUser user,
+            String action,
+            Reservation reservation,
+            String oldValue,
+            String newValue) {
+        audits.save(new AuditLog(user.id(), action, reservation.getId(), oldValue, newValue));
+    }
+
+    /**
+     * Chuyển thực thể reservation thành DTO phản hồi.
+     *
+     * @param r reservation nguồn
+     * @return DTO phản hồi
+     */
+    private Response response(Reservation reservation) {
+        return reservationMapper.toResponse(reservation);
+    }
+
+    /**
+     * Chuẩn hóa giá theo số chữ số thập phân của tiền tệ.
+     *
+     * @param value giá cần chuẩn hóa
+     * @param currency tiền tệ áp dụng
+     * @return giá đã chuẩn hóa
+     * @throws ResponseStatusException nếu giá vượt độ chính xác tiền tệ
+     */
+    private BigDecimal scale(BigDecimal value, Currency currency) {
+        try {
+            return value.setScale(currency.getDefaultFractionDigits(), RoundingMode.UNNECESSARY);
+        } catch (ArithmeticException exception) {
+            throw bad("Rate exceeds currency precision");
+        }
+    }
+
+    /**
+     * Tạo lỗi HTTP 400.
+     *
+     * @param message thông điệp lỗi
+     * @return ngoại lệ phản hồi lỗi dữ liệu
+     */
+    private ResponseStatusException bad(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+
+    /**
+     * Tạo lỗi HTTP 404.
+     *
+     * @param resourceName tên tài nguyên không tìm thấy
+     * @return ngoại lệ phản hồi không tìm thấy
+     */
+    private ResponseStatusException notFound(String resourceName) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, resourceName + " not found");
+    }
+
+    /**
+     * Tạo lỗi HTTP 409.
+     *
+     * @param message thông điệp xung đột
+     * @return ngoại lệ phản hồi xung đột
+     */
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, message);
+    }
 }

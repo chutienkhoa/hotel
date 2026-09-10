@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Reservation details')}"></head>
+<body>
+<div class="app-shell">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations}">Back to reservations</a>
+
+        <div class="page-heading">
+            <div>
+                <h1>Reservation details</h1>
+                <p th:text="${reservation.reservationNumber}">Reservation number</p>
+            </div>
+            <span class="status" th:text="${reservation.status}">DRAFT</span>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-grid">
+            <div>
+                <dt>Guest</dt>
+                <dd th:text="${reservation.guestCode}">Guest code</dd>
+            </div>
+            <div>
+                <dt>Check-in</dt>
+                <dd th:text="${reservation.checkInDate}">2027-01-10</dd>
+            </div>
+            <div>
+                <dt>Check-out</dt>
+                <dd th:text="${reservation.checkOutDate}">2027-01-12</dd>
+            </div>
+            <div>
+                <dt>Total</dt>
+                <dd th:text="${reservation.totalAmount + ' ' + reservation.currency}">0 JPY</dd>
+            </div>
+            <div th:if="${reservation.notes}">
+                <dt>Notes</dt>
+                <dd th:text="${reservation.notes}">Notes</dd>
+            </div>
+        </dl>
+
+        <section aria-labelledby="assigned-rooms-heading">
+            <h2 id="assigned-rooms-heading">Assigned rooms</h2>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Room</th>
+                        <th scope="col">Check-in</th>
+                        <th scope="col">Check-out</th>
+                        <th scope="col">Nightly rate</th>
+                        <th scope="col">Total</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="room : ${reservation.rooms}">
+                        <td th:text="${room.roomNumber}">101</td>
+                        <td th:text="${room.checkInDate}">2027-01-10</td>
+                        <td th:text="${room.checkOutDate}">2027-01-12</td>
+                        <td th:text="${room.nightlyRate + ' ' + reservation.currency}">0 JPY</td>
+                        <td th:text="${room.totalAmount + ' ' + reservation.currency}">0 JPY</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section aria-labelledby="actions-heading" class="actions">
+            <h2 id="actions-heading">Available actions</h2>
+            <p th:if="${reservation.status == 'CHECKED_IN'}">
+                Check-out is not available in this frontend slice.
+            </p>
+            <p th:if="${reservation.status == 'CHECKED_OUT' or reservation.status == 'CANCELLED' or reservation.status == 'NO_SHOW'}">
+                No state-changing actions are available.
+            </p>
+
+            <form method="post" th:action="@{/reservations/{id}/confirm(id=${reservation.id})}"
+                  th:if="${reservation.status == 'DRAFT' and canManageBooking}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Confirm</button>
+            </form>
+
+            <div class="action-row" th:if="${reservation.status == 'CONFIRMED'}">
+                <form method="post" th:action="@{/reservations/{id}/check-in(id=${reservation.id})}" th:if="${canCheckIn}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-primary" type="submit">Check-in</button>
+                </form>
+
+                <form method="post" th:action="@{/reservations/{id}/cancel(id=${reservation.id})}" th:if="${canManageBooking}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-danger" type="submit">Cancel reservation</button>
+                </form>
+
+                <form method="post" th:action="@{/reservations/{id}/no-show(id=${reservation.id})}" th:if="${canManageBooking}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-secondary" type="submit">Mark no-show</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

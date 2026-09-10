@@ -7,5 +7,5 @@ import java.util.UUID;
 
 /** Dữ liệu một phòng và giá mỗi đêm trong request tạo reservation. */
 public record RoomRequest(
-    @NotNull UUID roomId,
-    @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal nightlyRate) {}
+        @NotNull UUID roomId,
+        @NotNull @DecimalMin(value = "0", inclusive = false) BigDecimal nightlyRate) {}
