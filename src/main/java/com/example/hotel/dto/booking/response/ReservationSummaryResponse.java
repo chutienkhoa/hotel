@@ -17,7 +17,7 @@ import java.util.UUID;
  */
 public record ReservationSummaryResponse(
         UUID id,
-        UUID reservationNumber,
+        String reservationNumber,
         String status,
         LocalDate checkInDate,
         LocalDate checkOutDate,

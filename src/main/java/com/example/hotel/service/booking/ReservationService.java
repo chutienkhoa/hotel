@@ -42,6 +42,7 @@ public class ReservationService {
     private final StayRepository stays;
     private final AuditLogRepository audits;
     private final ReservationMapper reservationMapper;
+    private final ReservationNumberGenerator reservationNumberGenerator;
 
     /**
      * Tạo dịch vụ với các repository phụ thuộc.
@@ -52,6 +53,7 @@ public class ReservationService {
      * @param stays repository lưu trú
      * @param audits repository audit
      * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
+     * @param reservationNumberGenerator generator tạo reservation number hằng ngày
      */
     ReservationService(
             ReservationRepository reservations,
@@ -59,13 +61,15 @@ public class ReservationService {
             RoomRepository rooms,
             StayRepository stays,
             AuditLogRepository audits,
-            ReservationMapper reservationMapper) {
+            ReservationMapper reservationMapper,
+            ReservationNumberGenerator reservationNumberGenerator) {
         this.reservations = reservations;
         this.guests = guests;
         this.rooms = rooms;
         this.stays = stays;
         this.audits = audits;
         this.reservationMapper = reservationMapper;
+        this.reservationNumberGenerator = reservationNumberGenerator;
     }
 
     /**
@@ -102,6 +106,7 @@ public class ReservationService {
         Reservation reservation =
                 new Reservation(
                         UUID.randomUUID(),
+                        reservationNumberGenerator.generate(),
                         guest,
                         request.checkInDate(),
                         request.checkOutDate(),

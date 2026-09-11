@@ -158,6 +158,13 @@ Constraints:
 guest_code UNIQUE
 ```
 
+Technical ID:
+
+```text
+id sử dụng UUID làm internal technical primary key.
+guest_code và reservation_number không được sinh từ UUID này.
+```
+
 Không sử dụng email làm unique identifier cho Guest.
 
 Một Guest có thể có nhiều Reservation:
@@ -229,6 +236,13 @@ Constraint:
 room_number UNIQUE
 ```
 
+Technical ID:
+
+```text
+id sử dụng UUID làm internal technical primary key.
+room_number và reservation_number không được sinh từ UUID này.
+```
+
 Relationship:
 
 ```text
@@ -273,6 +287,16 @@ created_at
 created_by
 updated_at
 updated_by
+```
+
+Reservation number:
+
+```text
+reservation_number được backend tự động sinh khi tạo Reservation.
+Format: R + yyyyMMdd + "-" + daily sequence sáu chữ số, zero-padded.
+Ví dụ: R20260911-000001
+reservation_number là immutable sau khi tạo và client không được cung cấp giá trị này.
+reservation_number không được sinh từ technical ID.
 ```
 
 Reservation source:

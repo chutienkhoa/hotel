@@ -22,7 +22,7 @@ import java.util.UUID;
  */
 public record ReservationDetailResponse(
         UUID id,
-        UUID reservationNumber,
+        String reservationNumber,
         UUID guestId,
         String guestCode,
         String status,

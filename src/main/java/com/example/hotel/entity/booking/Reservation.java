@@ -29,7 +29,7 @@ public class Reservation extends AuditedEntity {
     @Id private UUID id;
 
     @Column(name = "reservation_number", nullable = false, unique = true)
-    private UUID reservationNumber;
+    private String reservationNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "guest_id", nullable = false)
@@ -74,6 +74,7 @@ public class Reservation extends AuditedEntity {
      * Tạo một reservation nháp từ dữ liệu đặt phòng trực tiếp.
      *
      * @param id định danh reservation
+     * @param reservationNumber mã số reservation do backend tạo
      * @param guest khách thực hiện đặt phòng
      * @param checkInDate ngày nhận phòng
      * @param checkOutDate ngày trả phòng
@@ -82,13 +83,14 @@ public class Reservation extends AuditedEntity {
      */
     public Reservation(
             UUID id,
+            String reservationNumber,
             Guest guest,
             LocalDate checkInDate,
             LocalDate checkOutDate,
             String currency,
             String notes) {
         this.id = id;
-        reservationNumber = UUID.randomUUID();
+        this.reservationNumber = reservationNumber;
         this.guest = guest;
         this.checkInDate = checkInDate;
         this.checkOutDate = checkOutDate;
@@ -167,7 +169,7 @@ public class Reservation extends AuditedEntity {
      *
      * @return mã số reservation
      */
-    public UUID getReservationNumber() {
+    public String getReservationNumber() {
         return reservationNumber;
     }
 

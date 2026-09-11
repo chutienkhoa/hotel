@@ -79,7 +79,13 @@ class ReservationAccessAuthorizationTest {
     void shouldKeepReservationWritePermissionForAdministrativeRoles(
             String username, List<SimpleGrantedAuthority> authorities) throws Exception {
         when(reservationService.confirm(RESERVATION_ID))
-                .thenReturn(new Response(RESERVATION_ID, UUID.randomUUID(), "CONFIRMED", BigDecimal.ONE, "JPY"));
+                .thenReturn(
+                        new Response(
+                                RESERVATION_ID,
+                                "R20260911-000001",
+                                "CONFIRMED",
+                                BigDecimal.ONE,
+                                "JPY"));
 
         mockMvc.perform(post("/api/reservations/{id}/confirm", RESERVATION_ID)
                         .with(user(username).authorities(authorities))
@@ -108,7 +114,13 @@ class ReservationAccessAuthorizationTest {
     @Test
     void shouldKeepCheckInPermissionForStaffOnly() throws Exception {
         when(reservationService.checkIn(RESERVATION_ID))
-                .thenReturn(new Response(RESERVATION_ID, UUID.randomUUID(), "CHECKED_IN", BigDecimal.ONE, "JPY"));
+                .thenReturn(
+                        new Response(
+                                RESERVATION_ID,
+                                "R20260911-000001",
+                                "CHECKED_IN",
+                                BigDecimal.ONE,
+                                "JPY"));
 
         mockMvc.perform(post("/api/reservations/{id}/check-in", RESERVATION_ID)
                         .with(user("staff").authorities(checkInAuthority()))

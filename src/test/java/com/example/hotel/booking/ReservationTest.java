@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 
 /** Kiểm tra các quy tắc trạng thái và tính tiền của Reservation. */
 class ReservationTest {
+    private static final String RESERVATION_NUMBER = "R20270110-000001";
+
     /**
      * Tạo reservation nháp hợp lệ dùng chung cho test.
      *
@@ -20,7 +22,13 @@ class ReservationTest {
      */
     private Reservation reservation() {
         return new Reservation(
-                UUID.randomUUID(), null, LocalDate.of(2027, 1, 10), LocalDate.of(2027, 1, 12), "JPY", null);
+                UUID.randomUUID(),
+                RESERVATION_NUMBER,
+                null,
+                LocalDate.of(2027, 1, 10),
+                LocalDate.of(2027, 1, 12),
+                "JPY",
+                null);
     }
 
     /** Xác nhận reservation nháp chỉ được confirm một lần. */
@@ -65,5 +73,16 @@ class ReservationTest {
                         new BigDecimal("10000")));
         reservation.calculateTotal();
         assertEquals(0, new BigDecimal("20000").compareTo(reservation.getTotalAmount()));
+    }
+
+    /** Confirms that state changes do not alter the backend-generated reservation number. */
+    @Test
+    void reservationNumberIsImmutableAfterCreation() {
+        Reservation reservation = reservation();
+
+        reservation.confirm();
+        reservation.cancel();
+
+        assertEquals(RESERVATION_NUMBER, reservation.getReservationNumber());
     }
 }

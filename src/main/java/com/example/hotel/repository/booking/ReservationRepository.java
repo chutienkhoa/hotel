@@ -4,6 +4,7 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationStatus;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -11,6 +12,34 @@ import org.springframework.data.repository.query.Param;
 
 /** Cung cấp truy vấn lưu trữ và kiểm tra xung đột reservation. */
 public interface ReservationRepository extends JpaRepository<Reservation, UUID> {
+    /**
+     * Atomically allocates the next daily reservation number in the approved external format.
+     *
+     * @return the generated reservation number, or empty when the daily sequence is exhausted
+     */
+    @Query(
+            value = """
+                    INSERT INTO reservation_number_sequence (
+                        reservation_date,
+                        last_value
+                    ) VALUES (
+                        CURRENT_DATE,
+                        1
+                    )
+                    ON CONFLICT (reservation_date)
+                    DO UPDATE
+                    SET last_value = reservation_number_sequence.last_value + 1
+                    WHERE reservation_number_sequence.last_value < 999999
+                    RETURNING CONCAT(
+                        'R',
+                        TO_CHAR(reservation_date, 'YYYYMMDD'),
+                        '-',
+                        LPAD(last_value::TEXT, 6, '0')
+                    )
+                    """,
+            nativeQuery = true)
+    Optional<String> allocateReservationNumber();
+
     /**
      * Kiểm tra xem một phòng có reservation thuộc các trạng thái được chỉ định bị giao ngày hay
      * không.

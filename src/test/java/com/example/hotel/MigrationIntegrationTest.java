@@ -1,8 +1,10 @@
 package com.example.hotel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.hotel.entity.common.Role;
+import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.common.RoleRepository;
 import java.util.Set;
 
@@ -11,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -40,11 +43,14 @@ class MigrationIntegrationTest {
     @Autowired
     RoleRepository roleRepository;
 
+    @Autowired
+    ReservationRepository reservationRepository;
+
     /** Xác nhận không còn migration chờ và các migration permission đã được áp dụng. */
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(3, flyway.info().applied().length);
+        assertEquals(4, flyway.info().applied().length);
     }
 
     /** Xác nhận mapping permission sau migration chỉ bổ sung quyền xem reservation cho ADMIN và MANAGER. */
@@ -70,6 +76,17 @@ class MigrationIntegrationTest {
                         "MANAGE_GUEST",
                         "VIEW_BOOKING"));
         assertPermissionCodes("STAFF", Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT"));
+    }
+
+    /** Verifies that PostgreSQL allocates distinct, correctly formatted reservation numbers. */
+    @Test
+    @Transactional
+    void reservationNumberSequenceGeneratesUniqueDailyNumbers() {
+        String firstReservationNumber = reservationRepository.allocateReservationNumber().orElseThrow();
+        String secondReservationNumber = reservationRepository.allocateReservationNumber().orElseThrow();
+
+        assertTrue(firstReservationNumber.matches("R\\d{8}-000001"));
+        assertTrue(secondReservationNumber.matches("R\\d{8}-000002"));
     }
 
     /**
