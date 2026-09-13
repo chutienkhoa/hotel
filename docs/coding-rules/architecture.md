@@ -374,6 +374,7 @@ The frontend structure is:
 src/main/resources
 │
 ├── templates
+│   ├── dashboard
 │   ├── customer
 │   ├── booking
 │   ├── room

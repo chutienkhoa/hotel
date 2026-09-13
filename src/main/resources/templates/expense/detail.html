@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Expense detail')}"></head>
+<body>
+<div class="app-shell page-expenses">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/expenses}">Back to expenses</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="${expense.category.code}">ELECTRICITY</h1>
+                <p th:text="${expense.expenseDate}">2026-09-11</p>
+            </div>
+            <a class="button button-primary" th:if="${expense.status == 'DRAFT' and canManageExpense}"
+               th:href="@{/expenses/{id}/edit(id=${expense.id})}">Edit Expense</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt>Category</dt>
+            <dd th:text="${expense.category.code}">ELECTRICITY</dd>
+            <dt>Amount</dt>
+            <dd th:text="${expense.amount + ' ' + expense.currency}">0 VND</dd>
+            <dt>Expense date</dt>
+            <dd th:text="${expense.expenseDate}">2026-09-11</dd>
+            <dt>Payment method</dt>
+            <dd th:text="${expense.paymentMethod}">CASH</dd>
+            <dt>Status</dt>
+            <dd><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(expense.status)}" th:text="${expense.status}">DRAFT</span></dd>
+            <dt th:if="${expense.description}">Description</dt>
+            <dd th:if="${expense.description}" th:text="${expense.description}">Description</dd>
+        </dl>
+
+        <section aria-labelledby="actions-heading" class="card actions">
+            <h2 id="actions-heading">Available actions</h2>
+            <form method="post" th:action="@{/expenses/{id}/submit(id=${expense.id})}"
+                  th:if="${expense.status == 'DRAFT' and canManageExpense}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Submit</button>
+            </form>
+            <div class="action-row" th:if="${expense.status == 'SUBMITTED' and canManageExpense}">
+                <form method="post" th:action="@{/expenses/{id}/approve(id=${expense.id})}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-primary" type="submit">Approve</button>
+                </form>
+                <form method="post" th:action="@{/expenses/{id}/reject(id=${expense.id})}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-danger" type="submit">Reject</button>
+                </form>
+            </div>
+            <form method="post" th:action="@{/expenses/{id}/post(id=${expense.id})}"
+                  th:if="${expense.status == 'APPROVED' and canManageExpense}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Post</button>
+            </form>
+            <p th:if="${expense.status == 'REJECTED' or expense.status == 'POSTED'}">
+                No state-changing actions are available.
+            </p>
+        </section>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

@@ -4,8 +4,12 @@ import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
+import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
+import com.example.hotel.service.booking.StayBalance;
+import com.example.hotel.service.booking.StayBalanceService;
+import com.example.hotel.service.booking.StayQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import jakarta.validation.Valid;
@@ -34,6 +38,8 @@ public class ReservationPageController {
     private final ReservationService reservationService;
     private final GuestQueryService guestQueryService;
     private final RoomQueryService roomQueryService;
+    private final StayQueryService stayQueryService;
+    private final StayBalanceService stayBalanceService;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -43,16 +49,22 @@ public class ReservationPageController {
      * @param reservationService service used to execute existing reservation operations
      * @param guestQueryService service used to load guest choices
      * @param roomQueryService service used to load room choices
+     * @param stayQueryService service used to resolve a Reservation's Stay
+     * @param stayBalanceService service used to supply non-financial checkout readiness
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
             ReservationService reservationService,
             GuestQueryService guestQueryService,
-            RoomQueryService roomQueryService) {
+            RoomQueryService roomQueryService,
+            StayQueryService stayQueryService,
+            StayBalanceService stayBalanceService) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
         this.roomQueryService = roomQueryService;
+        this.stayQueryService = stayQueryService;
+        this.stayBalanceService = stayBalanceService;
     }
 
     /**
@@ -82,7 +94,9 @@ public class ReservationPageController {
     @PreAuthorize("hasAuthority('PERM_VIEW_BOOKING')")
     public String detail(@PathVariable UUID id, Model model, Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
-        model.addAttribute("reservation", reservationQueryService.findById(id));
+        ReservationDetailResponse reservation = reservationQueryService.findById(id);
+        model.addAttribute("reservation", reservation);
+        addCheckoutReadiness(model, reservation, authentication);
         return "reservation/detail";
     }
 
@@ -190,6 +204,20 @@ public class ReservationPageController {
     }
 
     /**
+     * Checks out an eligible reservation through the existing transactional reservation service operation.
+     *
+     * @param id reservation identifier
+     * @param redirectAttributes attributes used to show post-redirect feedback
+     * @return a redirect to the reservation detail page
+     */
+    @PostMapping("/reservations/{id}/check-out")
+    @PreAuthorize("hasAuthority('PERM_CHECK_OUT')")
+    public String checkOut(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
+        return redirectAfterAction(id, redirectAttributes, "Check-out completed successfully.",
+                () -> reservationService.checkOut(id));
+    }
+
+    /**
      * Adds lookup and authorization data required to render the reservation creation form.
      *
      * @param model model used to render the form
@@ -214,6 +242,29 @@ public class ReservationPageController {
         model.addAttribute("canManageBooking", hasAuthority(authentication, "PERM_MANAGE_BOOKING"));
         model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
         model.addAttribute("canCheckIn", hasAuthority(authentication, "PERM_CHECK_IN"));
+        model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
+        model.addAttribute("canManagePayment", hasAuthority(authentication, "PERM_MANAGE_PAYMENT"));
+        model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
+    }
+
+    /**
+     * Adds the approved non-financial checkout-readiness state for a checked-in Reservation.
+     *
+     * @param model model used to render Reservation detail
+     * @param reservation Reservation detail data
+     * @param authentication current browser authentication
+     */
+    private void addCheckoutReadiness(
+            Model model, ReservationDetailResponse reservation, Authentication authentication) {
+        if (!"CHECKED_IN".equals(reservation.status())
+                || !hasAuthority(authentication, "PERM_CHECK_OUT")) {
+            return;
+        }
+        StayResponse stay = stayQueryService.findByReservationId(reservation.id());
+        StayBalance balance = stayBalanceService.calculate(stay.id());
+        model.addAttribute(
+                "checkoutReadiness",
+                balance.outstanding().signum() == 0 ? "READY" : "PAYMENT_REQUIRED");
     }
 
     /**

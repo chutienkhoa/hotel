@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Room detail')}"></head>
+<body>
+<div class="app-shell page-rooms">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/rooms}">Back to rooms</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="${room.roomNumber}">101</h1>
+                <p>Room profile</p>
+            </div>
+            <a class="button button-primary" th:href="@{/rooms/{id}/edit(id=${room.id})}">Edit Room</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="card actions" aria-label="Room operations">
+            <form method="post" th:action="@{/rooms/{id}/start-cleaning(id=${room.id})}" th:if="${room.status == 'DIRTY'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Start Cleaning</button>
+            </form>
+            <form method="post" th:action="@{/rooms/{id}/finish-cleaning(id=${room.id})}" th:if="${room.status == 'CLEANING'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Finish Cleaning</button>
+            </form>
+            <form method="post" th:action="@{/rooms/{id}/start-maintenance(id=${room.id})}" th:if="${room.status == 'AVAILABLE'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-secondary" type="submit">Start Maintenance</button>
+            </form>
+            <form method="post" th:action="@{/rooms/{id}/mark-out-of-order(id=${room.id})}" th:if="${room.status == 'AVAILABLE'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-secondary" type="submit">Mark Out Of Order</button>
+            </form>
+            <form method="post" th:action="@{/rooms/{id}/finish-maintenance(id=${room.id})}" th:if="${room.status == 'MAINTENANCE'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Finish Maintenance</button>
+            </form>
+            <form method="post" th:action="@{/rooms/{id}/restore-to-service(id=${room.id})}" th:if="${room.status == 'OUT_OF_ORDER'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Restore To Service</button>
+            </form>
+        </section>
+
+        <dl class="detail-list">
+            <dt>RoomType</dt>
+            <dd th:text="|${room.roomType.code} — ${room.roomType.name}|">SINGLE — Single</dd>
+            <dt>Floor</dt>
+            <dd th:text="${room.floor}">1</dd>
+            <dt>Status</dt>
+            <dd><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></dd>
+            <dt>Active inventory</dt>
+            <dd th:text="${room.active}">true</dd>
+        </dl>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

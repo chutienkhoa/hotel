@@ -5,6 +5,8 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
@@ -23,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -109,6 +112,22 @@ class GuestAuthorizationTest {
                         .with(user("admin").authorities(manageGuestAuthority()))
                         .with(csrf()))
                 .andExpect(status().isMethodNotAllowed());
+    }
+
+    /** Confirms a client-supplied guest code cannot override the value owned by the backend. */
+    @Test
+    void shouldIgnoreClientSuppliedGuestCode() throws Exception {
+        when(guestService.create(org.mockito.ArgumentMatchers.any())).thenReturn(guestResponse());
+        String body =
+                "{\"firstName\":\"First\",\"guestCode\":\"CLIENT-OVERRIDE\"}";
+
+        mockMvc.perform(post("/api/guests")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body)
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.guestCode").value("G000001"));
     }
 
     /**

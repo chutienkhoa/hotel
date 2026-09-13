@@ -6,6 +6,7 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.booking.Stay;
+import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
@@ -43,6 +44,7 @@ public class ReservationService {
     private final AuditLogRepository audits;
     private final ReservationMapper reservationMapper;
     private final ReservationNumberGenerator reservationNumberGenerator;
+    private final StayBalanceService stayBalanceService;
 
     /**
      * Tạo dịch vụ với các repository phụ thuộc.
@@ -54,6 +56,7 @@ public class ReservationService {
      * @param audits repository audit
      * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
      * @param reservationNumberGenerator generator tạo reservation number hằng ngày
+     * @param stayBalanceService service tính số dư của Stay khi check-out
      */
     ReservationService(
             ReservationRepository reservations,
@@ -62,7 +65,8 @@ public class ReservationService {
             StayRepository stays,
             AuditLogRepository audits,
             ReservationMapper reservationMapper,
-            ReservationNumberGenerator reservationNumberGenerator) {
+            ReservationNumberGenerator reservationNumberGenerator,
+            StayBalanceService stayBalanceService) {
         this.reservations = reservations;
         this.guests = guests;
         this.rooms = rooms;
@@ -70,6 +74,7 @@ public class ReservationService {
         this.audits = audits;
         this.reservationMapper = reservationMapper;
         this.reservationNumberGenerator = reservationNumberGenerator;
+        this.stayBalanceService = stayBalanceService;
     }
 
     /**
@@ -248,6 +253,59 @@ public class ReservationService {
         stay.audit(user.id());
         stays.save(stay);
         audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
+        return response(reservation);
+    }
+
+    /**
+     * Checks out every room assigned to a checked-in reservation in one transaction.
+     *
+     * @param id reservation identifier
+     * @return reservation after its completed check-out
+     * @throws ResponseStatusException if the reservation, Stay, balance, or Room states prevent check-out
+     */
+    @Transactional
+    public Response checkOut(UUID id) {
+        Reservation reservation = load(id);
+        CurrentUser user = currentUser();
+        if (reservation.getStatus() != ReservationStatus.CHECKED_IN) {
+            throw conflict("Invalid reservation state transition");
+        }
+        Stay stay = stays
+                .findByReservationIdForUpdate(id)
+                .orElseThrow(() -> conflict("Stay not found for reservation"));
+        if (stay.getStatus() != StayStatus.CHECKED_IN) {
+            throw conflict("Invalid stay state transition");
+        }
+        StayBalance balance = stayBalanceService.calculate(stay.getId());
+        if (balance.outstanding().compareTo(BigDecimal.ZERO) != 0) {
+            throw conflict("Outstanding balance must be zero for check-out");
+        }
+        List<UUID> roomIds = reservation.getRooms().stream()
+                .map(reservationRoom -> reservationRoom.getRoom().getId())
+                .sorted()
+                .toList();
+        List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
+        if (lockedRooms.size() != roomIds.size()) {
+            throw notFound("Room");
+        }
+        for (Room room : lockedRooms) {
+            if (room.getStatus() != RoomStatus.OCCUPIED) {
+                throw conflict("Room is not occupied for check-out");
+            }
+        }
+        try {
+            for (Room room : lockedRooms) {
+                room.markDirty();
+                room.audit(user.id());
+            }
+            reservation.checkOut();
+            reservation.audit(user.id());
+            stay.checkOut();
+            stay.audit(user.id());
+        } catch (IllegalStateException exception) {
+            throw conflict(exception.getMessage());
+        }
+        audit(user, "CHECK_OUT", reservation, "CHECKED_IN", "CHECKED_OUT");
         return response(reservation);
     }
 

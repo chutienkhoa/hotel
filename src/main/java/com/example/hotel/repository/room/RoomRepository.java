@@ -13,6 +13,26 @@ import org.springframework.data.repository.query.Param;
 /** Cung cấp thao tác lưu trữ và khóa đồng thời cho phòng. */
 public interface RoomRepository extends JpaRepository<Room, UUID> {
     /**
+     * Counts active Rooms grouped by their current operational status.
+     *
+     * @return status and count rows for active Rooms in stable status order
+     */
+    @Query(
+            "SELECT r.status, COUNT(r) "
+                    + "FROM Room r "
+                    + "WHERE r.active = TRUE "
+                    + "GROUP BY r.status "
+                    + "ORDER BY r.status")
+    List<Object[]> countActiveByStatus();
+
+    /**
+     * Counts Rooms that remain in the active hotel inventory.
+     *
+     * @return active Room count
+     */
+    long countByActiveTrue();
+
+    /**
      * Khóa các phòng theo thứ tự định danh để bảo vệ thao tác đồng thời.
      *
      * @param ids các định danh phòng cần khóa

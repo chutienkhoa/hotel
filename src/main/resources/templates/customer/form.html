@@ -2,21 +2,23 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <head th:replace="~{layout/base :: head(${guest == null} ? 'Create guest' : 'Edit guest')}"></head>
 <body>
-<div class="app-shell">
+<div class="app-shell page-guests">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
         <a class="back-link" th:href="@{/guests}">Back to guests</a>
-        <h1 th:text="${guest == null} ? 'Create guest' : 'Edit guest'">Guest form</h1>
-        <p th:if="${guest == null}">The guest code is generated automatically after creation.</p>
-        <p th:unless="${guest == null}">
-            Guest code: <span th:text="${guest.guestCode}">G000001</span>
-        </p>
+        <div class="page-header"><div>
+            <h1 th:text="${guest == null} ? 'Create guest' : 'Edit guest'">Guest form</h1>
+            <p th:if="${guest == null}">The guest code is generated automatically after creation.</p>
+            <p th:unless="${guest == null}">
+                Guest code: <span th:text="${guest.guestCode}">G000001</span>
+            </p>
+        </div></div>
 
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <form method="post"
+        <form class="form-card" method="post"
               th:action="${guest == null} ? @{/guests} : @{/guests/{id}(id=${guest.id})}"
               th:object="${guestForm}">
             <p class="message message-error" th:if="${#fields.hasAnyErrors()}">

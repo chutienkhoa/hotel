@@ -2,8 +2,8 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <head th:replace="~{layout/base :: head('Sign in')}"></head>
 <body class="login-page">
-<main class="login-panel">
-    <h1>Sign in</h1>
+<main aria-labelledby="login-heading" class="login-panel">
+    <h1 id="login-heading">Sign in</h1>
 
     <p class="message message-error" th:if="${param.error}">
         Invalid username or password.

@@ -8,7 +8,10 @@
       "mainClass": "com.example.hotel.HotelApplication",
       "projectName": "hotel-management",
       "envFile": "${workspaceFolder}/.env",
-      "preLaunchTask": "Maven: Build"
+      "preLaunchTask": "Maven: Build",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "dev"
+      }
     }
   ]
 }

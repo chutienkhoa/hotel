@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Expenses')}"></head>
+<body>
+<div class="app-shell page-expenses">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Expenses</h1>
+                <p>Manage Expense v1 drafts and lifecycle actions.</p>
+            </div>
+            <a class="button button-primary" th:if="${canManageExpense}" th:href="@{/expenses/new}">Create Expense</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="empty-state" th:if="${#lists.isEmpty(expenses)}">No expenses found.</p>
+
+        <div class="table-wrap" th:unless="${#lists.isEmpty(expenses)}"><table>
+            <thead>
+            <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Category</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Payment method</th>
+                <th scope="col">Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="expense : ${expenses}">
+                <td th:text="${expense.expenseDate}">2026-09-11</td>
+                <td>
+                    <a th:href="@{/expenses/{id}(id=${expense.id})}" th:text="${expense.category.code}">ELECTRICITY</a>
+                </td>
+                <td th:text="${expense.amount + ' ' + expense.currency}">0 VND</td>
+                <td th:text="${expense.paymentMethod}">CASH</td>
+                <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(expense.status)}" th:text="${expense.status}">DRAFT</span></td>
+            </tr>
+            </tbody>
+        </table></div>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

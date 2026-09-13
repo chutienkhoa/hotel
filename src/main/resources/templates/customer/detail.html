@@ -2,13 +2,13 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <head th:replace="~{layout/base :: head('Guest detail')}"></head>
 <body>
-<div class="app-shell">
+<div class="app-shell page-guests">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
         <a class="back-link" th:href="@{/guests}">Back to guests</a>
-        <div class="page-heading">
+        <div class="page-header">
             <div>
                 <h1 th:text="${guest.guestCode}">G000001</h1>
                 <p>Guest profile</p>

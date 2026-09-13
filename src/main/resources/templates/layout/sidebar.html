@@ -2,9 +2,16 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <body>
 <nav aria-label="Main navigation" class="sidebar" th:fragment="sidebar">
-    <a th:href="@{/reservations}">Reservations</a>
-    <a th:if="${canManageBooking}" th:href="@{/reservations/new}">Create Reservation</a>
-    <a th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
+    <div class="nav-section" th:if="${canViewReport}">
+        <p class="nav-section-label">Overview</p>
+        <a class="nav-link nav-dashboard" th:href="@{/dashboard}">Dashboard</a>
+    </div>
+    <div class="nav-section">
+        <p class="nav-section-label">Front desk</p>
+        <a class="nav-link nav-reservations" th:href="@{/reservations}">Reservations</a>
+        <a class="nav-link" th:if="${canManageBooking}" th:href="@{/reservations/new}">Create Reservation</a>
+        <a class="nav-link nav-guests" th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
+    </div>
 </nav>
 </body>
 </html>

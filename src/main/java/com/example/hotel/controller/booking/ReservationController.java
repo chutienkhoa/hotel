@@ -118,4 +118,16 @@ public class ReservationController {
     Response checkIn(@PathVariable UUID id) {
         return service.checkIn(id);
     }
+
+    /**
+     * Performs check-out for an eligible checked-in reservation.
+     *
+     * @param id reservation identifier
+     * @return reservation after check-out
+     */
+    @PostMapping("/{id}/check-out")
+    @PreAuthorize("hasAuthority('PERM_CHECK_OUT')")
+    Response checkOut(@PathVariable UUID id) {
+        return service.checkOut(id);
+    }
 }

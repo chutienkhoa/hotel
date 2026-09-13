@@ -118,7 +118,13 @@ Guest
                            Account
 
 
-Expense ────────────────> AccountingEntry
+Expense
+  │
+  ↓
+Future Accounting integration
+  │
+  ↓
+AccountingEntry
 
 
 AppUser ───< Role ───< Permission
@@ -204,12 +210,28 @@ code UNIQUE
 Các RoomType đã thống nhất:
 
 ```text
-SINGLE
-DOUBLE
-TWIN
-DELUXE
-SUITE
+SINGLE: Single Room, capacity 1
+DOUBLE: Double Room, capacity 2
+TWIN: Twin Room, capacity 2
+TRIPLE: Triple Room, capacity 3
+FAMILY: Family Room, capacity 4
 ```
+
+RoomType không định nghĩa permanent fixed selling price.
+
+Giá Room có thể thay đổi theo tourism season, month, date range, hoặc future pricing rules.
+
+Không dùng `RoomType.base_price` làm authoritative long-term reservation price.
+
+Detailed pricing / rate-plan behavior không thuộc current Room Management scope.
+
+Không implement RoomRate hoặc RatePlan trong scope hiện tại.
+
+Năm RoomType đã thống nhất phải tồn tại dưới dạng read-only reference data.
+
+Room Management có thể đọc và chọn một trong các RoomType này khi create/update Room.
+
+Không implement RoomType create/update/delete trong current scope.
 
 ---
 
@@ -240,7 +262,7 @@ Technical ID:
 
 ```text
 id sử dụng UUID làm internal technical primary key.
-room_number và reservation_number không được sinh từ UUID này.
+room_number và bất kỳ business identifier nào không được sinh từ UUID này.
 ```
 
 Relationship:
@@ -248,6 +270,82 @@ Relationship:
 ```text
 RoomType 1 ─── N Room
 ```
+
+Mỗi Room phải thuộc chính xác một RoomType.
+
+`room_type` là mandatory cho Room.
+
+Room profile:
+
+```text
+Create Room: room_number, room_type, floor
+Update Room profile: room_number, room_type, floor
+```
+
+Generic Room create/update không được điều khiển:
+
+```text
+id
+status
+active
+created_by
+updated_by
+deleted_by
+```
+
+Initial Room status:
+
+```text
+AVAILABLE
+```
+
+Client không được cung cấp initial status.
+
+`active` biểu thị Room còn thuộc active hotel inventory hay không và khác với operational status.
+
+Ví dụ:
+
+```text
+active=true + AVAILABLE: active room currently ready
+active=true + OCCUPIED: active room occupied
+active=true + OUT_OF_ORDER: active inventory room temporarily unavailable
+active=true + MAINTENANCE: active inventory room under maintenance
+active=false: room is no longer part of active hotel inventory
+```
+
+Không dùng `active=false` thay cho `OUT_OF_ORDER` hoặc `MAINTENANCE`.
+
+Deactivate/reactivate Room không thuộc current Room Management slice.
+
+Authorization:
+
+```text
+MANAGE_ROOM bảo vệ Room Management operations.
+Reservation room lookup tiếp tục dùng MANAGE_BOOKING.
+```
+
+Operational status và booking availability là hai khái niệm khác nhau.
+
+`Room.status == AVAILABLE` không tự nó xác định Room available cho requested booking period.
+
+Booking availability phải xét ít nhất:
+
+```text
+requested check-in/check-out period
+existing relevant Reservations for that Room
+```
+
+Current Room Management implementation slice chỉ gồm:
+
+```text
+RoomType read-only support
+Room list
+Room detail
+Create Room
+Update Room profile
+```
+
+Explicit operational status actions, deactivate/reactivate Room, và RoomType management không thuộc slice này.
 
 Room status:
 
@@ -437,6 +535,84 @@ Reservation 1 ─── 1 Stay
 
 Stay được tạo từ Reservation khi khách thực hiện check-in.
 
+Stay statuses:
+
+```text
+CHECKED_IN
+CHECKED_OUT
+```
+
+Allowed transition:
+
+```text
+CHECKED_IN -> CHECKED_OUT
+Operation: check-out
+```
+
+Khi check-in:
+
+```text
+Stay.status = CHECKED_IN
+actual_check_in_at được backend ghi nhận
+actual_check_out_at = null
+```
+
+Khi check-out:
+
+```text
+Stay.status = CHECKED_OUT
+actual_check_out_at được backend ghi nhận
+```
+
+Client không được set trực tiếp Stay.status.
+
+Không thêm Stay state khác trong current scope.
+
+## 8.2 Folio v1
+
+Folio là financial view của một Stay và được truy cập theo Reservation:
+
+```text
+GET /reservations/{reservationId}/folio
+```
+
+Detailed Folio financial information yêu cầu permission:
+
+```text
+MANAGE_PAYMENT
+```
+
+`MANAGE_PAYMENT` authorizes:
+
+```text
+- viewing Charges
+- viewing Payments
+- viewing Total Charges
+- viewing Total Paid Payments
+- viewing Outstanding
+- creating Charges
+- creating Payments
+- Payment state transitions
+```
+
+`CHECK_OUT` không cấp detailed financial read access. User chỉ có `CHECK_OUT` không được truy cập Charge, Payment, hoặc detailed Folio financial information chỉ vì có thể thực hiện check-out.
+
+Folio có thể hiển thị Reservation context, Stay context, Charges, Payments, Total Charges, Total Paid Payments, và Outstanding.
+
+Folio financially mutable chỉ khi:
+
+```text
+Stay.status = CHECKED_IN
+```
+
+Khi:
+
+```text
+Stay.status = CHECKED_OUT
+```
+
+Folio closed và read-only trong v1.
+
 ---
 
 # 9. Charge Domain
@@ -449,18 +625,72 @@ Fields:
 
 ```text
 id
-stay_id
+stayId
 type
 description
 quantity
-unit_price
+unitPrice
 amount
-charged_at
-created_at
-created_by
-updated_at
-updated_by
+chargedAt
+createdAt
+createdBy
+updatedAt
+updatedBy
 ```
+
+Rules:
+
+```text
+id is a backend-generated UUID
+stayId is required
+type is required
+description is optional
+amount is the persisted authoritative financial value
+chargedAt is generated by the backend at Charge creation
+audit fields are backend-controlled
+```
+
+Client không được provide:
+
+```text
+id
+chargedAt
+createdAt
+createdBy
+updatedAt
+updatedBy
+```
+
+Relationship:
+
+```text
+Stay 1:N Charge
+```
+
+Mỗi Charge thuộc chính xác một Stay. `charge.stay_id` là mandatory. Reverse `Stay.charges` entity collection không bắt buộc trong Charge v1.
+
+Authorization:
+
+```text
+MANAGE_PAYMENT
+```
+
+Charge v1 chỉ hỗ trợ:
+
+```text
+POST /api/stays/{stayId}/charges
+GET  /api/stays/{stayId}/charges
+```
+
+Charge creation chỉ được phép khi:
+
+```text
+Stay.status = CHECKED_IN
+```
+
+Charge creation phải reject khi `Stay.status = CHECKED_OUT`.
+
+Không định nghĩa update, delete, void, correction, hoặc reversal behavior trong Charge v1.
 
 Charge types:
 
@@ -476,13 +706,72 @@ DISCOUNT
 OTHER
 ```
 
-Constraint:
+Charge v1 chỉ được tạo các type:
+
+```text
+ROOM
+BREAKFAST
+EXTRA_BED
+LAUNDRY
+MINIBAR
+SERVICE
+OTHER
+```
+
+`TAX` và `DISCOUNT` được giữ lại làm enum/reference values cho future use, nhưng Charge v1 phải reject việc tạo Charge với hai type này.
+
+Không implement automatic tax calculation, discount calculation, negative Charge behavior, currency-conversion, hoặc advanced rounding behavior trong current scope. Detailed behavior sẽ được định nghĩa trong future specification change.
+
+### Charge pricing modes
+
+Mỗi Charge phải dùng chính xác một trong hai pricing modes sau.
+
+#### FIXED AMOUNT
+
+FIXED AMOUNT được dùng khi `quantity` và `unitPrice` không được cung cấp.
+
+```text
+amount > 0
+quantity = absent
+unitPrice = absent
+```
+
+Với FIXED AMOUNT, user cung cấp `amount`; `amount` được persisted và authoritative. Mode này hỗ trợ fixed Charges như `SERVICE`, `OTHER`, và `ROOM` khi applicable.
+
+#### ITEMIZED
+
+ITEMIZED được dùng khi `quantity` và `unitPrice` được cung cấp. Hai field này phải cùng present.
 
 ```text
 quantity > 0
+unitPrice >= 0
+amount = quantity * unitPrice
+amount > 0
 ```
 
+Với ITEMIZED Charge mới được tạo, backend phải authoritative khi tính `amount = quantity * unitPrice`. Client chỉ cung cấp `quantity` và `unitPrice`; client không được independently determine authoritative calculated `amount`.
+
+Không được dựa vào Thymeleaf, browser validation, JavaScript, hoặc client-supplied calculated values để enforce financial correctness của ITEMIZED Charge.
+
+Không tạo Charge-type-specific pricing rule trong Charge v1. `quantity` tiếp tục dùng `BigDecimal`; chưa định nghĩa type-specific integer/fractional quantity rule. Ví dụ hợp lệ về presentation gồm `2` breakfasts, `3` laundry units, hoặc `1.5` service units nếu operationally needed. Presentation không nên hiển thị trailing zeros không cần thiết, ví dụ `1.000000 -> 1` và `1.500000 -> 1.5`.
+
 Charge và Payment là hai khái niệm khác nhau.
+
+Charge đại diện cho financial amount đã được ghi nhận trên Stay/Folio.
+
+Không thêm Charge state `PENDING` hoặc `FINALIZED` trong current scope.
+
+`Charge.amount` đã được persisted là authoritative monetary value dùng cho balance calculation. Check-out và accounting calculation phải dùng:
+
+```text
+SUM(charge.amount)
+```
+
+Không tính lại Stay balance hoặc historical `Charge.amount` tại check-out từ `quantity * unitPrice`.
+
+Historical Charge records không được recalculate hoặc modify. Historical Charge giữ stored `amount` là authoritative, kể cả khi `quantity` và `unitPrice` không khớp với stored `amount`. ITEMIZED calculated-amount rule chỉ áp dụng cho Charge mới được tạo sau khi behavior này được implement; không cần data migration hoặc historical normalization.
+
+UI entry phải làm rõ hai mode: ITEMIZED entry nhận `quantity` và `unitPrice` rồi application calculates `amount`; FIXED AMOUNT entry nhận `amount` và không nhận `quantity` hoặc `unitPrice`. UI không được encourage user nhập ba independent monetary/calculation values. Không quy định JavaScript behavior trong specification này.
 
 Ví dụ:
 
@@ -490,10 +779,8 @@ Ví dụ:
 Charges:
 Room       ¥30,000
 Breakfast   ¥3,000
-Tax         ¥3,300
-Discount   -¥2,000
 
-Total = ¥34,300
+Total = ¥33,000
 ```
 
 ---
@@ -508,17 +795,79 @@ Fields:
 
 ```text
 id
-stay_id
+stayId
 amount
 method
 status
-transaction_reference
-paid_at
-created_at
-created_by
-updated_at
-updated_by
+paidAt
+reference
+createdAt
+createdBy
+updatedAt
+updatedBy
 ```
+
+Rules:
+
+```text
+id is a backend-generated UUID
+stayId is required and comes from the URL path
+amount is required, amount > 0, and immutable after Payment creation
+method is required
+reference is optional for all Payment methods
+reference has no method-specific format or uniqueness rule in Payment v1
+audit fields are backend-controlled
+```
+
+Client chỉ được provide:
+
+```text
+amount
+method
+reference
+```
+
+Client không được provide:
+
+```text
+id
+stayId in request body
+status
+paidAt
+createdAt
+createdBy
+updatedAt
+updatedBy
+```
+
+Relationship:
+
+```text
+Stay 1:N Payment
+```
+
+Mỗi Payment thuộc chính xác một Stay. `payment.stay_id` là NOT NULL.
+
+Payment creation chỉ được phép khi `Stay.status = CHECKED_IN`. Không hỗ trợ pre-check-in deposits và không tạo Payment mới sau khi Stay `CHECKED_OUT`.
+
+Authorization:
+
+```text
+MANAGE_PAYMENT
+```
+
+Payment v1 chỉ hỗ trợ:
+
+```text
+POST /api/stays/{stayId}/payments
+GET  /api/stays/{stayId}/payments
+
+POST /api/payments/{id}/mark-paid
+POST /api/payments/{id}/mark-failed
+POST /api/payments/{id}/refund
+```
+
+Không implement generic Payment update hoặc delete.
 
 Payment methods:
 
@@ -539,11 +888,44 @@ FAILED
 REFUNDED
 ```
 
-Constraint:
+Mỗi Payment mới bắt đầu với:
 
 ```text
-amount > 0
+status = PENDING
+paidAt = null
 ```
+
+Client không được chọn initial status. Direct creation với `PAID`, `FAILED`, hoặc `REFUNDED` không được phép.
+
+Khi chuyển `PENDING -> PAID`, backend ghi `paidAt` bằng backend current time. Client không được provide hoặc modify `paidAt`.
+
+Payment `FAILED` giữ `paidAt = null`. Không định nghĩa `refundedAt` hoặc refund timestamp behavior trong Payment v1.
+
+Chỉ Payment có status `PAID` đóng góp vào Total Payments.
+
+```text
+PENDING: không đóng góp
+FAILED: không đóng góp
+PAID: đóng góp amount
+REFUNDED: không đóng góp
+```
+
+Overpayment không được hỗ trợ.
+
+Trước khi chuyển `PENDING -> PAID`, backend phải bảo đảm việc công nhận Payment là `PAID` không làm:
+
+```text
+Total PAID Payments > Total Charges
+```
+
+Trong đó:
+
+```text
+Total Charges = SUM(charge.amount)
+Total PAID Payments = SUM(payment.amount WHERE status = PAID)
+```
+
+Nếu transition gây overpayment, phải reject. Không implement general Outstanding service trong Payment v1.
 
 ---
 
@@ -552,28 +934,49 @@ amount > 0
 Allowed transitions:
 
 ```text
-PENDING
- ├── PAID
- └── FAILED
+PENDING -> PAID
+Operation: mark-paid
 
-PAID
- └── REFUNDED
+PENDING -> FAILED
+Operation: mark-failed
+
+PAID -> REFUNDED
+Operation: refund
 ```
 
-Không cho phép:
+Không được thêm Payment transition khác.
+
+Các Payment transitions chỉ được phép khi owning Stay có:
 
 ```text
-PAID → PENDING
-PAID → FAILED
-REFUNDED → PAID
-REFUNDED → PENDING
+Stay.status = CHECKED_IN
 ```
+
+Khi owning Stay có `Stay.status = CHECKED_OUT`, các operation `mark-paid`, `mark-failed`, và `refund` phải reject. Rule này không thay đổi Payment state machine.
+
+Refund dùng cùng Payment record theo transition `PAID -> REFUNDED`. Không tạo separate negative Payment record; Payment amount giữ nguyên; partial refunds không được hỗ trợ trong Payment v1.
 
 ---
 
 # 12. Outstanding Balance
 
-Tổng tiền phải trả được xác định từ Charges.
+Total Charges:
+
+```text
+SUM(charge.amount)
+```
+
+Total Payments:
+
+```text
+SUM(payment.amount WHERE payment.status = PAID)
+```
+
+Outstanding:
+
+```text
+Total Charges - Total Payments
+```
 
 Ví dụ:
 
@@ -593,7 +996,25 @@ Total Payment = ¥40,000
 Outstanding = ¥10,000
 ```
 
-Không được check-out khi còn outstanding balance, trừ trường hợp có cơ chế override được cấp quyền.
+Check-out yêu cầu `Outstanding = 0`.
+
+Không có outstanding-balance override hoặc override permission trong current scope.
+
+Reservation Detail có thể hiển thị non-financial checkout-readiness indicator cho user có `CHECK_OUT`:
+
+```text
+READY
+- current Stay exists
+- Outstanding = 0
+
+PAYMENT_REQUIRED
+- current Stay exists
+- Outstanding != 0
+```
+
+Detailed Outstanding monetary amount không cần expose cho user chỉ có `CHECK_OUT`. Backend check-out validation remains authoritative.
+
+Folio v1 không hỗ trợ post-checkout refund, Payment, Charge, folio reopening, late Charge, financial adjustment, correction/reversal workflow, hoặc accounting reversal. Các behavior này yêu cầu future explicit financial/accounting specification.
 
 ---
 
@@ -629,6 +1050,10 @@ MAINTENANCE
 OTHER
 ```
 
+ExpenseCategory là read-only reference data trong Expense v1.
+
+Không implement ExpenseCategory create, update, hoặc delete.
+
 ---
 
 ## 13.2 Expense
@@ -651,6 +1076,35 @@ updated_at
 updated_by
 ```
 
+Expense v1 sử dụng fixed currency:
+
+```text
+VND
+```
+
+Currency do backend kiểm soát. Client không được provide hoặc modify currency. Không implement multi-currency behavior trong Expense v1.
+
+`Expense.amount` là required, phải lớn hơn `0`, và sử dụng `BigDecimal`. Không dùng `float` hoặc `double`.
+
+`expenseDate` do client cung cấp, đại diện cho business date của Expense và khác `createdAt`. Không áp dụng future-date restriction trong Expense v1.
+
+Expense payment methods là Expense concept riêng, không reuse `PaymentMethod` của Payment domain theo assumption:
+
+```text
+CASH
+BANK_TRANSFER
+CREDIT_CARD
+OTHER
+```
+
+Mỗi Expense mới bắt đầu với:
+
+```text
+status = DRAFT
+```
+
+Client không được chọn initial Expense status.
+
 Expense status:
 
 ```text
@@ -661,7 +1115,85 @@ REJECTED
 POSTED
 ```
 
-Expense có thể tạo Accounting Entry.
+Allowed transitions:
+
+```text
+DRAFT -> SUBMITTED
+Operation: submit
+
+SUBMITTED -> APPROVED
+Operation: approve
+
+SUBMITTED -> REJECTED
+Operation: reject
+
+APPROVED -> POSTED
+Operation: post
+```
+
+Không được thêm Expense transition khác.
+
+Khi `Expense.status = DRAFT`, chỉ các field sau có thể được update:
+
+```text
+category
+amount
+expenseDate
+paymentMethod
+description
+```
+
+Sau khi rời khỏi `DRAFT`, các business field này immutable. Không implement generic editing cho Expense có status `SUBMITTED`, `APPROVED`, `REJECTED`, hoặc `POSTED`.
+
+Client chỉ được provide:
+
+```text
+category
+amount
+expenseDate
+paymentMethod
+description
+```
+
+Client không được provide:
+
+```text
+id
+currency
+status
+createdBy
+approvedBy
+createdAt
+updatedAt
+updatedBy
+```
+
+`approvedBy` do backend kiểm soát và được set khi transition `SUBMITTED -> APPROVED`.
+
+Mọi Expense v1 operation yêu cầu permission:
+
+```text
+MANAGE_EXPENSE
+```
+
+Không thêm Expense permission mới. Current role-permission mapping giữ nguyên.
+
+Expense v1 hỗ trợ:
+
+```text
+List Expenses
+View Expense Detail
+Create Expense
+Update DRAFT Expense
+Submit Expense
+Approve Expense
+Reject Expense
+Post Expense
+```
+
+Không hỗ trợ delete, correction, reversal, void, receipt/file upload, hoặc recurring Expense behavior.
+
+Expense v1 không tạo `AccountingEntry`. `POSTED` chỉ là Expense domain state trong version này. Không định nghĩa debit/credit behavior, chart-of-accounts mapping, accounting posting rules, hoặc automatic AccountingEntry creation; Accounting integration sẽ được specified separately sau này.
 
 ---
 
@@ -911,9 +1443,10 @@ Reservation phù hợp để check-in
 Room available/ready
 Guest information hợp lệ
 Reservation không bị cancellation
-Deposit/payment rule
 User có CHECK_IN permission
 ```
+
+Không thêm deposit/payment requirement cho check-in trong current scope.
 
 ## Check-out
 
@@ -922,47 +1455,52 @@ Phải kiểm tra:
 ```text
 Final bill đã được calculate
 Outstanding balance = 0
-Không còn pending charge
 User có CHECK_OUT permission
 ```
+
+Không dùng pending charges làm check-out validation rule trong current version.
 
 ---
 
 # 21. Room State Machine
 
-Allowed transitions:
+Approved transitions:
 
 ```text
-AVAILABLE
- ├── OCCUPIED
- ├── MAINTENANCE
- └── OUT_OF_ORDER
+AVAILABLE -> OCCUPIED
+Operation: check-in
+Permission: CHECK_IN
+
+OCCUPIED -> DIRTY
+Operation: check-out
+Permission: CHECK_OUT
+
+DIRTY -> CLEANING
+Operation: start-cleaning
+Permission: MANAGE_ROOM
+
+CLEANING -> AVAILABLE
+Operation: finish-cleaning
+Permission: MANAGE_ROOM
+
+AVAILABLE -> MAINTENANCE
+Operation: start-maintenance
+Permission: MANAGE_ROOM
+
+MAINTENANCE -> AVAILABLE
+Operation: finish-maintenance
+Permission: MANAGE_ROOM
+
+AVAILABLE -> OUT_OF_ORDER
+Operation: mark-out-of-order
+Permission: MANAGE_ROOM
+
+OUT_OF_ORDER -> AVAILABLE
+Operation: restore-to-service
+Permission: MANAGE_ROOM
 ```
 
-```text
-OCCUPIED
- └── DIRTY
-```
-
-```text
-DIRTY
- └── CLEANING
-```
-
-```text
-CLEANING
- └── AVAILABLE
-```
-
-```text
-MAINTENANCE
- └── AVAILABLE
-```
-
-```text
-OUT_OF_ORDER
- └── AVAILABLE
-```
+Không được thêm Room status transition khác.
 
 ---
 
@@ -998,8 +1536,6 @@ Verify Guest
       ↓
 Verify Room
       ↓
-Verify Payment / Deposit
-      ↓
 Check-in
       ↓
 Reservation = CHECKED_IN
@@ -1015,29 +1551,48 @@ Các bước phải nằm trong business transaction phù hợp.
 
 # 24. Check-out Flow
 
-```text
-Stay
- ↓
-Calculate final amount
- ↓
-Check unpaid balance
- ↓
-Receive payment
- ↓
-Check-out
- ↓
-Reservation = CHECKED_OUT
- ↓
-Room = DIRTY
-```
+Check-out operates atomically on the entire Reservation.
 
-Nếu còn outstanding balance:
+Nếu Reservation chứa nhiều assigned Rooms:
 
 ```text
-Check-out = rejected
+every Room phải OCCUPIED trước check-out
+every Room chuyển OCCUPIED -> DIRTY
+Reservation chuyển CHECKED_IN -> CHECKED_OUT
+Stay chuyển CHECKED_IN -> CHECKED_OUT
+actual_check_out_at được ghi nhận
 ```
 
-trừ khi có quyền override.
+Không hỗ trợ partial-room check-out trong current version.
+
+Nếu bất kỳ assigned Room không thể chuyển `OCCUPIED -> DIRTY`, toàn bộ check-out thất bại và không có partial check-out.
+
+Check-out transaction phải atomically:
+
+```text
+1. Load CHECKED_IN Reservation
+2. Load unique Stay
+3. Calculate Total Charges
+4. Calculate Total PAID Payments
+5. Calculate Outstanding
+6. Reject nếu Outstanding != 0
+7. Lock all assigned Rooms
+8. Require every Room = OCCUPIED
+9. Transition every Room OCCUPIED -> DIRTY
+10. Transition Reservation CHECKED_IN -> CHECKED_OUT
+11. Transition Stay CHECKED_IN -> CHECKED_OUT
+12. Record actual_check_out_at
+13. Apply authenticated-user audit updates
+14. Write approved CHECK_OUT audit log
+```
+
+Nếu bất kỳ step nào fail, transaction phải roll back.
+
+Check-out yêu cầu `CHECK_OUT`.
+
+Không có check-out override permission.
+
+Existing `CHECK_IN` authorization remains unchanged.
 
 ---
 
@@ -1159,7 +1714,9 @@ ADMIN
  ├── MANAGE_PAYMENT
  ├── MANAGE_EXPENSE
  ├── MANAGE_GUEST
- └── VIEW_BOOKING
+ ├── VIEW_REPORT
+ ├── VIEW_BOOKING
+ └── CHECK_OUT
 ```
 
 ```text
@@ -1169,7 +1726,8 @@ MANAGER
  ├── MANAGE_PAYMENT
  ├── VIEW_REPORT
  ├── VIEW_BOOKING
- └── MANAGE_GUEST
+ ├── MANAGE_GUEST
+ └── CHECK_OUT
 ```
 
 ```text
@@ -1473,7 +2031,7 @@ amount > 0
 ## Charge
 
 ```text
-quantity > 0
+quantity is absent or quantity > 0
 ```
 
 ## AccountingEntryLine
@@ -1603,39 +2161,224 @@ không được tự động coi là có trong iCal.
 
 # 41. Dashboard
 
-Dashboard phải hiển thị các thông tin chính:
+Dashboard v1 là read-only và yêu cầu permission:
 
 ```text
-Today's Check-in
-Today's Check-out
-Pending Payment
-Dirty Rooms
-Maintenance Rooms
-Upcoming Reservations
+VIEW_REPORT
 ```
 
-Các KPI đã thống nhất:
+MVC route:
 
 ```text
-Occupancy
-Check-in count
-Check-out count
+GET /dashboard
+```
+
+Dashboard v1 không yêu cầu REST endpoint.
+
+Dashboard v1 chỉ hiển thị:
+
+```text
+Reservation summary
+- total Reservation count
+- Reservation count grouped by status
+
+Room summary
+- total active Rooms
+- active Room count grouped by operational status
+
+Stay summary
+- count of currently CHECKED_IN Stays
+
+Operational Room alerts for active Rooms
+- DIRTY
+- CLEANING
+- MAINTENANCE
+- OUT_OF_ORDER
+
+Expense summary
+- Expense count grouped by status
+```
+
+Dashboard Room summary và operational alerts chỉ bao gồm Room có `active = true`.
+Dashboard Room metrics chỉ đại diện cho operational Room status; không suy ra booking availability từ `Room.status = AVAILABLE`.
+
+Dashboard v1 không bao gồm:
+
+```text
+today's arrivals
+today's departures
+upcoming reservations
 Revenue
-Expense
 Profit
+global Charge total
+global Payment total
+global Outstanding
+Pending Payment summary
+occupancy rate
+ADR
+RevPAR
+cancellation rate
+average stay
+any other hotel KPI not explicitly approved
 ```
 
-Ví dụ:
+Các reference Revenue, Expense, và Profit như Dashboard KPI là future reporting goals. Dashboard v1 không tính hoặc hiển thị Revenue hoặc Profit; PAID Payment không được gắn nhãn Revenue. Accounting-based financial KPI sẽ được định nghĩa trong future Accounting/Reporting specification.
+
+Dashboard v1 cố ý không có date-scoped arrival/departure metrics. Scheduled-vs-actual semantics và Dashboard business timezone sẽ được specified separately khi thêm date-scoped Dashboard metric.
+
+Dashboard template có thể đặt tại:
 
 ```text
-Occupancy: 78%
-Check-in: 5
-Check-out: 3
-
-Revenue: ¥185,000
-Expense: ¥52,000
-Profit: ¥133,000
+src/main/resources/templates/dashboard/
 ```
+
+## 41.1 Dashboard Analytics v2
+
+Dashboard Analytics v2 vẫn là read-only, dùng cùng MVC route Dashboard hiện có, và tiếp tục yêu cầu permission:
+
+```text
+VIEW_REPORT
+```
+
+Không thêm user-selectable date filter trong Analytics v2.
+
+### Reporting period
+
+Analytics v2 dùng current calendar year làm reporting period mặc định. Với current year `Y`:
+
+```text
+startDate = Y-01-01
+endDateExclusive = (Y + 1)-01-01
+```
+
+Mọi Analytics v2 dataset phải dùng `Reservation.checkInDate` để xác định Reservation có thuộc reporting period hay không.
+
+Không dùng:
+
+```text
+Reservation.createdAt
+Reservation.reservedAt
+Stay.actualCheckInAt
+```
+
+### Reservations by Check-in Month
+
+Definition:
+
+```text
+COUNT(Reservation)
+GROUP BY year/month of Reservation.checkInDate
+within the current calendar year
+```
+
+Metric này hiển thị planned booking volume, không phải completed stays.
+
+Hiển thị đủ mười hai tháng January đến December. Month không có Reservation phải có count = `0`.
+
+Không filter theo `Reservation.status`.
+
+### Booked Rooms by RoomType
+
+Definition:
+
+```text
+COUNT(ReservationRoom)
+GROUP BY RoomType
+WHERE owning Reservation.checkInDate is within the current calendar year
+```
+
+Count `ReservationRoom` records, không count distinct `Reservation`.
+
+Không filter theo `Reservation.status`.
+
+`RoomType.code` là stable grouping identity. `RoomType.name` có thể dùng làm presentation text.
+
+Analytics v2 có thể resolve RoomType qua:
+
+```text
+ReservationRoom -> Room -> RoomType
+```
+
+Vì vậy Analytics v2 dùng current RoomType assignment của Room. Không thêm historical RoomType snapshot trong version này. Nếu cần strict historical RoomType-at-booking reporting sau này, requirement đó phải được specified riêng.
+
+### Reservations by Source
+
+Definition:
+
+```text
+COUNT(Reservation)
+GROUP BY Reservation.source
+WHERE Reservation.checkInDate is within the current calendar year
+```
+
+Không filter theo `Reservation.status`.
+
+Approved sources giữ nguyên:
+
+```text
+DIRECT
+AGODA
+BOOKING_COM
+AIRBNB
+```
+
+Không thêm source mới.
+
+### Consistent reporting period
+
+Cả ba Analytics v2 charts phải dùng cùng current-calendar-year `Reservation.checkInDate` reporting period. Không dùng all-history aggregation cho RoomType hoặc Source trong khi monthly chart dùng year range.
+
+### Chart presentation
+
+Approved visualizations:
+
+```text
+Reservations by Check-in Month: bar or line chart
+Booked Rooms by RoomType: bar chart
+Reservations by Source: doughnut or pie chart
+```
+
+Chart.js được approved làm rendering library. Dùng pinned/local application asset, không dùng unpinned runtime CDN.
+
+Backend phải cung cấp already aggregated data. Frontend JavaScript chỉ được transform data đó thành Chart.js datasets và render charts.
+
+Frontend JavaScript không được:
+
+```text
+calculate business metrics
+query the database
+determine permissions
+infer Reservation state
+infer Room availability
+```
+
+### Zero-count handling
+
+Dashboard backend layer phải cung cấp deterministic complete datasets. Với monthly analytics:
+
+```text
+all 12 months must be represented
+missing query results are zero-filled by backend/service logic
+```
+
+Charts không được tự determine missing business buckets.
+
+### Analytics v2 boundaries
+
+Analytics v2 không thêm:
+
+```text
+Revenue
+Profit
+ADR
+RevPAR
+Occupancy Rate
+Payment totals
+Outstanding totals
+financial/accounting metrics
+```
+
+Dashboard authorization không thay đổi.
 
 ---
 
@@ -1653,7 +2396,7 @@ Expense
 Operating Profit
 ```
 
-Revenue và Expense phải có accounting representation phù hợp.
+Expense có thể cần accounting representation phù hợp trong future Accounting implementation. Behavior này nằm ngoài Expense v1: Expense `POSTED` hiện không tạo `AccountingEntry`. AccountingEntry creation rules, debit/credit rules, account mapping, và posting behavior sẽ được specified separately trong Accounting scope.
 
 ---
 
@@ -1824,12 +2567,12 @@ và không được sửa trực tiếp sau POSTED.
 
 6. NO_SHOW reservation không được check-in.
 
-7. Check-out yêu cầu outstanding balance = 0,
-   trừ trường hợp override có permission phù hợp.
+7. Check-out yêu cầu outstanding balance = 0.
+   Không có override permission trong current scope.
 
 8. Payment amount > 0.
 
-9. Charge quantity > 0.
+9. Charge uses a valid FIXED AMOUNT or ITEMIZED pricing mode.
 
 10. Accounting debit/credit phải cân bằng.
 

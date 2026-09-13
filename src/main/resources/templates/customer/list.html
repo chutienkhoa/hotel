@@ -2,12 +2,12 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <head th:replace="~{layout/base :: head('Guests')}"></head>
 <body>
-<div class="app-shell">
+<div class="app-shell page-guests">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <div class="page-heading">
+        <div class="page-header">
             <div>
                 <h1>Guests</h1>
                 <p>Manage guest profiles used by reservations.</p>
@@ -17,9 +17,9 @@
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
 
-        <p th:if="${#lists.isEmpty(guests)}">No guests found.</p>
+        <p class="empty-state" th:if="${#lists.isEmpty(guests)}">No guests found.</p>
 
-        <table th:unless="${#lists.isEmpty(guests)}">
+        <div class="table-wrap" th:unless="${#lists.isEmpty(guests)}"><table>
             <thead>
             <tr>
                 <th scope="col">Guest Code</th>
@@ -38,7 +38,7 @@
                 <td th:text="${guest.email}">email@example.com</td>
             </tr>
             </tbody>
-        </table>
+        </table></div>
     </main>
 
     <footer th:replace="~{layout/footer :: footer}"></footer>

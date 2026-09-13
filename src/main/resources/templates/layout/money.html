@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<body>
+<span th:fragment="amount(value, currency)"
+      th:text="${currency == 'VND' ? #numbers.formatDecimal(value, 1, 'COMMA', 0, 'POINT') + ' VND' : value + ' ' + currency}">0 VND</span>
+</body>
+</html>

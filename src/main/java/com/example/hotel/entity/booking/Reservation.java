@@ -229,6 +229,15 @@ public class Reservation extends AuditedEntity {
     }
 
     /**
+     * Chuyển reservation đã check-in sang trạng thái đã check-out.
+     *
+     * @throws IllegalStateException nếu reservation không ở trạng thái CHECKED_IN
+     */
+    public void checkOut() {
+        transition(ReservationStatus.CHECKED_IN, ReservationStatus.CHECKED_OUT);
+    }
+
+    /**
      * Thực hiện một chuyển đổi trạng thái hợp lệ.
      *
      * @param from trạng thái nguồn bắt buộc

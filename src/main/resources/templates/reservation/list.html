@@ -2,12 +2,12 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <head th:replace="~{layout/base :: head('Reservations')}"></head>
 <body>
-<div class="app-shell">
+<div class="app-shell page-reservations">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <div class="page-heading">
+        <div class="page-header">
             <div>
                 <h1>Reservations</h1>
                 <p>View reservation status and planned stay dates.</p>
@@ -37,12 +37,12 @@
                 <tbody>
                 <tr th:each="reservation : ${reservations}">
                     <td th:text="${reservation.reservationNumber}">Reservation number</td>
-                    <td><span class="status" th:text="${reservation.status}">DRAFT</span></td>
-                    <td th:text="${reservation.checkInDate}">2027-01-10</td>
-                    <td th:text="${reservation.checkOutDate}">2027-01-12</td>
-                    <td th:text="${reservation.totalAmount + ' ' + reservation.currency}">0 JPY</td>
-                    <td>
-                        <a th:href="@{/reservations/{id}(id=${reservation.id})}">View</a>
+                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span></td>
+                    <td class="table-date" th:text="${reservation.checkInDate}">2027-01-10</td>
+                    <td class="table-date" th:text="${reservation.checkOutDate}">2027-01-12</td>
+                    <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
+                    <td class="table-actions">
+                        <a class="table-action" th:href="@{/reservations/{id}(id=${reservation.id})}">View</a>
                     </td>
                 </tr>
                 </tbody>

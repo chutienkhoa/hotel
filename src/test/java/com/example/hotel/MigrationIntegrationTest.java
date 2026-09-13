@@ -4,13 +4,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.hotel.entity.common.Role;
+import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.common.RoleRepository;
+import com.example.hotel.repository.customer.GuestRepository;
 import java.util.Set;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,14 +50,20 @@ class MigrationIntegrationTest {
     @Autowired
     ReservationRepository reservationRepository;
 
+    @Autowired
+    GuestRepository guestRepository;
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
     /** Xác nhận không còn migration chờ và các migration permission đã được áp dụng. */
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(4, flyway.info().applied().length);
+        assertEquals(12, flyway.info().applied().length);
     }
 
-    /** Xác nhận mapping permission sau migration chỉ bổ sung quyền xem reservation cho ADMIN và MANAGER. */
+    /** Verifies the exact role-permission mappings required by the approved operational flow. */
     @Test
     void permissionMappingMatchesSpecification() {
         assertPermissionCodes(
@@ -65,7 +75,9 @@ class MigrationIntegrationTest {
                         "MANAGE_PAYMENT",
                         "MANAGE_EXPENSE",
                         "MANAGE_GUEST",
-                        "VIEW_BOOKING"));
+                        "VIEW_REPORT",
+                        "VIEW_BOOKING",
+                        "CHECK_OUT"));
         assertPermissionCodes(
                 "MANAGER",
                 Set.of(
@@ -74,8 +86,15 @@ class MigrationIntegrationTest {
                         "MANAGE_PAYMENT",
                         "VIEW_REPORT",
                         "MANAGE_GUEST",
-                        "VIEW_BOOKING"));
+                        "VIEW_BOOKING",
+                        "CHECK_OUT"));
         assertPermissionCodes("STAFF", Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT"));
+        assertRolePermissionRelationshipCount("ADMIN", "VIEW_REPORT", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "VIEW_REPORT", 1);
+        assertRolePermissionRelationshipCount("STAFF", "VIEW_REPORT", 0);
+        assertRolePermissionRelationshipCount("ADMIN", "CHECK_OUT", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "CHECK_OUT", 1);
+        assertRolePermissionRelationshipCount("STAFF", "CHECK_OUT", 1);
     }
 
     /** Verifies that PostgreSQL allocates distinct, correctly formatted reservation numbers. */
@@ -87,6 +106,151 @@ class MigrationIntegrationTest {
 
         assertTrue(firstReservationNumber.matches("R\\d{8}-000001"));
         assertTrue(secondReservationNumber.matches("R\\d{8}-000002"));
+    }
+
+    /** Verifies the Room table requires a RoomType after the approved Room Management migration. */
+    @Test
+    void roomTypeIsRequiredForRooms() {
+        Boolean roomTypeIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'room' AND column_name = 'room_type_id'",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(roomTypeIsRequired));
+    }
+
+    /** Verifies Flyway seeds exactly the approved read-only RoomType reference records. */
+    @Test
+    void approvedRoomTypesAreSeededWithoutFixedPrices() {
+        Integer approvedRoomTypeCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) "
+                        + "FROM room_type "
+                        + "WHERE (code = 'SINGLE' AND name = 'Single Room' AND capacity = 1) "
+                        + "OR (code = 'DOUBLE' AND name = 'Double Room' AND capacity = 2) "
+                        + "OR (code = 'TWIN' AND name = 'Twin Room' AND capacity = 2) "
+                        + "OR (code = 'TRIPLE' AND name = 'Triple Room' AND capacity = 3) "
+                        + "OR (code = 'FAMILY' AND name = 'Family Room' AND capacity = 4)",
+                Integer.class);
+        Integer roomTypesWithFixedPrice = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) "
+                        + "FROM room_type "
+                        + "WHERE code IN ('SINGLE', 'DOUBLE', 'TWIN', 'TRIPLE', 'FAMILY') "
+                        + "AND base_price IS NOT NULL",
+                Integer.class);
+
+        assertEquals(5, approvedRoomTypeCount);
+        assertEquals(0, roomTypesWithFixedPrice);
+    }
+
+    /** Verifies the Charge v1 migration creates its mandatory Stay relationship and validation constraints. */
+    @Test
+    void chargeSchemaMatchesV1Rules() {
+        Boolean stayIdIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'charge' AND column_name = 'stay_id'",
+                Boolean.class);
+        Boolean amountIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'charge' AND column_name = 'amount'",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(stayIdIsRequired));
+        assertTrue(Boolean.TRUE.equals(amountIsRequired));
+    }
+
+    /** Verifies the Payment v1 migration creates the mandatory Stay relationship and nullable paid time. */
+    @Test
+    void paymentSchemaMatchesV1Rules() {
+        Boolean stayIdIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'payment' AND column_name = 'stay_id'",
+                Boolean.class);
+        Boolean paidAtIsNullable = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'YES' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'payment' AND column_name = 'paid_at'",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(stayIdIsRequired));
+        assertTrue(Boolean.TRUE.equals(paidAtIsNullable));
+    }
+
+    /** Verifies the Expense v1 migration creates required fields and exactly the approved categories. */
+    @Test
+    void expenseSchemaMatchesV1Rules() {
+        Boolean categoryIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'expense' AND column_name = 'category_id'",
+                Boolean.class);
+        Boolean expenseDateIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'expense' AND column_name = 'expense_date'",
+                Boolean.class);
+        String currencyDataType = jdbcTemplate.queryForObject(
+                "SELECT data_type "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'expense' AND column_name = 'currency'",
+                String.class);
+        Integer approvedCategoryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) "
+                        + "FROM expense_category "
+                        + "WHERE code IN ("
+                        + "'ELECTRICITY', 'WATER', 'INTERNET', 'SALARY', 'LAUNDRY', "
+                        + "'CLEANING', 'SUPPLIES', 'MAINTENANCE', 'OTHER' )",
+                Integer.class);
+
+        assertTrue(Boolean.TRUE.equals(categoryIsRequired));
+        assertTrue(Boolean.TRUE.equals(expenseDateIsRequired));
+        assertEquals("character varying", currencyDataType);
+        assertEquals(9, approvedCategoryCount);
+    }
+
+    /** Verifies that JPA lifecycle callbacks preserve creator audit fields and refresh updater audit fields. */
+    @Test
+    @Transactional
+    void guestAuditFieldsAreManagedByTheBackend() throws InterruptedException {
+        UUID guestId = UUID.randomUUID();
+        UUID creatorId = UUID.randomUUID();
+        UUID updaterId = UUID.randomUUID();
+        Guest guest = Guest.create(
+                guestId,
+                "G999999",
+                "Created",
+                "Guest",
+                null,
+                null,
+                null,
+                null,
+                null);
+        guest.audit(creatorId);
+        guestRepository.saveAndFlush(guest);
+
+        Boolean creationAuditMatches = jdbcTemplate.queryForObject(
+                "SELECT created_by = ? AND updated_by = ? AND created_at = updated_at FROM guest WHERE id = ?",
+                Boolean.class,
+                creatorId,
+                creatorId,
+                guestId);
+        assertTrue(Boolean.TRUE.equals(creationAuditMatches));
+
+        Thread.sleep(2);
+        guest.updateProfile("Updated", "Guest", null, null, null, null, null);
+        guest.audit(updaterId);
+        guestRepository.saveAndFlush(guest);
+
+        Boolean updateAuditMatches = jdbcTemplate.queryForObject(
+                "SELECT created_by = ? AND updated_by = ? AND created_at < updated_at FROM guest WHERE id = ?",
+                Boolean.class,
+                creatorId,
+                updaterId,
+                guestId);
+        assertTrue(Boolean.TRUE.equals(updateAuditMatches));
     }
 
     /**
@@ -101,5 +265,26 @@ class MigrationIntegrationTest {
                 .map(permission -> permission.getCode())
                 .collect(java.util.stream.Collectors.toSet());
         assertEquals(expectedPermissionCodes, permissionCodes);
+    }
+
+    /**
+     * Verifies the number of persisted rows for a role and permission relationship.
+     *
+     * @param roleCode code of the seeded role
+     * @param permissionCode code of the permission to inspect
+     * @param expectedCount expected relationship-row count
+     */
+    private void assertRolePermissionRelationshipCount(
+            String roleCode, String permissionCode, int expectedCount) {
+        Integer relationshipCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) "
+                        + "FROM role_permission rp "
+                        + "JOIN role r ON r.id = rp.role_id "
+                        + "JOIN permission p ON p.id = rp.permission_id "
+                        + "WHERE r.code = ? AND p.code = ?",
+                Integer.class,
+                roleCode,
+                permissionCode);
+        assertEquals(expectedCount, relationshipCount);
     }
 }

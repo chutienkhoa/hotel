@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Rooms')}"></head>
+<body>
+<div class="app-shell page-rooms">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Rooms</h1>
+                <p>Manage room profiles and their assigned RoomTypes.</p>
+            </div>
+            <a class="button button-primary" th:href="@{/rooms/new}">Create Room</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="empty-state" th:if="${#lists.isEmpty(rooms)}">No rooms found.</p>
+
+        <div class="table-wrap" th:unless="${#lists.isEmpty(rooms)}"><table>
+            <thead>
+            <tr>
+                <th scope="col">Room Number</th>
+                <th scope="col">RoomType</th>
+                <th scope="col">Floor</th>
+                <th scope="col">Status</th>
+                <th scope="col">Active</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="room : ${rooms}">
+                <td><a th:href="@{/rooms/{id}(id=${room.id})}" th:text="${room.roomNumber}">101</a></td>
+                <td th:text="${room.roomType.code}">SINGLE</td>
+                <td th:text="${room.floor}">1</td>
+                <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></td>
+                <td th:text="${room.active}">true</td>
+            </tr>
+            </tbody>
+        </table></div>
+    </main>
+
+    <footer th:replace="~{layout/footer :: footer}"></footer>
+</div>
+</body>
+</html>

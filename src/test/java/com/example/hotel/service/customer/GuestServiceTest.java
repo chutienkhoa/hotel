@@ -54,6 +54,22 @@ class GuestServiceTest {
         assertEquals(creatorId, savedGuest.getValue().getCreatedBy());
     }
 
+    /** Confirms a generated guest code remains unique when a legacy code already uses a sequence value. */
+    @Test
+    void shouldSkipAnExistingGuestCodeWhenGeneratingGuestCode() {
+        GuestRepository guestRepository = mock(GuestRepository.class);
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper());
+        setCurrentUser(UUID.randomUUID());
+        when(guestRepository.nextGuestCodeSequence()).thenReturn(1L, 2L);
+        when(guestRepository.existsByGuestCode("G000001")).thenReturn(true);
+        when(guestRepository.existsByGuestCode("G000002")).thenReturn(false);
+        when(guestRepository.save(any(Guest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GuestResponse created = guestService.create(createRequest());
+
+        assertEquals("G000002", created.guestCode());
+    }
+
     /**
      * Confirms profile updates preserve the initial creator, refresh the updater, and keep the code immutable.
      */

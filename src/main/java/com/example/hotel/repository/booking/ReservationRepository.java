@@ -4,6 +4,7 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationStatus;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -12,6 +13,70 @@ import org.springframework.data.repository.query.Param;
 
 /** Cung cấp truy vấn lưu trữ và kiểm tra xung đột reservation. */
 public interface ReservationRepository extends JpaRepository<Reservation, UUID> {
+    /**
+     * Counts all Reservations grouped by their current lifecycle status.
+     *
+     * @return status and count rows in stable status order
+     */
+    @Query("SELECT r.status, COUNT(r) FROM Reservation r GROUP BY r.status ORDER BY r.status")
+    List<Object[]> countAllByStatus();
+
+    /**
+     * Counts Reservations by planned check-in year and month within a reporting period.
+     *
+     * @param startDate inclusive reporting-period start
+     * @param endDateExclusive exclusive reporting-period end
+     * @return year, month, and count rows in chronological order
+     */
+    @Query(
+            "SELECT YEAR(r.checkInDate), MONTH(r.checkInDate), COUNT(r) "
+                    + "FROM Reservation r "
+                    + "WHERE r.checkInDate >= :startDate "
+                    + "AND r.checkInDate < :endDateExclusive "
+                    + "GROUP BY YEAR(r.checkInDate), MONTH(r.checkInDate) "
+                    + "ORDER BY YEAR(r.checkInDate), MONTH(r.checkInDate)")
+    List<Object[]> countByCheckInMonthWithin(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDateExclusive") LocalDate endDateExclusive);
+
+    /**
+     * Counts assigned ReservationRoom rows by each Room's current RoomType within a reporting period.
+     *
+     * @param startDate inclusive reporting-period start
+     * @param endDateExclusive exclusive reporting-period end
+     * @return RoomType code, name, and assigned-room count rows in code order
+     */
+    @Query(
+            "SELECT roomType.code, roomType.name, COUNT(rr) "
+                    + "FROM ReservationRoom rr "
+                    + "JOIN rr.room room "
+                    + "JOIN room.roomType roomType "
+                    + "WHERE rr.reservation.checkInDate >= :startDate "
+                    + "AND rr.reservation.checkInDate < :endDateExclusive "
+                    + "GROUP BY roomType.code, roomType.name "
+                    + "ORDER BY roomType.code")
+    List<Object[]> countBookedRoomsByRoomTypeWithin(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDateExclusive") LocalDate endDateExclusive);
+
+    /**
+     * Counts Reservations by booking source within a planned check-in reporting period.
+     *
+     * @param startDate inclusive reporting-period start
+     * @param endDateExclusive exclusive reporting-period end
+     * @return source and count rows in source order
+     */
+    @Query(
+            "SELECT r.source, COUNT(r) "
+                    + "FROM Reservation r "
+                    + "WHERE r.checkInDate >= :startDate "
+                    + "AND r.checkInDate < :endDateExclusive "
+                    + "GROUP BY r.source "
+                    + "ORDER BY r.source")
+    List<Object[]> countBySourceWithin(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDateExclusive") LocalDate endDateExclusive);
+
     /**
      * Atomically allocates the next daily reservation number in the approved external format.
      *

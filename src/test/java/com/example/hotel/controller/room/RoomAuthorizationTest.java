@@ -1,0 +1,293 @@
+package com.example.hotel.controller.room;
+
+import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+import com.example.hotel.dto.room.response.RoomLookupResponse;
+import com.example.hotel.dto.room.response.RoomResponse;
+import com.example.hotel.dto.room.response.RoomTypeResponse;
+import com.example.hotel.security.JwtService;
+import com.example.hotel.service.room.RoomQueryService;
+import com.example.hotel.service.room.RoomService;
+import com.example.hotel.service.room.RoomTypeQueryService;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+
+/** Verifies Room Management authorization and the unchanged Reservation room-lookup boundary. */
+@WebMvcTest({RoomController.class, RoomLookupController.class, RoomPageController.class, RoomTypeController.class})
+@Import(RoomAuthorizationTest.MethodSecurityTestConfiguration.class)
+class RoomAuthorizationTest {
+
+    private static final UUID ROOM_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID ROOM_TYPE_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private RoomService roomService;
+
+    @MockitoBean
+    private RoomQueryService roomQueryService;
+
+    @MockitoBean
+    private RoomTypeQueryService roomTypeQueryService;
+
+    @MockitoBean
+    private JwtService jwtService;
+
+    /**
+     * Confirms ADMIN and MANAGER can access Room Management list, detail, and RoomType reads.
+     *
+     * @param username representative administrative user
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @ParameterizedTest
+    @MethodSource("roomManagers")
+    void shouldAllowAdministrativeRolesToAccessRoomManagement(String username) throws Exception {
+        when(roomService.findAll()).thenReturn(List.of(roomResponse()));
+        when(roomService.findById(ROOM_ID)).thenReturn(roomResponse());
+        when(roomTypeQueryService.findAll()).thenReturn(List.of(roomTypeResponse()));
+
+        mockMvc.perform(get("/api/rooms").with(user(username).authorities(manageRoomAuthority())))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/rooms/{id}", ROOM_ID)
+                        .with(user(username).authorities(manageRoomAuthority())))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/room-types").with(user(username).authorities(manageRoomAuthority())))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/rooms").with(user(username).authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("room/list"));
+    }
+
+    /**
+     * Confirms STAFF cannot access Room Management with only reservation-view and check-in/out rights.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectStaffFromRoomManagement() throws Exception {
+        mockMvc.perform(get("/api/rooms").with(user("staff").authorities(staffAuthorities())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/rooms/{id}", ROOM_ID).with(user("staff").authorities(staffAuthorities())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/room-types").with(user("staff").authorities(staffAuthorities())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/rooms").with(user("staff").authorities(staffAuthorities())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms the Reservation room lookup remains protected by MANAGE_BOOKING rather than MANAGE_ROOM.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldKeepReservationRoomLookupProtectedByManageBooking() throws Exception {
+        when(roomQueryService.findAllForReservationCreation())
+                .thenReturn(List.of(new RoomLookupResponse(ROOM_ID, "101", "AVAILABLE", true)));
+
+        mockMvc.perform(get("/api/rooms/lookup")
+                        .with(user("reservation-manager").authorities(manageBookingAuthority())))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/rooms/lookup")
+                        .with(user("room-manager").authorities(manageRoomAuthority())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms Room Management does not expose REST deletion or RoomType write operations.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldNotExposeRoomOrRoomTypeWriteOperationsOutsideApprovedScope() throws Exception {
+        mockMvc.perform(delete("/api/rooms/{id}", ROOM_ID)
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isMethodNotAllowed());
+        mockMvc.perform(post("/api/room-types")
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isMethodNotAllowed());
+    }
+
+    /**
+     * Confirms browser Room Management mutations retain Spring Security CSRF protection.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldRequireCsrfForRoomPageMutation() throws Exception {
+        mockMvc.perform(post("/rooms")
+                        .param("roomNumber", "101")
+                        .param("roomTypeId", ROOM_TYPE_ID.toString())
+                        .param("floor", "1")
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms ADMIN and MANAGER can invoke every approved Room Operations B REST operation.
+     *
+     * @param username representative administrative user
+     * @param operationPath approved Room Operations B path suffix
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @ParameterizedTest
+    @MethodSource("roomManagerOperations")
+    void shouldAllowAdministrativeRolesToInvokeRoomOperations(String username, String operationPath)
+            throws Exception {
+        mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+                        .with(user(username).authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Confirms STAFF cannot invoke any Room Operations B REST operation.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectStaffFromRoomOperations() throws Exception {
+        for (String operationPath : roomOperationPaths().toList()) {
+            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("staff").authorities(staffAuthorities()))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    /**
+     * Confirms Room Operations B browser forms retain CSRF protection.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldRequireCsrfForRoomOperationPageMutation() throws Exception {
+        mockMvc.perform(post("/rooms/{id}/start-maintenance", ROOM_ID)
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms no arbitrary status-update operation is exposed.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldNotExposeArbitraryRoomStatusUpdateEndpoint() throws Exception {
+        mockMvc.perform(post("/api/rooms/{id}/status", ROOM_ID)
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
+    }
+
+    /**
+     * Supplies ADMIN and MANAGER as the roles that already hold MANAGE_ROOM.
+     *
+     * @return representative administrative usernames
+     */
+    private static Stream<Arguments> roomManagers() {
+        return Stream.of(Arguments.of("admin"), Arguments.of("manager"));
+    }
+
+    /**
+     * Supplies every administrative role and approved Room Operations B path combination.
+     *
+     * @return administrative user and operation-path combinations
+     */
+    private static Stream<Arguments> roomManagerOperations() {
+        return Stream.of("admin", "manager")
+                .flatMap(username -> roomOperationPaths().map(operationPath -> Arguments.of(username, operationPath)));
+    }
+
+    /**
+     * Supplies the approved explicit Room Operations B path suffixes.
+     *
+     * @return operation path suffixes
+     */
+    private static Stream<String> roomOperationPaths() {
+        return Stream.of(
+                "start-cleaning",
+                "finish-cleaning",
+                "start-maintenance",
+                "finish-maintenance",
+                "mark-out-of-order",
+                "restore-to-service");
+    }
+
+    /**
+     * Builds the authority used by Room Management operations.
+     *
+     * @return the MANAGE_ROOM authority
+     */
+    private static List<SimpleGrantedAuthority> manageRoomAuthority() {
+        return List.of(new SimpleGrantedAuthority("PERM_MANAGE_ROOM"));
+    }
+
+    /**
+     * Builds the existing Reservation room-lookup authority.
+     *
+     * @return the MANAGE_BOOKING authority
+     */
+    private static List<SimpleGrantedAuthority> manageBookingAuthority() {
+        return List.of(new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"));
+    }
+
+    /**
+     * Builds the STAFF authority set without Room Management access.
+     *
+     * @return the STAFF authorities
+     */
+    private static List<SimpleGrantedAuthority> staffAuthorities() {
+        return List.of(
+                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                new SimpleGrantedAuthority("PERM_CHECK_IN"),
+                new SimpleGrantedAuthority("PERM_CHECK_OUT"));
+    }
+
+    /**
+     * Creates a representative Room response.
+     *
+     * @return a client-safe room response
+     */
+    private RoomResponse roomResponse() {
+        return new RoomResponse(ROOM_ID, "101", roomTypeResponse(), "1", "AVAILABLE", true);
+    }
+
+    /**
+     * Creates a representative read-only RoomType response.
+     *
+     * @return a RoomType response
+     */
+    private RoomTypeResponse roomTypeResponse() {
+        return new RoomTypeResponse(ROOM_TYPE_ID, "SINGLE", "Single");
+    }
+
+    /** Enables method-security interception for this MVC authorization test slice. */
+    @TestConfiguration
+    @EnableMethodSecurity
+    static class MethodSecurityTestConfiguration {}
+}

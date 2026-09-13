@@ -177,6 +177,8 @@ public class GuestPageController {
                 .anyMatch(authority -> "PERM_MANAGE_BOOKING".equals(authority.getAuthority())));
         model.addAttribute("canManageGuest", authentication.getAuthorities().stream()
                 .anyMatch(authority -> "PERM_MANAGE_GUEST".equals(authority.getAuthority())));
+        model.addAttribute("canViewReport", authentication.getAuthorities().stream()
+                .anyMatch(authority -> "PERM_VIEW_REPORT".equals(authority.getAuthority())));
     }
 
     /**

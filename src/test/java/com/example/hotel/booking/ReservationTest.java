@@ -60,6 +60,20 @@ class ReservationTest {
         assertEquals(ReservationStatus.CHECKED_IN, reservation.getStatus());
     }
 
+    /** Confirms only a checked-in reservation may transition to checked out. */
+    @Test
+    void checkOutRequiresCheckedIn() {
+        Reservation reservation = reservation();
+
+        assertThrows(IllegalStateException.class, reservation::checkOut);
+        reservation.confirm();
+        reservation.checkIn();
+        reservation.checkOut();
+
+        assertEquals(ReservationStatus.CHECKED_OUT, reservation.getStatus());
+        assertThrows(IllegalStateException.class, reservation::checkOut);
+    }
+
     /** Xác nhận tổng tiền sử dụng giá snapshot nhân với số đêm. */
     @Test
     void totalsUseNightlySnapshotAndNumberOfNights() {
