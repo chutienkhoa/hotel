@@ -8,11 +8,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Cung cấp truy vấn lưu trữ và kiểm tra xung đột reservation. */
-public interface ReservationRepository extends JpaRepository<Reservation, UUID> {
+public interface ReservationRepository
+        extends JpaRepository<Reservation, UUID>, JpaSpecificationExecutor<Reservation> {
     /**
      * Counts all Reservations grouped by their current lifecycle status.
      *

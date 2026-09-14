@@ -105,30 +105,56 @@ class ChargeServiceTest {
         assertEquals(400, exception.getStatusCode().value());
     }
 
-    /** Confirms omitted quantity and unit price are accepted descriptive-field values. */
+    /** Confirms fixed Charges accept a client-supplied positive amount without itemized fields. */
     @Test
-    void shouldAllowQuantityAndUnitPriceToBothBeAbsent() {
-        assertCreateSucceeds(request(ChargeType.SERVICE, null, null, BigDecimal.ONE));
+    void shouldCreateFixedChargeWithSuppliedAmount() {
+        ChargeResponse response = assertCreateSucceeds(
+                request(ChargeType.SERVICE, null, null, new BigDecimal("100000")));
+
+        assertAmount(new BigDecimal("100000"), response.amount());
     }
 
-    /** Confirms quantity and unit price may both be supplied without recalculating amount. */
+    /** Confirms itemized Charges persist the backend-calculated amount. */
     @Test
-    void shouldAllowQuantityAndUnitPriceToBothBePresentWithoutRecalculatingAmount() {
-        BigDecimal amount = new BigDecimal("19.99");
+    void shouldCalculateItemizedChargeAmount() {
         ChargeResponse response = assertCreateSucceeds(
-                request(ChargeType.BREAKFAST, new BigDecimal("2"), new BigDecimal("10"), amount));
+                request(ChargeType.BREAKFAST, new BigDecimal("2"), new BigDecimal("150000"), null));
 
-        assertEquals(0, amount.compareTo(response.amount()));
+        assertAmount(new BigDecimal("300000"), response.amount());
+        assertEquals(6, response.amount().scale());
+    }
+
+    /** Confirms itemized calculation is explicitly normalized to the persisted amount scale. */
+    @Test
+    void shouldNormalizeItemizedAmountToScaleSixUsingHalfUp() {
+        ChargeResponse response = assertCreateSucceeds(request(
+                ChargeType.LAUNDRY,
+                new BigDecimal("1.234567"),
+                new BigDecimal("10.123456"),
+                null));
+
+        assertEquals(new BigDecimal("12.498085"), response.amount());
+        assertEquals(6, response.amount().scale());
+    }
+
+    /** Confirms a client cannot provide a competing amount for itemized pricing. */
+    @Test
+    void shouldRejectClientSuppliedAmountForItemizedCharge() {
+        assertBadRequest(request(
+                ChargeType.BREAKFAST,
+                new BigDecimal("2"),
+                new BigDecimal("150000"),
+                BigDecimal.ONE));
     }
 
     /** Confirms incomplete quantity and unit-price pairs are rejected. */
     @ParameterizedTest
     @MethodSource("incompleteQuantityAndUnitPricePairs")
     void shouldRejectIncompleteQuantityAndUnitPricePair(BigDecimal quantity, BigDecimal unitPrice) {
-        assertBadRequest(request(ChargeType.ROOM, quantity, unitPrice, BigDecimal.ONE));
+        assertBadRequest(request(ChargeType.ROOM, quantity, unitPrice, null));
     }
 
-    /** Confirms non-positive quantity, negative unit price, and non-positive amount are rejected. */
+    /** Confirms invalid fixed and itemized pricing values are rejected. */
     @ParameterizedTest
     @MethodSource("invalidMonetaryValues")
     void shouldRejectInvalidChargeValues(
@@ -265,9 +291,11 @@ class ChargeServiceTest {
      */
     private static Stream<Arguments> invalidMonetaryValues() {
         return Stream.of(
-                Arguments.of(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ONE),
-                Arguments.of(BigDecimal.ONE, new BigDecimal("-0.01"), BigDecimal.ONE),
-                Arguments.of(null, null, BigDecimal.ZERO));
+                Arguments.of(BigDecimal.ZERO, BigDecimal.ZERO, null),
+                Arguments.of(BigDecimal.ONE, new BigDecimal("-0.01"), null),
+                Arguments.of(BigDecimal.ONE, BigDecimal.ZERO, null),
+                Arguments.of(null, null, BigDecimal.ZERO),
+                Arguments.of(null, null, null));
     }
 
     /**
@@ -341,6 +369,11 @@ class ChargeServiceTest {
      */
     private ChargeService chargeService(ChargeRepository chargeRepository, StayRepository stayRepository) {
         return new ChargeService(chargeRepository, stayRepository, new ChargeMapper());
+    }
+
+    /** Compares monetary values without treating insignificant scale as a difference. */
+    private void assertAmount(BigDecimal expected, BigDecimal actual) {
+        assertEquals(0, expected.compareTo(actual));
     }
 
     /**

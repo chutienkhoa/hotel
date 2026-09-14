@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
@@ -48,7 +49,10 @@ class DashboardPageControllerTest {
                         .with(user(username).authorities(new SimpleGrantedAuthority("PERM_VIEW_REPORT"))))
                 .andExpect(status().isOk())
                 .andExpect(view().name("dashboard/index"))
-                .andExpect(model().attribute("canViewReport", true));
+                .andExpect(model().attribute("canViewReport", true))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "app-shell page-dashboard")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("nav-dashboard")));
     }
 
     /** Verifies STAFF cannot access the Dashboard without VIEW_REPORT. */

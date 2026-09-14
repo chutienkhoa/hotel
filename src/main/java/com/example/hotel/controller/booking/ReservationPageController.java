@@ -1,10 +1,12 @@
 package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
+import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
+import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalance;
@@ -13,8 +15,10 @@ import com.example.hotel.service.booking.StayQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -25,6 +29,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -76,9 +81,28 @@ public class ReservationPageController {
      */
     @GetMapping("/reservations")
     @PreAuthorize("hasAuthority('PERM_VIEW_BOOKING')")
-    public String list(Model model, Authentication authentication) {
+    public String list(
+            @ModelAttribute("searchCriteria") ReservationSearchCriteria searchCriteria,
+            BindingResult bindingResult,
+            @RequestParam(required = false) Integer page,
+            Model model,
+            Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
-        model.addAttribute("reservations", reservationQueryService.findAll());
+        searchCriteria.normalizeReservationNumber();
+        model.addAttribute("reservationStatuses", ReservationStatus.values());
+
+        String validationMessage = validateSearchCriteria(searchCriteria, bindingResult);
+        if (validationMessage != null) {
+            model.addAttribute("errorMessage", validationMessage);
+            Page<?> reservationPage = Page.empty();
+            model.addAttribute("reservationPage", reservationPage);
+            addPaginationAttributes(model, reservationPage);
+            return "reservation/list";
+        }
+
+        Page<?> reservationPage = reservationQueryService.findPage(searchCriteria, page == null ? 0 : page);
+        model.addAttribute("reservationPage", reservationPage);
+        addPaginationAttributes(model, reservationPage);
         return "reservation/list";
     }
 
@@ -245,6 +269,65 @@ public class ReservationPageController {
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
         model.addAttribute("canManagePayment", hasAuthority(authentication, "PERM_MANAGE_PAYMENT"));
         model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
+    }
+
+    /**
+     * Validates structural binding and the independent one-calendar-year limits for list filters.
+     *
+     * @param criteria submitted list filters
+     * @param bindingResult binding result for the submitted filters
+     * @return a user-safe validation message, or {@code null} when criteria are valid
+     */
+    private String validateSearchCriteria(
+            ReservationSearchCriteria criteria, BindingResult bindingResult) {
+        if (bindingResult.hasErrors()) {
+            return "Please provide valid reservation filter values.";
+        }
+        String checkInError = validateDateRange(
+                criteria.getCheckInFrom(), criteria.getCheckInTo(), "Check-in");
+        if (checkInError != null) {
+            return checkInError;
+        }
+        return validateDateRange(criteria.getCheckOutFrom(), criteria.getCheckOutTo(), "Check-out");
+    }
+
+    /**
+     * Adds presentation-only page-window bounds for the Reservation list paginator.
+     *
+     * @param model MVC model used by the Reservation list view
+     * @param reservationPage current server-side page metadata
+     */
+    private void addPaginationAttributes(Model model, Page<?> reservationPage) {
+        int totalPages = reservationPage.getTotalPages();
+        if (totalPages == 0) {
+            return;
+        }
+        int lastPage = totalPages - 1;
+        int startPage = Math.max(0, Math.min(reservationPage.getNumber() - 1, lastPage - 2));
+        int endPage = Math.min(lastPage, startPage + 2);
+        model.addAttribute("paginationStartPage", startPage);
+        model.addAttribute("paginationEndPage", endPage);
+    }
+
+    /**
+     * Validates one inclusive LocalDate range without applying a database query.
+     *
+     * @param from optional inclusive lower bound
+     * @param to optional inclusive upper bound
+     * @param label user-facing date-range label
+     * @return a user-safe validation message, or {@code null} when valid
+     */
+    private String validateDateRange(LocalDate from, LocalDate to, String label) {
+        if (from == null || to == null) {
+            return null;
+        }
+        if (to.isBefore(from)) {
+            return label + " end date must be on or after the start date.";
+        }
+        if (to.isAfter(from.plusYears(1))) {
+            return label + " date range cannot exceed one calendar year.";
+        }
+        return null;
     }
 
     /**

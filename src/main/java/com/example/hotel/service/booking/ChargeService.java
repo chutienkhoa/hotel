@@ -11,6 +11,7 @@ import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -52,7 +53,7 @@ public class ChargeService {
      */
     @Transactional
     public ChargeResponse create(UUID stayId, ChargeCreateRequest request) {
-        validate(request);
+        BigDecimal amount = validateAndResolveAmount(request);
         Stay stay = findStay(stayId);
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Charges can be created only for checked-in stays");
@@ -63,7 +64,7 @@ public class ChargeService {
                 request.description(),
                 request.quantity(),
                 request.unitPrice(),
-                request.amount());
+                amount);
         charge.audit(currentUser().id());
         return chargeMapper.toResponse(chargeRepository.save(charge));
     }
@@ -84,27 +85,41 @@ public class ChargeService {
     }
 
     /**
-     * Validates rules that must remain enforced even when the service is called without REST validation.
+     * Validates pricing rules and resolves the authoritative amount for a new Charge.
      *
      * @param request Charge data to validate
+     * @return fixed client amount or backend-calculated itemized amount
      * @throws ResponseStatusException if a Charge v1 rule is not satisfied
      */
-    private void validate(ChargeCreateRequest request) {
+    private BigDecimal validateAndResolveAmount(ChargeCreateRequest request) {
         if (request.type() == null || !request.type().isSupportedInV1()) {
             throw badRequest("Unsupported Charge v1 type");
-        }
-        if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw badRequest("amount must be greater than zero");
         }
         if ((request.quantity() == null) != (request.unitPrice() == null)) {
             throw badRequest("quantity and unitPrice must both be present or absent");
         }
-        if (request.quantity() != null && request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
+        if (request.quantity() == null) {
+            if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
+                throw badRequest("fixed charge amount must be greater than zero");
+            }
+            return request.amount();
+        }
+        if (request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("quantity must be greater than zero");
         }
-        if (request.unitPrice() != null && request.unitPrice().compareTo(BigDecimal.ZERO) < 0) {
+        if (request.unitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw badRequest("unitPrice must be greater than or equal to zero");
         }
+        if (request.amount() != null) {
+            throw badRequest("itemized charges must not provide amount");
+        }
+        BigDecimal amount = request.quantity()
+                .multiply(request.unitPrice())
+                .setScale(6, RoundingMode.HALF_UP);
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw badRequest("calculated itemized amount must be greater than zero");
+        }
+        return amount;
     }
 
     /**

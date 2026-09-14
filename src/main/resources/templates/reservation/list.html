@@ -20,37 +20,117 @@
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <p class="empty-state" th:if="${#lists.isEmpty(reservations)}">No reservations found.</p>
+        <section class="form-card" aria-label="Filter reservations">
+            <form method="get" th:action="@{/reservations}">
+                <div class="reservation-filter-grid">
+                    <div class="form-field">
+                        <label for="reservationNumber">Reservation Number</label>
+                        <input id="reservationNumber" name="reservationNumber" type="search"
+                               th:value="${searchCriteria.reservationNumber}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option value="" th:selected="${searchCriteria.status == null}">All statuses</option>
+                            <option th:each="reservationStatus : ${reservationStatuses}"
+                                    th:selected="${searchCriteria.status == reservationStatus}"
+                                    th:text="${reservationStatus}"
+                                    th:value="${reservationStatus}">DRAFT</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label for="checkInFrom">Check-in from</label>
+                        <input class="js-date-picker" id="checkInFrom" name="checkInFrom" type="text"
+                               th:value="${searchCriteria.checkInFrom}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="checkInTo">Check-in to</label>
+                        <input class="js-date-picker" id="checkInTo" name="checkInTo" type="text"
+                               th:value="${searchCriteria.checkInTo}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="checkOutFrom">Check-out from</label>
+                        <input class="js-date-picker" id="checkOutFrom" name="checkOutFrom" type="text"
+                               th:value="${searchCriteria.checkOutFrom}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="checkOutTo">Check-out to</label>
+                        <input class="js-date-picker" id="checkOutTo" name="checkOutTo" type="text"
+                               th:value="${searchCriteria.checkOutTo}" />
+                    </div>
+                </div>
+                <div class="action-row reservation-filter-actions">
+                    <a class="button button-secondary" th:href="@{/reservations}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
 
-        <div class="table-wrap" th:unless="${#lists.isEmpty(reservations)}">
-            <table>
-                <thead>
-                <tr>
-                    <th scope="col">Reservation number</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Check-in</th>
-                    <th scope="col">Check-out</th>
-                    <th scope="col">Total</th>
-                    <th scope="col"><span class="visually-hidden">View details</span></th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="reservation : ${reservations}">
-                    <td th:text="${reservation.reservationNumber}">Reservation number</td>
-                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span></td>
-                    <td class="table-date" th:text="${reservation.checkInDate}">2027-01-10</td>
-                    <td class="table-date" th:text="${reservation.checkOutDate}">2027-01-12</td>
-                    <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
-                    <td class="table-actions">
-                        <a class="table-action" th:href="@{/reservations/{id}(id=${reservation.id})}">View</a>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
+        <section class="reservation-results">
+            <div class="results-toolbar">
+                <p>
+                    <span th:text="${reservationPage.totalElements}">0</span>
+                    <span th:text="${reservationPage.totalElements == 1 ? 'result' : 'results'}">results</span>
+                </p>
+                <nav aria-label="Reservation pages" class="pagination reservation-pagination"
+                     th:if="${reservationPage.totalPages > 1}">
+                    <a class="pagination__segment" th:if="${!reservationPage.first}"
+                       th:href="@{/reservations(reservationNumber=${searchCriteria.reservationNumber},status=${searchCriteria.status},checkInFrom=${searchCriteria.checkInFrom},checkInTo=${searchCriteria.checkInTo},checkOutFrom=${searchCriteria.checkOutFrom},checkOutTo=${searchCriteria.checkOutTo},page=${reservationPage.number - 1})}">
+                        Previous
+                    </a>
+                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+                        <span aria-current="page" class="pagination__segment pagination__segment--current"
+                              th:if="${pageNumber == reservationPage.number}"
+                              th:text="${pageNumber + 1}">1</span>
+                        <a class="pagination__segment" th:unless="${pageNumber == reservationPage.number}"
+                           th:href="@{/reservations(reservationNumber=${searchCriteria.reservationNumber},status=${searchCriteria.status},checkInFrom=${searchCriteria.checkInFrom},checkInTo=${searchCriteria.checkInTo},checkOutFrom=${searchCriteria.checkOutFrom},checkOutTo=${searchCriteria.checkOutTo},page=${pageNumber})}"
+                           th:text="${pageNumber + 1}">2</a>
+                    </th:block>
+                    <span class="pagination__segment pagination__segment--ellipsis"
+                          th:if="${paginationEndPage + 1 < reservationPage.totalPages - 1}">...</span>
+                    <a class="pagination__segment" th:if="${paginationEndPage < reservationPage.totalPages - 1}"
+                       th:href="@{/reservations(reservationNumber=${searchCriteria.reservationNumber},status=${searchCriteria.status},checkInFrom=${searchCriteria.checkInFrom},checkInTo=${searchCriteria.checkInTo},checkOutFrom=${searchCriteria.checkOutFrom},checkOutTo=${searchCriteria.checkOutTo},page=${reservationPage.totalPages - 1})}"
+                       th:text="${reservationPage.totalPages}">2</a>
+                    <a class="pagination__segment" th:if="${!reservationPage.last}"
+                       th:href="@{/reservations(reservationNumber=${searchCriteria.reservationNumber},status=${searchCriteria.status},checkInFrom=${searchCriteria.checkInFrom},checkInTo=${searchCriteria.checkInTo},checkOutFrom=${searchCriteria.checkOutFrom},checkOutTo=${searchCriteria.checkOutTo},page=${reservationPage.number + 1})}">
+                        Next
+                    </a>
+                </nav>
+            </div>
+
+            <p class="empty-state" th:if="${reservationPage.empty}">
+                No reservations match the current filters.
+            </p>
+
+            <div class="table-wrap" th:unless="${reservationPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Reservation number</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Check-in</th>
+                        <th scope="col">Check-out</th>
+                        <th scope="col">Total</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="reservation : ${reservationPage.content}">
+                        <td>
+                            <a th:href="@{/reservations/{id}(id=${reservation.id})}"
+                               th:text="${reservation.reservationNumber}">Reservation number</a>
+                        </td>
+                        <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span></td>
+                        <td class="table-date" th:text="${reservation.checkInDate}">2027-01-10</td>
+                        <td class="table-date" th:text="${reservation.checkOutDate}">2027-01-12</td>
+                        <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

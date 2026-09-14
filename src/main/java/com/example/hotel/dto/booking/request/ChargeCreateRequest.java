@@ -14,7 +14,7 @@ public record ChargeCreateRequest(
         @Size(max = 1000) String description,
         @Positive BigDecimal quantity,
         @DecimalMin(value = "0.0", inclusive = true) BigDecimal unitPrice,
-        @NotNull @Positive BigDecimal amount) {
+        @Positive BigDecimal amount) {
 
     /**
      * Confirms quantity and unit price are supplied together or both omitted.
@@ -24,5 +24,18 @@ public record ChargeCreateRequest(
     @AssertTrue(message = "quantity and unitPrice must both be present or absent")
     public boolean isQuantityAndUnitPricePaired() {
         return (quantity == null) == (unitPrice == null);
+    }
+
+    /**
+     * Confirms a request uses either fixed amount or itemized pricing, but never both.
+     *
+     * @return {@code true} when fixed pricing provides amount or itemized pricing omits it
+     */
+    @AssertTrue(message = "fixed charges require amount; itemized charges must omit amount")
+    public boolean isPricingModeValid() {
+        if ((quantity == null) != (unitPrice == null)) {
+            return false;
+        }
+        return quantity == null ? amount != null : amount == null;
     }
 }

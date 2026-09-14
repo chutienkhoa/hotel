@@ -14,7 +14,8 @@
         </div></div>
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <form class="form-card" method="post"
+        <form class="form-card" data-confirm-message="Save this expense?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${expense == null} ? 'Create expense' : 'Update expense',data-confirm-label=${expense == null} ? 'Create expense' : 'Update expense'" method="post"
               th:action="${expense == null} ? @{/expenses} : @{/expenses/{id}(id=${expense.id})}"
               th:object="${expenseForm}">
             <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
@@ -67,7 +68,7 @@
         </form>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

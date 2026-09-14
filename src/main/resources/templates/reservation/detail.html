@@ -90,30 +90,45 @@
                 No state-changing actions are available.
             </p>
 
-            <form method="post" th:action="@{/reservations/{id}/confirm(id=${reservation.id})}"
+            <form data-confirm-label="Confirm reservation" data-confirm-severity="WARNING"
+                  data-confirm-title="Confirm reservation" method="post"
+                  th:action="@{/reservations/{id}/confirm(id=${reservation.id})}"
+                  th:attr="data-confirm-message=|Confirm reservation ${reservation.reservationNumber}?|"
                   th:if="${reservation.status == 'DRAFT' and canManageBooking}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Confirm</button>
             </form>
 
             <div class="action-row" th:if="${reservation.status == 'CONFIRMED'}">
-                <form method="post" th:action="@{/reservations/{id}/check-in(id=${reservation.id})}" th:if="${canCheckIn}">
+                <form data-confirm-label="Check in" data-confirm-severity="WARNING"
+                      data-confirm-title="Check in reservation" method="post"
+                      th:action="@{/reservations/{id}/check-in(id=${reservation.id})}"
+                      th:attr="data-confirm-message=|Check in reservation ${reservation.reservationNumber}?|" th:if="${canCheckIn}">
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <button class="button button-primary" type="submit">Check-in</button>
                 </form>
 
-                <form method="post" th:action="@{/reservations/{id}/cancel(id=${reservation.id})}" th:if="${canManageBooking}">
+                <form data-confirm-label="Cancel reservation" data-confirm-severity="DANGER"
+                      data-confirm-title="Cancel reservation" method="post"
+                      th:action="@{/reservations/{id}/cancel(id=${reservation.id})}"
+                      th:attr="data-confirm-message=|Cancel reservation ${reservation.reservationNumber}?|" th:if="${canManageBooking}">
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <button class="button button-danger" type="submit">Cancel reservation</button>
                 </form>
 
-                <form method="post" th:action="@{/reservations/{id}/no-show(id=${reservation.id})}" th:if="${canManageBooking}">
+                <form data-confirm-label="Mark no-show" data-confirm-severity="DANGER"
+                      data-confirm-title="Mark reservation as no-show" method="post"
+                      th:action="@{/reservations/{id}/no-show(id=${reservation.id})}"
+                      th:attr="data-confirm-message=|Mark reservation ${reservation.reservationNumber} as no-show?|" th:if="${canManageBooking}">
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <button class="button button-secondary" type="submit">Mark no-show</button>
                 </form>
             </div>
 
-            <form method="post" th:action="@{/reservations/{id}/check-out(id=${reservation.id})}"
+            <form data-confirm-label="Check out" data-confirm-severity="DANGER"
+                  data-confirm-title="Check out reservation" method="post"
+                  th:action="@{/reservations/{id}/check-out(id=${reservation.id})}"
+                  th:attr="data-confirm-message=|Check out reservation ${reservation.reservationNumber}?|"
                   th:if="${reservation.status == 'CHECKED_IN' and canCheckOut}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Check-out</button>
@@ -121,7 +136,7 @@
         </section>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

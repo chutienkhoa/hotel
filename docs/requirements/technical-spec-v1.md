@@ -179,6 +179,30 @@ Một Guest có thể có nhiều Reservation:
 Guest 1 ─── N Reservation
 ```
 
+## 4.2 Guest Management List
+
+Guest Management provides one optional free-text search field named `query`.
+The trimmed, non-blank query performs case-insensitive partial matching across:
+
+```text
+guest_code
+first_name
+last_name
+email
+phone
+nationality
+```
+
+Filtering and pagination are performed at the database level. The fixed page size is 10,
+with deterministic default ordering by `guest_code ASC`. A zero-result search remains on
+the filtered list and presents `0 results` with `No guests match the current search.`
+
+The Guest list presents nationality as an optional Unicode country flag followed by the
+stored country name when the stored value can be safely resolved to ISO 3166-1 alpha-2.
+The country name remains authoritative Guest data; the flag is presentation-only. Blank
+nationality is displayed as `—`, and an unknown historical nationality is displayed without
+a generated flag.
+
 ---
 
 # 5. Room Domain
@@ -720,7 +744,7 @@ OTHER
 
 `TAX` và `DISCOUNT` được giữ lại làm enum/reference values cho future use, nhưng Charge v1 phải reject việc tạo Charge với hai type này.
 
-Không implement automatic tax calculation, discount calculation, negative Charge behavior, currency-conversion, hoặc advanced rounding behavior trong current scope. Detailed behavior sẽ được định nghĩa trong future specification change.
+Không implement automatic tax calculation, discount calculation, negative Charge behavior, hoặc currency-conversion trong current scope. Detailed behavior sẽ được định nghĩa trong future specification change.
 
 ### Charge pricing modes
 
@@ -745,11 +769,20 @@ ITEMIZED được dùng khi `quantity` và `unitPrice` được cung cấp. Hai 
 ```text
 quantity > 0
 unitPrice >= 0
-amount = quantity * unitPrice
+rawAmount = quantity * unitPrice
+amount = rawAmount normalized to scale 6 using HALF_UP
 amount > 0
 ```
 
-Với ITEMIZED Charge mới được tạo, backend phải authoritative khi tính `amount = quantity * unitPrice`. Client chỉ cung cấp `quantity` và `unitPrice`; client không được independently determine authoritative calculated `amount`.
+Với ITEMIZED Charge mới được tạo, backend phải authoritative khi tính `rawAmount = quantity * unitPrice`, sau đó normalize calculated `amount` trước persistence theo existing Charge amount scale:
+
+```text
+scale = 6
+rounding mode = HALF_UP
+quantity.multiply(unitPrice).setScale(6, RoundingMode.HALF_UP)
+```
+
+Không được dựa vào database hoặc JPA implicit rounding. Client chỉ cung cấp `quantity` và `unitPrice`; client không được independently determine authoritative calculated `amount`.
 
 Không được dựa vào Thymeleaf, browser validation, JavaScript, hoặc client-supplied calculated values để enforce financial correctness của ITEMIZED Charge.
 
@@ -771,7 +804,7 @@ Không tính lại Stay balance hoặc historical `Charge.amount` tại check-ou
 
 Historical Charge records không được recalculate hoặc modify. Historical Charge giữ stored `amount` là authoritative, kể cả khi `quantity` và `unitPrice` không khớp với stored `amount`. ITEMIZED calculated-amount rule chỉ áp dụng cho Charge mới được tạo sau khi behavior này được implement; không cần data migration hoặc historical normalization.
 
-UI entry phải làm rõ hai mode: ITEMIZED entry nhận `quantity` và `unitPrice` rồi application calculates `amount`; FIXED AMOUNT entry nhận `amount` và không nhận `quantity` hoặc `unitPrice`. UI không được encourage user nhập ba independent monetary/calculation values. Không quy định JavaScript behavior trong specification này.
+UI entry phải làm rõ hai mode: ITEMIZED entry nhận `quantity` và `unitPrice` rồi application calculates `amount`; FIXED AMOUNT entry nhận `amount` và không nhận `quantity` hoặc `unitPrice`. UI không được encourage user nhập ba independent monetary/calculation values. Không quy định JavaScript behavior trong specification này. VND display formatting là presentation concern và có thể hide fractional digits, nhưng không thay đổi stored BigDecimal semantics.
 
 Ví dụ:
 

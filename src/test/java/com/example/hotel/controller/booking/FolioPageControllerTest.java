@@ -2,8 +2,11 @@ package com.example.hotel.controller.booking;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -14,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
@@ -31,6 +35,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -84,7 +89,54 @@ class FolioPageControllerTest {
                 .andExpect(content().string(containsString("Add Payment")))
                 .andExpect(content().string(containsString("Mark paid")))
                 .andExpect(content().string(containsString("ROOM")))
+                .andExpect(content().string(containsString("1.5")))
+                .andExpect(content().string(not(containsString("1.500000"))))
                 .andExpect(content().string(containsString("0 VND")));
+    }
+
+    /** Confirms absent optional Charge pricing fields render as dashes rather than null money. */
+    @Test
+    void shouldRenderFixedChargeOptionalPricingFieldsAsDashes() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+        when(chargeService.findByStayId(STAY_ID)).thenReturn(List.of(fixedCharge()));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("80,000 VND")))
+                .andExpect(content().string(containsString("<td class=\"table-number\">—</td>")))
+                .andExpect(content().string(not(containsString("null VND"))));
+    }
+
+    /** Confirms itemized Charge pricing fields retain their formatted values. */
+    @Test
+    void shouldRenderItemizedChargePricingFields() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+        when(chargeService.findByStayId(STAY_ID)).thenReturn(List.of(itemizedCharge()));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("3")))
+                .andExpect(content().string(not(containsString("3.000000"))))
+                .andExpect(content().string(containsString("30,000 VND")))
+                .andExpect(content().string(containsString("90,000 VND")));
+    }
+
+    /** Confirms Folio payment and check-out actions expose their approved confirmation metadata. */
+    @Test
+    void shouldRenderDangerConfirmationMetadataForRefundAndCheckOut() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PAID");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment(), checkOut())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-confirm-title=\"Refund payment\"")))
+                .andExpect(content().string(containsString("data-confirm-message=\"Refund 100 VND?\"")))
+                .andExpect(content().string(containsString("data-confirm-label=\"Refund payment\"")))
+                .andExpect(content().string(containsString("data-confirm-severity=\"DANGER\"")))
+                .andExpect(content().string(containsString("data-confirm-title=\"Check out reservation\"")))
+                .andExpect(content().string(containsString("Check out reservation R20260911-000001?")));
     }
 
     /** Confirms a closed Folio renders its history but no financial mutation controls. */
@@ -122,6 +174,27 @@ class FolioPageControllerTest {
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID + "/folio"));
+    }
+
+    /** Confirms the itemized Charge form submits quantity and unit price without a client amount. */
+    @Test
+    void shouldCreateItemizedChargeWithCsrfAndRedirectToFolio() throws Exception {
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/charges", RESERVATION_ID)
+                        .param("type", "BREAKFAST")
+                        .param("quantity", "2")
+                        .param("unitPrice", "150000")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID + "/folio"));
+
+        ArgumentCaptor<ChargeCreateRequest> captor = ArgumentCaptor.forClass(ChargeCreateRequest.class);
+        verify(chargeService).create(eq(STAY_ID), captor.capture());
+        assertNull(captor.getValue().amount());
+        assertEquals(new BigDecimal("2"), captor.getValue().quantity());
+        assertEquals(new BigDecimal("150000"), captor.getValue().unitPrice());
     }
 
     /** Confirms Folio financial POST routes reject browser submissions without a CSRF token. */
@@ -178,9 +251,35 @@ class FolioPageControllerTest {
                 STAY_ID,
                 "ROOM",
                 "Room charge",
-                null,
-                null,
+                new BigDecimal("1.500000"),
+                new BigDecimal("66.666667"),
                 new BigDecimal("100.00"),
+                Instant.parse("2026-09-11T10:00:00Z"));
+    }
+
+    /** Creates a fixed-amount Charge with absent optional quantity and unit price. */
+    private ChargeResponse fixedCharge() {
+        return new ChargeResponse(
+                UUID.randomUUID(),
+                STAY_ID,
+                "BREAKFAST",
+                null,
+                null,
+                null,
+                new BigDecimal("80000"),
+                Instant.parse("2026-09-11T10:00:00Z"));
+    }
+
+    /** Creates an itemized Charge whose quantity should render without trailing zeroes. */
+    private ChargeResponse itemizedCharge() {
+        return new ChargeResponse(
+                UUID.randomUUID(),
+                STAY_ID,
+                "LAUNDRY",
+                null,
+                new BigDecimal("3.000000"),
+                new BigDecimal("30000"),
+                new BigDecimal("90000"),
                 Instant.parse("2026-09-11T10:00:00Z"));
     }
 

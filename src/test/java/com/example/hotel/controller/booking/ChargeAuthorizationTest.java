@@ -57,9 +57,26 @@ class ChargeAuthorizationTest {
                         .with(user("manager").authorities(managePaymentAuthority()))
                         .with(csrf()))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/api/stays/{stayId}/charges", STAY_ID)
-                        .with(user("manager").authorities(managePaymentAuthority())))
+        mockMvc.perform(post("/api/stays/{stayId}/charges", STAY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"BREAKFAST\",\"quantity\":2,\"unitPrice\":150000}")
+                        .with(user("manager").authorities(managePaymentAuthority()))
+                        .with(csrf()))
                 .andExpect(status().isOk());
+        mockMvc.perform(get("/api/stays/{stayId}/charges", STAY_ID)
+                .with(user("manager").authorities(managePaymentAuthority())))
+                .andExpect(status().isOk());
+    }
+
+    /** Confirms REST validation rejects a client amount combined with itemized pricing inputs. */
+    @Test
+    void shouldRejectClientAmountForItemizedChargeRequest() throws Exception {
+        mockMvc.perform(post("/api/stays/{stayId}/charges", STAY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\":\"BREAKFAST\",\"quantity\":2,\"unitPrice\":150000,\"amount\":1}")
+                        .with(user("manager").authorities(managePaymentAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
     }
 
     /** Confirms users without MANAGE_PAYMENT cannot create or list Charges. */

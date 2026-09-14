@@ -6,10 +6,13 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.hotel.controller.common.NavigationModelAdvice;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
+import com.example.hotel.dto.customer.response.GuestListResponse;
 import com.example.hotel.dto.customer.response.GuestResponse;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.customer.GuestQueryService;
@@ -26,14 +29,16 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Verifies the approved authorization boundary between Guest Management and reservation lookup. */
-@WebMvcTest({GuestController.class, GuestLookupController.class})
-@Import(GuestAuthorizationTest.MethodSecurityTestConfiguration.class)
+@WebMvcTest({GuestController.class, GuestLookupController.class, GuestPageController.class})
+@Import({GuestAuthorizationTest.MethodSecurityTestConfiguration.class, NavigationModelAdvice.class})
 class GuestAuthorizationTest {
 
     private static final UUID GUEST_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -81,6 +86,76 @@ class GuestAuthorizationTest {
         mockMvc.perform(get("/api/guests/{id}", GUEST_ID)
                         .with(user("staff").authorities(staffAuthorities())))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Confirms the shared Guest form grid is used for both creation and editing. */
+    @Test
+    void shouldRenderGuestFormGridForCreationAndEditing() throws Exception {
+        mockMvc.perform(get("/guests/new").with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"form-grid guest-form-grid\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"form-field guest-form-address\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"js-date-picker\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-title=\"Create guest\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-label=\"Create guest\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-severity=\"NORMAL\"")));
+
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        mockMvc.perform(get("/guests/{id}/edit", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"form-grid guest-form-grid\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-title=\"Update guest\"")));
+    }
+
+    /** Confirms the Guest list preserves its query while using shared result and pagination markup. */
+    @Test
+    void shouldRenderSearchablePaginatedGuestList() throws Exception {
+        GuestListResponse guest = new GuestListResponse(
+                GUEST_ID,
+                "G000001",
+                "Khoa",
+                "Chu",
+                "khoa@example.com",
+                new com.example.hotel.dto.customer.response.GuestNationalityDisplay("Vietnam", "🇻🇳"));
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of(guest), PageRequest.of(0, 10), 11));
+
+        mockMvc.perform(get("/guests").param("query", "Vietnam")
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"query\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"Vietnam\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("class=\"pagination guest-pagination\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("pagination__segment")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("G000001")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/guests/" + GUEST_ID + "\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("🇻🇳")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Vietnam")));
+    }
+
+    /** Confirms an empty Guest search keeps the query and omits stale table and pagination content. */
+    @Test
+    void shouldRenderZeroResultGuestSearchWithoutPagination() throws Exception {
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/guests").param("query", "no-match")
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("0</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "No guests match the current search.")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "class=\"pagination guest-pagination\""))));
     }
 
     /**

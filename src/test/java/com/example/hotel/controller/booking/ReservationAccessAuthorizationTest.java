@@ -1,18 +1,27 @@
 package com.example.hotel.controller.booking;
 
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.booking.request.CreateRequest;
+import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationRoomResponse;
+import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.booking.ReservationQueryService;
@@ -28,6 +37,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -36,6 +46,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -244,6 +256,283 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("1,100,000 VND")));
     }
 
+    /** Confirms reservation mutation forms expose confirmation metadata without changing their CSRF fields. */
+    @Test
+    void shouldRenderReservationConfirmationMetadata() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
+
+        mockMvc.perform(get("/reservations/new")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("app-shell page-reservation-create")))
+                .andExpect(content().string(containsString("nav-reservation-create")))
+                .andExpect(content().string(containsString("data-confirm-title=\"Create reservation\"")))
+                .andExpect(content().string(containsString("data-confirm-severity=\"NORMAL\"")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-confirm-title=\"Cancel reservation\"")))
+                .andExpect(content().string(containsString("data-confirm-severity=\"DANGER\"")))
+                .andExpect(content().string(containsString("Cancel reservation R20260911-000001?")));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("staff").authorities(
+                                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                                new SimpleGrantedAuthority("PERM_CHECK_IN"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-confirm-title=\"Check in reservation\"")))
+                .andExpect(content().string(containsString("data-confirm-severity=\"WARNING\"")));
+    }
+
+    /** Confirms the Reservation Create page limits currency selection to VND and USD. */
+    @Test
+    void shouldRenderCurrencySelectAndPreserveSelectedCurrencyAfterValidationFailure() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
+
+        mockMvc.perform(get("/reservations/new")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<select id=\"currency\"")))
+                .andExpect(content().string(containsString("value=\"VND\">VND")))
+                .andExpect(content().string(containsString("value=\"USD\">USD")))
+                .andExpect(content().string(not(containsString("<input id=\"currency\""))))
+                .andExpect(content().string(containsString("class=\"button button-danger remove-room\"")));
+
+        mockMvc.perform(post("/reservations")
+                        .param("currency", "USD")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"USD\" selected=\"selected\"")));
+    }
+
+    /** Confirms Reservation date fields opt in to the shared non-native date picker assets. */
+    @Test
+    void shouldRenderSharedDatePickerForReservationFiltersAndCreateForm() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        mockMvc.perform(get("/reservations")
+                        .param("checkInFrom", "2026-09-01")
+                        .param("checkOutTo", "2026-09-30")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "href=\"/css/vendor/flatpickr-4.6.13.min.css\"")))
+                .andExpect(content().string(containsString(
+                        "src=\"/js/vendor/flatpickr-4.6.13.min.js\"")))
+                .andExpect(content().string(containsString("src=\"/js/common/date-picker.js\"")))
+                .andExpect(content().string(containsString("class=\"js-date-picker\"")))
+                .andExpect(content().string(containsString("value=\"2026-09-01\"")))
+                .andExpect(content().string(containsString("value=\"2026-09-30\"")))
+                .andExpect(content().string(not(containsString("type=\"date\""))));
+
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
+
+        mockMvc.perform(get("/reservations/new")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"checkInDate\"")))
+                .andExpect(content().string(containsString("id=\"checkOutDate\"")))
+                .andExpect(content().string(containsString("class=\"js-date-picker\"")))
+                .andExpect(content().string(not(containsString("type=\"date\""))));
+    }
+
+    /** Confirms ISO dates submitted by the date picker continue to bind to LocalDate. */
+    @Test
+    void shouldBindIsoReservationDatesSubmittedByDatePicker() throws Exception {
+        UUID guestId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        UUID roomId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        when(reservationService.create(any())).thenReturn(new Response(
+                RESERVATION_ID,
+                "R20260911-000001",
+                "DRAFT",
+                BigDecimal.TEN,
+                "VND"));
+
+        mockMvc.perform(post("/reservations")
+                        .param("guestId", guestId.toString())
+                        .param("checkInDate", "2027-01-10")
+                        .param("checkOutDate", "2027-01-12")
+                        .param("currency", "VND")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "100000")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID));
+
+        ArgumentCaptor<CreateRequest> requestCaptor = ArgumentCaptor.forClass(CreateRequest.class);
+        verify(reservationService).create(requestCaptor.capture());
+        assertEquals(LocalDate.of(2027, 1, 10), requestCaptor.getValue().checkInDate());
+        assertEquals(LocalDate.of(2027, 1, 12), requestCaptor.getValue().checkOutDate());
+    }
+
+    /** Confirms Reservation list and detail retain the shared Reservations navigation page class. */
+    @Test
+    void shouldRenderReservationsNavigationForListAndDetail() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+
+        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("app-shell page-reservations")))
+                .andExpect(content().string(containsString("nav-reservations")));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("app-shell page-reservations")))
+                .andExpect(content().string(containsString("nav-reservations")));
+    }
+
+    /** Confirms the reservation number is the sole detail link in the reservation list. */
+    @Test
+    void shouldRenderReservationNumberAsDetailLinkWithoutViewColumn() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0)))
+                .thenReturn(new PageImpl<>(
+                        List.of(new ReservationSummaryResponse(
+                                RESERVATION_ID,
+                                "R20260911-000001",
+                                "CONFIRMED",
+                                LocalDate.of(2026, 9, 11),
+                                LocalDate.of(2026, 9, 12),
+                                BigDecimal.TEN,
+                                "VND")),
+                        PageRequest.of(0, 10),
+                        1));
+
+        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "href=\"/reservations/" + RESERVATION_ID + "\">R20260911-000001</a>")))
+                .andExpect(content().string(not(containsString("View details"))))
+                .andExpect(content().string(not(containsString(">View</a>"))));
+    }
+
+    /** Confirms filters are preserved in page links and use the requested server-side page. */
+    @Test
+    void shouldRenderFilterPreservingReservationPagination() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(1)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 23));
+
+        mockMvc.perform(get("/reservations")
+                        .param("reservationNumber", " R2026 ")
+                        .param("status", "CHECKED_IN")
+                        .param("checkInFrom", "2026-01-01")
+                        .param("checkInTo", "2026-12-31")
+                        .param("checkOutFrom", "2026-01-02")
+                        .param("checkOutTo", "2027-01-01")
+                        .param("page", "1")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("23")))
+                .andExpect(content().string(containsString("class=\"reservation-filter-grid\"")))
+                .andExpect(content().string(containsString("class=\"action-row reservation-filter-actions\"")))
+                .andExpect(content().string(containsString("class=\"results-toolbar\"")))
+                .andExpect(content().string(containsString("class=\"pagination reservation-pagination\"")))
+                .andExpect(content().string(containsString("value=\"R2026\"")))
+                .andExpect(content().string(containsString("value=\"CHECKED_IN\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("page=0")))
+                .andExpect(content().string(containsString("page=2")))
+                .andExpect(content().string(containsString("reservationNumber=R2026")))
+                .andExpect(content().string(containsString("status=CHECKED_IN")));
+
+        ArgumentCaptor<ReservationSearchCriteria> criteriaCaptor =
+                ArgumentCaptor.forClass(ReservationSearchCriteria.class);
+        verify(reservationQueryService).findPage(criteriaCaptor.capture(), eq(1));
+        assertEquals("R2026", criteriaCaptor.getValue().getReservationNumber());
+    }
+
+    /** Confirms the first page renders a three-page window and a direct final-page link. */
+    @Test
+    void shouldRenderCompactPaginationWindowOnFirstPage() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 500));
+
+        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("pagination__segment--current")))
+                .andExpect(content().string(containsString("page=1")))
+                .andExpect(content().string(containsString("page=2")))
+                .andExpect(content().string(containsString(">...</span>")))
+                .andExpect(content().string(containsString("page=49")))
+                .andExpect(content().string(containsString("Next")))
+                .andExpect(content().string(not(containsString("Previous"))));
+    }
+
+    /** Confirms a middle page has adjacent window pages, ellipsis, and the final page. */
+    @Test
+    void shouldRenderCompactPaginationWindowOnMiddlePage() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(9)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(9, 10), 500));
+
+        mockMvc.perform(get("/reservations").param("page", "9")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Previous")))
+                .andExpect(content().string(containsString("page=8")))
+                .andExpect(content().string(containsString("page=10")))
+                .andExpect(content().string(containsString(">...</span>")))
+                .andExpect(content().string(containsString("page=49")))
+                .andExpect(content().string(containsString("Next")));
+    }
+
+    /** Confirms an adjacent final page is rendered directly without an unnecessary ellipsis. */
+    @Test
+    void shouldNotRenderEllipsisWhenFinalPageIsAdjacentToWindow() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(47)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(47, 10), 500));
+
+        mockMvc.perform(get("/reservations").param("page", "47")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("page=46")))
+                .andExpect(content().string(containsString(">48</span>")))
+                .andExpect(content().string(containsString("page=48")))
+                .andExpect(content().string(containsString("page=49")))
+                .andExpect(content().string(not(containsString(">...</span>"))));
+    }
+
+    /** Confirms the final-page window has no duplicate final page, ellipsis, or Next action. */
+    @Test
+    void shouldRenderCompactPaginationWindowOnLastPage() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(49)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(49, 10), 500));
+
+        mockMvc.perform(get("/reservations").param("page", "49")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Previous")))
+                .andExpect(content().string(containsString(">48</a>")))
+                .andExpect(content().string(containsString(">49</a>")))
+                .andExpect(content().string(containsString(">50</span>")))
+                .andExpect(content().string(not(containsString(">...</span>"))))
+                .andExpect(content().string(not(containsString("Next"))));
+    }
+
+    /** Confirms invalid date ranges render safely without executing an unrestricted query. */
+    @Test
+    void shouldRejectReservationDateRangeLongerThanOneCalendarYear() throws Exception {
+        mockMvc.perform(get("/reservations")
+                        .param("checkInFrom", "2026-01-01")
+                        .param("checkInTo", "2027-01-02")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Check-in date range cannot exceed one calendar year.")))
+                .andExpect(content().string(containsString("No reservations match the current filters.")))
+                .andExpect(content().string(not(containsString("Reservation pages"))));
+
+        verifyNoInteractions(reservationQueryService);
+    }
+
     /** Supplies the checked-in Reservation, Stay, and authoritative balance required by detail rendering. */
     private void stubCheckedInReservation(BigDecimal outstanding) {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
@@ -265,6 +554,22 @@ class ReservationAccessAuthorizationTest {
                 null));
         when(stayBalanceService.calculate(UUID.fromString("22222222-2222-2222-2222-222222222222")))
                 .thenReturn(new StayBalance(BigDecimal.TEN, BigDecimal.TEN.subtract(outstanding), outstanding));
+    }
+
+    /** Creates Reservation context with the requested status for confirmation metadata rendering. */
+    private ReservationDetailResponse reservation(String status) {
+        return new ReservationDetailResponse(
+                RESERVATION_ID,
+                "R20260911-000001",
+                UUID.randomUUID(),
+                "GUEST-001",
+                status,
+                LocalDate.of(2026, 9, 11),
+                LocalDate.of(2026, 9, 12),
+                BigDecimal.TEN,
+                "VND",
+                null,
+                List.of());
     }
 
     /**

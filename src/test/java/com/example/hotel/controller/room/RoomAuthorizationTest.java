@@ -1,14 +1,18 @@
 package com.example.hotel.controller.room;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import com.example.hotel.controller.common.NavigationModelAdvice;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.dto.room.response.RoomTypeResponse;
@@ -27,14 +31,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.ui.ExtendedModelMap;
 
 /** Verifies Room Management authorization and the unchanged Reservation room-lookup boundary. */
 @WebMvcTest({RoomController.class, RoomLookupController.class, RoomPageController.class, RoomTypeController.class})
-@Import(RoomAuthorizationTest.MethodSecurityTestConfiguration.class)
+@Import({RoomAuthorizationTest.MethodSecurityTestConfiguration.class, NavigationModelAdvice.class})
 class RoomAuthorizationTest {
 
     private static final UUID ROOM_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -77,7 +83,9 @@ class RoomAuthorizationTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/rooms").with(user(username).authorities(manageRoomAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(view().name("room/list"));
+                .andExpect(view().name("room/list"))
+                .andExpect(model().attribute("canManageRoom", true))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/rooms\"")));
     }
 
     /**
@@ -95,6 +103,17 @@ class RoomAuthorizationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/rooms").with(user("staff").authorities(staffAuthorities())))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Confirms navigation hides the Rooms link for users without Room Management permission. */
+    @Test
+    void shouldExposeFalseRoomNavigationFlagWithoutManageRoomPermission() {
+        ExtendedModelMap model = new ExtendedModelMap();
+        new NavigationModelAdvice().addNavigationAttributes(
+                model,
+                new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()));
+
+        assertFalse((Boolean) model.getAttribute("canManageRoom"));
     }
 
     /**
@@ -145,6 +164,21 @@ class RoomAuthorizationTest {
                         .param("floor", "1")
                         .with(user("admin").authorities(manageRoomAuthority())))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Confirms Room creation opts into the shared normal confirmation convention. */
+    @Test
+    void shouldRenderNormalConfirmationMetadataForRoomCreation() throws Exception {
+        when(roomTypeQueryService.findAll()).thenReturn(List.of(roomTypeResponse()));
+
+        mockMvc.perform(get("/rooms/new").with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-title=\"Create room\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-label=\"Create room\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-severity=\"NORMAL\"")));
     }
 
     /**

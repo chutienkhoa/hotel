@@ -17,31 +17,86 @@
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
 
-        <p class="empty-state" th:if="${#lists.isEmpty(guests)}">No guests found.</p>
+        <section class="form-card" aria-label="Search guests">
+            <form method="get" th:action="@{/guests}">
+                <div class="form-field">
+                    <label for="query">Search</label>
+                    <input id="query" name="query" type="search"
+                           th:value="${searchCriteria.query}" />
+                </div>
+                <div class="action-row guest-filter-actions">
+                    <a class="button button-secondary" th:href="@{/guests}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
 
-        <div class="table-wrap" th:unless="${#lists.isEmpty(guests)}"><table>
-            <thead>
-            <tr>
-                <th scope="col">Guest Code</th>
-                <th scope="col">First Name</th>
-                <th scope="col">Last Name</th>
-                <th scope="col">Email</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="guest : ${guests}">
-                <td>
-                    <a th:href="@{/guests/{id}(id=${guest.id})}" th:text="${guest.guestCode}">G000001</a>
-                </td>
-                <td th:text="${guest.firstName}">First name</td>
-                <td th:text="${guest.lastName}">Last name</td>
-                <td th:text="${guest.email}">email@example.com</td>
-            </tr>
-            </tbody>
-        </table></div>
+        <section class="guest-results">
+            <div class="results-toolbar">
+                <p>
+                    <span th:text="${guestPage.totalElements}">0</span>
+                    <span th:text="${guestPage.totalElements == 1 ? 'result' : 'results'}">results</span>
+                </p>
+                <nav aria-label="Guest pages" class="pagination guest-pagination"
+                     th:if="${guestPage.totalPages > 1}">
+                    <a class="pagination__segment" th:if="${!guestPage.first}"
+                       th:href="@{/guests(query=${searchCriteria.query},page=${guestPage.number - 1})}">
+                        Previous
+                    </a>
+                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+                        <span aria-current="page" class="pagination__segment pagination__segment--current"
+                              th:if="${pageNumber == guestPage.number}"
+                              th:text="${pageNumber + 1}">1</span>
+                        <a class="pagination__segment" th:unless="${pageNumber == guestPage.number}"
+                           th:href="@{/guests(query=${searchCriteria.query},page=${pageNumber})}"
+                           th:text="${pageNumber + 1}">2</a>
+                    </th:block>
+                    <span class="pagination__segment pagination__segment--ellipsis"
+                          th:if="${paginationEndPage + 1 < guestPage.totalPages - 1}">...</span>
+                    <a class="pagination__segment" th:if="${paginationEndPage < guestPage.totalPages - 1}"
+                       th:href="@{/guests(query=${searchCriteria.query},page=${guestPage.totalPages - 1})}"
+                       th:text="${guestPage.totalPages}">2</a>
+                    <a class="pagination__segment" th:if="${!guestPage.last}"
+                       th:href="@{/guests(query=${searchCriteria.query},page=${guestPage.number + 1})}">
+                        Next
+                    </a>
+                </nav>
+            </div>
+
+            <p class="empty-state" th:if="${guestPage.empty}">No guests match the current search.</p>
+
+            <div class="table-wrap" th:unless="${guestPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Guest Code</th>
+                        <th scope="col">First Name</th>
+                        <th scope="col">Last Name</th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Nationality</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="guest : ${guestPage.content}">
+                        <td>
+                            <a th:href="@{/guests/{id}(id=${guest.id})}" th:text="${guest.guestCode}">G000001</a>
+                        </td>
+                        <td th:text="${guest.firstName}">First name</td>
+                        <td th:text="${guest.lastName}">Last name</td>
+                        <td th:text="${guest.email}">email@example.com</td>
+                        <td>
+                            <span aria-hidden="true" th:if="${guest.nationality.flag != null}"
+                                  th:text="${guest.nationality.flag}">🇻🇳</span>
+                            <span th:text="${guest.nationality.displayName}">Vietnam</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

@@ -37,22 +37,30 @@
 
         <section aria-labelledby="actions-heading" class="card actions">
             <h2 id="actions-heading">Available actions</h2>
-            <form method="post" th:action="@{/expenses/{id}/submit(id=${expense.id})}"
+            <form data-confirm-label="Submit expense" data-confirm-message="Submit this expense for approval?"
+                  data-confirm-severity="WARNING" data-confirm-title="Submit expense" method="post"
+                  th:action="@{/expenses/{id}/submit(id=${expense.id})}"
                   th:if="${expense.status == 'DRAFT' and canManageExpense}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Submit</button>
             </form>
             <div class="action-row" th:if="${expense.status == 'SUBMITTED' and canManageExpense}">
-                <form method="post" th:action="@{/expenses/{id}/approve(id=${expense.id})}">
+                <form data-confirm-label="Approve expense" data-confirm-message="Approve this expense?"
+                      data-confirm-severity="WARNING" data-confirm-title="Approve expense" method="post"
+                      th:action="@{/expenses/{id}/approve(id=${expense.id})}">
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <button class="button button-primary" type="submit">Approve</button>
                 </form>
-                <form method="post" th:action="@{/expenses/{id}/reject(id=${expense.id})}">
+                <form data-confirm-label="Reject expense" data-confirm-message="Reject this expense?"
+                      data-confirm-severity="DANGER" data-confirm-title="Reject expense" method="post"
+                      th:action="@{/expenses/{id}/reject(id=${expense.id})}">
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <button class="button button-danger" type="submit">Reject</button>
                 </form>
             </div>
-            <form method="post" th:action="@{/expenses/{id}/post(id=${expense.id})}"
+            <form data-confirm-label="Post expense" data-confirm-message="Post this expense?"
+                  data-confirm-severity="DANGER" data-confirm-title="Post expense" method="post"
+                  th:action="@{/expenses/{id}/post(id=${expense.id})}"
                   th:if="${expense.status == 'APPROVED' and canManageExpense}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Post</button>
@@ -63,7 +71,7 @@
         </section>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

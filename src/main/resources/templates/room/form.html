@@ -18,7 +18,8 @@
         </p>
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <form class="form-card" method="post"
+        <form class="form-card" data-confirm-message="Save this room?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${room == null} ? 'Create room' : 'Update room',data-confirm-label=${room == null} ? 'Create room' : 'Update room'" method="post"
               th:action="${room == null} ? @{/rooms} : @{/rooms/{id}(id=${room.id})}"
               th:object="${roomForm}">
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
@@ -63,7 +64,7 @@
         </form>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

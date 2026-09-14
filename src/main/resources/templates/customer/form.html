@@ -18,14 +18,15 @@
 
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <form class="form-card" method="post"
+        <form class="form-card" data-confirm-message="Save this guest?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${guest == null} ? 'Create guest' : 'Update guest',data-confirm-label=${guest == null} ? 'Create guest' : 'Update guest'" method="post"
               th:action="${guest == null} ? @{/guests} : @{/guests/{id}(id=${guest.id})}"
               th:object="${guestForm}">
             <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
                 Please correct the highlighted fields.
             </p>
 
-            <div class="form-grid">
+            <div class="form-grid guest-form-grid">
                 <div class="form-field">
                     <label for="firstName">First name</label>
                     <input id="firstName" maxlength="100" th:field="*{firstName}" type="text" />
@@ -53,15 +54,15 @@
                 </div>
                 <div class="form-field">
                     <label for="dateOfBirth">Date of birth</label>
-                    <input id="dateOfBirth" th:field="*{dateOfBirth}" type="date" />
+                    <input class="js-date-picker" id="dateOfBirth" th:field="*{dateOfBirth}" type="text" />
                     <p class="field-error" th:errors="*{dateOfBirth}"></p>
                 </div>
-            </div>
 
-            <div class="form-field">
-                <label for="address">Address</label>
-                <textarea id="address" rows="4" th:field="*{address}"></textarea>
-                <p class="field-error" th:errors="*{address}"></p>
+                <div class="form-field guest-form-address">
+                    <label for="address">Address</label>
+                    <textarea id="address" rows="4" th:field="*{address}"></textarea>
+                    <p class="field-error" th:errors="*{address}"></p>
+                </div>
             </div>
 
             <div class="form-actions">
@@ -73,7 +74,7 @@
         </form>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

@@ -4,13 +4,14 @@
 <nav aria-label="Main navigation" class="sidebar" th:fragment="sidebar">
     <div class="nav-section" th:if="${canViewReport}">
         <p class="nav-section-label">Overview</p>
-        <a class="nav-link nav-dashboard" th:href="@{/dashboard}">Dashboard</a>
+        <a class="nav-link sidebar-nav-link nav-dashboard" th:href="@{/dashboard}">Dashboard</a>
     </div>
     <div class="nav-section">
         <p class="nav-section-label">Front desk</p>
-        <a class="nav-link nav-reservations" th:href="@{/reservations}">Reservations</a>
-        <a class="nav-link" th:if="${canManageBooking}" th:href="@{/reservations/new}">Create Reservation</a>
-        <a class="nav-link nav-guests" th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
+        <a class="nav-link sidebar-nav-link nav-reservations" th:href="@{/reservations}">Reservations</a>
+        <a class="nav-link sidebar-nav-link nav-reservation-create" th:if="${canManageBooking}" th:href="@{/reservations/new}">Create Reservation</a>
+        <a class="nav-link sidebar-nav-link nav-guests" th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
+        <a class="nav-link sidebar-nav-link nav-rooms" th:if="${canManageRoom}" th:href="@{/rooms}">Rooms</a>
     </div>
 </nav>
 </body>

@@ -82,10 +82,12 @@
                     <tr th:each="charge : ${charges}">
                         <td th:text="${charge.type}">ROOM</td>
                         <td th:text="${charge.description ?: '—'}">—</td>
-                        <td class="table-number" th:text="${charge.quantity ?: '—'}">—</td>
+                        <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
                         <td class="table-number">
-                            <span th:if="${charge.unitPrice != null}" th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
-                            <span th:if="${charge.unitPrice == null}">—</span>
+                            <th:block th:if="${charge.unitPrice != null}">
+                                <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
+                            </th:block>
+                            <span th:unless="${charge.unitPrice != null}">—</span>
                         </td>
                         <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></td>
                         <td class="table-date" th:text="${charge.chargedAt}">2027-01-10T10:00:00Z</td>
@@ -97,44 +99,75 @@
                 </table>
             </div>
 
-            <form class="form-card" method="post"
+            <form class="form-card" data-confirm-label="Add fixed charge"
+                  data-confirm-message="Record this fixed charge?" data-confirm-severity="NORMAL"
+                  data-confirm-title="Add fixed charge" method="post"
                   th:action="@{/reservations/{id}/folio/charges(id=${reservation.id})}"
                   th:if="${folioMutable}" th:object="${chargeForm}">
-                <h3>Add Charge</h3>
+                <h3>Add Charge — Fixed Amount</h3>
                 <div class="form-grid">
                     <div class="form-field">
-                        <label for="charge-type">Type</label>
-                        <select id="charge-type" required th:field="*{type}">
+                        <label for="fixed-charge-type">Type</label>
+                        <select id="fixed-charge-type" required th:field="*{type}">
                             <option value="">Select a type</option>
                             <option th:each="type : ${chargeTypes}" th:text="${type}" th:value="${type}">ROOM</option>
                         </select>
                         <p class="field-error" th:errors="*{type}"></p>
                     </div>
                     <div class="form-field">
-                        <label for="charge-amount">Amount</label>
-                        <input id="charge-amount" min="0.01" required step="0.01" th:field="*{amount}" type="number" />
+                        <label for="fixed-charge-amount">Amount</label>
+                        <input id="fixed-charge-amount" min="0.01" required step="0.01" th:field="*{amount}" type="number" />
                         <p class="field-error" th:errors="*{amount}"></p>
                     </div>
+                </div>
+                <div class="form-field">
+                    <label for="fixed-charge-description">Description <span aria-hidden="true">(optional)</span></label>
+                    <textarea id="fixed-charge-description" maxlength="1000" th:field="*{description}"></textarea>
+                    <p class="field-error" th:errors="*{description}"></p>
+                </div>
+                <p class="field-error" th:errors="*{pricingModeValid}"></p>
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <div class="form-actions">
+                    <button class="button button-primary" type="submit">Add Fixed Charge</button>
+                </div>
+            </form>
+
+            <form class="form-card" data-confirm-label="Add itemized charge"
+                  data-confirm-message="Record this itemized charge?" data-confirm-severity="NORMAL"
+                  data-confirm-title="Add itemized charge" method="post"
+                  th:action="@{/reservations/{id}/folio/charges(id=${reservation.id})}"
+                  th:if="${folioMutable}" th:object="${chargeForm}">
+                <h3>Add Charge — Itemized</h3>
+                <div class="form-grid">
                     <div class="form-field">
-                        <label for="charge-quantity">Quantity <span aria-hidden="true">(optional)</span></label>
-                        <input id="charge-quantity" min="0.000001" step="0.000001" th:field="*{quantity}" type="number" />
+                        <label for="itemized-charge-type">Type</label>
+                        <select id="itemized-charge-type" required th:field="*{type}">
+                            <option value="">Select a type</option>
+                            <option th:each="type : ${chargeTypes}" th:text="${type}" th:value="${type}">ROOM</option>
+                        </select>
+                        <p class="field-error" th:errors="*{type}"></p>
+                    </div>
+                    <div class="form-field">
+                        <label for="itemized-charge-quantity">Quantity</label>
+                        <input id="itemized-charge-quantity" min="0.000001" required step="0.000001" th:field="*{quantity}" type="number" />
                         <p class="field-error" th:errors="*{quantity}"></p>
                     </div>
                     <div class="form-field">
-                        <label for="charge-unit-price">Unit price <span aria-hidden="true">(optional)</span></label>
-                        <input id="charge-unit-price" min="0" step="0.01" th:field="*{unitPrice}" type="number" />
+                        <label for="itemized-charge-unit-price">Unit price</label>
+                        <input id="itemized-charge-unit-price" min="0" required step="0.01" th:field="*{unitPrice}" type="number" />
                         <p class="field-error" th:errors="*{unitPrice}"></p>
                     </div>
                 </div>
                 <div class="form-field">
-                    <label for="charge-description">Description <span aria-hidden="true">(optional)</span></label>
-                    <textarea id="charge-description" maxlength="1000" th:field="*{description}"></textarea>
+                    <label for="itemized-charge-description">Description <span aria-hidden="true">(optional)</span></label>
+                    <textarea id="itemized-charge-description" maxlength="1000" th:field="*{description}"></textarea>
                     <p class="field-error" th:errors="*{description}"></p>
                 </div>
                 <p class="field-error" th:errors="*{quantityAndUnitPricePaired}"></p>
+                <p class="field-error" th:errors="*{pricingModeValid}"></p>
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <div class="form-actions">
-                    <button class="button button-primary" type="submit">Add Charge</button>
+                    <button class="button button-primary" type="submit">Add Itemized Charge</button>
                 </div>
             </form>
         </section>
@@ -162,20 +195,24 @@
                         <td class="table-date" th:text="${payment.paidAt ?: '—'}">—</td>
                         <td class="table-actions">
                             <div class="action-row" th:if="${folioMutable}">
-                                <form method="post"
+                                <form data-confirm-label="Mark paid" data-confirm-message="Mark this payment as paid?"
+                                      data-confirm-severity="WARNING" data-confirm-title="Mark payment paid" method="post"
                                       th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/mark-paid(reservationId=${reservation.id},paymentId=${payment.id})}"
                                       th:if="${payment.status == 'PENDING'}">
                                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                                     <button class="button button-primary table-action" type="submit">Mark paid</button>
                                 </form>
-                                <form method="post"
+                                <form data-confirm-label="Mark failed" data-confirm-message="Mark this payment as failed?"
+                                      data-confirm-severity="WARNING" data-confirm-title="Mark payment failed" method="post"
                                       th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/mark-failed(reservationId=${reservation.id},paymentId=${payment.id})}"
                                       th:if="${payment.status == 'PENDING'}">
                                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                                     <button class="button button-secondary table-action" type="submit">Mark failed</button>
                                 </form>
-                                <form method="post"
+                                <form data-confirm-label="Refund payment" data-confirm-severity="DANGER"
+                                      data-confirm-title="Refund payment" method="post"
                                       th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/refund(reservationId=${reservation.id},paymentId=${payment.id})}"
+                                      th:attr="data-confirm-message=${'Refund ' + (reservation.currency == 'VND' ? #numbers.formatDecimal(payment.amount, 1, 'COMMA', 0, 'POINT') + ' VND' : payment.amount + ' ' + reservation.currency) + '?'}"
                                       th:if="${payment.status == 'PAID'}">
                                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                                     <button class="button button-danger table-action" type="submit">Refund</button>
@@ -190,7 +227,9 @@
                 </table>
             </div>
 
-            <form class="form-card" method="post"
+            <form class="form-card" data-confirm-label="Add payment"
+                  data-confirm-message="Record this payment?" data-confirm-severity="NORMAL"
+                  data-confirm-title="Add payment" method="post"
                   th:action="@{/reservations/{id}/folio/payments(id=${reservation.id})}"
                   th:if="${folioMutable}" th:object="${paymentForm}">
                 <h3>Add Payment</h3>
@@ -224,7 +263,10 @@
         <section aria-labelledby="checkout-heading" class="card">
             <h2 id="checkout-heading">Check-out</h2>
             <p th:if="${not checkoutReady}">Check-out is unavailable until the outstanding balance is zero.</p>
-            <form method="post" th:action="@{/reservations/{id}/check-out(id=${reservation.id})}"
+            <form data-confirm-label="Check out" data-confirm-severity="DANGER"
+                  data-confirm-title="Check out reservation" method="post"
+                  th:action="@{/reservations/{id}/check-out(id=${reservation.id})}"
+                  th:attr="data-confirm-message=|Check out reservation ${reservation.reservationNumber}?|"
                   th:if="${checkoutReady and canCheckOut}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Check-out</button>
@@ -232,7 +274,7 @@
         </section>
     </main>
 
-    <footer th:replace="~{layout/footer :: footer}"></footer>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
@@ -152,6 +153,22 @@ class ExpenseAuthorizationTest {
                         .with(user("admin").authorities(manageExpenseAuthority()))
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    /** Confirms the terminal Expense posting action opts into danger confirmation metadata. */
+    @Test
+    void shouldRenderDangerConfirmationMetadataForExpensePosting() throws Exception {
+        when(expenseService.findById(EXPENSE_ID)).thenReturn(response("APPROVED"));
+
+        mockMvc.perform(get("/expenses/{id}", EXPENSE_ID)
+                        .with(user("admin").authorities(manageExpenseAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-title=\"Post expense\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-label=\"Post expense\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "data-confirm-severity=\"DANGER\"")));
     }
 
     /** Builds the existing authority required by every Expense v1 operation. */

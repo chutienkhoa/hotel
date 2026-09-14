@@ -1,12 +1,15 @@
 package com.example.hotel.controller.customer;
 
 import com.example.hotel.dto.customer.request.GuestCreateRequest;
+import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.request.GuestUpdateRequest;
 import com.example.hotel.dto.customer.response.GuestResponse;
+import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.customer.GuestService;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -16,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -24,18 +28,21 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class GuestPageController {
 
     private final GuestService guestService;
+    private final GuestQueryService guestQueryService;
 
     /**
      * Creates the guest page controller with the guest-management service.
      *
      * @param guestService service used to load and update guest data
+     * @param guestQueryService service used to load paginated Guest list data
      */
-    public GuestPageController(GuestService guestService) {
+    public GuestPageController(GuestService guestService, GuestQueryService guestQueryService) {
         this.guestService = guestService;
+        this.guestQueryService = guestQueryService;
     }
 
     /**
-     * Displays all guest profiles available to guest-management users.
+     * Displays a searchable, paginated Guest list for guest-management users.
      *
      * @param model model used to render the page
      * @param authentication current browser authentication
@@ -43,9 +50,16 @@ public class GuestPageController {
      */
     @GetMapping("/guests")
     @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
-    public String list(Model model, Authentication authentication) {
+    public String list(
+            @ModelAttribute("searchCriteria") GuestSearchCriteria searchCriteria,
+            @RequestParam(required = false) Integer page,
+            Model model,
+            Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
-        model.addAttribute("guests", guestService.findAll());
+        searchCriteria.normalizeQuery();
+        Page<?> guestPage = guestQueryService.findPage(searchCriteria, page == null ? 0 : page);
+        model.addAttribute("guestPage", guestPage);
+        addPaginationAttributes(model, guestPage);
         return "customer/list";
     }
 
@@ -191,6 +205,24 @@ public class GuestPageController {
     private void addFormAttributes(Model model, Object guestForm, Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("guestForm", guestForm);
+    }
+
+    /**
+     * Adds presentation-only page-window bounds for the Guest list paginator.
+     *
+     * @param model MVC model used by the Guest list view
+     * @param guestPage current server-side page metadata
+     */
+    private void addPaginationAttributes(Model model, Page<?> guestPage) {
+        int totalPages = guestPage.getTotalPages();
+        if (totalPages == 0) {
+            return;
+        }
+        int lastPage = totalPages - 1;
+        int startPage = Math.max(0, Math.min(guestPage.getNumber() - 1, lastPage - 2));
+        int endPage = Math.min(lastPage, startPage + 2);
+        model.addAttribute("paginationStartPage", startPage);
+        model.addAttribute("paginationEndPage", endPage);
     }
 
     /**
