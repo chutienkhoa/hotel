@@ -1,8 +1,12 @@
 package com.example.hotel.service.customer;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,15 +59,36 @@ class GuestQueryServiceTest {
         assertEquals(List.of(summary), result.getContent());
     }
 
-    /** Confirms one normalized query creates OR predicates for every approved Guest search field. */
+    /** Confirms an unfiltered criteria object adds no database predicate for any field. */
     @Test
     @SuppressWarnings("unchecked")
-    void shouldSearchAllApprovedGuestFieldsCaseInsensitively() {
+    void shouldIgnoreAbsentFilters() {
         GuestRepository repository = mock(GuestRepository.class);
         GuestQueryService service = new GuestQueryService(repository, mock(GuestMapper.class));
         GuestSearchCriteria criteria = new GuestSearchCriteria();
-        criteria.setQuery("  KhOa  ");
-        criteria.normalizeQuery();
+        criteria.normalize();
+
+        CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class);
+        Predicate conjunction = mock(Predicate.class);
+        ArgumentCaptor<Predicate[]> predicatesCaptor = ArgumentCaptor.forClass(Predicate[].class);
+        when(criteriaBuilder.and(predicatesCaptor.capture())).thenReturn(conjunction);
+
+        Predicate result = service.specificationFor(criteria)
+                .toPredicate(mock(Root.class), mock(CriteriaQuery.class), criteriaBuilder);
+
+        assertEquals(conjunction, result);
+        assertEquals(0, predicatesCaptor.getValue().length);
+    }
+
+    /** Confirms one populated filter field builds exactly one case-insensitive partial-match predicate. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldBuildPartialMatchPredicateForOnePopulatedField() {
+        GuestRepository repository = mock(GuestRepository.class);
+        GuestQueryService service = new GuestQueryService(repository, mock(GuestMapper.class));
+        GuestSearchCriteria criteria = new GuestSearchCriteria();
+        criteria.setFirstName("  KhOa  ");
+        criteria.normalize();
 
         Root<Guest> root = mock(Root.class);
         CriteriaQuery<?> query = mock(CriteriaQuery.class);
@@ -71,38 +96,101 @@ class GuestQueryServiceTest {
         Path<String> field = mock(Path.class);
         Expression<String> lowerCaseField = mock(Expression.class);
         Predicate predicate = mock(Predicate.class);
-        when(root.<String>get(any(String.class))).thenReturn(field);
-        when(criteriaBuilder.lower(any(Expression.class))).thenReturn(lowerCaseField);
+        Predicate conjunction = mock(Predicate.class);
+        when(root.<String>get("firstName")).thenReturn(field);
+        when(criteriaBuilder.lower(field)).thenReturn(lowerCaseField);
         when(criteriaBuilder.like(lowerCaseField, "%khoa%")).thenReturn(predicate);
-        when(criteriaBuilder.or(any(Predicate[].class))).thenReturn(predicate);
+        ArgumentCaptor<Predicate[]> predicatesCaptor = ArgumentCaptor.forClass(Predicate[].class);
+        when(criteriaBuilder.and(predicatesCaptor.capture())).thenReturn(conjunction);
 
-        service.specificationFor(criteria).toPredicate(root, query, criteriaBuilder);
+        Predicate result = service.specificationFor(criteria).toPredicate(root, query, criteriaBuilder);
 
-        verify(root).get("guestCode");
+        assertEquals(conjunction, result);
         verify(root).get("firstName");
-        verify(root).get("lastName");
-        verify(root).get("email");
-        verify(root).get("phone");
-        verify(root).get("nationality");
-        verify(criteriaBuilder).or(any(Predicate[].class));
+        verify(root, never()).get("guestCode");
+        verify(root, never()).get("lastName");
+        verify(root, never()).get("email");
+        verify(root, never()).get("nationality");
+        assertArrayEquals(new Predicate[] {predicate}, predicatesCaptor.getValue());
     }
 
-    /** Confirms blank input does not add a database search predicate. */
+    /**
+     * Confirms the nationality filter builds a case-insensitive OR predicate across the
+     * canonical country name and its known legacy demonyms, not a free-text partial match.
+     */
     @Test
-    void shouldIgnoreBlankGuestSearchQuery() {
+    @SuppressWarnings("unchecked")
+    void shouldBuildCountrySelectionPredicateForNationalityFilter() {
         GuestRepository repository = mock(GuestRepository.class);
         GuestQueryService service = new GuestQueryService(repository, mock(GuestMapper.class));
         GuestSearchCriteria criteria = new GuestSearchCriteria();
-        criteria.setQuery("   ");
-        criteria.normalizeQuery();
-        CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class);
-        Predicate conjunction = mock(Predicate.class);
-        when(criteriaBuilder.conjunction()).thenReturn(conjunction);
+        criteria.setNationality("Japan");
+        criteria.normalize();
 
-        Predicate result = service.specificationFor(criteria)
-                .toPredicate(mock(Root.class), mock(CriteriaQuery.class), criteriaBuilder);
+        Root<Guest> root = mock(Root.class);
+        CriteriaQuery<?> query = mock(CriteriaQuery.class);
+        CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class);
+        Path<String> nationalityField = mock(Path.class);
+        Expression<String> lowerNationality = mock(Expression.class);
+        Predicate canonicalMatch = mock(Predicate.class);
+        Predicate legacyMatch = mock(Predicate.class);
+        Predicate orPredicate = mock(Predicate.class);
+        Predicate conjunction = mock(Predicate.class);
+        when(root.<String>get("nationality")).thenReturn(nationalityField);
+        when(criteriaBuilder.lower(nationalityField)).thenReturn(lowerNationality);
+        when(criteriaBuilder.equal(lowerNationality, "japan")).thenReturn(canonicalMatch);
+        when(criteriaBuilder.equal(lowerNationality, "japanese")).thenReturn(legacyMatch);
+        ArgumentCaptor<Predicate[]> orPredicatesCaptor = ArgumentCaptor.forClass(Predicate[].class);
+        when(criteriaBuilder.or(orPredicatesCaptor.capture())).thenReturn(orPredicate);
+        when(criteriaBuilder.and(any(Predicate[].class))).thenReturn(conjunction);
+
+        Predicate result = service.specificationFor(criteria).toPredicate(root, query, criteriaBuilder);
 
         assertEquals(conjunction, result);
-        verify(criteriaBuilder).conjunction();
+        assertEquals(2, orPredicatesCaptor.getValue().length);
+        assertTrue(List.of(orPredicatesCaptor.getValue()).containsAll(List.of(canonicalMatch, legacyMatch)));
+        verify(root, never()).get("firstName");
+    }
+
+    /** Confirms multiple populated filter fields are AND-combined into one predicate array. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldCombineMultiplePopulatedFiltersWithAndSemantics() {
+        GuestRepository repository = mock(GuestRepository.class);
+        GuestQueryService service = new GuestQueryService(repository, mock(GuestMapper.class));
+        GuestSearchCriteria criteria = new GuestSearchCriteria();
+        criteria.setFirstName("Khoa");
+        criteria.setNationality("Vietnam");
+        criteria.normalize();
+
+        Root<Guest> root = mock(Root.class);
+        CriteriaQuery<?> query = mock(CriteriaQuery.class);
+        CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class);
+        Path<String> firstNameField = mock(Path.class);
+        Path<String> nationalityField = mock(Path.class);
+        Expression<String> lowerFirstName = mock(Expression.class);
+        Expression<String> lowerNationality = mock(Expression.class);
+        Predicate firstNamePredicate = mock(Predicate.class);
+        Predicate nationalityOrPredicate = mock(Predicate.class);
+        Predicate conjunction = mock(Predicate.class);
+        when(root.<String>get("firstName")).thenReturn(firstNameField);
+        when(root.<String>get("nationality")).thenReturn(nationalityField);
+        when(criteriaBuilder.lower(firstNameField)).thenReturn(lowerFirstName);
+        when(criteriaBuilder.lower(nationalityField)).thenReturn(lowerNationality);
+        when(criteriaBuilder.like(lowerFirstName, "%khoa%")).thenReturn(firstNamePredicate);
+        // Nationality is a country selection: "Vietnam" also matches the known legacy value "Vietnamese".
+        when(criteriaBuilder.equal(eq(lowerNationality), any())).thenReturn(mock(Predicate.class));
+        when(criteriaBuilder.or(any(Predicate[].class))).thenReturn(nationalityOrPredicate);
+        ArgumentCaptor<Predicate[]> andPredicatesCaptor = ArgumentCaptor.forClass(Predicate[].class);
+        when(criteriaBuilder.and(andPredicatesCaptor.capture())).thenReturn(conjunction);
+
+        Predicate result = service.specificationFor(criteria).toPredicate(root, query, criteriaBuilder);
+
+        assertEquals(conjunction, result);
+        assertEquals(2, andPredicatesCaptor.getValue().length);
+        assertTrue(List.of(andPredicatesCaptor.getValue()).containsAll(
+                List.of(firstNamePredicate, nationalityOrPredicate)));
+        verify(criteriaBuilder).equal(lowerNationality, "vietnam");
+        verify(criteriaBuilder).equal(lowerNationality, "vietnamese");
     }
 }

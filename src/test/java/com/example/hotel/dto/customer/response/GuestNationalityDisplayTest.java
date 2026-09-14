@@ -18,6 +18,28 @@ class GuestNationalityDisplayTest {
                 GuestNationalityDisplay.from("United States"));
     }
 
+    /** Confirms common nationality demonyms resolve to the same flag as their country name. */
+    @Test
+    void shouldResolveKnownDemonymsToUnicodeFlags() {
+        assertEquals(new GuestNationalityDisplay("Vietnamese", "🇻🇳"), GuestNationalityDisplay.from("Vietnamese"));
+        assertEquals(new GuestNationalityDisplay("Japanese", "🇯🇵"), GuestNationalityDisplay.from("Japanese"));
+        assertEquals(new GuestNationalityDisplay("American", "🇺🇸"), GuestNationalityDisplay.from("American"));
+        assertEquals(new GuestNationalityDisplay("Korean", "🇰🇷"), GuestNationalityDisplay.from("Korean"));
+        assertEquals(new GuestNationalityDisplay("Chinese", "🇨🇳"), GuestNationalityDisplay.from("Chinese"));
+        assertEquals(new GuestNationalityDisplay("British", "🇬🇧"), GuestNationalityDisplay.from("British"));
+        assertEquals(new GuestNationalityDisplay("French", "🇫🇷"), GuestNationalityDisplay.from("French"));
+        assertEquals(new GuestNationalityDisplay("German", "🇩🇪"), GuestNationalityDisplay.from("German"));
+    }
+
+    /** Confirms demonym resolution is case-insensitive while preserving the original stored casing. */
+    @Test
+    void shouldResolveDemonymsCaseInsensitivelyWhilePreservingStoredText() {
+        GuestNationalityDisplay display = GuestNationalityDisplay.from("  vietnamese  ");
+
+        assertEquals("vietnamese", display.displayName());
+        assertEquals("🇻🇳", display.flag());
+    }
+
     /** Confirms blank nationalities remain an explicit non-country presentation. */
     @Test
     void shouldRenderBlankNationalityAsDash() {

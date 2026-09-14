@@ -17,12 +17,41 @@
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
 
-        <section class="form-card" aria-label="Search guests">
+        <section class="form-card" aria-label="Filter guests">
             <form method="get" th:action="@{/guests}">
-                <div class="form-field">
-                    <label for="query">Search</label>
-                    <input id="query" name="query" type="search"
-                           th:value="${searchCriteria.query}" />
+                <div class="form-grid guest-form-grid">
+                    <div class="form-field">
+                        <label for="guestCode">Guest Code</label>
+                        <input id="guestCode" name="guestCode" type="search"
+                               th:value="${searchCriteria.guestCode}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="firstName">First Name</label>
+                        <input id="firstName" name="firstName" type="search"
+                               th:value="${searchCriteria.firstName}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="lastName">Last Name</label>
+                        <input id="lastName" name="lastName" type="search"
+                               th:value="${searchCriteria.lastName}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="email">Email</label>
+                        <input id="email" name="email" type="search"
+                               th:value="${searchCriteria.email}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="nationality">Nationality</label>
+                        <select id="nationality" name="nationality">
+                            <option th:selected="${searchCriteria.nationality == null}" value="">
+                                All nationalities
+                            </option>
+                            <option th:each="country : ${countries}"
+                                    th:selected="${country.name == searchCriteria.nationality}"
+                                    th:text="${country.flag + ' ' + country.name}"
+                                    th:value="${country.name}">🇻🇳 Vietnam</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="action-row guest-filter-actions">
                     <a class="button button-secondary" th:href="@{/guests}">Reset</a>
@@ -40,7 +69,7 @@
                 <nav aria-label="Guest pages" class="pagination guest-pagination"
                      th:if="${guestPage.totalPages > 1}">
                     <a class="pagination__segment" th:if="${!guestPage.first}"
-                       th:href="@{/guests(query=${searchCriteria.query},page=${guestPage.number - 1})}">
+                       th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (guestPage.number - 1)}">
                         Previous
                     </a>
                     <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
@@ -48,22 +77,22 @@
                               th:if="${pageNumber == guestPage.number}"
                               th:text="${pageNumber + 1}">1</span>
                         <a class="pagination__segment" th:unless="${pageNumber == guestPage.number}"
-                           th:href="@{/guests(query=${searchCriteria.query},page=${pageNumber})}"
+                           th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}"
                            th:text="${pageNumber + 1}">2</a>
                     </th:block>
                     <span class="pagination__segment pagination__segment--ellipsis"
                           th:if="${paginationEndPage + 1 < guestPage.totalPages - 1}">...</span>
                     <a class="pagination__segment" th:if="${paginationEndPage < guestPage.totalPages - 1}"
-                       th:href="@{/guests(query=${searchCriteria.query},page=${guestPage.totalPages - 1})}"
+                       th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (guestPage.totalPages - 1)}"
                        th:text="${guestPage.totalPages}">2</a>
                     <a class="pagination__segment" th:if="${!guestPage.last}"
-                       th:href="@{/guests(query=${searchCriteria.query},page=${guestPage.number + 1})}">
+                       th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (guestPage.number + 1)}">
                         Next
                     </a>
                 </nav>
             </div>
 
-            <p class="empty-state" th:if="${guestPage.empty}">No guests match the current search.</p>
+            <p class="empty-state" th:if="${guestPage.empty}">No guests match the current filters.</p>
 
             <div class="table-wrap" th:unless="${guestPage.empty}">
                 <table>

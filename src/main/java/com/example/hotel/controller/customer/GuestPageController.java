@@ -3,10 +3,13 @@ package com.example.hotel.controller.customer;
 import com.example.hotel.dto.customer.request.GuestCreateRequest;
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.request.GuestUpdateRequest;
+import com.example.hotel.dto.customer.response.CountryCatalog;
 import com.example.hotel.dto.customer.response.GuestResponse;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.customer.GuestService;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
@@ -22,6 +25,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /** Serves CSRF-protected Thymeleaf pages for authorized guest management. */
 @Controller
@@ -56,9 +60,11 @@ public class GuestPageController {
             Model model,
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
-        searchCriteria.normalizeQuery();
+        searchCriteria.normalize();
         Page<?> guestPage = guestQueryService.findPage(searchCriteria, page == null ? 0 : page);
         model.addAttribute("guestPage", guestPage);
+        model.addAttribute("countries", CountryCatalog.countries());
+        model.addAttribute("filterQueryString", filterQueryString(searchCriteria));
         addPaginationAttributes(model, guestPage);
         return "customer/list";
     }
@@ -89,7 +95,8 @@ public class GuestPageController {
     @GetMapping("/guests/new")
     @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
     public String createForm(Model model, Authentication authentication) {
-        addFormAttributes(model, new GuestCreateRequest(null, null, null, null, null, null, null), authentication);
+        addFormAttributes(
+                model, new GuestCreateRequest(null, null, null, null, null, null, null), authentication, null);
         return "customer/form";
     }
 
@@ -112,7 +119,7 @@ public class GuestPageController {
             Authentication authentication,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
-            addFormAttributes(model, guestForm, authentication);
+            addFormAttributes(model, guestForm, authentication, null);
             return "customer/form";
         }
         try {
@@ -120,7 +127,7 @@ public class GuestPageController {
             redirectAttributes.addFlashAttribute("successMessage", "Guest created successfully.");
             return "redirect:/guests/" + guest.id();
         } catch (ResponseStatusException exception) {
-            addFormAttributes(model, guestForm, authentication);
+            addFormAttributes(model, guestForm, authentication, null);
             model.addAttribute("errorMessage", safeMessage(exception));
             return "customer/form";
         }
@@ -138,7 +145,12 @@ public class GuestPageController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
     public String updateForm(@PathVariable UUID id, Model model, Authentication authentication) {
         GuestResponse guest = guestService.findById(id);
-        addFormAttributes(model, toUpdateRequest(guest), authentication);
+        NationalitySelection nationalitySelection = resolveNationalitySelection(guest.nationality());
+        addFormAttributes(
+                model,
+                toUpdateRequest(guest, nationalitySelection.selectedValue()),
+                authentication,
+                nationalitySelection.unmappedValue());
         model.addAttribute("guest", guest);
         return "customer/form";
     }
@@ -164,7 +176,7 @@ public class GuestPageController {
             Authentication authentication,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
-            addFormAttributes(model, guestForm, authentication);
+            addFormAttributes(model, guestForm, authentication, null);
             model.addAttribute("guest", guestService.findById(id));
             return "customer/form";
         }
@@ -173,7 +185,7 @@ public class GuestPageController {
             redirectAttributes.addFlashAttribute("successMessage", "Guest updated successfully.");
             return "redirect:/guests/" + id;
         } catch (ResponseStatusException exception) {
-            addFormAttributes(model, guestForm, authentication);
+            addFormAttributes(model, guestForm, authentication, null);
             model.addAttribute("guest", guestService.findById(id));
             model.addAttribute("errorMessage", safeMessage(exception));
             return "customer/form";
@@ -201,10 +213,83 @@ public class GuestPageController {
      * @param model model used to render a page
      * @param guestForm create or update form data
      * @param authentication current browser authentication
+     * @param unmappedNationality the Guest's current nationality when it cannot be safely
+     *     resolved to a canonical country, so the Edit dropdown can preserve it verbatim
+     *     instead of silently discarding it; {@code null} for Create, a resolved value, or an
+     *     absent value
      */
-    private void addFormAttributes(Model model, Object guestForm, Authentication authentication) {
+    private void addFormAttributes(
+            Model model, Object guestForm, Authentication authentication, String unmappedNationality) {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("guestForm", guestForm);
+        model.addAttribute("countries", CountryCatalog.countries());
+        model.addAttribute("unmappedNationality", unmappedNationality);
+    }
+
+    /**
+     * Resolves a Guest's stored nationality to the value the Edit dropdown should preselect.
+     *
+     * <p>A canonical country name or a known legacy demonym resolves to its canonical country
+     * name. An unmapped value (unknown legacy text) is preserved verbatim as both the
+     * preselected value and the value the template must render as an extra dropdown option, so
+     * an Edit submission that does not touch the field cannot silently discard it.</p>
+     *
+     * @param storedNationality the Guest's currently stored nationality text
+     * @return the dropdown preselection and, when applicable, the unmapped value to preserve
+     */
+    private NationalitySelection resolveNationalitySelection(String storedNationality) {
+        if (storedNationality == null || storedNationality.isBlank()) {
+            return new NationalitySelection(null, null);
+        }
+        return CountryCatalog.canonicalNameFor(storedNationality)
+                .map(canonicalName -> new NationalitySelection(canonicalName, null))
+                .orElseGet(() -> new NationalitySelection(storedNationality, storedNationality));
+    }
+
+    /**
+     * Carries the Edit dropdown preselection derived from a Guest's stored nationality.
+     *
+     * @param selectedValue the value the dropdown should preselect
+     * @param unmappedValue the original stored value, when it could not be safely resolved to a
+     *     canonical country and must be preserved as an extra dropdown option
+     */
+    private record NationalitySelection(String selectedValue, String unmappedValue) {}
+
+    /**
+     * Builds an already URL-encoded query string containing only the currently populated Guest
+     * list filters, so pagination links can preserve every active filter without appending
+     * blank query parameters for filters the user left empty.
+     *
+     * @param searchCriteria normalized Guest list filters
+     * @return the encoded {@code name=value&...} filter query string, or an empty string when
+     *     no filter is active
+     */
+    private String filterQueryString(GuestSearchCriteria searchCriteria) {
+        Map<String, String> filters = new LinkedHashMap<>();
+        putIfPresent(filters, "guestCode", searchCriteria.getGuestCode());
+        putIfPresent(filters, "firstName", searchCriteria.getFirstName());
+        putIfPresent(filters, "lastName", searchCriteria.getLastName());
+        putIfPresent(filters, "email", searchCriteria.getEmail());
+        putIfPresent(filters, "nationality", searchCriteria.getNationality());
+        if (filters.isEmpty()) {
+            return "";
+        }
+        UriComponentsBuilder builder = UriComponentsBuilder.newInstance();
+        filters.forEach(builder::queryParam);
+        return builder.build().encode().getQuery();
+    }
+
+    /**
+     * Adds one filter parameter only when it was actually supplied.
+     *
+     * @param filters filter map being built for the pagination filter query string
+     * @param name filter parameter name
+     * @param value normalized optional filter value
+     */
+    private void putIfPresent(Map<String, String> filters, String name, String value) {
+        if (value != null) {
+            filters.put(name, value);
+        }
     }
 
     /**
@@ -229,15 +314,16 @@ public class GuestPageController {
      * Converts a guest response into the mutable fields accepted by the update form.
      *
      * @param guest guest profile to populate the form
+     * @param nationalitySelection the resolved nationality dropdown preselection
      * @return mutable guest form data without the immutable code
      */
-    private GuestUpdateRequest toUpdateRequest(GuestResponse guest) {
+    private GuestUpdateRequest toUpdateRequest(GuestResponse guest, String nationalitySelection) {
         return new GuestUpdateRequest(
                 guest.firstName(),
                 guest.lastName(),
                 guest.email(),
                 guest.phone(),
-                guest.nationality(),
+                nationalitySelection,
                 guest.dateOfBirth(),
                 guest.address());
     }

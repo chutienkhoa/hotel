@@ -1,5 +1,6 @@
 package com.example.hotel.controller.customer;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -116,9 +117,100 @@ class GuestAuthorizationTest {
                         "data-confirm-title=\"Update guest\"")));
     }
 
-    /** Confirms the Guest list preserves its query while using shared result and pagination markup. */
+    /** Confirms the Create form renders Nationality as a placeholder-led country select, not free text. */
     @Test
-    void shouldRenderSearchablePaginatedGuestList() throws Exception {
+    void shouldRenderNationalityAsCountrySelectOnCreateForm() throws Exception {
+        mockMvc.perform(get("/guests/new").with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "<select id=\"nationality\" name=\"nationality\">")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "id=\"nationality\" maxlength=\"100\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "<option value=\"\">Select nationality</option>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("🇯🇵 Japan")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("🇻🇳 Vietnam")));
+    }
+
+    /** Confirms the Edit form preselects the Guest's existing canonical nationality. */
+    @Test
+    void shouldPreselectCanonicalNationalityOnEditForm() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse("Japan"));
+
+        mockMvc.perform(get("/guests/{id}/edit", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "value=\"Japan\" selected=\"selected\"")));
+    }
+
+    /** Confirms a known legacy nationality safely preselects its canonical country on the Edit form. */
+    @Test
+    void shouldMapKnownLegacyNationalityToCanonicalSelectionOnEditForm() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse("Japanese"));
+
+        mockMvc.perform(get("/guests/{id}/edit", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "value=\"Japan\" selected=\"selected\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        ">Japanese</option>"))));
+    }
+
+    /** Confirms an unmappable legacy nationality is preserved as a selected option, not silently discarded. */
+    @Test
+    void shouldPreserveUnknownLegacyNationalityOnEditForm() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse("Atlantean"));
+
+        mockMvc.perform(get("/guests/{id}/edit", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "value=\"Atlantean\" selected=\"selected\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">Atlantean</option>")));
+    }
+
+    /** Confirms creating a guest persists the canonical country name selected from the dropdown. */
+    @Test
+    void shouldSubmitCanonicalCountryNameWhenCreatingGuest() throws Exception {
+        when(guestService.create(org.mockito.ArgumentMatchers.any())).thenReturn(guestResponse("Japan"));
+        org.mockito.ArgumentCaptor<com.example.hotel.dto.customer.request.GuestCreateRequest> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.hotel.dto.customer.request.GuestCreateRequest.class);
+
+        mockMvc.perform(post("/guests")
+                        .param("firstName", "Khoa")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        verify(guestService).create(captor.capture());
+        org.junit.jupiter.api.Assertions.assertEquals("Japan", captor.getValue().nationality());
+    }
+
+    /** Confirms the Guest list renders five independent filter fields and no generic Search field. */
+    @Test
+    void shouldRenderFiveIndependentGuestFilterFieldsWithoutGenericSearchField() throws Exception {
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/guests").with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"guestCode\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"firstName\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"lastName\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"email\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"nationality\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("name=\"query\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString(">Search</label>"))));
+    }
+
+    /** Confirms the Guest list preserves every active filter while using shared result and pagination markup. */
+    @Test
+    void shouldRenderFilteredPaginatedGuestListPreservingAllFilters() throws Exception {
         GuestListResponse guest = new GuestListResponse(
                 GUEST_ID,
                 "G000001",
@@ -129,33 +221,72 @@ class GuestAuthorizationTest {
         when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
                 .thenReturn(new PageImpl<>(List.of(guest), PageRequest.of(0, 10), 11));
 
-        mockMvc.perform(get("/guests").param("query", "Vietnam")
+        mockMvc.perform(get("/guests")
+                        .param("firstName", "Khoa")
+                        .param("nationality", "Vietnam")
                         .with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"query\"")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"Vietnam\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "id=\"firstName\" name=\"firstName\" type=\"search\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"Khoa\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "value=\"Vietnam\" selected=\"selected\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("class=\"pagination guest-pagination\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("pagination__segment")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("pagination__segment--current")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/guests?firstName=Khoa&amp;nationality=Vietnam&amp;page=1\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("G000001")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/guests/" + GUEST_ID + "\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("🇻🇳")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Vietnam")));
     }
 
-    /** Confirms an empty Guest search keeps the query and omits stale table and pagination content. */
+    /** Confirms an empty Guest filter result keeps the selected nationality and omits stale table and pagination content. */
     @Test
-    void shouldRenderZeroResultGuestSearchWithoutPagination() throws Exception {
+    void shouldRenderZeroResultGuestFilterWithoutPagination() throws Exception {
         when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
                 .thenReturn(new PageImpl<>(List.of()));
 
-        mockMvc.perform(get("/guests").param("query", "no-match")
+        mockMvc.perform(get("/guests").param("nationality", "Japan")
                         .with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("0</span>")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
-                        "No guests match the current search.")))
+                        "No guests match the current filters.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "value=\"Japan\" selected=\"selected\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
                         "class=\"pagination guest-pagination\""))));
+    }
+
+    /** Confirms the Nationality filter is a country-selection dropdown, not a free-text input. */
+    @Test
+    void shouldRenderNationalityFilterAsCountryDropdown() throws Exception {
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/guests").with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "<select id=\"nationality\" name=\"nationality\">")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "id=\"nationality\" name=\"nationality\" type=\"search\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("All nationalities")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("🇯🇵 Japan")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("🇻🇳 Vietnam")));
+    }
+
+    /** Confirms Reset always points to the unfiltered Guest list regardless of active filters. */
+    @Test
+    void shouldPointResetToUnfilteredGuestList() throws Exception {
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/guests").param("firstName", "Khoa")
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/guests\">Reset</a>")));
     }
 
     /**
@@ -250,6 +381,16 @@ class GuestAuthorizationTest {
      * @return a guest response for controller testing
      */
     private GuestResponse guestResponse() {
+        return guestResponse("Japan");
+    }
+
+    /**
+     * Creates a representative client-safe guest profile response with the given nationality.
+     *
+     * @param nationality stored nationality text to use for the response
+     * @return a guest response for controller testing
+     */
+    private GuestResponse guestResponse(String nationality) {
         return new GuestResponse(
                 GUEST_ID,
                 "G000001",
@@ -257,7 +398,7 @@ class GuestAuthorizationTest {
                 "Last",
                 "guest@example.com",
                 "0123456789",
-                "Japan",
+                nationality,
                 null,
                 "Tokyo");
     }

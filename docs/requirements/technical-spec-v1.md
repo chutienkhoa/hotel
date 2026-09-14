@@ -179,29 +179,70 @@ Một Guest có thể có nhiều Reservation:
 Guest 1 ─── N Reservation
 ```
 
+### Nationality selection (Create / Edit)
+
+Guest Create and Edit select `nationality` from a country dropdown backed by the shared ISO
+3166-1 country reference (code, canonical English name, Unicode flag), rather than free text.
+The dropdown's first option is a `Select nationality` placeholder. Only the canonical country
+name (e.g. `Vietnam`, `Japan`, `South Korea`) is submitted and persisted for new submissions —
+never an ISO code or a nationality demonym (e.g. not `VN`, not `Vietnamese`).
+
+Historical Guest data is **not automatically migrated** to canonical country names. Opening
+the Edit form never silently modifies stored data by itself:
+
+- If the Guest's stored nationality is already a canonical country name, or is a known legacy
+  demonym (e.g. `Vietnamese`, `Japanese`, `American`, `Korean`, `Chinese`, `British`, `French`,
+  `German`), the dropdown preselects the matching canonical country.
+- If the stored value cannot be safely mapped, it is preserved verbatim as the current
+  selection (not discarded or reset to blank) unless the user explicitly changes the field and
+  submits the form.
+
+The database schema is unchanged; `nationality` remains a single free-text column.
+
 ## 4.2 Guest Management List
 
-Guest Management provides one optional free-text search field named `query`.
-The trimmed, non-blank query performs case-insensitive partial matching across:
+Guest Management provides five independent, optional filter fields instead of one generic
+search field:
 
 ```text
 guest_code
 first_name
 last_name
 email
-phone
 nationality
 ```
 
+`phone` is not an available Guest list filter.
+
+`guest_code`, `first_name`, `last_name`, and `email` are trimmed independently; a blank field
+is ignored (no filter applied for that field). A non-blank value performs case-insensitive
+partial (contains) matching against its own column.
+
+`nationality` is a **country selection**, not free text: it is presented as a dropdown sourced
+from the same shared country reference used by Create/Edit, with a leading `All nationalities`
+option meaning no nationality filter is applied. Selecting a country matches Guests whose
+stored nationality is that country's canonical name **or** one of its known legacy demonyms
+(e.g. selecting `Japan` matches both `Japan` and `Japanese`), case-insensitively. This is an
+exact match against the canonical name and its known legacy equivalents, not a partial
+substring match.
+
+Multiple populated filter fields combine with **AND** semantics: a Guest must match every
+populated filter to appear in the result. For example, `first_name = Khoa` together with
+`nationality = Vietnam` returns only Guests matching both conditions, not either one.
+
 Filtering and pagination are performed at the database level. The fixed page size is 10,
-with deterministic default ordering by `guest_code ASC`. A zero-result search remains on
-the filtered list and presents `0 results` with `No guests match the current search.`
+with deterministic default ordering by `guest_code ASC`. Pagination links preserve every
+currently active filter without emitting blank query parameters. A zero-result search remains
+on the filtered list, preserves the entered filter values (including the selected
+nationality), and presents `0 results` with `No guests match the current filters.`
 
 The Guest list presents nationality as an optional Unicode country flag followed by the
-stored country name when the stored value can be safely resolved to ISO 3166-1 alpha-2.
-The country name remains authoritative Guest data; the flag is presentation-only. Blank
-nationality is displayed as `—`, and an unknown historical nationality is displayed without
-a generated flag.
+unmodified stored nationality text when that text can be safely resolved to an ISO 3166-1
+alpha-2 country — either as a country name (e.g. `Vietnam`) or as a known legacy nationality
+demonym (e.g. `Vietnamese`) from the same shared, explicitly approved reference. The stored
+nationality text remains authoritative Guest data and is never rewritten; the flag is
+presentation-only. Blank nationality is displayed as `—`, and an unknown historical
+nationality is displayed without a generated flag.
 
 ---
 
