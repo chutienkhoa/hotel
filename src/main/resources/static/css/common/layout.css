@@ -147,7 +147,9 @@ tbody tr { transition: background-color 150ms ease; }
 tbody tr:hover { background: #f8fbff; }
 tbody tr:last-child td { border-bottom: 0; }
 .table-number, .table-date { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.table-actions { text-align: right; width: 1%; }
+.table-actions { text-align: right; white-space: nowrap; width: 1%; }
+.table-actions .action-row { flex-wrap: nowrap; }
+.table-reference { max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-numeric-column { font-variant-numeric: tabular-nums; text-align: center; }
 .dashboard-count-table { table-layout: fixed; width: 100%; }
 .dashboard-count-table th:first-child, .dashboard-count-table td:first-child { width: 50%; }
@@ -230,6 +232,11 @@ input, select, textarea { background: var(--color-surface); border: 1px solid va
 textarea { min-height: 7rem; resize: vertical; }
 input:focus, select:focus, textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgb(23 105 170 / 15%); outline: 0; }
 input:invalid:not(:placeholder-shown), select:invalid, textarea:invalid:not(:placeholder-shown) { border-color: var(--color-danger); }
+input:disabled, select:disabled, textarea:disabled { background: var(--color-surface-muted); border-color: var(--color-border); color: var(--color-muted); cursor: not-allowed; }
+.exchange-rate-inline { align-items: center; display: flex; gap: var(--space-2); }
+.exchange-rate-inline input { flex: 1 1 auto; min-width: 0; }
+.exchange-rate-inline span { color: var(--color-muted); font-size: 0.875rem; font-weight: 600; white-space: nowrap; }
+output { color: var(--color-navy); display: block; font-size: 1.0625rem; font-weight: 750; min-height: 2.5rem; padding: 0.55rem 0; }
 
 .flatpickr-calendar { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); box-shadow: 0 0.75rem 1.75rem rgb(16 42 67 / 16%); color: var(--color-text); font-family: inherit; overflow: hidden; width: 20.75rem; }
 .flatpickr-months { align-items: center; background: var(--color-surface); border-bottom: 1px solid var(--color-border); min-height: 3rem; padding: 0 var(--space-2); }

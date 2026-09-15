@@ -5,6 +5,7 @@ import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.entity.booking.ChargeType;
+import com.example.hotel.entity.booking.PaymentCurrency;
 import com.example.hotel.entity.booking.PaymentMethod;
 import com.example.hotel.service.booking.ChargeService;
 import com.example.hotel.service.booking.PaymentService;
@@ -245,6 +246,7 @@ public class FolioPageController {
         model.addAttribute("paymentForm", paymentForm);
         model.addAttribute("chargeTypes", supportedChargeTypes());
         model.addAttribute("paymentMethods", List.of(PaymentMethod.values()));
+        model.addAttribute("paymentCurrencies", List.of(PaymentCurrency.values()));
         model.addAttribute("folioMutable", folioMutable);
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
         model.addAttribute(
@@ -265,12 +267,18 @@ public class FolioPageController {
     }
 
     /**
-     * Returns the Charge types supported for creation in Folio v1.
+     * Returns the Charge types staff may manually create from the Folio Add Charge form.
      *
-     * @return supported Charge type list
+     * <p>ROOM is excluded here even though it remains a Charge v1 type: it is created
+     * automatically at check-in and rejected by {@code ChargeService} when submitted manually.</p>
+     *
+     * @return manually selectable Charge type list
      */
     private List<ChargeType> supportedChargeTypes() {
-        return Arrays.stream(ChargeType.values()).filter(ChargeType::isSupportedInV1).toList();
+        return Arrays.stream(ChargeType.values())
+                .filter(ChargeType::isSupportedInV1)
+                .filter(type -> type != ChargeType.ROOM)
+                .toList();
     }
 
     /**
@@ -288,7 +296,7 @@ public class FolioPageController {
      * @return empty Payment request data
      */
     private PaymentCreateRequest emptyPaymentForm() {
-        return new PaymentCreateRequest(null, null, null);
+        return new PaymentCreateRequest(null, null, null, null, null);
     }
 
     /**

@@ -3,6 +3,7 @@ package com.example.hotel.service.booking;
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.entity.booking.Charge;
+import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.mapper.booking.ChargeMapper;
@@ -95,6 +96,9 @@ public class ChargeService {
         if (request.type() == null || !request.type().isSupportedInV1()) {
             throw badRequest("Unsupported Charge v1 type");
         }
+        if (request.type() == ChargeType.ROOM) {
+            throw badRequest("ROOM charges are created automatically at check-in");
+        }
         if ((request.quantity() == null) != (request.unitPrice() == null)) {
             throw badRequest("quantity and unitPrice must both be present or absent");
         }
@@ -106,6 +110,9 @@ public class ChargeService {
         }
         if (request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("quantity must be greater than zero");
+        }
+        if (request.quantity().stripTrailingZeros().scale() > 0) {
+            throw badRequest("quantity must be a whole number");
         }
         if (request.unitPrice().compareTo(BigDecimal.ZERO) < 0) {
             throw badRequest("unitPrice must be greater than or equal to zero");

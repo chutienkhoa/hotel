@@ -120,8 +120,8 @@
                                th:text="${reservation.reservationNumber}">Reservation number</a>
                         </td>
                         <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span></td>
-                        <td class="table-date" th:text="${reservation.checkInDate}">2027-01-10</td>
-                        <td class="table-date" th:text="${reservation.checkOutDate}">2027-01-12</td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></td>
                         <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
                     </tr>
                     </tbody>

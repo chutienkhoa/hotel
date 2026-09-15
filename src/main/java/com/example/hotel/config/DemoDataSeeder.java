@@ -58,9 +58,10 @@ public class DemoDataSeeder {
         UUID auditUserId = deterministicId(MARKER_USERNAME);
         insertAuditUser(jdbcTemplate, auditUserId, nowTimestamp);
         Map<String, UUID> roomTypes = roomTypeIds(jdbcTemplate);
-        List<UUID> roomIds = insertRooms(jdbcTemplate, roomTypes, auditUserId, nowTimestamp);
+        Map<UUID, String> roomNumbers = new java.util.LinkedHashMap<>();
+        List<UUID> roomIds = insertRooms(jdbcTemplate, roomTypes, roomNumbers, auditUserId, nowTimestamp);
         List<UUID> guestIds = insertGuests(jdbcTemplate, auditUserId, nowTimestamp);
-        insertReservations(jdbcTemplate, guestIds, roomIds, auditUserId, today, nowTimestamp);
+        insertReservations(jdbcTemplate, guestIds, roomIds, roomNumbers, auditUserId, today, nowTimestamp);
         setOperationalRoomMix(jdbcTemplate, roomIds, auditUserId, nowTimestamp);
     }
 
@@ -85,18 +86,20 @@ public class DemoDataSeeder {
     }
 
     private List<UUID> insertRooms(
-            JdbcTemplate jdbcTemplate, Map<String, UUID> roomTypes, UUID auditUserId, Timestamp now) {
+            JdbcTemplate jdbcTemplate, Map<String, UUID> roomTypes, Map<UUID, String> roomNumbers,
+            UUID auditUserId, Timestamp now) {
         List<UUID> roomIds = new java.util.ArrayList<>();
-        insertRooms(jdbcTemplate, roomIds, roomTypes, auditUserId, now, "SINGLE", 5, 101);
-        insertRooms(jdbcTemplate, roomIds, roomTypes, auditUserId, now, "DOUBLE", 6, 201);
-        insertRooms(jdbcTemplate, roomIds, roomTypes, auditUserId, now, "TWIN", 4, 301);
-        insertRooms(jdbcTemplate, roomIds, roomTypes, auditUserId, now, "TRIPLE", 4, 401);
-        insertRooms(jdbcTemplate, roomIds, roomTypes, auditUserId, now, "FAMILY", 3, 501);
+        insertRooms(jdbcTemplate, roomIds, roomNumbers, roomTypes, auditUserId, now, "SINGLE", 5, 101);
+        insertRooms(jdbcTemplate, roomIds, roomNumbers, roomTypes, auditUserId, now, "DOUBLE", 6, 201);
+        insertRooms(jdbcTemplate, roomIds, roomNumbers, roomTypes, auditUserId, now, "TWIN", 4, 301);
+        insertRooms(jdbcTemplate, roomIds, roomNumbers, roomTypes, auditUserId, now, "TRIPLE", 4, 401);
+        insertRooms(jdbcTemplate, roomIds, roomNumbers, roomTypes, auditUserId, now, "FAMILY", 3, 501);
         return List.copyOf(roomIds);
     }
 
     private void insertRooms(
-            JdbcTemplate jdbcTemplate, List<UUID> roomIds, Map<String, UUID> roomTypes, UUID auditUserId,
+            JdbcTemplate jdbcTemplate, List<UUID> roomIds, Map<UUID, String> roomNumbers,
+            Map<String, UUID> roomTypes, UUID auditUserId,
             Timestamp now, String roomType, int count, int firstNumber) {
         UUID roomTypeId = roomTypes.get(roomType);
         if (roomTypeId == null) {
@@ -104,12 +107,14 @@ public class DemoDataSeeder {
         }
         for (int index = 0; index < count; index++) {
             UUID roomId = deterministicId(PREFIX + "ROOM-" + (firstNumber + index));
+            String roomNumber = PREFIX + (firstNumber + index);
             jdbcTemplate.update(
                     "INSERT INTO room (id, room_number, room_type_id, floor, status, active, created_at, "
                             + "created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, 'AVAILABLE', TRUE, ?, ?, ?, ?)",
-                    roomId, PREFIX + (firstNumber + index), roomTypeId, String.valueOf(firstNumber / 100),
+                    roomId, roomNumber, roomTypeId, String.valueOf(firstNumber / 100),
                     now, auditUserId, now, auditUserId);
             roomIds.add(roomId);
+            roomNumbers.put(roomId, roomNumber);
         }
     }
 
@@ -134,8 +139,8 @@ public class DemoDataSeeder {
     }
 
     private void insertReservations(
-            JdbcTemplate jdbcTemplate, List<UUID> guestIds, List<UUID> roomIds, UUID auditUserId,
-            LocalDate today, Timestamp now) {
+            JdbcTemplate jdbcTemplate, List<UUID> guestIds, List<UUID> roomIds, Map<UUID, String> roomNumbers,
+            UUID auditUserId, LocalDate today, Timestamp now) {
         Random random = new Random(RANDOM_SEED);
         Random sourceRandom = new Random(RANDOM_SEED);
         int reservationIndex = 0;
@@ -168,13 +173,16 @@ public class DemoDataSeeder {
                         checkInDate, checkInDate.plusDays(nights), totalAmount,
                         "Synthetic development demonstration reservation", reservedAtTimestamp, auditUserId,
                         updatedAt, auditUserId);
-                insertReservationRoom(
+                UUID reservationRoomId = insertReservationRoom(
                         jdbcTemplate, reservationId, roomId, auditUserId, checkInDate, nights, reservedAtTimestamp,
                         updatedAt);
                 if ("CHECKED_IN".equals(status) || "CHECKED_OUT".equals(status)) {
-                    insertStay(
+                    UUID stayId = insertStay(
                             jdbcTemplate, reservationId, auditUserId, checkInDate, nights, status,
                             reservedAtTimestamp, updatedAt);
+                    insertRoomCharge(
+                            jdbcTemplate, stayId, reservationRoomId, roomNumbers.get(roomId), auditUserId,
+                            checkInDate, nights, reservedAtTimestamp, updatedAt);
                 }
                 reservationIndex++;
             }
@@ -224,30 +232,55 @@ public class DemoDataSeeder {
         return "CHECKED_IN".equals(status) ? reservationIndex % 5 : 5 + reservationIndex % 17;
     }
 
-    private void insertReservationRoom(
+    private UUID insertReservationRoom(
             JdbcTemplate jdbcTemplate, UUID reservationId, UUID roomId, UUID auditUserId,
             LocalDate checkInDate, int nights, Timestamp createdAt, Timestamp updatedAt) {
         BigDecimal rate = BigDecimal.valueOf(1_100_000L);
+        UUID reservationRoomId = deterministicId(PREFIX + "RESERVATION-ROOM-" + reservationId);
         jdbcTemplate.update(
                 "INSERT INTO reservation_room (id, reservation_id, room_id, check_in_date, check_out_date, "
                         + "nightly_rate, total_amount, created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                deterministicId(PREFIX + "RESERVATION-ROOM-" + reservationId), reservationId, roomId,
+                reservationRoomId, reservationId, roomId,
                 checkInDate, checkInDate.plusDays(nights), rate,
                 rate.multiply(BigDecimal.valueOf(nights)), createdAt, auditUserId, updatedAt, auditUserId);
+        return reservationRoomId;
     }
 
-    private void insertStay(
+    private UUID insertStay(
             JdbcTemplate jdbcTemplate, UUID reservationId, UUID auditUserId, LocalDate checkInDate,
             int nights, String reservationStatus, Timestamp createdAt, Timestamp updatedAt) {
         Instant checkedInAt = checkInDate.atTime(14, 0).atZone(BUSINESS_ZONE).toInstant();
         Instant checkedOutAt = "CHECKED_OUT".equals(reservationStatus)
                 ? checkInDate.plusDays(nights).atTime(11, 0).atZone(BUSINESS_ZONE).toInstant() : null;
+        UUID stayId = deterministicId(PREFIX + "STAY-" + reservationId);
         jdbcTemplate.update(
                 "INSERT INTO stay (id, reservation_id, status, actual_check_in_at, actual_check_out_at, "
                         + "created_at, created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                deterministicId(PREFIX + "STAY-" + reservationId), reservationId, reservationStatus,
+                stayId, reservationId, reservationStatus,
                 timestamp(checkedInAt), timestamp(checkedOutAt),
+                createdAt, auditUserId, updatedAt, auditUserId);
+        return stayId;
+    }
+
+    /**
+     * Seeds the automatic ROOM Charge that {@code ReservationService.checkIn()} would have created for
+     * this ReservationRoom, since seeded CHECKED_IN/CHECKED_OUT Stays are inserted directly and bypass
+     * that production check-in flow. The amount is copied from the same nightly-rate/nights snapshot
+     * used to seed the ReservationRoom, not independently recalculated.
+     */
+    private void insertRoomCharge(
+            JdbcTemplate jdbcTemplate, UUID stayId, UUID reservationRoomId, String roomNumber,
+            UUID auditUserId, LocalDate checkInDate, int nights, Timestamp createdAt, Timestamp updatedAt) {
+        BigDecimal rate = BigDecimal.valueOf(1_100_000L);
+        BigDecimal totalAmount = rate.multiply(BigDecimal.valueOf(nights));
+        Instant chargedAt = checkInDate.atTime(14, 0).atZone(BUSINESS_ZONE).toInstant();
+        jdbcTemplate.update(
+                "INSERT INTO charge (id, stay_id, type, description, quantity, unit_price, amount, "
+                        + "charged_at, created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, 'ROOM', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                deterministicId(PREFIX + "CHARGE-ROOM-" + reservationRoomId), stayId, "Room " + roomNumber,
+                BigDecimal.valueOf(nights), rate, totalAmount, timestamp(chargedAt),
                 createdAt, auditUserId, updatedAt, auditUserId);
     }
 

@@ -653,7 +653,51 @@ Report the missing mapping instead.
 
 ---
 
-## 34. Priority
+## 34. Date/Time Display Formatting
+
+All human-facing date and date-time values rendered in Thymeleaf templates must use:
+
+```text
+Date only:
+dd/MM/yyyy
+
+Date + time:
+dd/MM/yyyy HH:mm
+```
+
+Time is always 24-hour. Never display seconds, fractional seconds, or a raw ISO-8601/`Instant`
+string (e.g. `2026-09-15T14:40:41.407334Z`) to hotel staff.
+
+`Instant` values must be converted to the hotel's display timezone before formatting. The
+project's authoritative operational hotel timezone is `Asia/Ho_Chi_Minh` (matching the existing
+`DashboardClockConfiguration`/`DemoDataSeeder` business-time convention).
+
+Do not scatter the pattern or timezone across templates. Reuse the centralized mechanism:
+
+```text
+com.example.hotel.common.DisplayFormats   (formatDate / formatDateTime)
+templates/layout/datetime.html            (date(value) / dateTime(value) fragments)
+```
+
+Example:
+
+```html
+<span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span>
+<span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span>
+```
+
+This standard governs presentation only:
+
+- API JSON responses may continue to use ISO-8601 (`2026-09-15T14:40:41Z`).
+- `<input type="date">` and other HTML input values that require browser-standard
+  serialization (`yyyy-MM-dd`) are unaffected — this rule applies to displayed values, not
+  input serialization.
+- Stored `Instant`/`LocalDate` values, the database schema, and business calculations are
+  unaffected.
+
+---
+
+## 35. Priority
 
 If rules conflict, use:
 

@@ -58,7 +58,7 @@ class PaymentAuthorizationTest {
 
         mockMvc.perform(post("/api/stays/{stayId}/payments", STAY_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":100,\"method\":\"CASH\"}")
+                        .content("{\"amount\":100,\"currency\":\"VND\",\"method\":\"CASH\"}")
                         .with(user("manager").authorities(managePayment()))
                         .with(csrf()))
                 .andExpect(status().isOk());
@@ -78,7 +78,7 @@ class PaymentAuthorizationTest {
     void shouldRejectUnauthorizedPaymentCreation() throws Exception {
         mockMvc.perform(post("/api/stays/{stayId}/payments", STAY_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":100,\"method\":\"CASH\"}")
+                        .content("{\"amount\":100,\"currency\":\"VND\",\"method\":\"CASH\"}")
                         .with(user("staff").authorities(staffAuthorities()))
                         .with(csrf()))
                 .andExpect(status().isForbidden());
@@ -91,7 +91,7 @@ class PaymentAuthorizationTest {
 
         mockMvc.perform(post("/api/stays/{stayId}/payments", STAY_ID)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"amount\":100,\"method\":\"CASH\",\"status\":\"PAID\","
+                        .content("{\"amount\":100,\"currency\":\"VND\",\"method\":\"CASH\",\"status\":\"PAID\","
                                 + "\"paidAt\":\"2026-09-11T00:00:00Z\"}")
                         .with(user("manager").authorities(managePayment()))
                         .with(csrf()))
@@ -128,6 +128,9 @@ class PaymentAuthorizationTest {
         return new PaymentResponse(
                 PAYMENT_ID,
                 STAY_ID,
+                BigDecimal.TEN,
+                "VND",
+                null,
                 BigDecimal.TEN,
                 "CASH",
                 status,

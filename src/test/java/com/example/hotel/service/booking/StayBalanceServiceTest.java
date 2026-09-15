@@ -94,14 +94,14 @@ class StayBalanceServiceTest {
         PaymentRepository paymentRepository = mock(PaymentRepository.class);
         UUID stayId = UUID.randomUUID();
         when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(BigDecimal.TEN);
-        when(paymentRepository.sumAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
                 .thenReturn(BigDecimal.ZERO);
 
         StayBalance balance = new StayBalanceService(chargeRepository, paymentRepository).calculate(stayId);
 
         assertAmount(BigDecimal.ZERO, balance.totalPaidPayments());
         assertAmount(BigDecimal.TEN, balance.outstanding());
-        verify(paymentRepository).sumAmountByStayIdAndStatus(eq(stayId), eq(PaymentStatus.PAID));
+        verify(paymentRepository).sumAppliedAmountByStayIdAndStatus(eq(stayId), eq(PaymentStatus.PAID));
     }
 
     /** Calculates a Stay balance from mocked database aggregates. */
@@ -110,7 +110,7 @@ class StayBalanceServiceTest {
         PaymentRepository paymentRepository = mock(PaymentRepository.class);
         UUID stayId = UUID.randomUUID();
         when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(totalCharges);
-        when(paymentRepository.sumAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
                 .thenReturn(totalPaidPayments);
 
         return new StayBalanceService(chargeRepository, paymentRepository).calculate(stayId);

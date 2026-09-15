@@ -60,7 +60,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(12, flyway.info().applied().length);
+        assertEquals(13, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -177,6 +177,30 @@ class MigrationIntegrationTest {
 
         assertTrue(Boolean.TRUE.equals(stayIdIsRequired));
         assertTrue(Boolean.TRUE.equals(paidAtIsNullable));
+    }
+
+    /** Verifies the V13 Payment currency migration adds the expected columns with correct nullability. */
+    @Test
+    void paymentCurrencySchemaMatchesV13Rules() {
+        Boolean currencyIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'payment' AND column_name = 'currency'",
+                Boolean.class);
+        Boolean appliedAmountIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'payment' AND column_name = 'applied_amount'",
+                Boolean.class);
+        Boolean exchangeRateIsNullable = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'YES' "
+                        + "FROM information_schema.columns "
+                        + "WHERE table_name = 'payment' AND column_name = 'exchange_rate'",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(currencyIsRequired));
+        assertTrue(Boolean.TRUE.equals(appliedAmountIsRequired));
+        assertTrue(Boolean.TRUE.equals(exchangeRateIsNullable));
     }
 
     /** Verifies the Expense v1 migration creates required fields and exactly the approved categories. */

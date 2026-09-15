@@ -8,6 +8,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.hotel.entity.booking.Charge;
+import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.Stay;
@@ -16,6 +18,7 @@ import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.mapper.booking.ReservationMapper;
+import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
@@ -49,6 +52,7 @@ class ReservationCheckInStayTest {
         GuestRepository guestRepository = mock(GuestRepository.class);
         RoomRepository roomRepository = mock(RoomRepository.class);
         StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
         AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
         ReservationNumberGenerator reservationNumberGenerator = mock(ReservationNumberGenerator.class);
         StayBalanceService stayBalanceService = mock(StayBalanceService.class);
@@ -64,14 +68,17 @@ class ReservationCheckInStayTest {
         when(room.getId()).thenReturn(roomId);
         when(room.isActive()).thenReturn(true);
         when(room.getStatus()).thenReturn(RoomStatus.AVAILABLE);
+        when(room.getRoomNumber()).thenReturn("101");
         when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
         when(stayRepository.save(any(Stay.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         reservationService(
                         reservationRepository,
                         guestRepository,
                         roomRepository,
                         stayRepository,
+                        chargeRepository,
                         auditLogRepository,
                         reservationNumberGenerator,
                         stayBalanceService)
@@ -88,6 +95,15 @@ class ReservationCheckInStayTest {
         assertEquals(userId, savedStay.getUpdatedBy());
         verify(room).occupy();
         verify(auditLogRepository).save(any(AuditLog.class));
+
+        ArgumentCaptor<Charge> chargeCaptor = ArgumentCaptor.forClass(Charge.class);
+        verify(chargeRepository).save(chargeCaptor.capture());
+        Charge savedCharge = chargeCaptor.getValue();
+        assertEquals(savedStay, savedCharge.getStay());
+        assertEquals(ChargeType.ROOM, savedCharge.getType());
+        assertEquals("Room 101", savedCharge.getDescription());
+        assertEquals(0, reservation.getRooms().get(0).getTotalAmount().compareTo(savedCharge.getAmount()));
+        assertEquals(userId, savedCharge.getCreatedBy());
     }
 
     /**
@@ -135,6 +151,7 @@ class ReservationCheckInStayTest {
             GuestRepository guestRepository,
             RoomRepository roomRepository,
             StayRepository stayRepository,
+            ChargeRepository chargeRepository,
             AuditLogRepository auditLogRepository,
             ReservationNumberGenerator reservationNumberGenerator,
             StayBalanceService stayBalanceService) {
@@ -143,6 +160,7 @@ class ReservationCheckInStayTest {
                 guestRepository,
                 roomRepository,
                 stayRepository,
+                chargeRepository,
                 auditLogRepository,
                 new ReservationMapper(),
                 reservationNumberGenerator,

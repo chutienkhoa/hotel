@@ -19,7 +19,7 @@ public class StayBalanceService {
      * Creates the Stay-balance calculator with its aggregate repositories.
      *
      * @param chargeRepository repository used to sum authoritative Charge amounts
-     * @param paymentRepository repository used to sum PAID Payment amounts
+     * @param paymentRepository repository used to sum PAID Payment applied amounts
      */
     public StayBalanceService(
             ChargeRepository chargeRepository, PaymentRepository paymentRepository) {
@@ -30,14 +30,18 @@ public class StayBalanceService {
     /**
      * Calculates the outstanding balance for a Stay.
      *
+     * <p>Both aggregated totals are already denominated in the Reservation's currency — Charge
+     * amounts always are, and Payment {@code appliedAmount} is computed as such at Payment
+     * creation time. This service performs no currency conversion of its own.</p>
+     *
      * @param stayId Stay identifier whose recorded financial amounts are aggregated
-     * @return calculated Charge total, PAID-Payment total, and outstanding balance
+     * @return calculated Charge total, PAID-Payment applied total, and outstanding balance
      */
     @Transactional(readOnly = true)
     public StayBalance calculate(UUID stayId) {
         BigDecimal totalCharges = zeroIfNull(chargeRepository.sumAmountByStayId(stayId));
         BigDecimal totalPaidPayments = zeroIfNull(
-                paymentRepository.sumAmountByStayIdAndStatus(stayId, PaymentStatus.PAID));
+                paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID));
         return new StayBalance(
                 totalCharges, totalPaidPayments, totalCharges.subtract(totalPaidPayments));
     }

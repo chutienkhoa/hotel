@@ -34,17 +34,18 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     Optional<Payment> findByIdForUpdate(@Param("id") UUID id);
 
     /**
-     * Sums Payment amounts in one status for a Stay.
+     * Sums Payment applied amounts (already denominated in the owning Reservation's currency) in
+     * one status for a Stay.
      *
      * @param stayId owning Stay identifier
      * @param status Payment status included in the sum
-     * @return total amount, or zero when no matching Payments exist
+     * @return total applied amount, or zero when no matching Payments exist
      */
     @Query(
-            "SELECT COALESCE(SUM(p.amount), 0) "
+            "SELECT COALESCE(SUM(p.appliedAmount), 0) "
                     + "FROM Payment p "
                     + "WHERE p.stay.id = :stayId "
                     + "AND p.status = :status")
-    BigDecimal sumAmountByStayIdAndStatus(
+    BigDecimal sumAppliedAmountByStayIdAndStatus(
             @Param("stayId") UUID stayId, @Param("status") PaymentStatus status);
 }

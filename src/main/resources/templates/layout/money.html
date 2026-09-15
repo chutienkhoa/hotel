@@ -2,6 +2,13 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <body>
 <span th:fragment="amount(value, currency)"
-      th:text="${currency == 'VND' ? #numbers.formatDecimal(value, 1, 'COMMA', 0, 'POINT') + ' VND' : value + ' ' + currency}">0 VND</span>
+      th:text="${currency == 'VND'
+          ? #numbers.formatDecimal(value, 1, 'COMMA', 0, 'POINT') + ' VND'
+          : #numbers.formatDecimal(value, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' ' + currency}">0 VND</span>
+
+<!-- Renders a plain comma-grouped number without a currency suffix, trimmed of insignificant
+     trailing zeros (e.g. a stored exchangeRate of 25000.000000 renders as "25,000"). -->
+<span th:fragment="rate(value)"
+      th:text="${#numbers.formatDecimal(value, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '')}">0</span>
 </body>
 </html>

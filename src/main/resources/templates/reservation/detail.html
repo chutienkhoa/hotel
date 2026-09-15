@@ -35,11 +35,11 @@
             </div>
             <div>
                 <dt>Check-in</dt>
-                <dd th:text="${reservation.checkInDate}">2027-01-10</dd>
+                <dd><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></dd>
             </div>
             <div>
                 <dt>Check-out</dt>
-                <dd th:text="${reservation.checkOutDate}">2027-01-12</dd>
+                <dd><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></dd>
             </div>
             <div>
                 <dt>Total</dt>
@@ -77,8 +77,8 @@
                     <tbody>
                     <tr th:each="room : ${reservation.rooms}">
                         <td th:text="${room.roomNumber}">101</td>
-                        <td th:text="${room.checkInDate}">2027-01-10</td>
-                        <td th:text="${room.checkOutDate}">2027-01-12</td>
+                        <td><span th:replace="~{layout/datetime :: date(${room.checkInDate})}">—</span></td>
+                        <td><span th:replace="~{layout/datetime :: date(${room.checkOutDate})}">—</span></td>
                         <td><span th:replace="~{layout/money :: amount(${room.nightlyRate}, ${reservation.currency})}">0 VND</span></td>
                         <td><span th:replace="~{layout/money :: amount(${room.totalAmount}, ${reservation.currency})}">0 VND</span></td>
                     </tr>

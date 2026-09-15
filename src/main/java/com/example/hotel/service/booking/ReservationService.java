@@ -2,6 +2,8 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.entity.booking.Charge;
+import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
@@ -12,6 +14,7 @@ import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.mapper.booking.ReservationMapper;
+import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
@@ -22,6 +25,7 @@ import com.example.hotel.security.SessionUserPrincipal;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.temporal.ChronoUnit;
 import java.util.Currency;
 import java.util.HashSet;
 import java.util.List;
@@ -41,6 +45,7 @@ public class ReservationService {
     private final GuestRepository guests;
     private final RoomRepository rooms;
     private final StayRepository stays;
+    private final ChargeRepository charges;
     private final AuditLogRepository audits;
     private final ReservationMapper reservationMapper;
     private final ReservationNumberGenerator reservationNumberGenerator;
@@ -53,6 +58,7 @@ public class ReservationService {
      * @param guests repository khách
      * @param rooms repository phòng
      * @param stays repository lưu trú
+     * @param charges repository charge, dùng để tạo ROOM Charge tự động khi check-in
      * @param audits repository audit
      * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
      * @param reservationNumberGenerator generator tạo reservation number hằng ngày
@@ -63,6 +69,7 @@ public class ReservationService {
             GuestRepository guests,
             RoomRepository rooms,
             StayRepository stays,
+            ChargeRepository charges,
             AuditLogRepository audits,
             ReservationMapper reservationMapper,
             ReservationNumberGenerator reservationNumberGenerator,
@@ -71,6 +78,7 @@ public class ReservationService {
         this.guests = guests;
         this.rooms = rooms;
         this.stays = stays;
+        this.charges = charges;
         this.audits = audits;
         this.reservationMapper = reservationMapper;
         this.reservationNumberGenerator = reservationNumberGenerator;
@@ -300,8 +308,33 @@ public class ReservationService {
         Stay stay = new Stay(reservation);
         stay.audit(user.id());
         stays.save(stay);
+        createRoomCharges(stay, reservation, user);
         audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
         return response(reservation);
+    }
+
+    /**
+     * Creates the automatic ROOM Charges owed for a newly checked-in Stay, one per booked
+     * ReservationRoom, copying each Charge amount directly from its immutable price snapshot.
+     *
+     * @param stay newly created checked-in Stay
+     * @param reservation reservation whose booked rooms are charged
+     * @param user user attributed as the Charge creator
+     */
+    private void createRoomCharges(Stay stay, Reservation reservation, CurrentUser user) {
+        for (ReservationRoom reservationRoom : reservation.getRooms()) {
+            long nights = ChronoUnit.DAYS.between(
+                    reservationRoom.getCheckInDate(), reservationRoom.getCheckOutDate());
+            Charge charge = Charge.create(
+                    stay,
+                    ChargeType.ROOM,
+                    "Room " + reservationRoom.getRoom().getRoomNumber(),
+                    BigDecimal.valueOf(nights),
+                    reservationRoom.getNightlyRate(),
+                    reservationRoom.getTotalAmount());
+            charge.audit(user.id());
+            charges.save(charge);
+        }
     }
 
     /**

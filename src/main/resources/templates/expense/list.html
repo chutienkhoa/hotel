@@ -30,7 +30,7 @@
             </thead>
             <tbody>
             <tr th:each="expense : ${expenses}">
-                <td th:text="${expense.expenseDate}">2026-09-11</td>
+                <td><span th:replace="~{layout/datetime :: date(${expense.expenseDate})}">—</span></td>
                 <td>
                     <a th:href="@{/expenses/{id}(id=${expense.id})}" th:text="${expense.category.code}">ELECTRICITY</a>
                 </td>

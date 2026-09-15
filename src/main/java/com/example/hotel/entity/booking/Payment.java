@@ -31,6 +31,16 @@ public class Payment extends AuditedEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    private PaymentCurrency currency;
+
+    @Column(name = "exchange_rate", precision = 19, scale = 6)
+    private BigDecimal exchangeRate;
+
+    @Column(name = "applied_amount", nullable = false, precision = 19, scale = 6)
+    private BigDecimal appliedAmount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private PaymentMethod method;
 
     @Enumerated(EnumType.STRING)
@@ -48,17 +58,37 @@ public class Payment extends AuditedEntity {
     /**
      * Creates a pending Payment with server-owned identity and lifecycle fields.
      *
+     * <p>{@code amount}/{@code currency}/{@code exchangeRate}/{@code appliedAmount} form one
+     * immutable financial snapshot: the caller must supply an already-validated, already-computed
+     * {@code appliedAmount} (see {@code PaymentService}'s single authoritative calculation path) —
+     * this factory performs no currency conversion of its own.</p>
+     *
      * @param stay owning Stay
-     * @param amount immutable Payment amount
+     * @param amount immutable amount actually received, in {@code currency}
+     * @param currency currency the amount was actually received in
+     * @param exchangeRate {@code null} for a same-currency Payment; otherwise the immutable
+     *     "1 USD = exchangeRate VND" rate used to compute {@code appliedAmount}
+     * @param appliedAmount immutable amount applied to the Folio, already converted to the owning
+     *     Reservation's currency
      * @param method selected Payment method
      * @param reference optional external or manual reference
      * @return new pending Payment
      */
-    public static Payment create(Stay stay, BigDecimal amount, PaymentMethod method, String reference) {
+    public static Payment create(
+            Stay stay,
+            BigDecimal amount,
+            PaymentCurrency currency,
+            BigDecimal exchangeRate,
+            BigDecimal appliedAmount,
+            PaymentMethod method,
+            String reference) {
         Payment payment = new Payment();
         payment.id = UUID.randomUUID();
         payment.stay = stay;
         payment.amount = amount;
+        payment.currency = currency;
+        payment.exchangeRate = exchangeRate;
+        payment.appliedAmount = appliedAmount;
         payment.method = method;
         payment.status = PaymentStatus.PENDING;
         payment.paidAt = null;
@@ -77,7 +107,10 @@ public class Payment extends AuditedEntity {
         transition(PaymentStatus.PENDING, PaymentStatus.FAILED);
     }
 
-    /** Transitions this paid Payment to refunded while preserving its original payment time and amount. */
+    /**
+     * Transitions this paid Payment to refunded while preserving its original financial snapshot
+     * ({@code amount}, {@code currency}, {@code exchangeRate}, {@code appliedAmount}) and paid time.
+     */
     public void refund() {
         transition(PaymentStatus.PAID, PaymentStatus.REFUNDED);
     }
@@ -101,12 +134,40 @@ public class Payment extends AuditedEntity {
     }
 
     /**
-     * Returns the immutable Payment amount.
+     * Returns the immutable amount actually received from the guest, in {@link #getCurrency()}.
      *
      * @return Payment amount
      */
     public BigDecimal getAmount() {
         return amount;
+    }
+
+    /**
+     * Returns the currency the Payment amount was actually received in.
+     *
+     * @return Payment currency
+     */
+    public PaymentCurrency getCurrency() {
+        return currency;
+    }
+
+    /**
+     * Returns the immutable "1 USD = exchangeRate VND" rate used to compute
+     * {@link #getAppliedAmount()}.
+     *
+     * @return the exchange rate, or {@code null} for a same-currency Payment
+     */
+    public BigDecimal getExchangeRate() {
+        return exchangeRate;
+    }
+
+    /**
+     * Returns the immutable amount applied to the Folio, in the owning Reservation's currency.
+     *
+     * @return applied amount
+     */
+    public BigDecimal getAppliedAmount() {
+        return appliedAmount;
     }
 
     /**

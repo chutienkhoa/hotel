@@ -57,7 +57,7 @@ class ChargeServiceTest {
         when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ChargeResponse response = chargeService(chargeRepository, stayRepository)
-                .create(stayId, request(ChargeType.ROOM, null, null, new BigDecimal("100.00")));
+                .create(stayId, request(ChargeType.SERVICE, null, null, new BigDecimal("100.00")));
 
         ArgumentCaptor<Charge> captor = ArgumentCaptor.forClass(Charge.class);
         verify(chargeRepository).save(captor.capture());
@@ -105,6 +105,25 @@ class ChargeServiceTest {
         assertEquals(400, exception.getStatusCode().value());
     }
 
+    /**
+     * Confirms ROOM cannot be created manually since it is now created automatically at check-in,
+     * and that a direct API/service submission is rejected even though ROOM remains a Charge v1 type.
+     */
+    @Test
+    void shouldRejectManualRoomCharge() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        setCurrentUser(UUID.randomUUID());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> chargeService(chargeRepository, stayRepository)
+                        .create(UUID.randomUUID(), request(ChargeType.ROOM, null, null, BigDecimal.ONE)));
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertEquals("ROOM charges are created automatically at check-in", exception.getReason());
+    }
+
     /** Confirms fixed Charges accept a client-supplied positive amount without itemized fields. */
     @Test
     void shouldCreateFixedChargeWithSuppliedAmount() {
@@ -124,17 +143,43 @@ class ChargeServiceTest {
         assertEquals(6, response.amount().scale());
     }
 
+    /** Confirms whole-number quantities of 1 and 10 are accepted, matching quantity times unit price. */
+    @ParameterizedTest
+    @MethodSource("wholeNumberQuantities")
+    void shouldAcceptWholeNumberQuantity(BigDecimal quantity) {
+        ChargeResponse response = assertCreateSucceeds(
+                request(ChargeType.BREAKFAST, quantity, new BigDecimal("1000000"), null));
+
+        assertAmount(quantity.multiply(new BigDecimal("1000000")), response.amount());
+    }
+
     /** Confirms itemized calculation is explicitly normalized to the persisted amount scale. */
     @Test
     void shouldNormalizeItemizedAmountToScaleSixUsingHalfUp() {
         ChargeResponse response = assertCreateSucceeds(request(
                 ChargeType.LAUNDRY,
-                new BigDecimal("1.234567"),
-                new BigDecimal("10.123456"),
+                new BigDecimal("3"),
+                new BigDecimal("10.1234565"),
                 null));
 
-        assertEquals(new BigDecimal("12.498085"), response.amount());
+        assertEquals(new BigDecimal("30.370370"), response.amount());
         assertEquals(6, response.amount().scale());
+    }
+
+    /** Confirms a whole-number quantity with trailing zero scale (e.g. "2.000000") is still accepted. */
+    @Test
+    void shouldAcceptWholeNumberQuantityWithTrailingZeroScale() {
+        ChargeResponse response = assertCreateSucceeds(
+                request(ChargeType.LAUNDRY, new BigDecimal("2.000000"), new BigDecimal("150000"), null));
+
+        assertAmount(new BigDecimal("300000"), response.amount());
+    }
+
+    /** Confirms fractional quantities are rejected: a quantity must represent a whole count. */
+    @ParameterizedTest
+    @MethodSource("fractionalQuantities")
+    void shouldRejectFractionalQuantity(BigDecimal quantity) {
+        assertBadRequest(request(ChargeType.LAUNDRY, quantity, BigDecimal.TEN, null));
     }
 
     /** Confirms a client cannot provide a competing amount for itemized pricing. */
@@ -151,7 +196,7 @@ class ChargeServiceTest {
     @ParameterizedTest
     @MethodSource("incompleteQuantityAndUnitPricePairs")
     void shouldRejectIncompleteQuantityAndUnitPricePair(BigDecimal quantity, BigDecimal unitPrice) {
-        assertBadRequest(request(ChargeType.ROOM, quantity, unitPrice, null));
+        assertBadRequest(request(ChargeType.BREAKFAST, quantity, unitPrice, null));
     }
 
     /** Confirms invalid fixed and itemized pricing values are rejected. */
@@ -159,7 +204,7 @@ class ChargeServiceTest {
     @MethodSource("invalidMonetaryValues")
     void shouldRejectInvalidChargeValues(
             BigDecimal quantity, BigDecimal unitPrice, BigDecimal amount) {
-        assertBadRequest(request(ChargeType.ROOM, quantity, unitPrice, amount));
+        assertBadRequest(request(ChargeType.BREAKFAST, quantity, unitPrice, amount));
     }
 
     /** Confirms requests cannot carry server-controlled identity, timestamp, or audit fields. */
@@ -189,7 +234,7 @@ class ChargeServiceTest {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> chargeService(chargeRepository, stayRepository)
-                        .create(stayId, request(ChargeType.ROOM, null, null, BigDecimal.ONE)));
+                        .create(stayId, request(ChargeType.SERVICE, null, null, BigDecimal.ONE)));
 
         assertEquals(404, exception.getStatusCode().value());
     }
@@ -208,7 +253,7 @@ class ChargeServiceTest {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> chargeService(chargeRepository, stayRepository)
-                        .create(stayId, request(ChargeType.ROOM, null, null, BigDecimal.ONE)));
+                        .create(stayId, request(ChargeType.SERVICE, null, null, BigDecimal.ONE)));
 
         assertEquals(409, exception.getStatusCode().value());
     }
@@ -249,13 +294,13 @@ class ChargeServiceTest {
     }
 
     /**
-     * Supplies the supported Charge v1 types.
+     * Supplies the Charge v1 types that may still be created manually (ROOM is excluded; it is
+     * created automatically at check-in and rejected when submitted manually).
      *
-     * @return approved Charge classifications
+     * @return manually creatable Charge classifications
      */
     private static Stream<ChargeType> supportedTypes() {
         return Stream.of(
-                ChargeType.ROOM,
                 ChargeType.BREAKFAST,
                 ChargeType.EXTRA_BED,
                 ChargeType.LAUNDRY,
@@ -292,10 +337,29 @@ class ChargeServiceTest {
     private static Stream<Arguments> invalidMonetaryValues() {
         return Stream.of(
                 Arguments.of(BigDecimal.ZERO, BigDecimal.ZERO, null),
+                Arguments.of(new BigDecimal("-1"), BigDecimal.TEN, null),
                 Arguments.of(BigDecimal.ONE, new BigDecimal("-0.01"), null),
                 Arguments.of(BigDecimal.ONE, BigDecimal.ZERO, null),
                 Arguments.of(null, null, BigDecimal.ZERO),
                 Arguments.of(null, null, null));
+    }
+
+    /**
+     * Supplies fractional quantities that Charge v1 must reject: Quantity represents a whole count.
+     *
+     * @return fractional quantity values
+     */
+    private static Stream<BigDecimal> fractionalQuantities() {
+        return Stream.of(new BigDecimal("0.5"), new BigDecimal("0.000001"), new BigDecimal("1.5"));
+    }
+
+    /**
+     * Supplies representative whole-number quantities Charge v1 must accept.
+     *
+     * @return whole-number quantity values
+     */
+    private static Stream<BigDecimal> wholeNumberQuantities() {
+        return Stream.of(BigDecimal.ONE, BigDecimal.TEN);
     }
 
     /**

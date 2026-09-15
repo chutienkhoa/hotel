@@ -30,7 +30,7 @@
             <dt>Nationality</dt>
             <dd th:text="${guest.nationality}">Nationality</dd>
             <dt>Date of birth</dt>
-            <dd th:text="${guest.dateOfBirth}">Date of birth</dd>
+            <dd><span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">—</span></dd>
             <dt>Address</dt>
             <dd th:text="${guest.address}">Address</dd>
         </dl>

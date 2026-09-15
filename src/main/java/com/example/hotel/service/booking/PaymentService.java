@@ -3,6 +3,7 @@ package com.example.hotel.service.booking;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.entity.booking.Payment;
+import com.example.hotel.entity.booking.PaymentCurrency;
 import com.example.hotel.entity.booking.PaymentStatus;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
@@ -13,6 +14,7 @@ import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -64,7 +66,17 @@ public class PaymentService {
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Payments can be created only for checked-in stays");
         }
-        Payment payment = Payment.create(stay, request.amount(), request.method(), request.reference());
+        PaymentCurrency reservationCurrency = resolveReservationCurrency(stay);
+        BigDecimal appliedAmount = calculateAppliedAmount(
+                request.amount(), request.currency(), reservationCurrency, request.exchangeRate());
+        Payment payment = Payment.create(
+                stay,
+                request.amount(),
+                request.currency(),
+                request.exchangeRate(),
+                appliedAmount,
+                request.method(),
+                request.reference());
         payment.audit(currentUser().id());
         return paymentMapper.toResponse(paymentRepository.save(payment));
     }
@@ -98,9 +110,9 @@ public class PaymentService {
         Stay stay = findStayForUpdate(payment.getStay().getId());
         requireCheckedIn(stay);
         BigDecimal totalCharges = zeroIfNull(chargeRepository.sumAmountByStayId(stay.getId()));
-        BigDecimal totalPaid = zeroIfNull(
-                paymentRepository.sumAmountByStayIdAndStatus(stay.getId(), PaymentStatus.PAID));
-        if (totalPaid.add(payment.getAmount()).compareTo(totalCharges) > 0) {
+        BigDecimal totalPaidApplied = zeroIfNull(
+                paymentRepository.sumAppliedAmountByStayIdAndStatus(stay.getId(), PaymentStatus.PAID));
+        if (totalPaidApplied.add(payment.getAppliedAmount()).compareTo(totalCharges) > 0) {
             throw conflict("Payment would exceed total charges");
         }
         payment.markPaid();
@@ -164,9 +176,67 @@ public class PaymentService {
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("amount must be greater than zero");
         }
+        if (request.currency() == null) {
+            throw badRequest("currency is required");
+        }
         if (request.method() == null) {
             throw badRequest("method is required");
         }
+    }
+
+    /**
+     * Resolves the owning Reservation's currency as a {@link PaymentCurrency}.
+     *
+     * @param stay owning Stay
+     * @return the Reservation's currency
+     * @throws ResponseStatusException if the Reservation's currency is not a supported Payment currency
+     */
+    private PaymentCurrency resolveReservationCurrency(Stay stay) {
+        try {
+            return PaymentCurrency.valueOf(stay.getReservation().getCurrency());
+        } catch (IllegalArgumentException exception) {
+            throw conflict("Reservation currency is not supported for Payment");
+        }
+    }
+
+    /**
+     * Calculates the amount applied to the Folio, in the Reservation's currency.
+     *
+     * <p>This is the single authoritative Payment currency-conversion calculation: every other
+     * part of the codebase (overpayment validation, {@code StayBalanceService}, the Folio display)
+     * only ever reads the already-computed {@link Payment#getAppliedAmount()} and must never
+     * reinterpret {@code exchangeRate} itself. The canonical meaning of {@code exchangeRate} is
+     * always "1 USD = exchangeRate VND", regardless of which side is the Payment currency or the
+     * Reservation currency; a reciprocal rate is never calculated or stored.</p>
+     *
+     * @param amount amount actually received, in {@code paymentCurrency}
+     * @param paymentCurrency currency the amount was actually received in
+     * @param reservationCurrency owning Reservation's currency
+     * @param exchangeRate client-supplied "1 USD = exchangeRate VND" rate; must be {@code null}
+     *     for a same-currency Payment and a positive value for a cross-currency Payment
+     * @return the calculated applied amount, in {@code reservationCurrency}
+     */
+    private BigDecimal calculateAppliedAmount(
+            BigDecimal amount,
+            PaymentCurrency paymentCurrency,
+            PaymentCurrency reservationCurrency,
+            BigDecimal exchangeRate) {
+        if (paymentCurrency == reservationCurrency) {
+            if (exchangeRate != null) {
+                throw badRequest("exchangeRate must not be supplied for a same-currency payment");
+            }
+            return amount;
+        }
+        if (exchangeRate == null || exchangeRate.compareTo(BigDecimal.ZERO) <= 0) {
+            throw badRequest("exchangeRate must be greater than zero for a cross-currency payment");
+        }
+        BigDecimal appliedAmount = paymentCurrency == PaymentCurrency.USD
+                ? amount.multiply(exchangeRate).setScale(6, RoundingMode.HALF_UP)
+                : amount.divide(exchangeRate, 6, RoundingMode.HALF_UP);
+        if (appliedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw badRequest("calculated appliedAmount must be greater than zero");
+        }
+        return appliedAmount;
     }
 
     /**

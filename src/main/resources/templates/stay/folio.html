@@ -13,6 +13,7 @@
             <div>
                 <h1>Stay Folio</h1>
                 <p th:text="${reservation.reservationNumber}">Reservation number</p>
+                <p>Folio Currency: <strong th:text="${reservation.currency}">VND</strong></p>
             </div>
             <div class="action-row">
                 <span class="status-badge"
@@ -40,11 +41,11 @@
                 </div>
                 <div>
                     <dt>Actual check-in</dt>
-                    <dd th:text="${stay.actualCheckInAt}">2027-01-10T10:00:00Z</dd>
+                    <dd><span th:replace="~{layout/datetime :: dateTime(${stay.actualCheckInAt})}">—</span></dd>
                 </div>
                 <div th:if="${stay.actualCheckOutAt}">
                     <dt>Actual check-out</dt>
-                    <dd th:text="${stay.actualCheckOutAt}">2027-01-12T10:00:00Z</dd>
+                    <dd><span th:replace="~{layout/datetime :: dateTime(${stay.actualCheckOutAt})}">—</span></dd>
                 </div>
             </dl>
         </section>
@@ -53,14 +54,17 @@
             <div class="card summary-card">
                 <dt>Total Charges</dt>
                 <dd><span th:replace="~{layout/money :: amount(${balance.totalCharges}, ${reservation.currency})}">0 VND</span></dd>
+                <p class="summary-card__label" th:text="'in ' + ${reservation.currency}">in VND</p>
             </div>
             <div class="card summary-card">
-                <dt>Total Paid Payments</dt>
+                <dt>Total Paid</dt>
                 <dd><span th:replace="~{layout/money :: amount(${balance.totalPaidPayments}, ${reservation.currency})}">0 VND</span></dd>
+                <p class="summary-card__label" th:text="'Applied payments in ' + ${reservation.currency}">Applied payments in VND</p>
             </div>
             <div class="card summary-card">
                 <dt>Outstanding</dt>
                 <dd><span th:replace="~{layout/money :: amount(${balance.outstanding}, ${reservation.currency})}">0 VND</span></dd>
+                <p class="summary-card__label" th:text="'in ' + ${reservation.currency}">in VND</p>
             </div>
         </section>
 
@@ -90,7 +94,7 @@
                             <span th:unless="${charge.unitPrice != null}">—</span>
                         </td>
                         <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></td>
-                        <td class="table-date" th:text="${charge.chargedAt}">2027-01-10T10:00:00Z</td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(charges)}">
                         <td colspan="6">No Charges have been recorded.</td>
@@ -116,7 +120,7 @@
                     </div>
                     <div class="form-field">
                         <label for="fixed-charge-amount">Amount</label>
-                        <input id="fixed-charge-amount" min="0.01" required step="0.01" th:field="*{amount}" type="number" />
+                        <input class="js-money-input" id="fixed-charge-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
                         <p class="field-error" th:errors="*{amount}"></p>
                     </div>
                 </div>
@@ -149,12 +153,12 @@
                     </div>
                     <div class="form-field">
                         <label for="itemized-charge-quantity">Quantity</label>
-                        <input id="itemized-charge-quantity" min="0.000001" required step="0.000001" th:field="*{quantity}" type="number" />
+                        <input id="itemized-charge-quantity" inputmode="numeric" pattern="[0-9]*" required th:field="*{quantity}" type="text" />
                         <p class="field-error" th:errors="*{quantity}"></p>
                     </div>
                     <div class="form-field">
                         <label for="itemized-charge-unit-price">Unit price</label>
-                        <input id="itemized-charge-unit-price" min="0" required step="0.01" th:field="*{unitPrice}" type="number" />
+                        <input class="js-money-input" id="itemized-charge-unit-price" inputmode="decimal" required th:field="*{unitPrice}" type="text" />
                         <p class="field-error" th:errors="*{unitPrice}"></p>
                     </div>
                 </div>
@@ -178,7 +182,9 @@
                 <table>
                     <thead>
                     <tr>
-                        <th scope="col">Amount</th>
+                        <th scope="col">Received</th>
+                        <th scope="col">Rate</th>
+                        <th scope="col">Applied</th>
                         <th scope="col">Method</th>
                         <th scope="col">Reference</th>
                         <th scope="col">Status</th>
@@ -188,11 +194,17 @@
                     </thead>
                     <tbody>
                     <tr th:each="payment : ${payments}">
-                        <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.amount}, ${reservation.currency})}">0 VND</span></td>
+                        <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0 VND</span></td>
+                        <td class="table-number">
+                            <span th:if="${payment.exchangeRate != null}"
+                                  th:text="${'1 USD = ' + #numbers.formatDecimal(payment.exchangeRate, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' VND'}">1 USD = 25,000 VND</span>
+                            <span th:unless="${payment.exchangeRate != null}">—</span>
+                        </td>
+                        <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0 VND</span></td>
                         <td th:text="${payment.method}">CASH</td>
-                        <td th:text="${payment.reference ?: '—'}">—</td>
+                        <td class="table-reference" th:attr="title=${payment.reference}" th:text="${payment.reference ?: '—'}">—</td>
                         <td><span class="status-badge" th:text="${payment.status}">PENDING</span></td>
-                        <td class="table-date" th:text="${payment.paidAt ?: '—'}">—</td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
                         <td class="table-actions">
                             <div class="action-row" th:if="${folioMutable}">
                                 <form data-confirm-label="Mark paid" data-confirm-message="Mark this payment as paid?"
@@ -212,7 +224,7 @@
                                 <form data-confirm-label="Refund payment" data-confirm-severity="DANGER"
                                       data-confirm-title="Refund payment" method="post"
                                       th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/refund(reservationId=${reservation.id},paymentId=${payment.id})}"
-                                      th:attr="data-confirm-message=${'Refund ' + (reservation.currency == 'VND' ? #numbers.formatDecimal(payment.amount, 1, 'COMMA', 0, 'POINT') + ' VND' : payment.amount + ' ' + reservation.currency) + '?'}"
+                                      th:attr="data-confirm-message=${'Refund ' + (payment.currency == 'VND' ? #numbers.formatDecimal(payment.amount, 1, 'COMMA', 0, 'POINT') + ' VND' : #numbers.formatDecimal(payment.amount, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' ' + payment.currency) + '?'}"
                                       th:if="${payment.status == 'PAID'}">
                                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                                     <button class="button button-danger table-action" type="submit">Refund</button>
@@ -221,7 +233,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(payments)}">
-                        <td colspan="6">No Payments have been recorded.</td>
+                        <td colspan="8">No Payments have been recorded.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -229,15 +241,39 @@
 
             <form class="form-card" data-confirm-label="Add payment"
                   data-confirm-message="Record this payment?" data-confirm-severity="NORMAL"
-                  data-confirm-title="Add payment" method="post"
+                  data-confirm-title="Add payment" data-payment-form
+                  method="post"
                   th:action="@{/reservations/{id}/folio/payments(id=${reservation.id})}"
+                  th:attr="data-reservation-currency=${reservation.currency}"
                   th:if="${folioMutable}" th:object="${paymentForm}">
                 <h3>Add Payment</h3>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="payment-amount">Amount</label>
-                        <input id="payment-amount" min="0.01" required step="0.01" th:field="*{amount}" type="number" />
+                        <input class="js-money-input" id="payment-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
                         <p class="field-error" th:errors="*{amount}"></p>
+                    </div>
+                    <div class="form-field">
+                        <label for="payment-currency">Payment Currency</label>
+                        <select id="payment-currency" required th:field="*{currency}">
+                            <option value="">Select currency</option>
+                            <option th:each="currency : ${paymentCurrencies}" th:text="${currency}" th:value="${currency}">VND</option>
+                        </select>
+                        <p class="field-error" th:errors="*{currency}"></p>
+                    </div>
+                    <div class="form-field" data-exchange-rate-field>
+                        <label for="payment-exchange-rate">Exchange Rate</label>
+                        <div class="exchange-rate-inline">
+                            <span aria-hidden="true">1 USD =</span>
+                            <input class="js-money-input" id="payment-exchange-rate" inputmode="decimal" th:field="*{exchangeRate}" type="text" />
+                            <span aria-hidden="true">VND</span>
+                        </div>
+                        <p class="field-error" th:errors="*{exchangeRate}"></p>
+                    </div>
+                    <div class="form-field">
+                        <label for="payment-applied-preview">Applied to Folio</label>
+                        <output aria-live="polite" data-applied-preview id="payment-applied-preview">—</output>
+                        <p class="summary-card__label">Informational only — the backend calculates the recorded amount.</p>
                     </div>
                     <div class="form-field">
                         <label for="payment-method">Method</label>
@@ -276,5 +312,6 @@
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
+<script defer th:src="@{/js/stay/folio.js}"></script>
 </body>
 </html>

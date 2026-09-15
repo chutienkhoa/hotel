@@ -4,7 +4,6 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -94,6 +93,184 @@ class FolioPageControllerTest {
                 .andExpect(content().string(containsString("0 VND")));
     }
 
+    /** Confirms the Folio currency is displayed and exposed to client-side JS via a data attribute. */
+    @Test
+    void shouldExposeFolioCurrencyToPageAndJs() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Folio Currency: <strong>VND</strong>")))
+                .andExpect(content().string(containsString("data-reservation-currency=\"VND\"")));
+    }
+
+    /** Confirms Paid At renders as a compact local date-time instead of the raw ISO Instant. */
+    @Test
+    void shouldFormatPaidAtAsCompactLocalDateTimeInsteadOfRawInstant() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PAID");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("2026-09-11T11:00:00Z"))))
+                .andExpect(content().string(containsString("11/09/2026 18:00")));
+    }
+
+    /**
+     * Confirms Actual Check-in and Charges &gt; Charged At use the same centralized
+     * dd/MM/yyyy HH:mm standard, converted to the hotel's Asia/Ho_Chi_Minh display timezone,
+     * with no raw ISO Instant rendered anywhere on the page.
+     */
+    @Test
+    void shouldFormatActualCheckInAndChargedAtUsingHotelDisplayStandard() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("2026-09-11T10:00:00Z"))))
+                .andExpect(content().string(containsString("11/09/2026 17:00")));
+    }
+
+    /** Confirms a cross-currency Payment renders its received, rate, and applied columns correctly. */
+    @Test
+    void shouldRenderReceivedRateAndAppliedForCrossCurrencyPayment() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+        when(paymentService.findByStayId(STAY_ID)).thenReturn(List.of(crossCurrencyPayment("PENDING")));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("120 USD")))
+                .andExpect(content().string(containsString("1 USD = 25,000 VND")))
+                .andExpect(content().string(containsString("3,000,000 VND")));
+    }
+
+    /** Confirms a same-currency Payment renders its Rate cell as an em dash, never a formatted rate. */
+    @Test
+    void shouldRenderDashForSameCurrencyPaymentRate() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("1 USD = 25,000"))));
+    }
+
+    /** Confirms the Refund confirmation uses the original tender amount and currency, not appliedAmount. */
+    @Test
+    void shouldConfirmRefundUsingOriginalTenderAmount() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+        when(paymentService.findByStayId(STAY_ID)).thenReturn(List.of(crossCurrencyPayment("PAID")));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-confirm-message=\"Refund 120 USD?\"")))
+                .andExpect(content().string(not(containsString("Refund 3,000,000 VND?"))));
+    }
+
+    /** Confirms the Add Payment form offers both VND and USD regardless of Reservation currency. */
+    @Test
+    void shouldOfferBothCurrenciesInAddPaymentForm() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<option value=\"VND\">VND</option>")))
+                .andExpect(content().string(containsString("<option value=\"USD\">USD</option>")));
+    }
+
+    /** Confirms Payment lifecycle actions render only for the statuses that still permit a transition. */
+    @Test
+    void shouldRenderPaymentActionsOnlyForEligibleStatuses() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "FAILED");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("Mark paid"))))
+                .andExpect(content().string(not(containsString("Mark failed"))))
+                .andExpect(content().string(not(containsString("Refund"))));
+    }
+
+    /** Confirms an invalid Add Payment submission redisplays the Folio with the submitted values preserved. */
+    @Test
+    void shouldPreservePaymentFormValuesOnValidationErrorRedisplay() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments", RESERVATION_ID)
+                        .param("amount", "120.00")
+                        .param("currency", "USD")
+                        .param("exchangeRate", "25000")
+                        .param("reference", "Wire ref")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(view().name("stay/folio"))
+                .andExpect(content().string(containsString("value=\"120.00\"")))
+                .andExpect(content().string(containsString("value=\"25000\"")))
+                .andExpect(content().string(containsString("value=\"USD\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("value=\"Wire ref\"")));
+    }
+
+    /**
+     * Confirms Charge monetary fields (Fixed Amount, Unit Price) use the shared money-input
+     * behavior consistent with Payment Amount/Exchange Rate, while Quantity — not a monetary
+     * field — keeps its plain numeric input untouched.
+     */
+    @Test
+    void shouldApplyMoneyInputToChargeMonetaryFieldsOnly() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "<input class=\"js-money-input\" id=\"fixed-charge-amount\"")))
+                .andExpect(content().string(containsString("id=\"fixed-charge-amount\" inputmode=\"decimal\"")))
+                .andExpect(content().string(containsString(
+                        "<input class=\"js-money-input\" id=\"itemized-charge-unit-price\"")))
+                .andExpect(content().string(containsString(
+                        "id=\"itemized-charge-unit-price\" inputmode=\"decimal\"")))
+                .andExpect(content().string(containsString(
+                        "<input id=\"itemized-charge-quantity\" inputmode=\"numeric\"")))
+                .andExpect(content().string(not(containsString(
+                        "class=\"js-money-input\" id=\"itemized-charge-quantity\""))));
+    }
+
+    /**
+     * Confirms Quantity renders as a plain whole-number textbox: no monetary formatting, no
+     * decimal step, and no native number-input spinner.
+     */
+    @Test
+    void shouldRenderQuantityAsPlainWholeNumberTextInput() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "<input id=\"itemized-charge-quantity\" inputmode=\"numeric\" pattern=\"[0-9]*\" required "
+                                + "type=\"text\"")))
+                .andExpect(content().string(not(containsString("id=\"itemized-charge-quantity\" min="))))
+                .andExpect(content().string(not(containsString("id=\"itemized-charge-quantity\" type=\"number\""))));
+    }
+
+    /** Confirms the Add Charge type dropdown does not offer ROOM as a manually selectable type. */
+    @Test
+    void shouldNotOfferRoomAsManualChargeType() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"BREAKFAST\"")))
+                .andExpect(content().string(not(containsString("value=\"ROOM\""))));
+    }
+
     /** Confirms absent optional Charge pricing fields render as dashes rather than null money. */
     @Test
     void shouldRenderFixedChargeOptionalPricingFieldsAsDashes() throws Exception {
@@ -148,7 +325,7 @@ class FolioPageControllerTest {
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("This Folio is closed and read-only.")))
-                .andExpect(content().string(containsString("Total Paid Payments")))
+                .andExpect(content().string(containsString("Total Paid")))
                 .andExpect(content().string(not(containsString("Add Charge"))))
                 .andExpect(content().string(not(containsString("Add Payment"))))
                 .andExpect(content().string(not(containsString("Refund"))));
@@ -168,7 +345,7 @@ class FolioPageControllerTest {
         when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
 
         mockMvc.perform(post("/reservations/{reservationId}/folio/charges", RESERVATION_ID)
-                        .param("type", "ROOM")
+                        .param("type", "SERVICE")
                         .param("amount", "100.00")
                         .with(user("manager").authorities(managePayment()))
                         .with(csrf()))
@@ -201,7 +378,7 @@ class FolioPageControllerTest {
     @Test
     void shouldRequireCsrfForChargeCreation() throws Exception {
         mockMvc.perform(post("/reservations/{reservationId}/folio/charges", RESERVATION_ID)
-                        .param("type", "ROOM")
+                        .param("type", "SERVICE")
                         .param("amount", "100.00")
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isForbidden());
@@ -289,7 +466,25 @@ class FolioPageControllerTest {
                 UUID.randomUUID(),
                 STAY_ID,
                 new BigDecimal("100.00"),
+                "VND",
+                null,
+                new BigDecimal("100.00"),
                 "CASH",
+                status,
+                "PAID".equals(status) ? Instant.parse("2026-09-11T11:00:00Z") : null,
+                null);
+    }
+
+    /** Creates a cross-currency Payment entry: 120 USD received, applied as 3,000,000 VND. */
+    private PaymentResponse crossCurrencyPayment(String status) {
+        return new PaymentResponse(
+                UUID.randomUUID(),
+                STAY_ID,
+                new BigDecimal("120.00"),
+                "USD",
+                new BigDecimal("25000.000000"),
+                new BigDecimal("3000000.000000"),
+                "BANK_TRANSFER",
                 status,
                 "PAID".equals(status) ? Instant.parse("2026-09-11T11:00:00Z") : null,
                 null);
