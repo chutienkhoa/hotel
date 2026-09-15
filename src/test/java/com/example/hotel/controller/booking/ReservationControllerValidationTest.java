@@ -40,7 +40,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsEmptyRoomList() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"currency\":\"JPY\",\"rooms\":[]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[]}";
         assertDoesNotThrow(
                 () ->
                         mvc.perform(
@@ -52,12 +52,23 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsZeroNightlyRate() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":0}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":0}]}";
         assertDoesNotThrow(
                 () ->
                         mvc.perform(
                                         post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
                                 .andExpect(status().isBadRequest()));
+    }
+
+    /** Confirms source is mandatory for every newly created reservation. */
+    @Test
+    void rejectsReservationWithoutSource() {
+        String body =
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+
+        assertDoesNotThrow(
+                () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isBadRequest()));
     }
 
     /** Confirms that a client-supplied reservation number cannot replace the backend-generated value. */
@@ -72,7 +83,7 @@ class ReservationControllerValidationTest {
                                 BigDecimal.ONE,
                                 "JPY"));
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}],\"reservationNumber\":\"CLIENT-OVERRIDE\"}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}],\"reservationNumber\":\"CLIENT-OVERRIDE\"}";
 
         mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())

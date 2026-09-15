@@ -1,17 +1,21 @@
 package com.example.hotel.repository.room;
 
 import com.example.hotel.entity.room.Room;
+import com.example.hotel.entity.room.RoomStatus;
 import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Cung cấp thao tác lưu trữ và khóa đồng thời cho phòng. */
-public interface RoomRepository extends JpaRepository<Room, UUID> {
+public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificationExecutor<Room> {
+    List<Room> findByActiveTrueAndStatus(RoomStatus status);
+
     /**
      * Counts active Rooms grouped by their current operational status.
      *

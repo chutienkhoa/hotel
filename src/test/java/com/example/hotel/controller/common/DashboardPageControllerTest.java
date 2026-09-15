@@ -52,7 +52,11 @@ class DashboardPageControllerTest {
                 .andExpect(model().attribute("canViewReport", true))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "app-shell page-dashboard")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("nav-dashboard")));
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("nav-dashboard")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Reservations")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("This year")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("This month")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("SEP 2026")));
     }
 
     /** Verifies STAFF cannot access the Dashboard without VIEW_REPORT. */
@@ -75,7 +79,7 @@ class DashboardPageControllerTest {
     /** Creates the empty approved Dashboard shape used by MVC controller tests. */
     private DashboardResponse emptyDashboard() {
         return new DashboardResponse(
-                0L, 0L, 0L, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                0L, 0L, "SEP 2026", 0L, 0L, 0L, 0L, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     /** Enables method-security interception for Dashboard MVC tests. */

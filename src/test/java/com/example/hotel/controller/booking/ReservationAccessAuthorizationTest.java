@@ -20,9 +20,12 @@ import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
+import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.ReservationRoomResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
+import com.example.hotel.dto.customer.response.GuestLookupResponse;
+import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
@@ -268,6 +271,8 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("app-shell page-reservation-create")))
                 .andExpect(content().string(containsString("nav-reservation-create")))
                 .andExpect(content().string(containsString("data-confirm-title=\"Create reservation\"")))
+                .andExpect(content().string(containsString("data-confirm-message=\"Create this reservation?\"")))
+                .andExpect(content().string(containsString("data-confirm-label=\"Create reservation\"")))
                 .andExpect(content().string(containsString("data-confirm-severity=\"NORMAL\"")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
 
@@ -286,6 +291,35 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("data-confirm-title=\"Check in reservation\"")))
                 .andExpect(content().string(containsString("data-confirm-severity=\"WARNING\"")));
+    }
+
+    /** Confirms the reservation Guest field remains one native select with collapsible details. */
+    @Test
+    void shouldRenderNativeGuestSelectWithoutGuestSearchControl() throws Exception {
+        GuestLookupResponse guest = new GuestLookupResponse(
+                UUID.fromString("33333333-3333-3333-3333-333333333333"),
+                "G000125",
+                "Nguyen Van A",
+                "guest@example.com",
+                "0901234567",
+                "Vietnam");
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guest));
+        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
+
+        mockMvc.perform(get("/reservations/new")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<select data-guest-select")))
+                .andExpect(content().string(containsString("G000125 · Nguyen Van A")))
+                .andExpect(content().string(containsString("data-email=\"guest@example.com\"")))
+                .andExpect(content().string(containsString("<summary>Guest Information</summary>")))
+                .andExpect(content().string(containsString("Guest Code")))
+                .andExpect(content().string(containsString("Full Name")))
+                .andExpect(content().string(containsString("Nationality")))
+                .andExpect(content().string(not(containsString("data-guest-search"))))
+                .andExpect(content().string(not(containsString("guest-lookup.js"))))
+                .andExpect(content().string(not(containsString("Passport"))))
+                .andExpect(content().string(not(containsString("Identity document"))));
     }
 
     /** Confirms the Reservation Create page limits currency selection to VND and USD. */
@@ -360,6 +394,7 @@ class ReservationAccessAuthorizationTest {
                         .param("guestId", guestId.toString())
                         .param("checkInDate", "2027-01-10")
                         .param("checkOutDate", "2027-01-12")
+                        .param("source", "DIRECT")
                         .param("currency", "VND")
                         .param("rooms[0].roomId", roomId.toString())
                         .param("rooms[0].nightlyRate", "100000")
@@ -370,8 +405,107 @@ class ReservationAccessAuthorizationTest {
 
         ArgumentCaptor<CreateRequest> requestCaptor = ArgumentCaptor.forClass(CreateRequest.class);
         verify(reservationService).create(requestCaptor.capture());
+        assertEquals(guestId, requestCaptor.getValue().guestId());
         assertEquals(LocalDate.of(2027, 1, 10), requestCaptor.getValue().checkInDate());
         assertEquals(LocalDate.of(2027, 1, 12), requestCaptor.getValue().checkOutDate());
+    }
+
+    /** Confirms a booking manager can open a prepopulated edit form for a draft Reservation. */
+    @Test
+    void shouldRenderPrepopulatedEditFormForDraftReservation() throws Exception {
+        UUID guestId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        UUID roomId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        when(reservationQueryService.findForEdit(RESERVATION_ID)).thenReturn(new ReservationEditResponse(
+                RESERVATION_ID,
+                "DRAFT",
+                guestId,
+                LocalDate.of(2026, 9, 20),
+                LocalDate.of(2026, 9, 22),
+                com.example.hotel.entity.booking.BookingSource.AGODA,
+                "VND",
+                "Quiet room",
+                List.of(new ReservationRoomResponse(
+                        roomId,
+                        "101",
+                        LocalDate.of(2026, 9, 20),
+                        LocalDate.of(2026, 9, 22),
+                        new BigDecimal("1200000"),
+                        new BigDecimal("2400000")))));
+        when(guestQueryService.findAllForReservationEditing(guestId)).thenReturn(List.of(new GuestLookupResponse(
+                guestId, "G000125", "Nguyen Van A", "guest@example.com", "0901234567", "Vietnam")));
+        when(roomQueryService.findAllForReservationEditing(List.of(roomId))).thenReturn(List.of(
+                new RoomLookupResponse(UUID.randomUUID(), "DEMO-302", "AVAILABLE", true),
+                new RoomLookupResponse(roomId, "DEMO-101", "OCCUPIED", true)));
+
+        mockMvc.perform(get("/reservations/{id}/edit", RESERVATION_ID)
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Edit reservation")))
+                .andExpect(content().string(containsString("Save Changes")))
+                .andExpect(content().string(containsString("data-confirm-title=\"Save changes\"")))
+                .andExpect(content().string(containsString("data-confirm-message=\"Save changes to this reservation?\"")))
+                .andExpect(content().string(containsString("data-confirm-label=\"Save Changes\"")))
+                .andExpect(content().string(containsString(">DEMO-302</option>")))
+                .andExpect(content().string(containsString("DEMO-101 — OCCUPIED")))
+                .andExpect(content().string(containsString("id=\"checkInDate\"")))
+                .andExpect(content().string(containsString("value=\"2026-09-20\"")))
+                .andExpect(content().string(containsString("value=\"2026-09-22\"")))
+                .andExpect(content().string(not(containsString("value=\"2026-01-01\""))))
+                .andExpect(content().string(containsString("value=\"AGODA\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("Quiet room")))
+                .andExpect(content().string(containsString("class=\"js-money-input\"")));
+    }
+
+    /** Confirms edit remains a MANAGE_BOOKING operation and its POST is CSRF protected. */
+    @Test
+    void shouldRequireManageBookingAndCsrfForDraftEdit() throws Exception {
+        mockMvc.perform(get("/reservations/{id}/edit", RESERVATION_ID)
+                        .with(user("staff").authorities(viewBookingAuthority())))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/reservations/{id}/edit", RESERVATION_ID)
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Confirms a valid draft edit uses the existing request binding and redirects to detail. */
+    @Test
+    void shouldSubmitDraftEditAndRedirectToReservationDetail() throws Exception {
+        UUID guestId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        UUID roomId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        when(reservationService.updateDraft(eq(RESERVATION_ID), any())).thenReturn(new Response(
+                RESERVATION_ID, "R20260911-000001", "DRAFT", BigDecimal.TEN, "VND"));
+
+        mockMvc.perform(post("/reservations/{id}/edit", RESERVATION_ID)
+                        .param("guestId", guestId.toString())
+                        .param("checkInDate", "2027-01-10")
+                        .param("checkOutDate", "2027-01-12")
+                        .param("source", "DIRECT")
+                        .param("currency", "VND")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "1200000")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID));
+
+        verify(reservationService).updateDraft(eq(RESERVATION_ID), any(CreateRequest.class));
+    }
+
+    /** Confirms detail exposes Edit only for a draft Reservation to a booking manager. */
+    @Test
+    void shouldShowEditOnlyForDraftReservationToManageBookingUser() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("DRAFT"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/reservations/" + RESERVATION_ID + "/edit")));
+
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/edit"))));
     }
 
     /** Confirms Reservation list and detail retain the shared Reservations navigation page class. */

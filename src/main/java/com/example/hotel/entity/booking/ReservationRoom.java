@@ -113,4 +113,22 @@ public class ReservationRoom extends AuditedEntity {
     public BigDecimal getTotalAmount() {
         return totalAmount;
     }
+
+    /**
+     * Refreshes the date and price snapshot while its owning Reservation remains a draft.
+     *
+     * @param checkInDate replacement check-in snapshot
+     * @param checkOutDate replacement check-out snapshot
+     * @param nightlyRate replacement nightly-rate snapshot
+     */
+    void updateDraftSnapshot(LocalDate checkInDate, LocalDate checkOutDate, BigDecimal nightlyRate) {
+        if (reservation.getStatus() != ReservationStatus.DRAFT) {
+            throw new IllegalStateException("Only draft reservation rooms can be edited");
+        }
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+        this.nightlyRate = nightlyRate;
+        totalAmount = nightlyRate.multiply(
+                BigDecimal.valueOf(ChronoUnit.DAYS.between(checkInDate, checkOutDate)));
+    }
 }

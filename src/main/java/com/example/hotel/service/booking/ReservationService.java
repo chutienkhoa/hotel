@@ -85,6 +85,61 @@ public class ReservationService {
      */
     @Transactional
     public Response create(CreateRequest request) {
+        ReservationDraftData draftData = validateDraftData(request);
+        CurrentUser user = currentUser();
+        Reservation reservation =
+                new Reservation(
+                        UUID.randomUUID(),
+                        reservationNumberGenerator.generate(),
+                        draftData.guest(),
+                        request.checkInDate(),
+                        request.checkOutDate(),
+                        request.source(),
+                        draftData.currency().getCurrencyCode(),
+                        request.notes());
+        reservation.audit(user.id());
+        createRoomSnapshots(reservation, request, draftData, user).forEach(reservation::addRoom);
+        reservation.calculateTotal();
+        reservations.save(reservation);
+        audit(user, "CREATE", reservation, null, "DRAFT");
+        return response(reservation);
+    }
+
+    /**
+     * Replaces all editable data and room snapshots for a draft Reservation.
+     *
+     * @param id Reservation identifier
+     * @param request replacement draft data
+     * @return updated Reservation response
+     */
+    @Transactional
+    public Response updateDraft(UUID id, CreateRequest request) {
+        Reservation reservation = load(id);
+        if (reservation.getStatus() != ReservationStatus.DRAFT) {
+            throw conflict("Only draft reservations can be edited");
+        }
+        ReservationDraftData draftData = validateDraftData(request);
+        CurrentUser user = currentUser();
+        List<ReservationRoom> updatedRooms = createRoomSnapshots(reservation, request, draftData, user);
+        try {
+            reservation.updateDraft(
+                    draftData.guest(),
+                    request.checkInDate(),
+                    request.checkOutDate(),
+                    request.source(),
+                    draftData.currency().getCurrencyCode(),
+                    request.notes(),
+                    updatedRooms);
+        } catch (IllegalStateException exception) {
+            throw conflict(exception.getMessage());
+        }
+        reservation.audit(user.id());
+        audit(user, "UPDATE", reservation, "DRAFT", "DRAFT");
+        return response(reservation);
+    }
+
+    /** Validates and resolves the request data shared by create and draft editing. */
+    private ReservationDraftData validateDraftData(CreateRequest request) {
         if (!request.checkOutDate().isAfter(request.checkInDate())) {
             throw bad("check_out_date must be after check_in_date");
         }
@@ -101,39 +156,32 @@ public class ReservationService {
                 throw bad("A room may be assigned once per reservation");
             }
         }
-        Map<UUID, Room> roomsById =
-                rooms.findAllById(roomIds).stream()
-                        .collect(Collectors.toMap(Room::getId, room -> room));
+        Map<UUID, Room> roomsById = rooms.findAllById(roomIds).stream()
+                .collect(Collectors.toMap(Room::getId, room -> room));
         if (roomsById.size() != roomIds.size()) {
             throw notFound("Room");
         }
-        CurrentUser user = currentUser();
-        Reservation reservation =
-                new Reservation(
-                        UUID.randomUUID(),
-                        reservationNumberGenerator.generate(),
-                        guest,
-                        request.checkInDate(),
-                        request.checkOutDate(),
-                        currency.getCurrencyCode(),
-                        request.notes());
-        reservation.audit(user.id());
-        for (var roomRequest : request.rooms()) {
-            BigDecimal nightlyRate = scale(roomRequest.nightlyRate(), currency);
-            ReservationRoom reservationRoom =
-                    new ReservationRoom(
+        return new ReservationDraftData(guest, currency, roomsById);
+    }
+
+    /** Builds the complete replacement set of immutable room-price snapshots. */
+    private List<ReservationRoom> createRoomSnapshots(
+            Reservation reservation,
+            CreateRequest request,
+            ReservationDraftData draftData,
+            CurrentUser user) {
+        return request.rooms().stream()
+                .map(roomRequest -> {
+                    ReservationRoom reservationRoom = new ReservationRoom(
                             reservation,
-                            roomsById.get(roomRequest.roomId()),
+                            draftData.roomsById().get(roomRequest.roomId()),
                             request.checkInDate(),
                             request.checkOutDate(),
-                            nightlyRate);
-            reservationRoom.audit(user.id());
-            reservation.addRoom(reservationRoom);
-        }
-        reservation.calculateTotal();
-        reservations.save(reservation);
-        audit(user, "CREATE", reservation, null, "DRAFT");
-        return response(reservation);
+                            scale(roomRequest.nightlyRate(), draftData.currency()));
+                    reservationRoom.audit(user.id());
+                    return reservationRoom;
+                })
+                .toList();
     }
 
     /**
@@ -410,4 +458,7 @@ public class ReservationService {
     private ResponseStatusException conflict(String message) {
         return new ResponseStatusException(HttpStatus.CONFLICT, message);
     }
+
+    /** Resolved request data shared by Reservation create and draft-update operations. */
+    private record ReservationDraftData(Guest guest, Currency currency, Map<UUID, Room> roomsById) {}
 }

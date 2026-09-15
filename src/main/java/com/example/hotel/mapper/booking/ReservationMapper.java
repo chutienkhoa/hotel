@@ -2,6 +2,7 @@ package com.example.hotel.mapper.booking;
 
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
+import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.ReservationRoomResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.entity.booking.ReservationRoom;
@@ -62,6 +63,20 @@ public class ReservationMapper {
                 reservation.getCheckInDate(),
                 reservation.getCheckOutDate(),
                 reservation.getTotalAmount(),
+                reservation.getCurrency(),
+                reservation.getNotes(),
+                reservation.getRooms().stream().map(this::toRoomResponse).toList());
+    }
+
+    /** Maps a draft Reservation into the complete editable MVC representation. */
+    public ReservationEditResponse toEditResponse(Reservation reservation) {
+        return new ReservationEditResponse(
+                reservation.getId(),
+                reservation.getStatus().name(),
+                reservation.getGuest().getId(),
+                reservation.getCheckInDate(),
+                reservation.getCheckOutDate(),
+                reservation.getSource(),
                 reservation.getCurrency(),
                 reservation.getNotes(),
                 reservation.getRooms().stream().map(this::toRoomResponse).toList());

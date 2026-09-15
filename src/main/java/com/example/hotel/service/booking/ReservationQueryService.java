@@ -1,6 +1,7 @@
 package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
+import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.entity.booking.Reservation;
@@ -118,5 +119,14 @@ public class ReservationQueryService {
                 .findById(reservationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
         return reservationMapper.toDetailResponse(reservation);
+    }
+
+    /** Retrieves one Reservation in the representation required by the draft edit form. */
+    @Transactional(readOnly = true)
+    public ReservationEditResponse findForEdit(UUID reservationId) {
+        Reservation reservation = reservationRepository
+                .findById(reservationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+        return reservationMapper.toEditResponse(reservation);
     }
 }

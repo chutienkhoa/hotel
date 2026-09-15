@@ -14,8 +14,10 @@ import com.example.hotel.repository.common.ExpenseRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -69,18 +71,28 @@ public class DashboardService {
                 .collect(Collectors.toMap(
                         DashboardStatusCountResponse::status,
                         DashboardStatusCountResponse::count));
+        List<DashboardMonthCountResponse> reservationsByCheckInMonth = completeMonthCounts(
+                currentDate.getYear(),
+                reservationRepository.countByCheckInMonthWithin(startDate, endDateExclusive));
+        long reservationsThisYear = reservationsByCheckInMonth.stream()
+                .mapToLong(DashboardMonthCountResponse::count)
+                .sum();
+        long reservationsThisMonth = reservationsByCheckInMonth.get(currentDate.getMonthValue() - 1).count();
 
         return new DashboardResponse(
-                reservationRepository.count(),
+                reservationsThisYear,
+                reservationsThisMonth,
+                currentDate.getMonth().getDisplayName(TextStyle.SHORT, Locale.ENGLISH).toUpperCase(Locale.ROOT)
+                        + " " + currentDate.getYear(),
                 roomRepository.countByActiveTrue(),
+                roomCountsByStatus.getOrDefault(RoomStatus.AVAILABLE.name(), 0L),
                 stayRepository.countByStatus(StayStatus.CHECKED_IN),
+                stayRepository.countCheckedInScheduledForCheckOutOn(StayStatus.CHECKED_IN, currentDate),
                 toStatusCounts(reservationRepository.countAllByStatus()),
                 roomStatusCounts,
                 operationalAlerts(roomCountsByStatus),
                 toStatusCounts(expenseRepository.countAllByStatus()),
-                completeMonthCounts(
-                        currentDate.getYear(),
-                        reservationRepository.countByCheckInMonthWithin(startDate, endDateExclusive)),
+                reservationsByCheckInMonth,
                 toRoomTypeCounts(
                         reservationRepository.countBookedRoomsByRoomTypeWithin(
                                 startDate, endDateExclusive)),

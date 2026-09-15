@@ -16,28 +16,107 @@
         </div>
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="empty-state" th:if="${#lists.isEmpty(rooms)}">No rooms found.</p>
 
-        <div class="table-wrap" th:unless="${#lists.isEmpty(rooms)}"><table>
-            <thead>
-            <tr>
-                <th scope="col">Room Number</th>
-                <th scope="col">RoomType</th>
-                <th scope="col">Floor</th>
-                <th scope="col">Status</th>
-                <th scope="col">Active</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="room : ${rooms}">
-                <td><a th:href="@{/rooms/{id}(id=${room.id})}" th:text="${room.roomNumber}">101</a></td>
-                <td th:text="${room.roomType.code}">SINGLE</td>
-                <td th:text="${room.floor}">1</td>
-                <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></td>
-                <td th:text="${room.active}">true</td>
-            </tr>
-            </tbody>
-        </table></div>
+        <section class="form-card" aria-label="Filter rooms">
+            <form method="get" th:action="@{/rooms}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="roomNumber">Room Number</label>
+                        <input id="roomNumber" name="roomNumber" type="search"
+                               th:value="${searchCriteria.roomNumber}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="roomTypeId">Room Type</label>
+                        <select id="roomTypeId" name="roomTypeId">
+                            <option th:selected="${searchCriteria.roomTypeId == null}" value="">
+                                All room types
+                            </option>
+                            <option th:each="roomType : ${roomTypes}"
+                                    th:selected="${roomType.id == searchCriteria.roomTypeId}"
+                                    th:text="|${roomType.code} — ${roomType.name}|"
+                                    th:value="${roomType.id}">SINGLE — Single</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label for="floor">Floor</label>
+                        <input id="floor" name="floor" type="text"
+                               th:value="${searchCriteria.floor}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option th:selected="${searchCriteria.status == null}" value="">All statuses</option>
+                            <option th:each="roomStatus : ${roomStatuses}"
+                                    th:selected="${roomStatus == searchCriteria.status}"
+                                    th:text="${roomStatus}"
+                                    th:value="${roomStatus}">AVAILABLE</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-row room-filter-actions">
+                    <a class="button button-secondary" th:href="@{/rooms}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="room-results">
+            <div class="results-toolbar">
+                <p>
+                    <span th:text="${roomPage.totalElements}">0</span>
+                    <span th:text="${roomPage.totalElements == 1 ? 'result' : 'results'}">results</span>
+                </p>
+                <nav aria-label="Room pages" class="pagination room-pagination"
+                     th:if="${roomPage.totalPages > 1}">
+                    <a class="pagination__segment" th:if="${!roomPage.first}"
+                       th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (roomPage.number - 1)}">
+                        Previous
+                    </a>
+                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+                        <span aria-current="page" class="pagination__segment pagination__segment--current"
+                              th:if="${pageNumber == roomPage.number}"
+                              th:text="${pageNumber + 1}">1</span>
+                        <a class="pagination__segment" th:unless="${pageNumber == roomPage.number}"
+                           th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}"
+                           th:text="${pageNumber + 1}">2</a>
+                    </th:block>
+                    <span class="pagination__segment pagination__segment--ellipsis"
+                          th:if="${paginationEndPage + 1 < roomPage.totalPages - 1}">...</span>
+                    <a class="pagination__segment" th:if="${paginationEndPage < roomPage.totalPages - 1}"
+                       th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (roomPage.totalPages - 1)}"
+                       th:text="${roomPage.totalPages}">2</a>
+                    <a class="pagination__segment" th:if="${!roomPage.last}"
+                       th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (roomPage.number + 1)}">
+                        Next
+                    </a>
+                </nav>
+            </div>
+
+            <p class="empty-state" th:if="${roomPage.empty}">No rooms match the current filters.</p>
+
+            <div class="table-wrap" th:unless="${roomPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Room Number</th>
+                        <th scope="col">RoomType</th>
+                        <th scope="col">Floor</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Active</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="room : ${roomPage.content}">
+                        <td><a th:href="@{/rooms/{id}(id=${room.id})}" th:text="${room.roomNumber}">101</a></td>
+                        <td th:text="${room.roomType.code}">SINGLE</td>
+                        <td th:text="${room.floor}">1</td>
+                        <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></td>
+                        <td th:text="${room.active}">true</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>

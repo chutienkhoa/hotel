@@ -1,13 +1,19 @@
 package com.example.hotel.controller.room;
 
 import com.example.hotel.dto.room.request.RoomCreateRequest;
+import com.example.hotel.dto.room.request.RoomSearchCriteria;
 import com.example.hotel.dto.room.request.RoomUpdateRequest;
 import com.example.hotel.dto.room.response.RoomResponse;
+import com.example.hotel.entity.room.RoomStatus;
+import com.example.hotel.service.room.RoomQueryService;
 import com.example.hotel.service.room.RoomService;
 import com.example.hotel.service.room.RoomTypeQueryService;
 import jakarta.validation.Valid;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -18,39 +24,57 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /** Serves CSRF-protected Thymeleaf pages for authorized Room Management. */
 @Controller
 public class RoomPageController {
 
     private final RoomService roomService;
+    private final RoomQueryService roomQueryService;
     private final RoomTypeQueryService roomTypeQueryService;
 
     /**
      * Creates the page controller with services used to manage rooms and load read-only RoomTypes.
      *
      * @param roomService service used to load and update room profiles
+     * @param roomQueryService service used to load paginated, filtered Room list data
      * @param roomTypeQueryService service used to load RoomType selections
      */
-    public RoomPageController(RoomService roomService, RoomTypeQueryService roomTypeQueryService) {
+    public RoomPageController(
+            RoomService roomService, RoomQueryService roomQueryService, RoomTypeQueryService roomTypeQueryService) {
         this.roomService = roomService;
+        this.roomQueryService = roomQueryService;
         this.roomTypeQueryService = roomTypeQueryService;
     }
 
     /**
-     * Displays all room profiles available to Room Management users.
+     * Displays a filterable, paginated Room list for Room Management users.
      *
+     * @param searchCriteria optional Room list filters bound from the request
+     * @param page zero-based requested page number
      * @param model model used to render the page
      * @param authentication current browser authentication
      * @return the room list template
      */
     @GetMapping("/rooms")
     @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
-    public String list(Model model, Authentication authentication) {
+    public String list(
+            @ModelAttribute("searchCriteria") RoomSearchCriteria searchCriteria,
+            @RequestParam(required = false) Integer page,
+            Model model,
+            Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
-        model.addAttribute("rooms", roomService.findAll());
+        searchCriteria.normalize();
+        model.addAttribute("roomTypes", roomTypeQueryService.findAll());
+        model.addAttribute("roomStatuses", RoomStatus.values());
+        Page<RoomResponse> roomPage = roomQueryService.findPage(searchCriteria, page == null ? 0 : page);
+        model.addAttribute("roomPage", roomPage);
+        model.addAttribute("filterQueryString", filterQueryString(searchCriteria));
+        addPaginationAttributes(model, roomPage);
         return "room/list";
     }
 
@@ -303,6 +327,55 @@ public class RoomPageController {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("roomForm", roomForm);
         model.addAttribute("roomTypes", roomTypeQueryService.findAll());
+    }
+
+    /**
+     * Builds an already URL-encoded query string containing only the currently populated Room
+     * list filters, so pagination links can preserve every active filter without appending
+     * blank query parameters for filters the user left empty.
+     *
+     * @param searchCriteria normalized Room list filters
+     * @return the encoded {@code name=value&...} filter query string, or an empty string when
+     *     no filter is active
+     */
+    private String filterQueryString(RoomSearchCriteria searchCriteria) {
+        Map<String, String> filters = new LinkedHashMap<>();
+        if (searchCriteria.getRoomNumber() != null) {
+            filters.put("roomNumber", searchCriteria.getRoomNumber());
+        }
+        if (searchCriteria.getRoomTypeId() != null) {
+            filters.put("roomTypeId", searchCriteria.getRoomTypeId().toString());
+        }
+        if (searchCriteria.getFloor() != null) {
+            filters.put("floor", searchCriteria.getFloor());
+        }
+        if (searchCriteria.getStatus() != null) {
+            filters.put("status", searchCriteria.getStatus().name());
+        }
+        if (filters.isEmpty()) {
+            return "";
+        }
+        UriComponentsBuilder builder = UriComponentsBuilder.newInstance();
+        filters.forEach(builder::queryParam);
+        return builder.build().encode().getQuery();
+    }
+
+    /**
+     * Adds presentation-only page-window bounds for the Room list paginator.
+     *
+     * @param model MVC model used by the Room list view
+     * @param roomPage current server-side page metadata
+     */
+    private void addPaginationAttributes(Model model, Page<?> roomPage) {
+        int totalPages = roomPage.getTotalPages();
+        if (totalPages == 0) {
+            return;
+        }
+        int lastPage = totalPages - 1;
+        int startPage = Math.max(0, Math.min(roomPage.getNumber() - 1, lastPage - 2));
+        int endPage = Math.min(lastPage, startPage + 2);
+        model.addAttribute("paginationStartPage", startPage);
+        model.addAttribute("paginationEndPage", endPage);
     }
 
     /**

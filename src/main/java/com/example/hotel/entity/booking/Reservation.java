@@ -18,7 +18,9 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.hibernate.annotations.JdbcTypeCode;
 
@@ -78,6 +80,7 @@ public class Reservation extends AuditedEntity {
      * @param guest khách thực hiện đặt phòng
      * @param checkInDate ngày nhận phòng
      * @param checkOutDate ngày trả phòng
+     * @param source nguồn tạo reservation
      * @param currency mã tiền tệ
      * @param notes ghi chú đặt phòng
      */
@@ -87,6 +90,7 @@ public class Reservation extends AuditedEntity {
             Guest guest,
             LocalDate checkInDate,
             LocalDate checkOutDate,
+            BookingSource source,
             String currency,
             String notes) {
         this.id = id;
@@ -96,9 +100,39 @@ public class Reservation extends AuditedEntity {
         this.checkOutDate = checkOutDate;
         this.currency = currency;
         this.notes = notes;
-        source = BookingSource.DIRECT;
+        this.source = source;
         status = ReservationStatus.DRAFT;
         reservedAt = Instant.now();
+    }
+
+    /**
+     * Creates a legacy direct Reservation for existing domain fixtures.
+     *
+     * @param id reservation identifier
+     * @param reservationNumber backend-generated reservation number
+     * @param guest reservation guest
+     * @param checkInDate check-in date
+     * @param checkOutDate check-out date
+     * @param currency reservation currency
+     * @param notes optional reservation notes
+     */
+    public Reservation(
+            UUID id,
+            String reservationNumber,
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            String currency,
+            String notes) {
+        this(
+                id,
+                reservationNumber,
+                guest,
+                checkInDate,
+                checkOutDate,
+                BookingSource.DIRECT,
+                currency,
+                notes);
     }
 
     /**
@@ -108,6 +142,64 @@ public class Reservation extends AuditedEntity {
      */
     public void addRoom(ReservationRoom room) {
         rooms.add(room);
+    }
+
+    /**
+     * Updates the editable data and complete room-price snapshots of a draft Reservation.
+     *
+     * @param guest replacement Guest
+     * @param checkInDate replacement planned check-in date
+     * @param checkOutDate replacement planned check-out date
+     * @param source replacement booking source
+     * @param currency replacement currency code
+     * @param notes replacement optional notes
+     * @param updatedRooms complete submitted room snapshots
+     */
+    public void updateDraft(
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            BookingSource source,
+            String currency,
+            String notes,
+            List<ReservationRoom> updatedRooms) {
+        if (status != ReservationStatus.DRAFT) {
+            throw new IllegalStateException("Only draft reservations can be edited");
+        }
+        this.guest = guest;
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+        this.source = source;
+        this.currency = currency;
+        this.notes = notes;
+        reconcileDraftRooms(updatedRooms);
+        calculateTotal();
+    }
+
+    /** Reconciles draft room snapshots by Room identity to avoid replacing unchanged children. */
+    private void reconcileDraftRooms(List<ReservationRoom> updatedRooms) {
+        Map<UUID, ReservationRoom> existingByRoomId = new HashMap<>();
+        for (ReservationRoom existingRoom : rooms) {
+            existingByRoomId.put(roomId(existingRoom), existingRoom);
+        }
+        List<ReservationRoom> additions = new ArrayList<>();
+        for (ReservationRoom updatedRoom : updatedRooms) {
+            ReservationRoom existingRoom = existingByRoomId.remove(roomId(updatedRoom));
+            if (existingRoom == null) {
+                additions.add(updatedRoom);
+            } else {
+                existingRoom.updateDraftSnapshot(
+                        updatedRoom.getCheckInDate(),
+                        updatedRoom.getCheckOutDate(),
+                        updatedRoom.getNightlyRate());
+            }
+        }
+        rooms.removeIf(existingRoom -> existingByRoomId.containsKey(roomId(existingRoom)));
+        rooms.addAll(additions);
+    }
+
+    private UUID roomId(ReservationRoom reservationRoom) {
+        return reservationRoom.getRoom() == null ? null : reservationRoom.getRoom().getId();
     }
 
     /**
@@ -135,6 +227,15 @@ public class Reservation extends AuditedEntity {
      */
     public ReservationStatus getStatus() {
         return status;
+    }
+
+    /**
+     * Returns the source selected when the reservation was created.
+     *
+     * @return the reservation booking source
+     */
+    public BookingSource getSource() {
+        return source;
     }
 
     /**

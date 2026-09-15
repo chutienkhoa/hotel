@@ -1,6 +1,7 @@
 package com.example.hotel.mapper.customer;
 
 import com.example.hotel.dto.customer.response.GuestListResponse;
+import com.example.hotel.dto.customer.response.GuestLookupResponse;
 import com.example.hotel.dto.customer.response.GuestNationalityDisplay;
 import com.example.hotel.dto.customer.response.GuestResponse;
 import com.example.hotel.entity.customer.Guest;
@@ -43,5 +44,34 @@ public class GuestMapper {
                 guest.getLastName(),
                 guest.getEmail(),
                 GuestNationalityDisplay.from(guest.getNationality()));
+    }
+
+    /**
+     * Maps one Guest entity to the verification-safe data used by Reservation guest lookup.
+     *
+     * @param guest Guest entity to map
+     * @return minimal Guest data required to select and verify a Reservation guest
+     */
+    public GuestLookupResponse toLookupResponse(Guest guest) {
+        return new GuestLookupResponse(
+                guest.getId(),
+                guest.getGuestCode(),
+                fullName(guest),
+                guest.getEmail(),
+                guest.getPhone(),
+                guest.getNationality());
+    }
+
+    /**
+     * Joins the optional Guest name components for presentation without changing Guest data.
+     *
+     * @param guest Guest whose name is displayed
+     * @return the trimmed display name, or an empty string when no name component is present
+     */
+    private String fullName(Guest guest) {
+        return java.util.stream.Stream.of(guest.getFirstName(), guest.getLastName())
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.joining(" "));
     }
 }

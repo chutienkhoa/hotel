@@ -16,16 +16,25 @@
 
         <section aria-label="Summary" class="card-grid">
             <div class="card summary-card">
-                <dt>Total Reservations</dt>
-                <dd th:text="${dashboard.totalReservations}">0</dd>
+                <dt>Reservations</dt>
+                <div class="summary-card__kpis">
+                    <div><dd th:text="${dashboard.reservationsThisYear}">0</dd><p class="summary-card__label">This year</p></div>
+                    <div><p class="summary-card__secondary summary-card__secondary--info" th:text="${dashboard.reservationsThisMonth}">0</p><p class="summary-card__label">This month</p><p class="summary-card__label" th:text="${dashboard.currentMonthLabel}">SEP 2026</p></div>
+                </div>
             </div>
             <div class="card summary-card">
-                <dt>Active Rooms</dt>
-                <dd th:text="${dashboard.activeRooms}">0</dd>
+                <dt>Rooms</dt>
+                <div class="summary-card__kpis">
+                    <div><dd th:text="${dashboard.activeRooms}">0</dd><p class="summary-card__label">Active rooms</p></div>
+                    <div><p class="summary-card__secondary summary-card__secondary--available" th:text="${dashboard.availableRooms}">0</p><p class="summary-card__label">Available now</p></div>
+                </div>
             </div>
             <div class="card summary-card">
-                <dt>Currently Checked-in Stays</dt>
-                <dd th:text="${dashboard.checkedInStays}">0</dd>
+                <dt>Currently Checked-in</dt>
+                <div class="summary-card__kpis">
+                    <div><dd th:text="${dashboard.checkedInStays}">0</dd><p class="summary-card__label">Current stays</p></div>
+                    <div><p class="summary-card__secondary summary-card__secondary--attention" th:text="${dashboard.checkOutTodayStays}">0</p><p class="summary-card__label">Check-out today</p></div>
+                </div>
             </div>
         </section>
 

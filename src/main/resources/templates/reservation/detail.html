@@ -16,6 +16,9 @@
             </div>
             <div class="action-row">
                 <a class="button button-secondary"
+                   th:href="@{/reservations/{id}/edit(id=${reservation.id})}"
+                   th:if="${reservation.status == 'DRAFT' and canManageBooking}">Edit</a>
+                <a class="button button-secondary"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id})}"
                    th:if="${canManagePayment and (reservation.status == 'CHECKED_IN' or reservation.status == 'CHECKED_OUT')}">View Folio</a>
                 <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span>

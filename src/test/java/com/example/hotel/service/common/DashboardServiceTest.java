@@ -59,7 +59,6 @@ class DashboardServiceTest {
     /** Verifies all approved summary, status, and operational-alert metrics. */
     @Test
     void shouldReturnOnlyApprovedDashboardMetrics() {
-        when(reservationRepository.count()).thenReturn(12L);
         when(reservationRepository.countAllByStatus()).thenReturn(List.of(
                 row(ReservationStatus.DRAFT, 2L), row(ReservationStatus.CONFIRMED, 10L)));
         when(roomRepository.countByActiveTrue()).thenReturn(5L);
@@ -68,6 +67,9 @@ class DashboardServiceTest {
                 row(RoomStatus.DIRTY, 1L),
                 row(RoomStatus.MAINTENANCE, 2L)));
         when(stayRepository.countByStatus(StayStatus.CHECKED_IN)).thenReturn(3L);
+        when(stayRepository.countCheckedInScheduledForCheckOutOn(
+                        StayStatus.CHECKED_IN, LocalDate.of(2026, 6, 15)))
+                .thenReturn(2L);
         when(expenseRepository.countAllByStatus()).thenReturn(List.of(
                 row(ExpenseStatus.DRAFT, 4L), row(ExpenseStatus.POSTED, 1L)));
         when(reservationRepository.countByCheckInMonthWithin(
@@ -82,9 +84,13 @@ class DashboardServiceTest {
 
         DashboardResponse dashboard = dashboardService.getDashboard();
 
-        assertEquals(12L, dashboard.totalReservations());
+        assertEquals(5L, dashboard.reservationsThisYear());
+        assertEquals(3L, dashboard.reservationsThisMonth());
+        assertEquals("JUN 2026", dashboard.currentMonthLabel());
         assertEquals(5L, dashboard.activeRooms());
+        assertEquals(2L, dashboard.availableRooms());
         assertEquals(3L, dashboard.checkedInStays());
+        assertEquals(2L, dashboard.checkOutTodayStays());
         assertEquals(
                 List.of(
                         new DashboardStatusCountResponse("DRAFT", 2L),
@@ -158,6 +164,28 @@ class DashboardServiceTest {
         verify(reservationRepository).countBySourceWithin(startDate, endDateExclusive);
     }
 
+    /** Verifies the September KPI uses the same zero-filled monthly check-in dataset as the chart. */
+    @Test
+    void shouldDeriveYearAndSeptemberKpisFromCheckInMonthCounts() {
+        Clock septemberClock = Clock.fixed(Instant.parse("2026-09-15T00:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh"));
+        dashboardService = new DashboardService(
+                reservationRepository, roomRepository, stayRepository, expenseRepository, septemberClock);
+        stubEmptyDashboardMetrics();
+        LocalDate yearStart = LocalDate.of(2026, 1, 1);
+        LocalDate nextYearStart = LocalDate.of(2027, 1, 1);
+        when(reservationRepository.countByCheckInMonthWithin(yearStart, nextYearStart)).thenReturn(List.<Object[]>of(
+                monthRow(2026, 1, 10L), monthRow(2026, 2, 5L), monthRow(2026, 9, 8L), monthRow(2026, 12, 4L)));
+        when(reservationRepository.countBookedRoomsByRoomTypeWithin(yearStart, nextYearStart)).thenReturn(List.of());
+        when(reservationRepository.countBySourceWithin(yearStart, nextYearStart)).thenReturn(List.of());
+
+        DashboardResponse dashboard = dashboardService.getDashboard();
+
+        assertEquals(27L, dashboard.reservationsThisYear());
+        assertEquals(8L, dashboard.reservationsThisMonth());
+        assertEquals("SEP 2026", dashboard.currentMonthLabel());
+        assertEquals(0L, dashboard.reservationsByCheckInMonth().get(2).count());
+    }
+
     /** Verifies the Dashboard service has no dependency on financial domain components. */
     @Test
     void shouldNotDependOnFinancialDomainComponents() {
@@ -175,11 +203,12 @@ class DashboardServiceTest {
 
     /** Stubs the existing Dashboard v1 metrics with empty values. */
     private void stubEmptyDashboardMetrics() {
-        when(reservationRepository.count()).thenReturn(0L);
         when(reservationRepository.countAllByStatus()).thenReturn(List.of());
         when(roomRepository.countByActiveTrue()).thenReturn(0L);
         when(roomRepository.countActiveByStatus()).thenReturn(List.of());
         when(stayRepository.countByStatus(StayStatus.CHECKED_IN)).thenReturn(0L);
+        when(stayRepository.countCheckedInScheduledForCheckOutOn(org.mockito.ArgumentMatchers.eq(StayStatus.CHECKED_IN), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(0L);
         when(expenseRepository.countAllByStatus()).thenReturn(List.of());
     }
 

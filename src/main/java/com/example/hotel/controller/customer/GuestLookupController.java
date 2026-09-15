@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -27,13 +28,15 @@ public class GuestLookupController {
     }
 
     /**
-     * Returns guests that can be selected while creating a reservation.
+     * Searches guests that can be selected while creating a reservation.
      *
-     * @return the guest lookup entries
+     * @param query optional Guest code, full-name, phone, or email search text
+     * @return the capped Guest lookup entries
      */
     @GetMapping("/lookup")
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
-    List<GuestLookupResponse> findAllForReservationCreation() {
-        return guestQueryService.findAllForReservationCreation();
+    List<GuestLookupResponse> searchForReservationCreation(
+            @RequestParam(required = false) String query) {
+        return guestQueryService.searchForReservationCreation(query);
     }
 }

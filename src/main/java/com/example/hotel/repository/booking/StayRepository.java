@@ -2,6 +2,7 @@ package com.example.hotel.repository.booking;
 
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import java.time.LocalDate;
 import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +20,11 @@ public interface StayRepository extends JpaRepository<Stay, UUID> {
      * @return matching Stay count
      */
     long countByStatus(StayStatus status);
+
+    /** Counts checked-in Stays scheduled by their Reservation to check out on one business date. */
+    @Query("SELECT COUNT(s) FROM Stay s WHERE s.status = :status AND s.reservation.checkOutDate = :currentDate")
+    long countCheckedInScheduledForCheckOutOn(
+            @Param("status") StayStatus status, @Param("currentDate") LocalDate currentDate);
 
     /**
      * Kiểm tra reservation đã có stay hay chưa.

@@ -423,6 +423,43 @@ MAINTENANCE
 OUT_OF_ORDER
 ```
 
+## 5.3 Room Management List
+
+Room Management provides four independent, optional filter fields:
+
+```text
+room_number
+room_type
+floor
+status
+```
+
+`room_number` is trimmed; a blank value is ignored (no filter applied). A non-blank value
+performs case-insensitive partial (contains) matching against `room_number`.
+
+`room_type` is selected from the existing read-only RoomType reference data (§5.1) and matched
+by its stable RoomType identifier, not by rendered display text. The first dropdown option
+means no RoomType filter is applied.
+
+`floor` is matched exactly against the stored `floor` value; a blank value is ignored. No floor
+range or additional business rule is introduced.
+
+`status` is matched exactly against one Room status value (§5.2); the first dropdown option
+means no status filter is applied.
+
+Multiple populated filter fields combine with **AND** semantics: a Room must match every
+populated filter to appear in the result. For example, `room_type = DOUBLE` together with
+`status = AVAILABLE` returns only Rooms matching both conditions, not either one.
+
+Filtering and pagination are performed at the database level. The fixed page size is 10, with
+deterministic default ordering by `room_number ASC`. Pagination links preserve every currently
+active filter without emitting blank query parameters. A zero-result search remains on the
+filtered list, preserves the entered filter values, and presents `0 results` with
+`No rooms match the current filters.`
+
+This list/filter behavior does not change the Room Management implementation slice described
+above, the Room state machine, or any operational status transition.
+
 ---
 
 # 6. Reservation Domain

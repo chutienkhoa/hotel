@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.response.GuestListResponse;
+import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.mapper.customer.GuestMapper;
 import com.example.hotel.repository.customer.GuestRepository;
@@ -32,6 +33,22 @@ import org.springframework.data.jpa.domain.Specification;
 
 /** Verifies database-backed Guest list pagination and nationality presentation configuration. */
 class GuestQueryServiceTest {
+
+    /** Confirms Reservation creation omits Guests with a completed Reservation. */
+    @Test
+    void shouldLoadOnlyGuestsWithoutCheckedOutReservationsForReservationCreation() {
+        GuestRepository repository = mock(GuestRepository.class);
+        GuestMapper mapper = mock(GuestMapper.class);
+        Guest eligibleGuest = mock(Guest.class);
+        when(repository.findAllWithoutReservationStatus(ReservationStatus.CHECKED_OUT))
+                .thenReturn(List.of(eligibleGuest));
+
+        new GuestQueryService(repository, mapper).findAllForReservationCreation();
+
+        verify(repository).findAllWithoutReservationStatus(ReservationStatus.CHECKED_OUT);
+        verify(repository, never()).findAll();
+        verify(mapper).toLookupResponse(eligibleGuest);
+    }
 
     /** Confirms Guest list queries use the approved fixed size and guest-code ordering. */
     @Test

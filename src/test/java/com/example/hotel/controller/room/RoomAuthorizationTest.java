@@ -73,6 +73,9 @@ class RoomAuthorizationTest {
         when(roomService.findAll()).thenReturn(List.of(roomResponse()));
         when(roomService.findById(ROOM_ID)).thenReturn(roomResponse());
         when(roomTypeQueryService.findAll()).thenReturn(List.of(roomTypeResponse()));
+        when(roomQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                        List.of(roomResponse()), org.springframework.data.domain.PageRequest.of(0, 10), 1));
 
         mockMvc.perform(get("/api/rooms").with(user(username).authorities(manageRoomAuthority())))
                 .andExpect(status().isOk());
@@ -86,6 +89,66 @@ class RoomAuthorizationTest {
                 .andExpect(view().name("room/list"))
                 .andExpect(model().attribute("canManageRoom", true))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/rooms\"")));
+    }
+
+    /** Confirms the Room list renders all four filters and reuses the shared pagination markup. */
+    @Test
+    void shouldRenderRoomFiltersAndSharedPaginationMarkup() throws Exception {
+        when(roomTypeQueryService.findAll()).thenReturn(List.of(roomTypeResponse()));
+        when(roomQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                        List.of(roomResponse()), org.springframework.data.domain.PageRequest.of(0, 10), 11));
+
+        mockMvc.perform(get("/rooms").with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"roomNumber\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "<select id=\"roomTypeId\" name=\"roomTypeId\">")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"floor\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "<select id=\"status\" name=\"status\">")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("All room types")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("All statuses")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"pagination room-pagination\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("pagination__segment")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("pagination__segment--current")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/rooms\">Reset</a>")));
+    }
+
+    /** Confirms active Room filters are preserved in a pagination link. */
+    @Test
+    void shouldPreserveActiveFiltersInRoomPaginationLinks() throws Exception {
+        when(roomTypeQueryService.findAll()).thenReturn(List.of(roomTypeResponse()));
+        when(roomQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                        List.of(roomResponse()), org.springframework.data.domain.PageRequest.of(0, 10), 11));
+
+        mockMvc.perform(get("/rooms")
+                        .param("roomNumber", "101")
+                        .param("status", "AVAILABLE")
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/rooms?roomNumber=101&amp;status=AVAILABLE&amp;page=1\"")));
+    }
+
+    /** Confirms a zero-result Room filter shows the empty state and omits pagination. */
+    @Test
+    void shouldRenderZeroResultRoomFilterWithoutPagination() throws Exception {
+        when(roomTypeQueryService.findAll()).thenReturn(List.of(roomTypeResponse()));
+        when(roomQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/rooms").param("floor", "99")
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("0</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "No rooms match the current filters.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"99\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "class=\"pagination room-pagination\""))));
     }
 
     /**

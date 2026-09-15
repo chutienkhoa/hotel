@@ -4,9 +4,13 @@ import java.util.List;
 
 /** Provides the approved read-only Dashboard v1 metrics for Thymeleaf rendering. */
 public record DashboardResponse(
-        long totalReservations,
+        long reservationsThisYear,
+        long reservationsThisMonth,
+        String currentMonthLabel,
         long activeRooms,
+        long availableRooms,
         long checkedInStays,
+        long checkOutTodayStays,
         List<DashboardStatusCountResponse> reservationsByStatus,
         List<DashboardStatusCountResponse> roomsByStatus,
         List<DashboardStatusCountResponse> operationalRoomAlerts,
