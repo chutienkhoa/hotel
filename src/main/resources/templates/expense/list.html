@@ -12,34 +12,125 @@
                 <h1>Expenses</h1>
                 <p>Manage Expense v1 drafts and lifecycle actions.</p>
             </div>
-            <a class="button button-primary" th:if="${canManageExpense}" th:href="@{/expenses/new}">Create Expense</a>
+            <div class="action-row" th:if="${canManageExpense}">
+                <a class="button button-secondary" th:href="@{/expense-categories}">Manage Categories</a>
+                <a class="button button-primary" th:href="@{/expenses/new}">Create Expense</a>
+            </div>
         </div>
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="empty-state" th:if="${#lists.isEmpty(expenses)}">No expenses found.</p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <div class="table-wrap" th:unless="${#lists.isEmpty(expenses)}"><table>
-            <thead>
-            <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Category</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Payment method</th>
-                <th scope="col">Status</th>
-            </tr>
-            </thead>
-            <tbody>
-            <tr th:each="expense : ${expenses}">
-                <td><span th:replace="~{layout/datetime :: date(${expense.expenseDate})}">—</span></td>
-                <td>
-                    <a th:href="@{/expenses/{id}(id=${expense.id})}" th:text="${expense.category.code}">ELECTRICITY</a>
-                </td>
-                <td th:text="${expense.amount + ' ' + expense.currency}">0 VND</td>
-                <td th:text="${expense.paymentMethod}">CASH</td>
-                <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(expense.status)}" th:text="${expense.status}">DRAFT</span></td>
-            </tr>
-            </tbody>
-        </table></div>
+        <section class="form-card" aria-label="Filter expenses">
+            <form method="get" th:action="@{/expenses}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="fromDate">From Date</label>
+                        <input class="js-date-picker" id="fromDate" name="fromDate"
+                               th:value="${searchCriteria.fromDate == null ? '' : #temporals.format(searchCriteria.fromDate, 'yyyy-MM-dd')}"
+                               type="text" />
+                    </div>
+                    <div class="form-field">
+                        <label for="toDate">To Date</label>
+                        <input class="js-date-picker" id="toDate" name="toDate"
+                               th:value="${searchCriteria.toDate == null ? '' : #temporals.format(searchCriteria.toDate, 'yyyy-MM-dd')}"
+                               type="text" />
+                    </div>
+                    <div class="form-field">
+                        <label for="categoryId">Category</label>
+                        <select id="categoryId" name="categoryId">
+                            <option th:selected="${searchCriteria.categoryId == null}" value="">
+                                All categories
+                            </option>
+                            <option th:each="category : ${categories}"
+                                    th:selected="${category.id == searchCriteria.categoryId}"
+                                    th:text="${category.code}"
+                                    th:value="${category.id}">ELECTRICITY</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option th:selected="${searchCriteria.status == null}" value="">All statuses</option>
+                            <option th:each="expenseStatus : ${statuses}"
+                                    th:selected="${expenseStatus == searchCriteria.status}"
+                                    th:text="${expenseStatus}"
+                                    th:value="${expenseStatus}">DRAFT</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-row expense-filter-actions">
+                    <a class="button button-secondary" th:href="@{/expenses}">Clear</a>
+                    <button class="button button-primary" type="submit">Filter</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="expense-results">
+            <div class="results-toolbar" th:if="${expensePage != null}">
+                <p>
+                    <span th:text="${expensePage.totalElements}">0</span>
+                    <span th:text="${expensePage.totalElements == 1 ? 'result' : 'results'}">results</span>
+                </p>
+                <nav aria-label="Expense pages" class="pagination expense-pagination"
+                     th:if="${expensePage.totalPages > 1}">
+                    <a class="pagination__segment" th:if="${!expensePage.first}"
+                       th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (expensePage.number - 1)}">
+                        Previous
+                    </a>
+                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+                        <span aria-current="page" class="pagination__segment pagination__segment--current"
+                              th:if="${pageNumber == expensePage.number}"
+                              th:text="${pageNumber + 1}">1</span>
+                        <a class="pagination__segment" th:unless="${pageNumber == expensePage.number}"
+                           th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}"
+                           th:text="${pageNumber + 1}">2</a>
+                    </th:block>
+                    <span class="pagination__segment pagination__segment--ellipsis"
+                          th:if="${paginationEndPage + 1 < expensePage.totalPages - 1}">...</span>
+                    <a class="pagination__segment" th:if="${paginationEndPage < expensePage.totalPages - 1}"
+                       th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (expensePage.totalPages - 1)}"
+                       th:text="${expensePage.totalPages}">2</a>
+                    <a class="pagination__segment" th:if="${!expensePage.last}"
+                       th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (expensePage.number + 1)}">
+                        Next
+                    </a>
+                </nav>
+            </div>
+
+            <div th:if="${expensePage != null and expensePage.empty and errorMessage == null}">
+                <p class="empty-state" th:if="${filtersActive}">
+                    No expenses match the selected filters.
+                    <a th:href="@{/expenses}">Clear filters</a>
+                </p>
+                <p class="empty-state" th:unless="${filtersActive}">No expenses found.</p>
+            </div>
+
+            <div class="table-wrap" th:if="${expensePage != null and not expensePage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Category</th>
+                        <th scope="col">Amount</th>
+                        <th scope="col">Payment method</th>
+                        <th scope="col">Status</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="expense : ${expensePage.content}">
+                        <td><span th:replace="~{layout/datetime :: date(${expense.expenseDate})}">—</span></td>
+                        <td>
+                            <a th:href="@{/expenses/{id}(id=${expense.id})}" th:text="${expense.category.code}">ELECTRICITY</a>
+                        </td>
+                        <td class="table-number"><span th:replace="~{layout/money :: amount(${expense.amount}, ${expense.currency})}">0 VND</span></td>
+                        <td th:text="${expense.paymentMethod}">CASH</td>
+                        <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(expense.status)}" th:text="${expense.status}">DRAFT</span></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>

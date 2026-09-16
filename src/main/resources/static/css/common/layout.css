@@ -55,7 +55,7 @@ p { color: var(--color-muted); }
 .nav-section-label { color: #9fb3c8; font-size: 0.6875rem; font-weight: 750; letter-spacing: 0.09em; margin: 0 var(--space-3) var(--space-1); text-transform: uppercase; }
 .sidebar-nav-link { align-items: center; background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); box-sizing: border-box; color: #d9e2ec; display: flex; font-size: 0.9375rem; font-weight: 600; line-height: 1.5; min-height: var(--control-height); max-width: 100%; padding: var(--space-2) var(--space-3); text-decoration: none; width: 100%; }
 .sidebar-nav-link:hover, .sidebar-nav-link:focus-visible { background: rgb(255 255 255 / 10%); color: #fff; }
-.app-shell.page-dashboard .nav-dashboard, .app-shell.page-reservations .nav-reservations, .app-shell.page-reservation-create .nav-reservation-create, .app-shell.page-guests .nav-guests, .app-shell.page-rooms .nav-rooms { background: #fff; color: var(--color-navy); }
+.app-shell.page-dashboard .nav-dashboard, .app-shell.page-reservations .nav-reservations, .app-shell.page-reservation-create .nav-reservation-create, .app-shell.page-guests .nav-guests, .app-shell.page-rooms .nav-rooms, .app-shell.page-expenses .nav-expenses { background: #fff; color: var(--color-navy); }
 .content { margin: 0 auto; max-width: 78rem; padding: var(--space-6); width: 100%; }
 .content > * + * { margin-top: var(--space-6); }
 
@@ -182,8 +182,8 @@ dd { margin: var(--space-1) 0 0; }
 .guest-form-grid .form-field { margin-bottom: 0; min-width: 0; }
 .guest-form-address { grid-column: 1 / -1; }
 .reservation-filter-grid { display: grid; gap: var(--space-4); grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.reservation-filter-actions, .guest-filter-actions, .room-filter-actions { justify-content: flex-end; }
-.reservation-results, .guest-results, .room-results { display: grid; gap: var(--space-4); }
+.reservation-filter-actions, .guest-filter-actions, .room-filter-actions, .expense-filter-actions { justify-content: flex-end; }
+.reservation-results, .guest-results, .room-results, .expense-results { display: grid; gap: var(--space-4); }
 .results-toolbar { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-4); justify-content: space-between; }
 .results-toolbar > p { margin-bottom: 0; }
 .pagination { display: inline-flex; flex-wrap: wrap; gap: 0; }

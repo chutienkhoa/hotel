@@ -6,8 +6,11 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
@@ -36,6 +39,28 @@ public class DemoDataSeeder {
             List.of("Linh", "Minh", "An", "Mai", "Thanh", "Hana", "Khoa", "Nhi");
     private static final List<String> LAST_NAMES =
             List.of("Nguyen", "Tran", "Le", "Pham", "Hoang", "Vu", "Bui", "Do");
+    private static final List<String> EXPENSE_CATEGORY_CODES = List.of(
+            "ELECTRICITY", "WATER", "INTERNET", "SALARY", "LAUNDRY", "CLEANING", "SUPPLIES",
+            "MAINTENANCE", "OTHER", "REPAIR", "CONSTRUCTION", "OTA_COMMISSION");
+    private static final List<String> OCCASIONAL_EXPENSE_CATEGORIES = List.of(
+            "MAINTENANCE", "REPAIR", "CONSTRUCTION", "SUPPLIES", "LAUNDRY", "CLEANING", "OTA_COMMISSION", "OTHER");
+    private static final int OCCASIONAL_EXPENSES_PER_MONTH = 4;
+    private static final Map<String, List<String>> OCCASIONAL_EXPENSE_DESCRIPTIONS = Map.of(
+            "MAINTENANCE", List.of("Air conditioner maintenance", "Plumbing maintenance", "Electrical maintenance"),
+            "REPAIR", List.of("Room equipment repair", "Bathroom fixture repair", "Furniture repair"),
+            "CONSTRUCTION", List.of("Small renovation work", "Painting", "Minor property improvement"),
+            "SUPPLIES", List.of("Guest amenities purchase", "Cleaning supplies purchase", "Toiletries purchase"),
+            "LAUNDRY", List.of("Linen laundry service", "Guest laundry service"),
+            "CLEANING", List.of("Housekeeping cleaning service", "Deep cleaning service"),
+            "OTA_COMMISSION", List.of("Agoda commission", "Booking.com commission", "Airbnb commission"),
+            "OTHER", List.of("Miscellaneous hotel expense"));
+    private static final List<String> HISTORICAL_STATUS_CYCLE = List.of(
+            "POSTED", "POSTED", "POSTED", "POSTED", "POSTED", "POSTED", "POSTED", "POSTED",
+            "POSTED", "POSTED", "POSTED", "POSTED", "POSTED", "POSTED", "POSTED", "POSTED",
+            "APPROVED", "APPROVED", "SUBMITTED", "DRAFT");
+    private static final List<String> RECENT_STATUS_CYCLE =
+            List.of("DRAFT", "SUBMITTED", "APPROVED", "POSTED");
+    private static final int REJECTED_EVERY_NTH_HISTORICAL_EXPENSE = 25;
 
     /** Creates the profile-gated runner that generates the demo dataset exactly once. */
     @Bean
@@ -63,6 +88,7 @@ public class DemoDataSeeder {
         List<UUID> guestIds = insertGuests(jdbcTemplate, auditUserId, nowTimestamp);
         insertReservations(jdbcTemplate, guestIds, roomIds, roomNumbers, auditUserId, today, nowTimestamp);
         setOperationalRoomMix(jdbcTemplate, roomIds, auditUserId, nowTimestamp);
+        insertExpenses(jdbcTemplate, auditUserId, today);
     }
 
     private void insertAuditUser(JdbcTemplate jdbcTemplate, UUID userId, Timestamp now) {
@@ -294,6 +320,166 @@ public class DemoDataSeeder {
             jdbcTemplate.update("UPDATE room SET status = ?, updated_at = ?, updated_by = ? WHERE id = ?",
                     status, now, auditUserId, roomIds.get(5 + index));
         }
+    }
+
+    /**
+     * Seeds deterministic Expense demo data spanning all 12 months of the current demo year: one
+     * recurring SALARY/ELECTRICITY/WATER/INTERNET Expense per month, plus
+     * {@value #OCCASIONAL_EXPENSES_PER_MONTH} occasional Expenses per month rotated across the
+     * remaining approved categories. Every month other than the current demo month is treated as
+     * settled historical accounting data and is predominantly POSTED; only the current demo month
+     * favors DRAFT/SUBMITTED/APPROVED to leave useful in-progress lifecycle data for manual
+     * testing, while still supporting a realistically POSTED-heavy full year for later Monthly
+     * Financial Report work.
+     *
+     * @param jdbcTemplate JDBC access used to insert Expense rows
+     * @param auditUserId demo audit user recorded as creator, updater, and approver
+     * @param today demo "current" date, used to select the seeded year and the historical/recent split
+     */
+    private void insertExpenses(JdbcTemplate jdbcTemplate, UUID auditUserId, LocalDate today) {
+        Map<String, UUID> categoryIds = expenseCategoryIds(jdbcTemplate);
+        Random amountRandom = new Random(RANDOM_SEED);
+        int year = today.getYear();
+        int currentMonth = today.getMonthValue();
+        int sequenceIndex = 0;
+
+        for (int month = 1; month <= 12; month++) {
+            boolean historical = month != currentMonth;
+            String monthName = Month.of(month).getDisplayName(TextStyle.FULL, Locale.ENGLISH);
+
+            sequenceIndex = insertExpense(
+                    jdbcTemplate, categoryIds.get("SALARY"), auditUserId,
+                    roundedAmount(amountRandom, 15_000_000L, 30_000_000L, 500_000L),
+                    LocalDate.of(year, month, 28), "BANK_TRANSFER",
+                    "Staff salary - " + monthName, historical, sequenceIndex);
+            sequenceIndex = insertExpense(
+                    jdbcTemplate, categoryIds.get("ELECTRICITY"), auditUserId,
+                    roundedAmount(amountRandom, 2_000_000L, 6_000_000L, 50_000L),
+                    LocalDate.of(year, month, 10), "BANK_TRANSFER",
+                    monthName + " electricity bill", historical, sequenceIndex);
+            sequenceIndex = insertExpense(
+                    jdbcTemplate, categoryIds.get("WATER"), auditUserId,
+                    roundedAmount(amountRandom, 500_000L, 1_500_000L, 10_000L),
+                    LocalDate.of(year, month, 12), "BANK_TRANSFER",
+                    monthName + " water bill", historical, sequenceIndex);
+            sequenceIndex = insertExpense(
+                    jdbcTemplate, categoryIds.get("INTERNET"), auditUserId,
+                    roundedAmount(amountRandom, 300_000L, 800_000L, 10_000L),
+                    LocalDate.of(year, month, 15), "BANK_TRANSFER",
+                    monthName + " internet bill", historical, sequenceIndex);
+
+            for (int occasionalIndex = 0; occasionalIndex < OCCASIONAL_EXPENSES_PER_MONTH; occasionalIndex++) {
+                String category = OCCASIONAL_EXPENSE_CATEGORIES.get(
+                        (month - 1 + occasionalIndex) % OCCASIONAL_EXPENSE_CATEGORIES.size());
+                List<String> descriptions = OCCASIONAL_EXPENSE_DESCRIPTIONS.get(category);
+                String description = descriptions.get((month - 1 + occasionalIndex) % descriptions.size());
+                if ("OTA_COMMISSION".equals(category)) {
+                    description = description + " - " + monthName;
+                }
+                BigDecimal amount = occasionalAmount(amountRandom, category);
+                LocalDate expenseDate = LocalDate.of(year, month, Math.min(28, 3 + occasionalIndex * 6));
+                String paymentMethod = occasionalPaymentMethod(category, amount, sequenceIndex);
+                sequenceIndex = insertExpense(
+                        jdbcTemplate, categoryIds.get(category), auditUserId, amount, expenseDate,
+                        paymentMethod, description, historical, sequenceIndex);
+            }
+        }
+    }
+
+    /** Resolves every approved Expense category code to its technical identifier. */
+    private Map<String, UUID> expenseCategoryIds(JdbcTemplate jdbcTemplate) {
+        Map<String, UUID> categoryIds = jdbcTemplate.query(
+                "SELECT id, code FROM expense_category WHERE code IN ("
+                        + String.join(",", java.util.Collections.nCopies(EXPENSE_CATEGORY_CODES.size(), "?"))
+                        + ")",
+                resultSet -> {
+                    Map<String, UUID> values = new java.util.HashMap<>();
+                    while (resultSet.next()) {
+                        values.put(resultSet.getString("code"), resultSet.getObject("id", UUID.class));
+                    }
+                    return values;
+                },
+                EXPENSE_CATEGORY_CODES.toArray());
+        for (String code : EXPENSE_CATEGORY_CODES) {
+            if (categoryIds.get(code) == null) {
+                throw new IllegalStateException("Approved Expense category is missing: " + code);
+            }
+        }
+        return categoryIds;
+    }
+
+    /**
+     * Inserts one deterministic Expense row with a lifecycle-consistent status and approver.
+     *
+     * @param sequenceIndex running Expense sequence number, used for the deterministic id and status cycle
+     * @return the next sequence index
+     */
+    private int insertExpense(
+            JdbcTemplate jdbcTemplate, UUID categoryId, UUID auditUserId, BigDecimal amount,
+            LocalDate expenseDate, String paymentMethod, String description, boolean historical,
+            int sequenceIndex) {
+        String status = statusFor(historical, sequenceIndex);
+        boolean approved = "APPROVED".equals(status) || "POSTED".equals(status);
+        UUID approvedBy = approved ? auditUserId : null;
+        Instant createdAt = expenseDate.atTime(9, 0).atZone(BUSINESS_ZONE).toInstant();
+        Instant updatedAt = approved ? expenseDate.plusDays(1).atTime(9, 0).atZone(BUSINESS_ZONE).toInstant() : createdAt;
+        UUID expenseId = deterministicId(PREFIX + "EXPENSE-" + sequenceIndex);
+        jdbcTemplate.update(
+                "INSERT INTO expense (id, category_id, amount, currency, expense_date, payment_method, "
+                        + "description, status, approved_by, created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, ?, 'VND', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                expenseId, categoryId, amount, expenseDate, paymentMethod, description, status, approvedBy,
+                timestamp(createdAt), auditUserId, timestamp(updatedAt), auditUserId);
+        return sequenceIndex + 1;
+    }
+
+    /** Selects a deterministic lifecycle status for one Expense sequence position. */
+    private String statusFor(boolean historical, int sequenceIndex) {
+        if (!historical) {
+            return RECENT_STATUS_CYCLE.get(sequenceIndex % RECENT_STATUS_CYCLE.size());
+        }
+        if (sequenceIndex % REJECTED_EVERY_NTH_HISTORICAL_EXPENSE == 0) {
+            return "REJECTED";
+        }
+        return HISTORICAL_STATUS_CYCLE.get(sequenceIndex % HISTORICAL_STATUS_CYCLE.size());
+    }
+
+    /** Generates a deterministic, human-friendly whole-VND amount rounded to the given step. */
+    private BigDecimal roundedAmount(Random random, long minInclusive, long maxInclusive, long step) {
+        long steps = (maxInclusive - minInclusive) / step;
+        long value = minInclusive + random.nextInt((int) steps + 1) * step;
+        return BigDecimal.valueOf(value);
+    }
+
+    /** Generates a deterministic occasional-category amount using a category-appropriate demo range. */
+    private BigDecimal occasionalAmount(Random random, String category) {
+        return switch (category) {
+            case "MAINTENANCE" -> roundedAmount(random, 500_000L, 3_000_000L, 50_000L);
+            case "REPAIR" -> roundedAmount(random, 300_000L, 2_500_000L, 50_000L);
+            case "CONSTRUCTION" -> roundedAmount(random, 3_000_000L, 15_000_000L, 100_000L);
+            case "SUPPLIES" -> roundedAmount(random, 200_000L, 2_000_000L, 10_000L);
+            case "LAUNDRY" -> roundedAmount(random, 300_000L, 1_500_000L, 10_000L);
+            case "CLEANING" -> roundedAmount(random, 200_000L, 1_200_000L, 10_000L);
+            case "OTA_COMMISSION" -> roundedAmount(random, 1_000_000L, 8_000_000L, 50_000L);
+            default -> roundedAmount(random, 200_000L, 2_000_000L, 10_000L);
+        };
+    }
+
+    /** Selects a realistic demo payment method for one occasional Expense category. */
+    private String occasionalPaymentMethod(String category, BigDecimal amount, int sequenceIndex) {
+        if ("CONSTRUCTION".equals(category) || "OTA_COMMISSION".equals(category)) {
+            return "BANK_TRANSFER";
+        }
+        if ("MAINTENANCE".equals(category)) {
+            return amount.compareTo(BigDecimal.valueOf(2_000_000L)) >= 0 ? "BANK_TRANSFER" : "CASH";
+        }
+        if ("SUPPLIES".equals(category) || "CLEANING".equals(category)) {
+            return "CASH";
+        }
+        if ("REPAIR".equals(category) || "LAUNDRY".equals(category)) {
+            return sequenceIndex % 5 == 0 ? "CREDIT_CARD" : "CASH";
+        }
+        return sequenceIndex % 4 == 0 ? "OTHER" : sequenceIndex % 4 == 1 ? "CREDIT_CARD" : "CASH";
     }
 
     private UUID deterministicId(String value) {

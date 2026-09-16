@@ -8,15 +8,23 @@ import com.example.hotel.entity.common.Expense;
 import com.example.hotel.entity.common.ExpenseCategory;
 import com.example.hotel.entity.common.ExpensePaymentMethod;
 import com.example.hotel.mapper.common.ExpenseMapper;
+import com.example.hotel.dto.common.request.ExpenseSearchCriteria;
 import com.example.hotel.repository.common.ExpenseCategoryRepository;
 import com.example.hotel.repository.common.ExpenseRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
+import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,6 +35,8 @@ import org.springframework.web.server.ResponseStatusException;
 /** Manages Expense v1 drafts, approved lifecycle transitions, and read-only category reference data. */
 @Service
 public class ExpenseService {
+
+    private static final int EXPENSE_PAGE_SIZE = 20;
 
     private final ExpenseRepository expenseRepository;
     private final ExpenseCategoryRepository expenseCategoryRepository;
@@ -61,6 +71,51 @@ public class ExpenseService {
     }
 
     /**
+     * Loads one database-backed page of Expenses matching every supplied optional filter.
+     *
+     * @param criteria normalized optional Expense list filters
+     * @param page zero-based requested page number
+     * @return a page of client-safe Expense responses ordered by expense date, then identifier, descending
+     */
+    @Transactional(readOnly = true)
+    public Page<ExpenseResponse> findPage(ExpenseSearchCriteria criteria, int page) {
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                EXPENSE_PAGE_SIZE,
+                Sort.by(Sort.Order.desc("expenseDate"), Sort.Order.desc("id")));
+        return expenseRepository.findAll(specificationFor(criteria), pageable).map(expenseMapper::toResponse);
+    }
+
+    /**
+     * Builds the database predicate combining every supplied Expense filter.
+     *
+     * <p>Each populated filter field contributes its own predicate on its own database column or
+     * association; populated filters are combined with AND semantics, so an Expense must match
+     * every supplied filter to appear in the result. From Date and To Date are both inclusive.</p>
+     *
+     * @param criteria normalized optional Expense list filters
+     * @return the database specification for matching Expense list rows
+     */
+    Specification<Expense> specificationFor(ExpenseSearchCriteria criteria) {
+        return (root, query, criteriaBuilder) -> {
+            var predicates = new ArrayList<Predicate>();
+            if (criteria.getFromDate() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("expenseDate"), criteria.getFromDate()));
+            }
+            if (criteria.getToDate() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("expenseDate"), criteria.getToDate()));
+            }
+            if (criteria.getCategoryId() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("category").get("id"), criteria.getCategoryId()));
+            }
+            if (criteria.getStatus() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), criteria.getStatus()));
+            }
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
      * Finds one Expense by its technical identifier.
      *
      * @param id Expense identifier
@@ -73,13 +128,33 @@ public class ExpenseService {
     }
 
     /**
-     * Lists the approved read-only Expense categories used by creation and update forms.
+     * Lists every Expense category, active or inactive, in stable code order.
      *
-     * @return categories in stable code order
+     * <p>Used where historical Expense data must remain representable, such as the Expense list
+     * category filter, which must still be able to filter by a category that has since been
+     * deactivated. Do not use this for a form that lets staff select a category for a
+     * <em>new</em> Expense assignment; use {@link #findActiveCategories()} for that.</p>
+     *
+     * @return categories in stable code order, active and inactive
      */
     @Transactional(readOnly = true)
     public List<ExpenseCategoryResponse> findAllCategories() {
         return expenseCategoryRepository.findAllByOrderByCodeAsc().stream()
+                .map(expenseMapper::toCategoryResponse)
+                .toList();
+    }
+
+    /**
+     * Lists only active Expense categories in stable code order.
+     *
+     * <p>Used for the Create Expense form, where only categories currently selectable for a new
+     * assignment should be offered.</p>
+     *
+     * @return active categories in stable code order
+     */
+    @Transactional(readOnly = true)
+    public List<ExpenseCategoryResponse> findActiveCategories() {
+        return expenseCategoryRepository.findByActiveTrueOrderByCodeAsc().stream()
                 .map(expenseMapper::toCategoryResponse)
                 .toList();
     }
@@ -93,8 +168,9 @@ public class ExpenseService {
     @Transactional
     public ExpenseResponse create(ExpenseCreateRequest request) {
         validate(request.categoryId(), request.amount(), request.expenseDate(), request.paymentMethod());
+        ExpenseCategory category = resolveCategoryForCreate(request.categoryId());
         Expense expense = Expense.create(
-                findCategory(request.categoryId()),
+                category,
                 request.amount(),
                 request.expenseDate(),
                 request.paymentMethod(),
@@ -115,9 +191,10 @@ public class ExpenseService {
     public ExpenseResponse update(UUID id, ExpenseUpdateRequest request) {
         validate(request.categoryId(), request.amount(), request.expenseDate(), request.paymentMethod());
         Expense expense = findExpenseForUpdate(id);
+        ExpenseCategory category = resolveCategoryForUpdate(request.categoryId(), expense);
         try {
             expense.updateDraft(
-                    findCategory(request.categoryId()),
+                    category,
                     request.amount(),
                     request.expenseDate(),
                     request.paymentMethod(),
@@ -254,6 +331,43 @@ public class ExpenseService {
      */
     private ExpenseCategory findCategory(UUID id) {
         return expenseCategoryRepository.findById(id).orElseThrow(() -> notFound("Expense category"));
+    }
+
+    /**
+     * Resolves the category selected for a new Expense, requiring it to be currently active.
+     *
+     * @param id selected ExpenseCategory identifier
+     * @return the resolved active category
+     * @throws ResponseStatusException if the category is missing or inactive
+     */
+    private ExpenseCategory resolveCategoryForCreate(UUID id) {
+        ExpenseCategory category = findCategory(id);
+        if (!category.isActive()) {
+            throw badRequest("category is not active");
+        }
+        return category;
+    }
+
+    /**
+     * Resolves the category selected while editing a draft Expense.
+     *
+     * <p>An active category is always allowed. An inactive category is allowed only when it is
+     * the Expense's own current category, so an existing assignment to a now-inactive category
+     * can be left unchanged; switching to a <em>different</em> inactive category is rejected.</p>
+     *
+     * @param id selected ExpenseCategory identifier
+     * @param expense the draft Expense being edited
+     * @return the resolved allowed category
+     * @throws ResponseStatusException if the category is missing, or inactive and not the
+     *     Expense's current category
+     */
+    private ExpenseCategory resolveCategoryForUpdate(UUID id, Expense expense) {
+        ExpenseCategory category = findCategory(id);
+        boolean keepingCurrentCategory = category.getId().equals(expense.getCategory().getId());
+        if (!category.isActive() && !keepingCurrentCategory) {
+            throw badRequest("category is not active");
+        }
+        return category;
     }
 
     /**

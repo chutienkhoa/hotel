@@ -60,7 +60,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(13, flyway.info().applied().length);
+        assertEquals(15, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -84,6 +84,7 @@ class MigrationIntegrationTest {
                         "MANAGE_ROOM",
                         "MANAGE_BOOKING",
                         "MANAGE_PAYMENT",
+                        "MANAGE_EXPENSE",
                         "VIEW_REPORT",
                         "MANAGE_GUEST",
                         "VIEW_BOOKING",
@@ -95,6 +96,9 @@ class MigrationIntegrationTest {
         assertRolePermissionRelationshipCount("ADMIN", "CHECK_OUT", 1);
         assertRolePermissionRelationshipCount("MANAGER", "CHECK_OUT", 1);
         assertRolePermissionRelationshipCount("STAFF", "CHECK_OUT", 1);
+        assertRolePermissionRelationshipCount("ADMIN", "MANAGE_EXPENSE", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "MANAGE_EXPENSE", 1);
+        assertRolePermissionRelationshipCount("STAFF", "MANAGE_EXPENSE", 0);
     }
 
     /** Verifies that PostgreSQL allocates distinct, correctly formatted reservation numbers. */
@@ -226,13 +230,17 @@ class MigrationIntegrationTest {
                         + "FROM expense_category "
                         + "WHERE code IN ("
                         + "'ELECTRICITY', 'WATER', 'INTERNET', 'SALARY', 'LAUNDRY', "
-                        + "'CLEANING', 'SUPPLIES', 'MAINTENANCE', 'OTHER' )",
+                        + "'CLEANING', 'SUPPLIES', 'MAINTENANCE', 'OTHER', "
+                        + "'REPAIR', 'CONSTRUCTION', 'OTA_COMMISSION' )",
                 Integer.class);
+        Integer totalCategoryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM expense_category", Integer.class);
 
         assertTrue(Boolean.TRUE.equals(categoryIsRequired));
         assertTrue(Boolean.TRUE.equals(expenseDateIsRequired));
         assertEquals("character varying", currencyDataType);
-        assertEquals(9, approvedCategoryCount);
+        assertEquals(12, approvedCategoryCount);
+        assertEquals(12, totalCategoryCount);
     }
 
     /** Verifies that JPA lifecycle callbacks preserve creator audit fields and refresh updater audit fields. */

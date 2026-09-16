@@ -13,6 +13,10 @@
         <a class="nav-link sidebar-nav-link nav-guests" th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
         <a class="nav-link sidebar-nav-link nav-rooms" th:if="${canManageRoom}" th:href="@{/rooms}">Rooms</a>
     </div>
+    <div class="nav-section" th:if="${canManageExpense}">
+        <p class="nav-section-label">Finance</p>
+        <a class="nav-link sidebar-nav-link nav-expenses" th:href="@{/expenses}">Expenses</a>
+    </div>
 </nav>
 </body>
 </html>

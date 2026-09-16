@@ -26,7 +26,9 @@
                     <label for="categoryId">Category</label>
                     <select id="categoryId" required th:field="*{categoryId}">
                         <option value="">Select a category</option>
-                        <option th:each="category : ${categories}" th:text="${category.code}" th:value="${category.id}">
+                        <option th:each="category : ${categories}"
+                                th:text="${category.active} ? ${category.code} : ${category.code + ' (Inactive)'}"
+                                th:value="${category.id}">
                             ELECTRICITY
                         </option>
                     </select>
@@ -34,12 +36,13 @@
                 </div>
                 <div class="form-field">
                     <label for="amount">Amount</label>
-                    <input id="amount" min="0.000001" required step="0.000001" th:field="*{amount}" type="number" />
+                    <input class="js-money-input" id="amount" inputmode="decimal" required th:field="*{amount}" type="text" />
                     <p class="field-error" th:errors="*{amount}"></p>
                 </div>
                 <div class="form-field">
                     <label for="expenseDate">Expense date</label>
-                    <input id="expenseDate" required th:field="*{expenseDate}" type="date" />
+                    <input id="expenseDate" name="expenseDate" required type="date"
+                           th:value="${expenseForm.expenseDate == null ? '' : #temporals.format(expenseForm.expenseDate, 'yyyy-MM-dd')}" />
                     <p class="field-error" th:errors="*{expenseDate}"></p>
                 </div>
                 <div class="form-field">

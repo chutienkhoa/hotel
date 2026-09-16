@@ -24,7 +24,7 @@
             <dt>Category</dt>
             <dd th:text="${expense.category.code}">ELECTRICITY</dd>
             <dt>Amount</dt>
-            <dd th:text="${expense.amount + ' ' + expense.currency}">0 VND</dd>
+            <dd><span th:replace="~{layout/money :: amount(${expense.amount}, ${expense.currency})}">0 VND</span></dd>
             <dt>Expense date</dt>
             <dd><span th:replace="~{layout/datetime :: date(${expense.expenseDate})}">—</span></dd>
             <dt>Payment method</dt>

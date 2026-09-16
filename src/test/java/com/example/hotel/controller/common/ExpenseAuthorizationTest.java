@@ -1,5 +1,7 @@
 package com.example.hotel.controller.common;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -11,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
@@ -28,10 +31,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.ui.ExtendedModelMap;
 
 /** Verifies Expense v1 REST and MVC authorization, server-owned fields, and CSRF boundaries. */
 @WebMvcTest({ExpenseController.class, ExpensePageController.class})
@@ -87,10 +92,10 @@ class ExpenseAuthorizationTest {
         }
     }
 
-    /** Confirms current non-Expense-management roles cannot access Expense v1 operations. */
+    /** Confirms STAFF, which does not hold MANAGE_EXPENSE, cannot access Expense v1 operations. */
     @Test
     void shouldRejectRolesWithoutManageExpense() throws Exception {
-        mockMvc.perform(get("/api/expenses").with(user("manager").authorities(managerAuthorities())))
+        mockMvc.perform(get("/api/expenses").with(user("staff").authorities(staffAuthorities())))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/expenses")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -98,6 +103,32 @@ class ExpenseAuthorizationTest {
                         .with(user("staff").authorities(staffAuthorities()))
                         .with(csrf()))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Confirms MANAGER, which now holds MANAGE_EXPENSE, can perform Expense v1 REST and MVC operations. */
+    @Test
+    void shouldAllowManagerToAccessExpenseOperations() throws Exception {
+        when(expenseService.findAll()).thenReturn(List.of(response("DRAFT")));
+        when(expenseService.findPage(any(), eq(0))).thenReturn(new org.springframework.data.domain.PageImpl<>(
+                List.of(response("DRAFT"))));
+        when(expenseService.create(any())).thenReturn(response("DRAFT"));
+        when(expenseService.submit(EXPENSE_ID)).thenReturn(response("SUBMITTED"));
+
+        mockMvc.perform(get("/api/expenses").with(user("manager").authorities(managerAuthorities())))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/expenses")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validRequest())
+                        .with(user("manager").authorities(managerAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/expenses").with(user("manager").authorities(managerAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(view().name("expense/list"));
+        mockMvc.perform(post("/expenses/{id}/submit", EXPENSE_ID)
+                        .with(user("manager").authorities(managerAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection());
     }
 
     /** Confirms client JSON cannot override fixed currency, initial status, approver, or audit values. */
@@ -139,6 +170,8 @@ class ExpenseAuthorizationTest {
     @Test
     void shouldRequireManageExpenseAndCsrfForMvcOperations() throws Exception {
         when(expenseService.findAll()).thenReturn(List.of());
+        when(expenseService.findPage(any(), eq(0)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(expenseService.submit(EXPENSE_ID)).thenReturn(response("SUBMITTED"));
 
         mockMvc.perform(get("/expenses").with(user("admin").authorities(manageExpenseAuthority())))
@@ -153,6 +186,35 @@ class ExpenseAuthorizationTest {
                         .with(user("admin").authorities(manageExpenseAuthority()))
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    /** Confirms the sidebar renders an Expenses link when MANAGE_EXPENSE is granted. */
+    @Test
+    void shouldRenderExpenseNavLinkWhenManageExpenseGranted() throws Exception {
+        when(expenseService.findAll()).thenReturn(List.of());
+        when(expenseService.findPage(any(), eq(0)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+        mockMvc.perform(get("/expenses").with(user("manager").authorities(managerAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("canManageExpense", true))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/expenses\"")));
+    }
+
+    /** Confirms the shared navigation advice exposes canManageExpense based on MANAGE_EXPENSE alone. */
+    @Test
+    void shouldExposeExpenseNavigationFlagFromNavigationModelAdvice() {
+        ExtendedModelMap grantedModel = new ExtendedModelMap();
+        new NavigationModelAdvice().addNavigationAttributes(
+                grantedModel,
+                new UsernamePasswordAuthenticationToken("manager", null, managerAuthorities()));
+        assertTrue((Boolean) grantedModel.getAttribute("canManageExpense"));
+
+        ExtendedModelMap deniedModel = new ExtendedModelMap();
+        new NavigationModelAdvice().addNavigationAttributes(
+                deniedModel,
+                new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()));
+        assertFalse((Boolean) deniedModel.getAttribute("canManageExpense"));
     }
 
     /** Confirms the terminal Expense posting action opts into danger confirmation metadata. */
@@ -176,9 +238,11 @@ class ExpenseAuthorizationTest {
         return List.of(new SimpleGrantedAuthority("PERM_MANAGE_EXPENSE"));
     }
 
-    /** Builds the current MANAGER authority set, which intentionally omits MANAGE_EXPENSE. */
+    /** Builds the current MANAGER authority set, which now includes MANAGE_EXPENSE. */
     private static List<SimpleGrantedAuthority> managerAuthorities() {
-        return List.of(new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"));
+        return List.of(
+                new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"),
+                new SimpleGrantedAuthority("PERM_MANAGE_EXPENSE"));
     }
 
     /** Builds the current STAFF authority set, which intentionally omits MANAGE_EXPENSE. */
@@ -201,7 +265,7 @@ class ExpenseAuthorizationTest {
     private ExpenseResponse response(String status) {
         return new ExpenseResponse(
                 EXPENSE_ID,
-                new ExpenseCategoryResponse(CATEGORY_ID, "ELECTRICITY"),
+                new ExpenseCategoryResponse(CATEGORY_ID, "ELECTRICITY", "Electricity", null, true),
                 BigDecimal.TEN,
                 "VND",
                 LocalDate.of(2026, 9, 11),

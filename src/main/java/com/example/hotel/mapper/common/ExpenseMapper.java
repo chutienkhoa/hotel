@@ -36,6 +36,11 @@ public class ExpenseMapper {
      * @return category response
      */
     public ExpenseCategoryResponse toCategoryResponse(ExpenseCategory category) {
-        return new ExpenseCategoryResponse(category.getId(), category.getCode());
+        return new ExpenseCategoryResponse(
+                category.getId(),
+                category.getCode(),
+                category.getName(),
+                category.getDescription(),
+                category.isActive());
     }
 }

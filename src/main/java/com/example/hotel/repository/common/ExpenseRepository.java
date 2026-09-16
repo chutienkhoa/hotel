@@ -5,13 +5,30 @@ import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-/** Provides persistence, stable listing, and lifecycle locking for Expense v1 records. */
-public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
+/** Provides persistence, stable listing, filtered pagination, and lifecycle locking for Expense v1 records. */
+public interface ExpenseRepository extends JpaRepository<Expense, UUID>, JpaSpecificationExecutor<Expense> {
+
+    /**
+     * Loads a filtered, paginated Expense list eagerly fetching its category to avoid N+1 lookups.
+     *
+     * @param spec optional filter predicate combination
+     * @param pageable requested page, size, and sort
+     * @return the matching Expense page with categories already fetched
+     */
+    @EntityGraph(attributePaths = "category")
+    @Override
+    Page<Expense> findAll(Specification<Expense> spec, Pageable pageable);
+
     /**
      * Counts all Expenses grouped by their current lifecycle status.
      *
