@@ -21,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
@@ -100,13 +101,15 @@ public class CheckInPageController {
      *
      * @param id Reservation identifier
      * @param model model used to render the Review page
+     * @param authentication current browser authentication
      * @return the Check-in Review template name
      */
     @GetMapping("/reservations/{id}")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
-    public String review(@PathVariable UUID id, Model model) {
+    public String review(@PathVariable UUID id, Model model, Authentication authentication) {
         CheckInReviewResponse review = checkInService.review(id);
         model.addAttribute("review", review);
+        model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
         return "check-in/review";
     }
 
@@ -339,5 +342,17 @@ public class CheckInPageController {
         return exception.getReason() == null
                 ? HttpStatus.valueOf(exception.getStatusCode().value()).getReasonPhrase()
                 : exception.getReason();
+    }
+
+    /**
+     * Determines whether the current authentication includes the specified backend authority.
+     *
+     * @param authentication current browser authentication
+     * @param authority required backend authority
+     * @return {@code true} when the authority is present
+     */
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
     }
 }

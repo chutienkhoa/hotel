@@ -65,4 +65,15 @@ public abstract class AuditedEntity {
     public UUID getUpdatedBy() {
         return updatedBy;
     }
+
+    /**
+     * Returns the time this entity was most recently persisted, set by the {@link PreUpdate}
+     * lifecycle callback. For a terminal state such as a refunded Payment, this is the
+     * authoritative timestamp of that final change.
+     *
+     * @return the most recent persistence time
+     */
+    public Instant getUpdatedAt() {
+        return updatedAt;
+    }
 }

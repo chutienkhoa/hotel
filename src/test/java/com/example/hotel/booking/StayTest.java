@@ -10,6 +10,7 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
 import java.lang.reflect.Method;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.UUID;
@@ -33,19 +34,33 @@ class StayTest {
     void shouldCheckOutCheckedInStayThroughExplicitDomainMethod() {
         Stay stay = new Stay(reservation());
 
-        stay.checkOut();
+        stay.checkOut(Instant.now());
 
         assertEquals(StayStatus.CHECKED_OUT, stay.getStatus());
         assertNotNull(stay.getActualCheckOutAt());
+    }
+
+    /**
+     * Confirms checkOut records exactly the caller-supplied Instant, never an internally computed
+     * one, so the entity never bypasses the authoritative Clock the calling service applies.
+     */
+    @Test
+    void shouldRecordExactlyTheSuppliedCheckOutInstant() {
+        Stay stay = new Stay(reservation());
+        Instant suppliedInstant = Instant.parse("2026-09-18T03:00:00Z");
+
+        stay.checkOut(suppliedInstant);
+
+        assertEquals(suppliedInstant, stay.getActualCheckOutAt());
     }
 
     /** Confirms a terminal checked-out Stay cannot transition again. */
     @Test
     void shouldRejectInvalidStayTransition() {
         Stay stay = new Stay(reservation());
-        stay.checkOut();
+        stay.checkOut(Instant.now());
 
-        assertThrows(IllegalStateException.class, stay::checkOut);
+        assertThrows(IllegalStateException.class, () -> stay.checkOut(Instant.now()));
         assertEquals(StayStatus.CHECKED_OUT, stay.getStatus());
     }
 

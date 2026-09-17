@@ -61,13 +61,12 @@
                         </span>
                         <div class="reservation-info-content">
                             <p class="reservation-info-label">Guest</p>
-                            <p class="reservation-info-value" th:text="${review.guestFullName}">Guest name</p>
-                            <p class="reservation-info-secondary" th:text="${review.guestCode}">GUEST-001</p>
-                            <p class="reservation-info-secondary" th:if="${review.guestNationality}" th:text="${review.guestNationality}">Vietnam</p>
-                            <p class="reservation-info-secondary" th:if="${!review.passportAvailable}">No passport image on file.</p>
-                            <p class="reservation-info-secondary" th:if="${review.passportAvailable}">
-                                <a th:href="@{/guests/{id}/passport-image(id=${review.guestId})}" target="_blank">View Passport</a>
-                            </p>
+                            <a class="reservation-info-value reservation-info-link"
+                               th:href="@{/guests/{id}(id=${review.guestId})}" th:if="${canManageGuest}">
+                                <span th:text="${review.guestCode}">GUEST-001</span>
+                                <span class="reservation-info-link-icon"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                            </a>
+                            <p class="reservation-info-value" th:text="${review.guestCode}" th:unless="${canManageGuest}">GUEST-001</p>
                         </div>
                     </div>
 

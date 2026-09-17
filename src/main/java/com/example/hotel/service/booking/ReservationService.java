@@ -8,6 +8,7 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.booking.Stay;
+import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.entity.customer.Guest;
@@ -17,6 +18,7 @@ import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.booking.StayRoomAssignmentRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
@@ -26,6 +28,7 @@ import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Currency;
@@ -47,6 +50,7 @@ public class ReservationService {
     private final GuestRepository guests;
     private final RoomRepository rooms;
     private final StayRepository stays;
+    private final StayRoomAssignmentRepository stayRoomAssignments;
     private final ChargeRepository charges;
     private final AuditLogRepository audits;
     private final ReservationMapper reservationMapper;
@@ -61,6 +65,8 @@ public class ReservationService {
      * @param guests repository khách
      * @param rooms repository phòng
      * @param stays repository lưu trú
+     * @param stayRoomAssignments repository lịch sử chiếm phòng thực tế, seeded khi check-in và
+     *     đóng lại khi check-out
      * @param charges repository charge, dùng để tạo ROOM Charge tự động khi check-in
      * @param audits repository audit
      * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
@@ -73,6 +79,7 @@ public class ReservationService {
             GuestRepository guests,
             RoomRepository rooms,
             StayRepository stays,
+            StayRoomAssignmentRepository stayRoomAssignments,
             ChargeRepository charges,
             AuditLogRepository audits,
             ReservationMapper reservationMapper,
@@ -83,6 +90,7 @@ public class ReservationService {
         this.guests = guests;
         this.rooms = rooms;
         this.stays = stays;
+        this.stayRoomAssignments = stayRoomAssignments;
         this.charges = charges;
         this.audits = audits;
         this.reservationMapper = reservationMapper;
@@ -320,9 +328,29 @@ public class ReservationService {
         Stay stay = new Stay(reservation);
         stay.audit(user.id());
         stays.save(stay);
+        seedRoomAssignments(stay, reservation, user);
         createRoomCharges(stay, reservation, user);
         audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
         return response(reservation);
+    }
+
+    /**
+     * Seeds one OPEN StayRoomAssignment per booked ReservationRoom, recording the guest's actual
+     * physical room occupancy from the moment of check-in. Each assignment references its exact
+     * originating ReservationRoom as its lineage anchor, so any later Room Change can determine
+     * the remaining planned occupancy boundary without touching this immutable booking snapshot.
+     *
+     * @param stay newly created checked-in Stay
+     * @param reservation reservation whose booked rooms are seeded
+     * @param user user attributed as the assignment creator
+     */
+    private void seedRoomAssignments(Stay stay, Reservation reservation, CurrentUser user) {
+        for (ReservationRoom reservationRoom : reservation.getRooms()) {
+            StayRoomAssignment assignment = new StayRoomAssignment(
+                    stay, reservationRoom.getRoom(), reservationRoom, stay.getActualCheckInAt(), null, null);
+            assignment.audit(user.id());
+            stayRoomAssignments.save(assignment);
+        }
     }
 
     /**
@@ -373,8 +401,9 @@ public class ReservationService {
         if (balance.outstanding().compareTo(BigDecimal.ZERO) != 0) {
             throw conflict("Outstanding balance must be zero for check-out");
         }
-        List<UUID> roomIds = reservation.getRooms().stream()
-                .map(reservationRoom -> reservationRoom.getRoom().getId())
+        List<StayRoomAssignment> openAssignments = stayRoomAssignments.findOpenByStayId(stay.getId());
+        List<UUID> roomIds = openAssignments.stream()
+                .map(assignment -> assignment.getRoom().getId())
                 .sorted()
                 .toList();
         List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
@@ -386,6 +415,7 @@ public class ReservationService {
                 throw conflict("Room is not occupied for check-out");
             }
         }
+        Instant actualCheckOutAt = Instant.now(clock);
         try {
             for (Room room : lockedRooms) {
                 room.markDirty();
@@ -393,10 +423,14 @@ public class ReservationService {
             }
             reservation.checkOut();
             reservation.audit(user.id());
-            stay.checkOut();
+            stay.checkOut(actualCheckOutAt);
             stay.audit(user.id());
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
+        }
+        for (StayRoomAssignment assignment : openAssignments) {
+            assignment.close(actualCheckOutAt);
+            assignment.audit(user.id());
         }
         audit(user, "CHECK_OUT", reservation, "CHECKED_IN", "CHECKED_OUT");
         return response(reservation);

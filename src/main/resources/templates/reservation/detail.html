@@ -14,7 +14,8 @@
                 <h1>Reservation details</h1>
                 <div class="reservation-detail-heading-meta">
                     <span th:text="${reservation.reservationNumber}">R20260916-000008</span>
-                    <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span>
+                    <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}"
+                          th:text="${T(com.example.hotel.entity.booking.ReservationStatus).valueOf(reservation.status).displayName}">Draft</span>
                 </div>
             </div>
             <div class="action-row">
@@ -27,8 +28,8 @@
             </div>
         </div>
 
-        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <p class="message message-success message-compact" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error message-compact" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
         <div class="reservation-detail">
             <section aria-labelledby="checkout-readiness-heading" class="card" th:if="${checkoutReadiness}">
@@ -56,7 +57,12 @@
                         </span>
                         <div class="reservation-info-content">
                             <p class="reservation-info-label">Guest</p>
-                            <p class="reservation-info-value" th:text="${reservation.guestCode}">GUEST-001</p>
+                            <a class="reservation-info-value reservation-info-link"
+                               th:href="@{/guests/{id}(id=${reservation.guestId})}" th:if="${canManageGuest}">
+                                <span th:text="${reservation.guestCode}">GUEST-001</span>
+                                <span class="reservation-info-link-icon"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                            </a>
+                            <p class="reservation-info-value" th:text="${reservation.guestCode}" th:unless="${canManageGuest}">GUEST-001</p>
                         </div>
                     </div>
 
@@ -125,7 +131,8 @@
                 </div>
             </section>
 
-            <section aria-labelledby="assigned-rooms-heading" class="card reservation-detail-section">
+            <section aria-labelledby="assigned-rooms-heading" class="card reservation-detail-section"
+                     th:if="${reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED'}">
                 <div class="assigned-rooms-header">
                     <div class="assigned-rooms-header-copy">
                         <h2 id="assigned-rooms-heading">Assigned rooms</h2>
@@ -165,39 +172,88 @@
                 </div>
             </section>
 
-            <div class="reservation-secondary-grid reservation-secondary-grid--single">
-                <section aria-labelledby="guest-info-heading" class="card reservation-detail-section">
-                    <div class="reservation-detail-section-header">
-                        <div>
-                            <h2 id="guest-info-heading">Guest information</h2>
-                            <p>Registered guest details.</p>
-                        </div>
+            <section aria-labelledby="current-rooms-heading" class="card reservation-detail-section"
+                     th:if="${reservation.status == 'CHECKED_IN'}">
+                <div class="assigned-rooms-header">
+                    <div class="assigned-rooms-header-copy">
+                        <h2 id="current-rooms-heading">Current rooms</h2>
+                        <p>Rooms the guest currently occupies. Booked dates, rates, and totals are unaffected by Room Change.</p>
                     </div>
-                    <a class="guest-summary" th:href="@{/guests/{id}(id=${reservation.guestId})}" th:if="${canManageGuest}">
-                        <span class="reservation-info-icon reservation-info-icon--blue">
-                            <svg th:replace="~{layout/icons :: user}"></svg>
+                    <div class="assigned-rooms-meta">
+                        <span>
+                            <strong th:text="${#lists.size(currentRooms)}">1</strong>
+                            <span th:text="${#lists.size(currentRooms) == 1 ? 'room' : 'rooms'}">room</span>
                         </span>
-                        <span class="guest-summary-name" th:text="${reservation.guestCode}">GUEST-001</span>
-                        <span class="guest-summary-chevron"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
-                    </a>
-                    <div class="guest-summary" th:unless="${canManageGuest}">
-                        <span class="reservation-info-icon reservation-info-icon--blue">
-                            <svg th:replace="~{layout/icons :: user}"></svg>
+                        <span>Total
+                            <strong><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></strong>
                         </span>
-                        <span class="guest-summary-name" th:text="${reservation.guestCode}">GUEST-001</span>
                     </div>
-                </section>
-            </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col">Room</th>
+                            <th scope="col">Occupied since</th>
+                            <th scope="col" th:if="${canChangeRoom}"></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="room : ${currentRooms}">
+                            <td th:text="${room.roomNumber}">101</td>
+                            <td><span th:replace="~{layout/datetime :: dateTime(${room.assignedFrom})}">—</span></td>
+                            <td th:if="${canChangeRoom}">
+                                <a class="button button-secondary"
+                                   th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${reservation.id},roomId=${room.roomId})}">Change Room</a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-            <section aria-labelledby="actions-heading" class="card reservation-detail-section actions">
+            <section aria-labelledby="room-history-heading" class="card reservation-detail-section"
+                     th:if="${reservation.status == 'CHECKED_IN' or reservation.status == 'CHECKED_OUT'}">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="room-history-heading">Room history</h2>
+                        <p>Complete chronological record of every room this Stay has occupied.</p>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col">Room</th>
+                            <th scope="col">From</th>
+                            <th scope="col">To</th>
+                            <th scope="col">Reason</th>
+                            <th scope="col">Changed by</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="line : ${roomHistory}">
+                            <td><strong th:text="${line.roomNumber}">101</strong></td>
+                            <td class="text-muted"><span th:replace="~{layout/datetime :: dateTime(${line.assignedFrom})}">—</span></td>
+                            <td>
+                                <span class="status-badge status-badge--current" th:if="${line.assignedTo == null}">Current</span>
+                                <span class="text-muted" th:unless="${line.assignedTo == null}" th:replace="~{layout/datetime :: dateTime(${line.assignedTo})}">—</span>
+                            </td>
+                            <td th:text="${line.reasonDisplay}">Initial Check-in</td>
+                            <td class="text-muted" th:text="${line.changedByUsername}">staff01</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section aria-labelledby="actions-heading" class="card reservation-detail-section actions"
+                     th:if="${reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN'}">
                 <div class="reservation-detail-section-header">
                     <div>
                         <h2 id="actions-heading">Available actions</h2>
                     </div>
                 </div>
-                <p th:if="${reservation.status == 'CHECKED_OUT' or reservation.status == 'CANCELLED' or reservation.status == 'NO_SHOW'}">
-                    No state-changing actions are available.
-                </p>
 
                 <div class="action-row">
                     <form data-confirm-label="Confirm reservation" data-confirm-severity="WARNING"

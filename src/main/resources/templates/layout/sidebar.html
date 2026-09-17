@@ -15,11 +15,15 @@
         <span>Dashboard</span>
     </a>
 
-    <div class="nav-section" th:if="${canCheckIn or canViewBooking or canManageGuest}">
+    <div class="nav-section" th:if="${canCheckIn or canCheckOut or canViewBooking or canManageGuest}">
         <p class="nav-section-label">Operations</p>
         <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
             <span>Check-in</span>
+        </a>
+        <a class="sidebar-nav-link nav-check-out" th:href="@{/check-out}" th:if="${canCheckOut}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
+            <span>Check-out</span>
         </a>
         <a class="sidebar-nav-link nav-reservations" th:href="@{/reservations}" th:if="${canViewBooking}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: calendar}"></svg></span>

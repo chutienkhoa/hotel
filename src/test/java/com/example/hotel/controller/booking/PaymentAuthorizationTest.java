@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -51,12 +52,19 @@ class PaymentAuthorizationTest {
     @Test
     void shouldAllowManagePaymentForAllPaymentV1Operations() throws Exception {
         when(paymentService.create(eq(STAY_ID), any())).thenReturn(response("PENDING"));
+        when(paymentService.recordPaid(eq(STAY_ID), any())).thenReturn(response("PAID"));
         when(paymentService.findByStayId(STAY_ID)).thenReturn(List.of(response("PENDING")));
         when(paymentService.markPaid(PAYMENT_ID)).thenReturn(response("PAID"));
         when(paymentService.markFailed(PAYMENT_ID)).thenReturn(response("FAILED"));
-        when(paymentService.refund(PAYMENT_ID)).thenReturn(response("REFUNDED"));
+        when(paymentService.refund(eq(PAYMENT_ID), any())).thenReturn(response("REFUNDED"));
 
         mockMvc.perform(post("/api/stays/{stayId}/payments", STAY_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\":100,\"currency\":\"VND\",\"method\":\"CASH\"}")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/stays/{stayId}/payments/record-paid", STAY_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"amount\":100,\"currency\":\"VND\",\"method\":\"CASH\"}")
                         .with(user("manager").authorities(managePayment()))
@@ -65,12 +73,41 @@ class PaymentAuthorizationTest {
         mockMvc.perform(get("/api/stays/{stayId}/payments", STAY_ID)
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk());
-        for (String operation : List.of("mark-paid", "mark-failed", "refund")) {
+        for (String operation : List.of("mark-paid", "mark-failed")) {
             mockMvc.perform(post("/api/payments/{id}/" + operation, PAYMENT_ID)
                             .with(user("manager").authorities(managePayment()))
                             .with(csrf()))
                     .andExpect(status().isOk());
         }
+        mockMvc.perform(post("/api/payments/{id}/refund", PAYMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Guest cancelled\"}")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    /** Confirms MANAGE_PAYMENT can also perform the refund operation, protected the same as the rest. */
+    @Test
+    void shouldRequireManagePaymentForRefund() throws Exception {
+        mockMvc.perform(post("/api/payments/{id}/refund", PAYMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Guest cancelled\"}")
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+        verify(paymentService, org.mockito.Mockito.never()).refund(any(), any());
+    }
+
+    /** Confirms a refund request without a reason is rejected before reaching the service. */
+    @Test
+    void shouldRejectRefundWithoutReasonAtRestBoundary() throws Exception {
+        mockMvc.perform(post("/api/payments/{id}/refund", PAYMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
     }
 
     /** Confirms users without MANAGE_PAYMENT cannot create a Payment. */
@@ -134,6 +171,7 @@ class PaymentAuthorizationTest {
                 BigDecimal.TEN,
                 "CASH",
                 status,
+                null,
                 null,
                 null);
     }

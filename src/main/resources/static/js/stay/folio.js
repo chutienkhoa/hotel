@@ -101,3 +101,21 @@
 
     refresh();
 })();
+
+// Informational only: the backend independently and authoritatively rejects an OTA Payment with
+// a blank reference regardless of this hint.
+(() => {
+    const methodSelect = document.getElementById("payment-method");
+    const referenceInput = document.getElementById("payment-reference");
+    const referenceHint = document.querySelector("[data-reference-hint]");
+    if (!methodSelect || !referenceInput || !referenceHint) return;
+
+    const refreshReferenceRequirement = () => {
+        const isOta = methodSelect.value === "OTA";
+        referenceInput.required = isOta;
+        referenceHint.textContent = isOta ? "(required for OTA)" : "(optional)";
+    };
+
+    methodSelect.addEventListener("change", refreshReferenceRequirement);
+    refreshReferenceRequirement();
+})();

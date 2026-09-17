@@ -52,6 +52,9 @@ public class Payment extends AuditedEntity {
 
     private String reference;
 
+    @Column(name = "refund_reason")
+    private String refundReason;
+
     /** Creates an empty Payment for JPA. */
     protected Payment() {}
 
@@ -96,10 +99,16 @@ public class Payment extends AuditedEntity {
         return payment;
     }
 
-    /** Transitions this pending Payment to paid and records the backend payment time. */
-    public void markPaid() {
+    /**
+     * Transitions this pending Payment to paid and records the supplied authoritative payment
+     * time.
+     *
+     * @param paidAt backend-authoritative instant, derived from the injected server Clock, never
+     *     from client input
+     */
+    public void markPaid(Instant paidAt) {
         transition(PaymentStatus.PENDING, PaymentStatus.PAID);
-        paidAt = Instant.now();
+        this.paidAt = paidAt;
     }
 
     /** Transitions this pending Payment to failed without recording a payment time. */
@@ -109,10 +118,17 @@ public class Payment extends AuditedEntity {
 
     /**
      * Transitions this paid Payment to refunded while preserving its original financial snapshot
-     * ({@code amount}, {@code currency}, {@code exchangeRate}, {@code appliedAmount}) and paid time.
+     * ({@code amount}, {@code currency}, {@code exchangeRate}, {@code appliedAmount}) and paid
+     * time, and persists the required refund reason. {@code updatedAt}/{@code updatedBy} (set via
+     * {@link #audit(UUID)}) remain the authoritative refund timestamp/user, since REFUNDED is a
+     * terminal status.
+     *
+     * @param refundReason non-blank staff-supplied reason; validated by the caller before this
+     *     transition is attempted
      */
-    public void refund() {
+    public void refund(String refundReason) {
         transition(PaymentStatus.PAID, PaymentStatus.REFUNDED);
+        this.refundReason = refundReason;
     }
 
     /**
@@ -204,6 +220,15 @@ public class Payment extends AuditedEntity {
      */
     public String getReference() {
         return reference;
+    }
+
+    /**
+     * Returns the reason recorded for a full refund.
+     *
+     * @return the refund reason, or {@code null} before this Payment is refunded
+     */
+    public String getRefundReason() {
+        return refundReason;
     }
 
     /**

@@ -96,15 +96,18 @@ public class Stay extends AuditedEntity {
     }
 
     /**
-     * Transitions this checked-in stay to checked out and records the backend checkout time.
+     * Transitions this checked-in stay to checked out and records the supplied authoritative
+     * checkout time.
      *
+     * @param actualCheckOutAt backend-authoritative instant, derived from the injected server
+     *     Clock, never from client input
      * @throws IllegalStateException if the stay is not currently checked in
      */
-    public void checkOut() {
+    public void checkOut(Instant actualCheckOutAt) {
         if (status != StayStatus.CHECKED_IN) {
             throw new IllegalStateException("Invalid stay state transition");
         }
         status = StayStatus.CHECKED_OUT;
-        actualCheckOutAt = Instant.now();
+        this.actualCheckOutAt = actualCheckOutAt;
     }
 }

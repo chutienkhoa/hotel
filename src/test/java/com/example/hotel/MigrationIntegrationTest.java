@@ -60,7 +60,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(21, flyway.info().applied().length);
+        assertEquals(24, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -78,7 +78,8 @@ class MigrationIntegrationTest {
                         "MANAGE_GUEST",
                         "VIEW_REPORT",
                         "VIEW_BOOKING",
-                        "CHECK_OUT"));
+                        "CHECK_OUT",
+                        "CHANGE_ROOM"));
         assertPermissionCodes(
                 "MANAGER",
                 Set.of(
@@ -91,8 +92,11 @@ class MigrationIntegrationTest {
                         "MANAGE_GUEST",
                         "VIEW_BOOKING",
                         "CHECK_IN",
-                        "CHECK_OUT"));
-        assertPermissionCodes("STAFF", Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT"));
+                        "CHECK_OUT",
+                        "CHANGE_ROOM"));
+        assertPermissionCodes(
+                "STAFF",
+                Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT", "CHANGE_ROOM"));
         assertRolePermissionRelationshipCount("ADMIN", "VIEW_REPORT", 1);
         assertRolePermissionRelationshipCount("MANAGER", "VIEW_REPORT", 1);
         assertRolePermissionRelationshipCount("STAFF", "VIEW_REPORT", 0);
@@ -110,6 +114,10 @@ class MigrationIntegrationTest {
         assertRolePermissionRelationshipCount("STAFF", "MANAGE_PAYMENT", 1);
         assertRolePermissionRelationshipCount("MANAGER", "CHECK_IN", 1);
         assertRolePermissionRelationshipCount("STAFF", "CHECK_IN", 1);
+        assertRolePermissionRelationshipCount("ADMIN", "CHANGE_ROOM", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "CHANGE_ROOM", 1);
+        assertRolePermissionRelationshipCount("STAFF", "CHANGE_ROOM", 1);
+        assertRolePermissionRelationshipCount("STAFF", "MANAGE_BOOKING", 0);
     }
 
     /** Verifies V16 preserves MANAGE_GUEST and adds a distinct Additional Revenue permission. */

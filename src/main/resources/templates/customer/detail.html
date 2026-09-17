@@ -7,7 +7,12 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/guests}">Back to guests</a>
+        <nav aria-label="Breadcrumb" class="breadcrumb">
+            <a th:href="@{/guests}">Guests</a>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-current" th:text="${guest.guestCode}">G000001</span>
+        </nav>
+
         <div class="page-header">
             <div>
                 <h1 th:text="${guest.guestCode}">G000001</h1>
@@ -18,30 +23,75 @@
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
 
-        <dl class="detail-list">
-            <dt>First name</dt>
-            <dd th:text="${guest.firstName}">First name</dd>
-            <dt>Last name</dt>
-            <dd th:text="${guest.lastName}">Last name</dd>
-            <dt>Email</dt>
-            <dd th:text="${guest.email}">email@example.com</dd>
-            <dt>Phone</dt>
-            <dd th:text="${guest.phone}">Phone number</dd>
-            <dt>Nationality</dt>
-            <dd th:text="${guest.nationality}">Nationality</dd>
-            <dt>Date of birth</dt>
-            <dd><span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">—</span></dd>
-            <dt>Address</dt>
-            <dd th:text="${guest.address}">Address</dd>
-        </dl>
+        <div class="reservation-detail">
+            <section aria-labelledby="guest-profile-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="guest-profile-heading">Personal Information</h2>
+                    </div>
+                    <span class="reservation-info-icon reservation-info-icon--blue">
+                        <svg th:replace="~{layout/icons :: user}"></svg>
+                    </span>
+                </div>
 
-        <section aria-labelledby="passport-heading" class="card guest-passport-section">
-            <h2 id="passport-heading">Passport</h2>
-            <p th:if="${passportDocument == null}">No passport image uploaded.</p>
-            <p th:if="${passportDocument != null}">
-                <a class="button button-secondary" th:href="@{/guests/{id}/passport-image(id=${guest.id})}" target="_blank">View Passport</a>
-            </p>
-        </section>
+                <div class="profile-info-grid">
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">First name</p>
+                        <p class="profile-info-value" th:text="${guest.firstName}">Thanh</p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Last name</p>
+                        <p class="profile-info-value" th:text="${guest.lastName}">Le</p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Nationality</p>
+                        <p class="profile-info-value" th:text="${guest.nationality} ?: '—'">Vietnam</p>
+                    </div>
+
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Date of birth</p>
+                        <p class="profile-info-value">
+                            <span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">01/01/1971</span>
+                        </p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Email</p>
+                        <p class="profile-info-value" th:text="${guest.email} ?: '—'">demo.guest1@example.test</p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Phone</p>
+                        <p class="profile-info-value" th:text="${guest.phone} ?: '—'">+840900000001</p>
+                    </div>
+
+                    <div class="profile-info-field profile-info-field--full">
+                        <p class="profile-info-label">Address</p>
+                        <p class="profile-info-value" th:text="${guest.address} ?: '—'">1 Demo Street, Ho Chi Minh City</p>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="passport-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="passport-heading">Passport</h2>
+                    </div>
+                </div>
+
+                <div class="reservation-info-item">
+                    <span class="reservation-info-icon reservation-info-icon--purple">
+                        <svg th:replace="~{layout/icons :: note}"></svg>
+                    </span>
+                    <div class="reservation-info-content">
+                        <p class="reservation-info-value">Passport image</p>
+                        <p class="reservation-info-secondary">View the stored passport image for this guest.</p>
+                        <p th:if="${passportDocument == null}" class="reservation-info-secondary">No passport image uploaded.</p>
+                        <p th:if="${passportDocument != null}">
+                            <a class="button button-secondary" th:href="@{/guests/{id}/passport-image(id=${guest.id})}" target="_blank">View Passport</a>
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </div>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>

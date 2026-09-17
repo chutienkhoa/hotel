@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Check-out')}"></head>
+<body>
+<div class="app-shell page-check-out">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Check-out</h1>
+                <p>Find checked-in reservations and review them before check-out. Search is local to Hotel System only.</p>
+            </div>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" aria-label="Search checked-in reservations">
+            <form method="get" th:action="@{/check-out}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="reservationNumber">Reservation Number</label>
+                        <input id="reservationNumber" name="reservationNumber" type="search"
+                               th:value="${searchCriteria.reservationNumber}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="guest">Guest</label>
+                        <input id="guest" name="guest" type="search" th:value="${searchCriteria.guest}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="room">Room</label>
+                        <input id="room" name="room" type="search" th:value="${searchCriteria.room}" />
+                    </div>
+                </div>
+                <div class="action-row expense-filter-actions">
+                    <a class="button button-secondary" th:href="@{/check-out}">Clear</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="expense-results">
+            <div class="results-toolbar" th:if="${reservationPage != null}">
+                <p>
+                    <span th:text="${reservationPage.totalElements}">0</span>
+                    <span th:text="${reservationPage.totalElements == 1 ? 'result' : 'results'}">results</span>
+                </p>
+                <nav aria-label="Reservation pages" class="pagination" th:if="${reservationPage.totalPages > 1}">
+                    <a class="pagination__segment" th:if="${!reservationPage.first}"
+                       th:href="@{/check-out(reservationNumber=${searchCriteria.reservationNumber},guest=${searchCriteria.guest},room=${searchCriteria.room},page=${reservationPage.number - 1})}">
+                        Previous
+                    </a>
+                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+                        <span aria-current="page" class="pagination__segment pagination__segment--current"
+                              th:if="${pageNumber == reservationPage.number}"
+                              th:text="${pageNumber + 1}">1</span>
+                        <a class="pagination__segment" th:unless="${pageNumber == reservationPage.number}"
+                           th:href="@{/check-out(reservationNumber=${searchCriteria.reservationNumber},guest=${searchCriteria.guest},room=${searchCriteria.room},page=${pageNumber})}"
+                           th:text="${pageNumber + 1}">2</a>
+                    </th:block>
+                    <a class="pagination__segment" th:if="${!reservationPage.last}"
+                       th:href="@{/check-out(reservationNumber=${searchCriteria.reservationNumber},guest=${searchCriteria.guest},room=${searchCriteria.room},page=${reservationPage.number + 1})}">
+                        Next
+                    </a>
+                </nav>
+            </div>
+
+            <p class="empty-state" th:if="${reservationPage != null and reservationPage.empty}">
+                No checked-in reservations match these filters.
+            </p>
+
+            <div class="table-wrap" th:if="${reservationPage != null and not reservationPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Reservation</th>
+                        <th scope="col">Guest</th>
+                        <th scope="col">Current Room(s)</th>
+                        <th scope="col">Check-out</th>
+                        <th scope="col">Readiness</th>
+                        <th scope="col"></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="reservation : ${reservationPage.content}">
+                        <td th:text="${reservation.reservationNumber}">R20260916-000001</td>
+                        <td th:text="${reservation.guestCode}">GUEST-001</td>
+                        <td th:text="${reservation.currentRoomNumbers}">101</td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></td>
+                        <td>
+                            <span class="status-badge" th:classappend="${reservation.readiness == 'READY' ? ' status-badge--current' : ' status-badge--no_show'}"
+                                  th:text="${reservation.readiness == 'READY' ? 'Ready' : 'Payment required'}">Ready</span>
+                        </td>
+                        <td>
+                            <a class="button button-primary" th:href="@{/check-out/{id}(id=${reservation.id})}">Review</a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+</body>
+</html>

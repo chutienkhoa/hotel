@@ -25,6 +25,7 @@ public class PaymentMapper {
                 payment.getMethod().name(),
                 payment.getStatus().name(),
                 payment.getPaidAt(),
-                payment.getReference());
+                payment.getReference(),
+                payment.getRefundReason());
     }
 }

@@ -203,7 +203,11 @@
                         <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0 VND</span></td>
                         <td th:text="${payment.method}">CASH</td>
                         <td class="table-reference" th:attr="title=${payment.reference}" th:text="${payment.reference ?: '—'}">—</td>
-                        <td><span class="status-badge" th:text="${payment.status}">PENDING</span></td>
+                        <td>
+                            <span class="status-badge" th:text="${payment.status}">PENDING</span>
+                            <p class="reservation-info-secondary" th:if="${payment.status == 'REFUNDED' and payment.refundReason != null}"
+                               th:text="${'Reason: ' + payment.refundReason}">Reason: —</p>
+                        </td>
                         <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
                         <td class="table-actions">
                             <div class="action-row" th:if="${folioMutable}">
@@ -221,12 +225,14 @@
                                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                                     <button class="button button-secondary table-action" type="submit">Mark failed</button>
                                 </form>
-                                <form data-confirm-label="Refund payment" data-confirm-severity="DANGER"
+                                <form class="payment-refund-form" data-confirm-label="Refund payment" data-confirm-severity="DANGER"
                                       data-confirm-title="Refund payment" method="post"
                                       th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/refund(reservationId=${reservation.id},paymentId=${payment.id})}"
                                       th:attr="data-confirm-message=${'Refund ' + (payment.currency == 'VND' ? #numbers.formatDecimal(payment.amount, 1, 'COMMA', 0, 'POINT') + ' VND' : #numbers.formatDecimal(payment.amount, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' ' + payment.currency) + '?'}"
                                       th:if="${payment.status == 'PAID'}">
                                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                    <input class="payment-refund-reason" maxlength="1000" name="reason"
+                                           placeholder="Refund reason" required type="text" />
                                     <button class="button button-danger table-action" type="submit">Refund</button>
                                 </form>
                             </div>
@@ -285,14 +291,17 @@
                     </div>
                 </div>
                 <div class="form-field">
-                    <label for="payment-reference">Reference <span aria-hidden="true">(optional)</span></label>
+                    <label for="payment-reference">Reference <span aria-hidden="true" data-reference-hint>(optional)</span></label>
                     <input id="payment-reference" maxlength="1000" th:field="*{reference}" type="text" />
                     <p class="field-error" th:errors="*{reference}"></p>
+                    <p class="form-hint">Required for OTA payments.</p>
                 </div>
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <div class="form-actions">
-                    <button class="button button-primary" type="submit">Add Payment</button>
+                    <button class="button button-secondary" type="submit">Add as Pending</button>
+                    <button class="button button-primary" th:formaction="@{/reservations/{id}/folio/payments/record-paid(id=${reservation.id})}" type="submit">Record Payment</button>
                 </div>
+                <p class="form-hint"><strong>Record Payment</strong> = money already received, recorded as Paid immediately. <strong>Add as Pending</strong> = recorded now, confirmed Paid later.</p>
             </form>
         </section>
 

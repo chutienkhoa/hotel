@@ -36,6 +36,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class CheckInPageControllerTest {
 
     private static final UUID RESERVATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID GUEST_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     @Autowired
     private MockMvc mockMvc;
@@ -127,6 +128,38 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("Ref: BK-12345")));
     }
 
+    /** Confirms the Guest tile shows only the Guest Code, linked, for a user authorized to manage guests. */
+    @Test
+    void shouldShowOnlyGuestCodeAsLinkWhenAuthorizedToManageGuests() throws Exception {
+        when(checkInService.review(RESERVATION_ID)).thenReturn(reviewResponse(CheckInTiming.NORMAL, true, null));
+
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID)
+                        .with(user("admin").authorities(checkInAndManageGuestAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("GUEST-001")))
+                .andExpect(content().string(containsString("class=\"reservation-info-value reservation-info-link\"")))
+                .andExpect(content().string(containsString("href=\"/guests/" + GUEST_ID + "\"")))
+                .andExpect(content().string(not(containsString("Nguyen Van A"))))
+                .andExpect(content().string(not(containsString("Vietnam"))))
+                .andExpect(content().string(not(containsString("No passport image on file."))))
+                .andExpect(content().string(not(containsString("View Passport"))));
+    }
+
+    /** Confirms the Guest tile shows the Guest Code as plain text, never a link, without PERM_MANAGE_GUEST. */
+    @Test
+    void shouldShowGuestCodeAsPlainTextWithoutManageGuestPermission() throws Exception {
+        when(checkInService.review(RESERVATION_ID)).thenReturn(reviewResponse(CheckInTiming.NORMAL, true, null));
+
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("GUEST-001")))
+                .andExpect(content().string(not(containsString("href=\"/guests/" + GUEST_ID + "\""))))
+                .andExpect(content().string(not(containsString("reservation-info-link"))))
+                .andExpect(content().string(not(containsString("Nguyen Van A"))))
+                .andExpect(content().string(not(containsString("Vietnam"))))
+                .andExpect(content().string(not(containsString("No passport image on file."))));
+    }
+
     /** Confirms the Check-in confirm POST requires CSRF like every other mutating action. */
     @Test
     void shouldRequireCsrfForConfirmPost() throws Exception {
@@ -157,7 +190,7 @@ class CheckInPageControllerTest {
                 Instant.parse("2026-09-15T10:00:00Z"),
                 otaReference == null ? BookingSource.DIRECT : BookingSource.BOOKING_COM,
                 otaReference,
-                UUID.randomUUID(),
+                GUEST_ID,
                 "Nguyen Van A",
                 "GUEST-001",
                 "Vietnam",
@@ -170,6 +203,12 @@ class CheckInPageControllerTest {
     /** Builds the CHECK_IN authority. */
     private static List<SimpleGrantedAuthority> checkInAuthority() {
         return List.of(new SimpleGrantedAuthority("PERM_CHECK_IN"));
+    }
+
+    /** Builds CHECK_IN combined with MANAGE_GUEST. */
+    private static List<SimpleGrantedAuthority> checkInAndManageGuestAuthorities() {
+        return List.of(
+                new SimpleGrantedAuthority("PERM_CHECK_IN"), new SimpleGrantedAuthority("PERM_MANAGE_GUEST"));
     }
 
     /** Enables method-security interception for this MVC authorization test slice. */

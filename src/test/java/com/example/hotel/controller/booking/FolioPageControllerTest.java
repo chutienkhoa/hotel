@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -86,6 +87,8 @@ class FolioPageControllerTest {
                 .andExpect(content().string(containsString("Total Charges")))
                 .andExpect(content().string(containsString("Add Charge")))
                 .andExpect(content().string(containsString("Add Payment")))
+                .andExpect(content().string(containsString("Record Payment")))
+                .andExpect(content().string(containsString("Add as Pending")))
                 .andExpect(content().string(containsString("Mark paid")))
                 .andExpect(content().string(containsString("ROOM")))
                 .andExpect(content().string(containsString("1.5")))
@@ -374,6 +377,107 @@ class FolioPageControllerTest {
         assertEquals(new BigDecimal("150000"), captor.getValue().unitPrice());
     }
 
+    /** Confirms the record-paid action calls the direct PAID recording operation and redirects on success. */
+    @Test
+    void shouldRecordPaymentAsPaidWithCsrfAndRedirectToFolio() throws Exception {
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        when(paymentService.recordPaid(eq(STAY_ID), any())).thenReturn(payment("PAID"));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments/record-paid", RESERVATION_ID)
+                        .param("amount", "100.00")
+                        .param("currency", "VND")
+                        .param("method", "CASH")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID + "/folio"));
+
+        verify(paymentService).recordPaid(eq(STAY_ID), any());
+    }
+
+    /** Confirms the existing Add-as-Pending Payment workflow still creates a PENDING Payment unchanged. */
+    @Test
+    void shouldStillCreatePendingPaymentThroughExistingWorkflow() throws Exception {
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        when(paymentService.create(eq(STAY_ID), any())).thenReturn(payment("PENDING"));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments", RESERVATION_ID)
+                        .param("amount", "100.00")
+                        .param("currency", "VND")
+                        .param("method", "CASH")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID + "/folio"));
+
+        verify(paymentService).create(eq(STAY_ID), any());
+    }
+
+    /** Confirms a refund submission passes the staff-supplied reason to the Payment service. */
+    @Test
+    void shouldRefundWithReasonAndRedirectToFolio() throws Exception {
+        UUID paymentId = UUID.randomUUID();
+        when(paymentService.refund(eq(paymentId), any())).thenReturn(payment("REFUNDED"));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments/{paymentId}/refund",
+                                RESERVATION_ID, paymentId)
+                        .param("reason", "Guest cancelled stay")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID + "/folio"));
+
+        ArgumentCaptor<com.example.hotel.dto.booking.request.PaymentRefundRequest> captor =
+                ArgumentCaptor.forClass(com.example.hotel.dto.booking.request.PaymentRefundRequest.class);
+        verify(paymentService).refund(eq(paymentId), captor.capture());
+        assertEquals("Guest cancelled stay", captor.getValue().reason());
+    }
+
+    /** Confirms a refund submission without a reason still reaches the service, which rejects it. */
+    @Test
+    void shouldSurfaceServiceRejectionWhenRefundReasonMissing() throws Exception {
+        UUID paymentId = UUID.randomUUID();
+        when(paymentService.refund(eq(paymentId), any()))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "reason is required"));
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PAID");
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments/{paymentId}/refund",
+                                RESERVATION_ID, paymentId)
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID + "/folio"));
+    }
+
+    /** Confirms a refunded Payment's reason is displayed read-only in the Payment history. */
+    @Test
+    void shouldDisplayRefundReasonReadOnlyInPaymentHistory() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        when(chargeService.findByStayId(STAY_ID)).thenReturn(List.of(charge()));
+        when(paymentService.findByStayId(STAY_ID)).thenReturn(List.of(payment("REFUNDED", "Guest cancelled stay")));
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(new StayBalance(
+                new BigDecimal("100.00"), BigDecimal.ZERO, new BigDecimal("100.00")));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Reason: Guest cancelled stay")));
+    }
+
+    /** Confirms the Add Payment form marks the Reference field as required specifically for OTA. */
+    @Test
+    void shouldReflectOtaReferenceRequirementInAddPaymentForm() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Required for OTA payments.")))
+                .andExpect(content().string(containsString("data-reference-hint")));
+    }
+
     /** Confirms Folio financial POST routes reject browser submissions without a CSRF token. */
     @Test
     void shouldRequireCsrfForChargeCreation() throws Exception {
@@ -464,6 +568,11 @@ class FolioPageControllerTest {
 
     /** Creates a representative Payment entry. */
     private PaymentResponse payment(String status) {
+        return payment(status, null);
+    }
+
+    /** Creates a representative Payment entry with an optional refund reason. */
+    private PaymentResponse payment(String status, String refundReason) {
         return new PaymentResponse(
                 UUID.randomUUID(),
                 STAY_ID,
@@ -474,7 +583,8 @@ class FolioPageControllerTest {
                 "CASH",
                 status,
                 "PAID".equals(status) ? Instant.parse("2026-09-11T11:00:00Z") : null,
-                null);
+                null,
+                refundReason);
     }
 
     /** Creates a cross-currency Payment entry: 120 USD received, applied as 3,000,000 VND. */
@@ -489,6 +599,7 @@ class FolioPageControllerTest {
                 "BANK_TRANSFER",
                 status,
                 "PAID".equals(status) ? Instant.parse("2026-09-11T11:00:00Z") : null,
+                null,
                 null);
     }
 

@@ -1,6 +1,7 @@
 package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
+import com.example.hotel.dto.booking.request.PaymentRefundRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.service.booking.PaymentService;
 import jakarta.validation.Valid;
@@ -42,6 +43,19 @@ public class PaymentController {
     }
 
     /**
+     * Atomically creates and marks as paid a Payment for money already received by Staff.
+     *
+     * @param stayId owning Stay identifier
+     * @param request validated client-controlled Payment fields
+     * @return the created, already-paid Payment
+     */
+    @PostMapping("/api/stays/{stayId}/payments/record-paid")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    PaymentResponse recordPaid(@PathVariable UUID stayId, @Valid @RequestBody PaymentCreateRequest request) {
+        return paymentService.recordPaid(stayId, request);
+    }
+
+    /**
      * Lists Payments recorded for one Stay.
      *
      * @param stayId owning Stay identifier
@@ -78,14 +92,16 @@ public class PaymentController {
     }
 
     /**
-     * Refunds one paid Payment using the same Payment record.
+     * Refunds one paid Payment using the same Payment record. V1 supports full refund only and
+     * requires a non-blank refund reason.
      *
      * @param id Payment identifier
+     * @param request client-supplied refund reason
      * @return refunded Payment
      */
     @PostMapping("/api/payments/{id}/refund")
     @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
-    PaymentResponse refund(@PathVariable UUID id) {
-        return paymentService.refund(id);
+    PaymentResponse refund(@PathVariable UUID id, @Valid @RequestBody PaymentRefundRequest request) {
+        return paymentService.refund(id, request);
     }
 }

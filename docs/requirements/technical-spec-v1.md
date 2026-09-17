@@ -715,6 +715,95 @@ Stay.status = CHECKED_OUT
 
 Folio closed và read-only trong v1.
 
+## 8.3 StayRoomAssignment — Room Change (V1)
+
+`StayRoomAssignment` đại diện cho ACTUAL PHYSICAL OCCUPANCY của một Stay, khác với `ReservationRoom`
+là BOOKING / PRICING snapshot bất biến.
+
+```text
+ReservationRoom
+  → "What room/rate/date range was originally booked?"
+  → immutable, không bị Room Change thay đổi
+
+StayRoomAssignment
+  → "What physical room was the guest actually occupying, and when?"
+  → một interval mở (đang là phòng hiện tại) hoặc đã đóng (lịch sử)
+```
+
+Fields:
+
+```text
+id
+stay_id
+room_id
+original_reservation_room_id
+assigned_from
+assigned_to
+reason
+notes
+created_at
+created_by
+updated_at
+updated_by
+```
+
+`original_reservation_room_id` là lineage anchor: mọi assignment sinh ra từ cùng một phòng đặt
+ban đầu (assignment khởi tạo lúc check-in và mọi assignment thay thế sau đó qua Room Change) đều
+tham chiếu cùng một `ReservationRoom`. Do đó ranh giới thời gian lưu trú còn lại ("planned
+check-out boundary") của lineage đó luôn được đọc từ `ReservationRoom.check_out_date` bất biến,
+không lưu trùng lặp.
+
+Khi check-in, backend tạo một `StayRoomAssignment` mở (`assigned_to = null`, `reason = null`) cho
+mỗi `ReservationRoom` của Reservation, với `assigned_from = Stay.actual_check_in_at`.
+
+### Room Change (sau check-in)
+
+Room Change chỉ khả dụng cho một Stay đang `CHECKED_IN`, và thao tác trên đúng một phòng hiện tại
+tại một thời điểm.
+
+Quy tắc:
+
+```text
+- Reason là bắt buộc: GUEST_REQUEST, ROOM_ISSUE, UPGRADE, DOWNGRADE, OPERATIONAL, OTHER
+- Notes là tùy chọn, ngoại trừ reason == OTHER thì Notes bắt buộc và không được rỗng
+- Phòng thay thế phải khác phòng hiện tại
+- Phòng thay thế phải AVAILABLE và active, và không có overlap với Reservation khác
+  (CONFIRMED/CHECKED_IN) trong khoảng [ngày hiện tại theo Clock, planned check-out boundary
+  của lineage đang đổi)
+- Room Change bị từ chối khi ngày hiện tại (theo Clock) >= planned check-out boundary của lineage
+- Room Change KHÔNG BAO GIỜ tự động thay đổi ReservationRoom.nightly_rate, ReservationRoom.total_amount,
+  Reservation.total_amount, hoặc các Charge ROOM đã tạo khi check-in
+- Nếu khách sạn cần thu thêm phí (ví dụ nâng hạng phòng), Staff tạo Charge riêng qua Charge/Folio
+  hiện có, không qua Room Change
+```
+
+Khi Room Change thành công, trong cùng một transaction:
+
+```text
+1. Đóng assignment hiện tại: assigned_to = thời điểm hiện tại theo Clock
+2. Tạo assignment mới, cùng original_reservation_room_id (cùng lineage), assigned_to = null
+3. Phòng cũ: OCCUPIED -> AVAILABLE qua Room Change release (xem mục 21)
+4. Phòng mới: AVAILABLE -> OCCUPIED (qua toán tử occupy hiện có)
+5. Ghi AuditLog: entity_type = RESERVATION, action = CHANGE_ROOM, entity_id = Reservation ID,
+   old_value = "Room <old>", new_value = "Room <new>"
+```
+
+Nếu bất kỳ bước nào thất bại (bao gồm mất race điều kiện dưới khóa phòng), toàn bộ transaction
+rollback: không có thay đổi trạng thái phòng, không có thay đổi assignment, không có trạng thái
+một phần nào còn lại.
+
+Lịch sử assignment đã đóng không bao giờ bị sửa hoặc xóa để phản ánh một lần đổi phòng sau đó;
+mỗi lần đổi phòng chỉ đóng interval hiện tại và thêm interval mới (append-only ngoại trừ việc đóng
+interval đang mở).
+
+Quay lại một phòng đã từng ở trước đó (ví dụ 201 → 305 → 201) là hợp lệ nếu phòng đó hiện đang
+usable và available cho phần còn lại của lineage.
+
+### Authorization
+
+Room Change yêu cầu permission `CHANGE_ROOM` (xem mục 28). `CHECK_IN`, `CHECK_OUT`, và
+`MANAGE_BOOKING` không cấp quyền thực hiện Room Change.
+
 ---
 
 # 9. Charge Domain
@@ -902,16 +991,23 @@ Payment đại diện cho tiền khách đã thanh toán.
 
 ## 10.1 Payment
 
+Payment hỗ trợ multi-currency: tender amount và Folio-applied amount là hai giá trị tách biệt,
+được snapshot bất biến ngay khi Payment được ghi nhận.
+
 Fields:
 
 ```text
 id
 stayId
-amount
+amount            -- tender amount, theo currency
+currency          -- PaymentCurrency: VND hoặc USD, currency khách thực trả
+exchangeRate      -- "1 USD = exchangeRate VND"; null cho same-currency Payment
+appliedAmount     -- amount đã quy đổi sang Folio (Reservation) currency; luôn > 0
 method
 status
 paidAt
 reference
+refundReason      -- required khi status = REFUNDED; null trước đó
 createdAt
 createdBy
 updatedAt
@@ -924,16 +1020,44 @@ Rules:
 id is a backend-generated UUID
 stayId is required and comes from the URL path
 amount is required, amount > 0, and immutable after Payment creation
+currency is required (VND hoặc USD)
 method is required
-reference is optional for all Payment methods
-reference has no method-specific format or uniqueness rule in Payment v1
+reference is optional, TRỪ method = OTA thì reference bắt buộc và không được rỗng
+reference has no method-specific format or uniqueness rule beyond the OTA-required rule
+exchangeRate, appliedAmount, currency, amount là immutable financial snapshot sau khi tạo
 audit fields are backend-controlled
 ```
+
+### Exchange rate / currency conversion
+
+`exchangeRate` luôn mang nghĩa cố định "1 USD = exchangeRate VND", bất kể Payment currency hay
+Reservation/Folio currency bên nào là USD. Backend là nơi duy nhất tính `appliedAmount`; client
+không bao giờ tự tính hay cung cấp `appliedAmount`.
+
+```text
+Same currency (Payment currency == Folio currency):
+    appliedAmount = amount
+    exchangeRate  = null (bắt buộc null, không được cung cấp)
+
+Cross currency, USD tender -> VND Folio:
+    appliedAmount = amount * exchangeRate
+
+Cross currency, VND tender -> USD Folio:
+    appliedAmount = amount / exchangeRate
+
+scale = 6
+rounding = HALF_UP
+```
+
+Một khi đã ghi nhận, `amount`/`currency`/`exchangeRate`/`appliedAmount` là snapshot tài chính bất
+biến. Thay đổi tỷ giá sau này không được tính lại các Payment lịch sử.
 
 Client chỉ được provide:
 
 ```text
 amount
+currency
+exchangeRate      -- chỉ khi cross-currency
 method
 reference
 ```
@@ -943,8 +1067,10 @@ Client không được provide:
 ```text
 id
 stayId in request body
+appliedAmount
 status
 paidAt
+refundReason (ngoại trừ qua refund operation riêng, xem bên dưới)
 createdAt
 createdBy
 updatedAt
@@ -967,15 +1093,19 @@ Authorization:
 MANAGE_PAYMENT
 ```
 
-Payment v1 chỉ hỗ trợ:
+`MANAGE_PAYMENT` bảo vệ đồng nhất mọi operation Payment v1: pending creation, direct record-paid,
+mark-paid, mark-failed, và refund. Không có permission Payment riêng biệt nào khác.
+
+Payment v1 hỗ trợ:
 
 ```text
-POST /api/stays/{stayId}/payments
+POST /api/stays/{stayId}/payments               -- tạo Payment PENDING
+POST /api/stays/{stayId}/payments/record-paid    -- tạo và xác nhận PAID atomically
 GET  /api/stays/{stayId}/payments
 
 POST /api/payments/{id}/mark-paid
 POST /api/payments/{id}/mark-failed
-POST /api/payments/{id}/refund
+POST /api/payments/{id}/refund                   -- body: { reason }
 ```
 
 Không implement generic Payment update hoặc delete.
@@ -999,44 +1129,59 @@ FAILED
 REFUNDED
 ```
 
-Mỗi Payment mới bắt đầu với:
+### Tạo Payment PENDING (existing flow)
+
+Mỗi Payment tạo qua `POST /api/stays/{stayId}/payments` bắt đầu với:
 
 ```text
 status = PENDING
 paidAt = null
 ```
 
-Client không được chọn initial status. Direct creation với `PAID`, `FAILED`, hoặc `REFUNDED` không được phép.
+Client không được chọn initial status. Direct creation với `PAID`, `FAILED`, hoặc `REFUNDED` không được phép qua endpoint này.
 
-Khi chuyển `PENDING -> PAID`, backend ghi `paidAt` bằng backend current time. Client không được provide hoặc modify `paidAt`.
+### Ghi nhận Payment đã thanh toán trực tiếp (direct record-paid)
 
-Payment `FAILED` giữ `paidAt = null`. Không định nghĩa `refundedAt` hoặc refund timestamp behavior trong Payment v1.
+`POST /api/stays/{stayId}/payments/record-paid` là thao tác được duyệt cho Payment thủ công mà
+Staff đã thực nhận tiền (ví dụ CASH tại quầy): tạo Payment và chuyển `PAID` trong cùng một
+transaction, không tồn tại trạng thái `PENDING` trung gian nào được persist. Endpoint này tái sử
+dụng chính xác cùng validation, tính `appliedAmount`, và overpayment-prevention logic (khóa Stay
+`PESSIMISTIC_WRITE`, tính lại tổng sau khi khóa) như flow PENDING + mark-paid hiện có. Flow
+PENDING + mark-paid vẫn được giữ nguyên và khả dụng đầy đủ, dành cho Payment cần chờ xác nhận từ
+gateway/ngân hàng/OTA trong tương lai.
+
+Khi chuyển `PENDING -> PAID` (qua mark-paid hoặc trực tiếp qua record-paid), backend ghi `paidAt`
+bằng authoritative hotel Clock (cùng Clock bean dùng cho Check-in/Check-out/Room Change). Client
+không được provide hoặc modify `paidAt`.
+
+Payment `FAILED` giữ `paidAt = null`.
 
 Chỉ Payment có status `PAID` đóng góp vào Total Payments.
 
 ```text
 PENDING: không đóng góp
 FAILED: không đóng góp
-PAID: đóng góp amount
-REFUNDED: không đóng góp
+PAID: đóng góp appliedAmount
+REFUNDED: không đóng góp (loại khỏi Total Payments ngay khi refund thành công)
 ```
 
 Overpayment không được hỗ trợ.
 
-Trước khi chuyển `PENDING -> PAID`, backend phải bảo đảm việc công nhận Payment là `PAID` không làm:
+Trước khi chuyển `PENDING -> PAID` (bao gồm cả record-paid), backend phải bảo đảm việc công nhận
+Payment là `PAID` không làm:
 
 ```text
-Total PAID Payments > Total Charges
+Total PAID Payments (appliedAmount) > Total Charges
 ```
 
 Trong đó:
 
 ```text
 Total Charges = SUM(charge.amount)
-Total PAID Payments = SUM(payment.amount WHERE status = PAID)
+Total PAID Payments = SUM(payment.appliedAmount WHERE status = PAID)
 ```
 
-Nếu transition gây overpayment, phải reject. Không implement general Outstanding service trong Payment v1.
+Nếu transition gây overpayment, phải reject. Không implement general Outstanding service trong Payment v1 — `StayBalanceService` là nơi duy nhất tính Outstanding cho Folio/Check-out.
 
 ---
 
@@ -1046,7 +1191,7 @@ Allowed transitions:
 
 ```text
 PENDING -> PAID
-Operation: mark-paid
+Operation: mark-paid, hoặc trực tiếp qua record-paid (tạo + PAID atomically)
 
 PENDING -> FAILED
 Operation: mark-failed
@@ -1067,6 +1212,23 @@ Khi owning Stay có `Stay.status = CHECKED_OUT`, các operation `mark-paid`, `ma
 
 Refund dùng cùng Payment record theo transition `PAID -> REFUNDED`. Không tạo separate negative Payment record; Payment amount giữ nguyên; partial refunds không được hỗ trợ trong Payment v1.
 
+Refund yêu cầu `refundReason` — free text, bắt buộc, không được rỗng sau khi trim. Backend từ
+chối refund nếu thiếu hoặc rỗng, kể cả khi UI bị bỏ qua. `refundReason` được lưu trên chính
+Payment row đó và không thể sửa sau khi refund. Không thêm `refundedAt`/`refundedBy`:
+`updatedAt`/`updatedBy` (từ audit fields hiện có) là authoritative timestamp/user cho refund, vì
+`REFUNDED` là trạng thái cuối (terminal).
+
+Refund thành công ghi một AuditLog entry theo convention hiện có (cùng style với
+`CHANGE_ROOM`/`CHECK_OUT`):
+
+```text
+action     = REFUND_PAYMENT
+entityType = RESERVATION
+entityId   = Reservation ID (qua Stay -> Reservation)
+oldValue   = "Payment <id> status=PAID"
+newValue   = "Payment <id> status=REFUNDED, reason=<refundReason>"
+```
+
 ---
 
 # 12. Outstanding Balance
@@ -1080,8 +1242,12 @@ SUM(charge.amount)
 Total Payments:
 
 ```text
-SUM(payment.amount WHERE payment.status = PAID)
+SUM(payment.appliedAmount WHERE payment.status = PAID)
 ```
+
+`appliedAmount` đã ở Folio (Reservation) currency; multi-currency Payment không cần quy đổi lại ở
+bước này (xem mục 10.1). Với Payment cùng currency với Folio, `appliedAmount = amount` nên công
+thức không đổi so với trường hợp single-currency.
 
 Outstanding:
 
@@ -1609,7 +1775,16 @@ Permission: MANAGE_ROOM
 OUT_OF_ORDER -> AVAILABLE
 Operation: restore-to-service
 Permission: MANAGE_ROOM
+
+OCCUPIED -> AVAILABLE
+Operation: room-change-release
+Permission: CHANGE_ROOM
 ```
+
+Transition `OCCUPIED -> AVAILABLE` (room-change-release) chỉ được sử dụng bởi Room Change (xem
+mục 8.3) để giải phóng phòng cũ. Transition này không thay thế, không thay đổi, và không được
+dùng cho check-out (`OCCUPIED -> DIRTY`, xem mục 24). Room Change không tự động chuyển phòng cũ
+sang `OUT_OF_ORDER`; Maintenance/Room Management chịu trách nhiệm riêng cho việc đó.
 
 Không được thêm Room status transition khác.
 
@@ -1808,19 +1983,29 @@ sidebar hiện có theo đúng permission-aware rule sẵn có (hiển thị khi
 
 Check-out operates atomically on the entire Reservation.
 
-Nếu Reservation chứa nhiều assigned Rooms:
+Check-out releases the Stay's CURRENT rooms — the open `StayRoomAssignment` rows (xem mục 8.3) —
+không phải danh sách `ReservationRoom` gốc. Với một Stay chưa từng Room Change, hai tập hợp này
+trùng nhau nên hành vi check-out không đổi. Với một Stay đã Room Change, chỉ phòng đang thực sự
+bị chiếm mới được release; phòng gốc đã được release trước đó bởi Room Change không bị đụng đến
+lần nữa.
+
+Ví dụ: Reservation đặt phòng 201 + 202. Sau Room Change 201 → 305, check-out phải chuyển 305 và
+202 sang DIRTY; 201 không được đụng đến vì assignment của nó đã bị đóng bởi Room Change.
+
+Nếu Stay chiếm nhiều Room hiện tại:
 
 ```text
-every Room phải OCCUPIED trước check-out
-every Room chuyển OCCUPIED -> DIRTY
+every current Room phải OCCUPIED trước check-out
+every current Room chuyển OCCUPIED -> DIRTY
 Reservation chuyển CHECKED_IN -> CHECKED_OUT
 Stay chuyển CHECKED_IN -> CHECKED_OUT
 actual_check_out_at được ghi nhận
+mọi open StayRoomAssignment của Stay được đóng tại đúng actual_check_out_at
 ```
 
 Không hỗ trợ partial-room check-out trong current version.
 
-Nếu bất kỳ assigned Room không thể chuyển `OCCUPIED -> DIRTY`, toàn bộ check-out thất bại và không có partial check-out.
+Nếu bất kỳ current Room không thể chuyển `OCCUPIED -> DIRTY`, toàn bộ check-out thất bại và không có partial check-out.
 
 Check-out transaction phải atomically:
 
@@ -1831,14 +2016,17 @@ Check-out transaction phải atomically:
 4. Calculate Total PAID Payments
 5. Calculate Outstanding
 6. Reject nếu Outstanding != 0
-7. Lock all assigned Rooms
-8. Require every Room = OCCUPIED
-9. Transition every Room OCCUPIED -> DIRTY
-10. Transition Reservation CHECKED_IN -> CHECKED_OUT
-11. Transition Stay CHECKED_IN -> CHECKED_OUT
-12. Record actual_check_out_at
-13. Apply authenticated-user audit updates
-14. Write approved CHECK_OUT audit log
+7. Load open StayRoomAssignment rows (current Rooms) của Stay
+8. Lock all current Rooms
+9. Require every current Room = OCCUPIED
+10. Transition every current Room OCCUPIED -> DIRTY
+11. Transition Reservation CHECKED_IN -> CHECKED_OUT
+12. Transition Stay CHECKED_IN -> CHECKED_OUT
+13. Record actual_check_out_at
+14. Close every open StayRoomAssignment tại actual_check_out_at, giữ nguyên lịch sử assignment
+    đã đóng trước đó
+15. Apply authenticated-user audit updates
+16. Write approved CHECK_OUT audit log
 ```
 
 Nếu bất kỳ step nào fail, transaction phải roll back.
@@ -1848,6 +2036,58 @@ Check-out yêu cầu `CHECK_OUT`.
 Không có check-out override permission.
 
 Existing `CHECK_IN` authorization remains unchanged.
+
+`actual_check_out_at` phải lấy từ authoritative hotel Clock (`Instant.now(clock)`), không phải
+`Instant.now()` mặc định và không được client/browser cung cấp. Backend tính đúng một `Instant`
+cho toàn bộ transaction và dùng lại chính giá trị đó cho cả `Stay.actual_check_out_at` lẫn
+`assigned_to` của mọi `StayRoomAssignment` đang mở được đóng trong transaction đó — hai giá trị
+này luôn bằng nhau.
+
+Check-out không phân biệt Early / Normal / Late so với `Reservation.check_out_date`. Cả ba
+trường hợp (`hotelToday < check_out_date`, `== check_out_date`, `> check_out_date`) đều được
+phép check-out như nhau khi các điều kiện hiện có (Reservation/Stay CHECKED_IN, Outstanding = 0,
+current Room = OCCUPIED) đã thỏa mãn. V1 không có cảnh báo, phí, hoàn tiền, thay đổi giá, hoặc
+gia hạn Reservation dựa trên thời điểm check-out thực tế so với ngày dự kiến.
+
+### Check-out Operational Screen
+
+`/check-out` là màn hình vận hành dạng queue/search, KHÔNG phải Reservation List thay thế: chỉ
+hiển thị Reservation có `status = CHECKED_IN` và Stay `status = CHECKED_IN`. Tìm kiếm theo
+Reservation Number, Guest, Room, tái dùng infrastructure search/pagination hiện có của
+Reservation (`ReservationSearchCriteria`/`ReservationQueryService`), buộc `status=CHECKED_IN`
+giống cách Check-in search buộc `status=CONFIRMED`.
+
+Cột "Current Room(s)" trên danh sách và trên Check-out Review luôn đọc từ open
+`StayRoomAssignment` (current Rooms), không phải `ReservationRoom` gốc — cùng nguyên tắc current-
+room đã mô tả ở đầu mục 24. Ví dụ: Reservation đặt phòng 201 + 202, sau Room Change 201 → 305,
+danh sách và Review phải hiển thị "305, 202", không hiển thị "201, 202".
+
+Guest hiển thị dưới dạng Guest Code (ví dụ "DEMO-G013"), không hiển thị mini profile
+(passport/nationality/address/phone/email/DOB). Guest Code chỉ là link khi user có
+`MANAGE_GUEST`; nếu không, hiển thị plain text.
+
+Readiness (`READY` / `PAYMENT_REQUIRED`) tái dùng `StayBalanceService` làm nguồn Outstanding duy
+nhất, không tính lại. User chỉ có `CHECK_OUT` (không có `MANAGE_PAYMENT`) chỉ thấy nhãn
+READY/PAYMENT REQUIRED, không thấy Total Charges/Total Paid/Outstanding amount — đúng nguyên tắc
+đã nêu ở mục 12 (`CHECK_OUT` không cấp detailed financial read access).
+
+Check-out Review (`GET /check-out/{id}`) là màn hình read-only trước khi xác nhận, hiển thị
+Guest, Current Rooms, planned check-in/check-out date, actual check-in, và Readiness. Review
+không tự làm authoritative cho Outstanding: nút "Confirm Check-out" chỉ hiển thị khi Reservation
+đang CHECKED_IN và Readiness = READY, nhưng hành động Confirm (`POST /check-out/{id}/confirm`)
+vẫn gọi lại đúng `ReservationService.checkOut(reservationId)` hiện có — service này tự revalidate
+toàn bộ điều kiện (Outstanding, trạng thái Reservation/Stay/Room) độc lập với dữ liệu Review có
+thể đã cũ.
+
+`/check-out` là một entry point BỔ SUNG cho check-out, không thay thế các entry point sẵn có
+(nút Check-out trên Reservation Detail và trên Folio) — tất cả entry point đều hội tụ vào cùng
+một `ReservationService.checkOut()`.
+
+### Sidebar
+
+Sau khi `/check-out` tồn tại như route thật, "Check-out" xuất hiện trong nhóm OPERATIONS của
+sidebar hiện có, ngay dưới "Check-in", theo đúng permission-aware rule sẵn có (hiển thị khi user
+có `CHECK_OUT`). Thứ tự nhóm OPERATIONS: Check-in, Check-out, Reservations, Guests.
 
 ---
 
@@ -1957,6 +2197,7 @@ VIEW_BOOKING
 CHECK_IN
 CHECK_OUT
 DELETE_RESERVATION
+CHANGE_ROOM
 ```
 
 Permission mapping đã thống nhất:
@@ -1971,7 +2212,8 @@ ADMIN
  ├── MANAGE_GUEST
  ├── VIEW_REPORT
  ├── VIEW_BOOKING
- └── CHECK_OUT
+ ├── CHECK_OUT
+ └── CHANGE_ROOM
 ```
 
 ```text
@@ -1983,7 +2225,8 @@ MANAGER
  ├── VIEW_BOOKING
  ├── MANAGE_GUEST
  ├── CHECK_IN
- └── CHECK_OUT
+ ├── CHECK_OUT
+ └── CHANGE_ROOM
 ```
 
 ```text
@@ -1991,7 +2234,8 @@ STAFF
  ├── VIEW_BOOKING
  ├── CHECK_IN
  ├── CHECK_OUT
- └── MANAGE_PAYMENT
+ ├── MANAGE_PAYMENT
+ └── CHANGE_ROOM
 ```
 
 `DELETE_RESERVATION` được xác định là permission có thể tồn tại trong hệ thống, nhưng business flow reservation không sử dụng hard delete.
@@ -2000,6 +2244,11 @@ STAFF
 Operational Sidebar Restructure). `CHECK_IN` được cấp cho MANAGER để đảm bảo cả ba role
 (ADMIN/MANAGER/STAFF) đều có thể thực hiện Check-in (xem 23.1). `CHECK_IN` còn cấp quyền ĐỌC
 ảnh passport Guest qua secure passport-image endpoint, không cấp Guest management.
+
+`CHANGE_ROOM` được cấp cho cả ba role (ADMIN/MANAGER/STAFF) vì Room Change là một thao tác vận
+hành tại quầy lễ tân trong một Stay đang hoạt động (xem 8.3); STAFF cần thực hiện được mà không
+cần được cấp `MANAGE_BOOKING`. `CHANGE_ROOM` là permission riêng biệt, không được suy ra từ
+`CHECK_IN`, `CHECK_OUT`, hay `MANAGE_BOOKING`.
 
 ---
 

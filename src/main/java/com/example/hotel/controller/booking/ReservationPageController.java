@@ -15,6 +15,7 @@ import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalance;
 import com.example.hotel.service.booking.StayBalanceService;
 import com.example.hotel.service.booking.StayQueryService;
+import com.example.hotel.service.booking.StayRoomAssignmentQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import jakarta.validation.Valid;
@@ -48,6 +49,7 @@ public class ReservationPageController {
     private final RoomQueryService roomQueryService;
     private final StayQueryService stayQueryService;
     private final StayBalanceService stayBalanceService;
+    private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -59,6 +61,7 @@ public class ReservationPageController {
      * @param roomQueryService service used to load room choices
      * @param stayQueryService service used to resolve a Reservation's Stay
      * @param stayBalanceService service used to supply non-financial checkout readiness
+     * @param stayRoomAssignmentQueryService service used to supply current rooms and Room History
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
@@ -66,13 +69,15 @@ public class ReservationPageController {
             GuestQueryService guestQueryService,
             RoomQueryService roomQueryService,
             StayQueryService stayQueryService,
-            StayBalanceService stayBalanceService) {
+            StayBalanceService stayBalanceService,
+            StayRoomAssignmentQueryService stayRoomAssignmentQueryService) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
         this.roomQueryService = roomQueryService;
         this.stayQueryService = stayQueryService;
         this.stayBalanceService = stayBalanceService;
+        this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
     }
 
     /**
@@ -128,7 +133,26 @@ public class ReservationPageController {
         ReservationDetailResponse reservation = reservationQueryService.findById(id);
         model.addAttribute("reservation", reservation);
         addCheckoutReadiness(model, reservation, authentication);
+        addRoomOccupancyAttributes(model, reservation);
         return "reservation/detail";
+    }
+
+    /**
+     * Adds the current-room and Room History presentation data for a Reservation that has reached
+     * Check-in. Before Check-in, the original ReservationRoom booking snapshot remains the correct
+     * "assigned rooms" view and this data is intentionally left empty.
+     *
+     * @param model model used to render Reservation detail
+     * @param reservation Reservation detail data
+     */
+    private void addRoomOccupancyAttributes(Model model, ReservationDetailResponse reservation) {
+        boolean hasStay = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
+        model.addAttribute(
+                "currentRooms",
+                hasStay ? stayRoomAssignmentQueryService.findCurrentRooms(reservation.id()) : List.of());
+        model.addAttribute(
+                "roomHistory",
+                hasStay ? stayRoomAssignmentQueryService.findHistory(reservation.id()) : List.of());
     }
 
     /**
@@ -372,6 +396,7 @@ public class ReservationPageController {
         model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
         model.addAttribute("canCheckIn", hasAuthority(authentication, "PERM_CHECK_IN"));
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
+        model.addAttribute("canChangeRoom", hasAuthority(authentication, "PERM_CHANGE_ROOM"));
         model.addAttribute("canManagePayment", hasAuthority(authentication, "PERM_MANAGE_PAYMENT"));
         model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
     }

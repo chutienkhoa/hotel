@@ -31,6 +31,7 @@ import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalanceService;
 import com.example.hotel.service.booking.StayQueryService;
+import com.example.hotel.service.booking.StayRoomAssignmentQueryService;
 import com.example.hotel.service.booking.StayBalance;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -84,6 +85,9 @@ class ReservationAccessAuthorizationTest {
 
     @MockitoBean
     private StayBalanceService stayBalanceService;
+
+    @MockitoBean
+    private StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -975,7 +979,7 @@ class ReservationAccessAuthorizationTest {
         assertEquals(1, confirmFormCount);
     }
 
-    /** Confirms the Guest Information summary links to Guest Detail only when the user can manage guests. */
+    /** Confirms the Guest tile links to Guest Detail only when the user can manage guests. */
     @Test
     void shouldLinkGuestSummaryOnlyWhenAuthorizedToManageGuests() throws Exception {
         UUID guestId = UUID.fromString("55555555-5555-5555-5555-555555555555");
@@ -989,14 +993,17 @@ class ReservationAccessAuthorizationTest {
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
                                 new SimpleGrantedAuthority("PERM_MANAGE_GUEST"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(
-                        "class=\"guest-summary\" href=\"/guests/" + guestId + "\"")));
+                .andExpect(content().string(containsString("class=\"reservation-info-value reservation-info-link\"")))
+                .andExpect(content().string(containsString("href=\"/guests/" + guestId + "\"")))
+                .andExpect(content().string(containsString("GUEST-001")))
+                .andExpect(content().string(not(containsString("Guest information"))))
+                .andExpect(content().string(not(containsString("Registered guest details."))));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(containsString("href=\"/guests/" + guestId + "\""))))
-                .andExpect(content().string(containsString("class=\"guest-summary\"")))
+                .andExpect(content().string(not(containsString("reservation-info-link"))))
                 .andExpect(content().string(containsString("GUEST-001")));
     }
 

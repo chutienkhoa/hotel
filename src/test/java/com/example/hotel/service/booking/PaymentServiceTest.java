@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
+import com.example.hotel.dto.booking.request.PaymentRefundRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.entity.booking.Payment;
 import com.example.hotel.entity.booking.PaymentCurrency;
@@ -20,13 +21,18 @@ import com.example.hotel.entity.booking.PaymentStatus;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.mapper.booking.PaymentMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.PaymentRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.security.CurrentUser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -202,7 +208,7 @@ class PaymentServiceTest {
                 PaymentMethod.CASH,
                 "REF-1");
         payment.audit(UUID.randomUUID());
-        payment.markPaid();
+        payment.markPaid(Instant.now());
         setCurrentUser(UUID.randomUUID());
         when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
         when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
@@ -213,7 +219,8 @@ class PaymentServiceTest {
         BigDecimal appliedAmount = payment.getAppliedAmount();
         var paidAt = payment.getPaidAt();
 
-        service(paymentRepository, stayRepository, chargeRepository).refund(payment.getId());
+        service(paymentRepository, stayRepository, chargeRepository)
+                .refund(payment.getId(), new PaymentRefundRequest("Guest requested refund"));
 
         assertEquals(PaymentStatus.REFUNDED, payment.getStatus());
         assertEquals(amount, payment.getAmount());
@@ -254,14 +261,54 @@ class PaymentServiceTest {
         assertEquals(404, exception.getStatusCode().value());
     }
 
-    /** Confirms every approved Payment method is accepted and an optional reference may be absent. */
+    /** Confirms every non-OTA approved Payment method is accepted and an optional reference may be absent. */
     @ParameterizedTest
-    @MethodSource("paymentMethods")
+    @MethodSource("nonOtaPaymentMethods")
     void shouldAcceptApprovedMethodAndOptionalReference(PaymentMethod method) {
         PaymentResponse response = createValidPayment(method, null);
 
         assertEquals(method.name(), response.method());
         assertNull(response.reference());
+    }
+
+    /** Confirms OTA is rejected with a null reference. */
+    @Test
+    void shouldRejectOtaPaymentWithNullReference() {
+        assertBadRequest(request(BigDecimal.TEN, PaymentMethod.OTA, null));
+    }
+
+    /** Confirms OTA is rejected with a blank reference. */
+    @Test
+    void shouldRejectOtaPaymentWithBlankReference() {
+        assertBadRequest(request(BigDecimal.TEN, PaymentMethod.OTA, "   "));
+    }
+
+    /** Confirms OTA is accepted once a non-blank reference is supplied. */
+    @Test
+    void shouldAcceptOtaPaymentWithReference() {
+        PaymentResponse response = createValidPayment(PaymentMethod.OTA, "OTA-REF-1");
+
+        assertEquals(PaymentMethod.OTA.name(), response.method());
+        assertEquals("OTA-REF-1", response.reference());
+    }
+
+    /** Confirms the OTA reference rule also applies to the direct record-paid operation. */
+    @Test
+    void shouldRejectOtaRecordPaidWithoutReference() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        setCurrentUser(UUID.randomUUID());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service(paymentRepository, stayRepository, chargeRepository)
+                        .recordPaid(stayId, request(BigDecimal.TEN, PaymentMethod.OTA, null)));
+
+        assertEquals(400, exception.getStatusCode().value());
     }
 
     /** Confirms direct service callers cannot create a non-positive Payment amount. */
@@ -332,7 +379,7 @@ class PaymentServiceTest {
         BigDecimal amount = fixture.payment().getAmount();
         var paidAt = fixture.payment().getPaidAt();
 
-        fixture.service().refund(fixture.payment().getId());
+        fixture.service().refund(fixture.payment().getId(), new PaymentRefundRequest("Guest requested refund"));
 
         assertEquals(PaymentStatus.REFUNDED, fixture.payment().getStatus());
         assertEquals(amount, fixture.payment().getAmount());
@@ -362,10 +409,11 @@ class PaymentServiceTest {
     @Test
     void shouldRejectRefundForCheckedOutStay() {
         Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
-        fixture.payment().markPaid();
+        fixture.payment().markPaid(Instant.now());
         when(fixture.stay().getStatus()).thenReturn(StayStatus.CHECKED_OUT);
 
-        assertConflict(() -> fixture.service().refund(fixture.payment().getId()));
+        assertConflict(() -> fixture.service()
+                .refund(fixture.payment().getId(), new PaymentRefundRequest("Guest requested refund")));
     }
 
     /** Confirms listing uses the repository result scoped to the requested Stay. */
@@ -388,14 +436,270 @@ class PaymentServiceTest {
         assertEquals(List.of(first.getId(), second.getId()), payments.stream().map(PaymentResponse::id).toList());
     }
 
-    /** Supplies all approved Payment methods. */
-    private static Stream<PaymentMethod> paymentMethods() {
+    /** Confirms record-paid creates an already-PAID Payment atomically, with no PENDING intermediate. */
+    @Test
+    void shouldRecordPaidPaymentAtomicallyWithNoPendingIntermediateState() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("100"));
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PaymentResponse response = service(paymentRepository, stayRepository, chargeRepository)
+                .recordPaid(stayId, request(BigDecimal.TEN, PaymentMethod.CASH, null));
+
+        assertEquals(PaymentStatus.PAID.name(), response.status());
+        assertNotNull(response.paidAt());
+        ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
+        verify(paymentRepository).save(captor.capture());
+        assertEquals(PaymentStatus.PAID, captor.getValue().getStatus());
+        // save() is invoked exactly once for the whole operation: no separate PENDING-creating
+        // save precedes it, so no PENDING state is ever committed for this Payment.
+        verify(paymentRepository, org.mockito.Mockito.times(1)).save(any(Payment.class));
+    }
+
+    /** Confirms record-paid derives paidAt from the injected authoritative Clock, not wall-clock time. */
+    @Test
+    void shouldRecordPaidUsingAuthoritativeClock() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("100"));
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        Instant fixedInstant = Instant.parse("2026-09-17T03:00:00Z");
+        Clock fixedClock = Clock.fixed(fixedInstant, ZoneId.of("Asia/Ho_Chi_Minh"));
+
+        PaymentResponse response = service(
+                        paymentRepository, stayRepository, chargeRepository, mock(AuditLogRepository.class), fixedClock)
+                .recordPaid(stayId, request(BigDecimal.TEN, PaymentMethod.CASH, null));
+
+        assertEquals(fixedInstant, response.paidAt());
+    }
+
+    /** Confirms record-paid applies the same-currency rule (no conversion). */
+    @Test
+    void shouldRecordPaidSameCurrencyWithoutConversion() {
+        PaymentResponse response = recordPaidPayment(new BigDecimal("50"), PaymentCurrency.VND, null, "VND");
+
+        assertNull(response.exchangeRate());
+        assertEquals(0, new BigDecimal("50").compareTo(response.appliedAmount()));
+    }
+
+    /** Confirms record-paid applies the same cross-currency conversion as pending creation. */
+    @Test
+    void shouldRecordPaidCrossCurrencyUsingExchangeRate() {
+        PaymentResponse response =
+                recordPaidPayment(new BigDecimal("120"), PaymentCurrency.USD, new BigDecimal("25000"), "VND");
+
+        assertEquals(0, new BigDecimal("3000000").compareTo(response.appliedAmount()));
+    }
+
+    /** Confirms record-paid rejects an amount that would exceed total charges. */
+    @Test
+    void shouldRejectRecordPaidOverpayment() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("100"));
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(new BigDecimal("90"));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service(paymentRepository, stayRepository, chargeRepository)
+                        .recordPaid(stayId, request(new BigDecimal("11"), PaymentMethod.CASH, null)));
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(paymentRepository, org.mockito.Mockito.never()).save(any(Payment.class));
+    }
+
+    /** Confirms record-paid rejects a Stay that is not currently checked in. */
+    @Test
+    void shouldRejectRecordPaidForNonCheckedInStay() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_OUT);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+
+        assertConflict(() -> service(paymentRepository, stayRepository, chargeRepository)
+                .recordPaid(stayId, request(BigDecimal.TEN, PaymentMethod.CASH, null)));
+        verify(paymentRepository, org.mockito.Mockito.never()).save(any(Payment.class));
+    }
+
+    /** Confirms record-paid rejects a non-positive amount, same as pending creation. */
+    @Test
+    void shouldRejectRecordPaidNonPositiveAmount() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        setCurrentUser(UUID.randomUUID());
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service(paymentRepository, stayRepository, chargeRepository)
+                        .recordPaid(UUID.randomUUID(), request(BigDecimal.ZERO, PaymentMethod.CASH, null)));
+
+        assertEquals(400, exception.getStatusCode().value());
+    }
+
+    /**
+     * Confirms two staff attempting to record-paid the same remaining Outstanding concurrently
+     * cannot both succeed: {@code recordPaid} locks the Stay via the same
+     * {@code findByIdForUpdate} pessimistic-write path {@code markPaid} already relies on, then
+     * recomputes totals under that lock before allowing PAID. This test simulates the second
+     * attempt observing the first attempt's already-applied total (as the real pessimistic lock
+     * would serialize it to see), which is the same technique the existing
+     * {@code shouldRejectMarkPaidWhenItWouldExceedCharges} test uses; true multi-threaded/DB-level
+     * lock contention is out of reach for a Mockito unit test and is not claimed here.
+     */
+    @Test
+    void shouldRejectSecondConcurrentRecordPaidThatWouldExceedRemainingOutstanding() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("1000000"));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // First transaction observes zero already paid and succeeds.
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(BigDecimal.ZERO, new BigDecimal("1000000"));
+
+        PaymentResponse first = service(paymentRepository, stayRepository, chargeRepository)
+                .recordPaid(stayId, request(new BigDecimal("1000000"), PaymentMethod.CASH, null));
+        assertEquals(PaymentStatus.PAID.name(), first.status());
+
+        // Second transaction, now observing the first's already-applied total under the same
+        // lock-then-recompute pattern, must be rejected rather than allowed to overpay.
+        assertConflict(() -> service(paymentRepository, stayRepository, chargeRepository)
+                .recordPaid(stayId, request(new BigDecimal("1000000"), PaymentMethod.CASH, null)));
+    }
+
+    /** Confirms refund rejects a blank reason. */
+    @Test
+    void shouldRejectRefundWithBlankReason() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+
+        assertBadRequestForOperation(
+                () -> fixture.service().refund(fixture.payment().getId(), new PaymentRefundRequest("   ")));
+        assertEquals(PaymentStatus.PAID, fixture.payment().getStatus());
+    }
+
+    /** Confirms refund rejects a missing reason. */
+    @Test
+    void shouldRejectRefundWithNullReason() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+
+        assertBadRequestForOperation(() -> fixture.service().refund(fixture.payment().getId(), null));
+        assertEquals(PaymentStatus.PAID, fixture.payment().getStatus());
+    }
+
+    /** Confirms a valid refund reason is trimmed and persisted on the same Payment row. */
+    @Test
+    void shouldPersistTrimmedRefundReason() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+
+        fixture.service().refund(fixture.payment().getId(), new PaymentRefundRequest("  Guest cancelled  "));
+
+        assertEquals("Guest cancelled", fixture.payment().getRefundReason());
+    }
+
+    /**
+     * Confirms refund records the refunding user as updatedBy, the authoritative refund-user
+     * metadata (no separate refundedBy field is added). {@code updatedAt} is populated by the JPA
+     * {@code @PreUpdate} lifecycle callback, which only fires under a real persistence context, so
+     * it is not independently observable in this Mockito-only unit test and is not asserted here.
+     */
+    @Test
+    void shouldRetainUpdatedByAsRefundAuditMetadata() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+        UUID refunderId = UUID.randomUUID();
+        setCurrentUser(refunderId);
+
+        fixture.service().refund(fixture.payment().getId(), new PaymentRefundRequest("Guest cancelled"));
+
+        assertEquals(refunderId, fixture.payment().getUpdatedBy());
+    }
+
+    /** Confirms a successful refund writes the approved REFUND_PAYMENT audit entry. */
+    @Test
+    void shouldWriteRefundPaymentAuditLogOnSuccessfulRefund() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        Payment payment = Payment.create(
+                stay, BigDecimal.TEN, PaymentCurrency.VND, null, BigDecimal.TEN, PaymentMethod.CASH, null);
+        payment.audit(UUID.randomUUID());
+        payment.markPaid(Instant.now());
+        setCurrentUser(UUID.randomUUID());
+        when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service(paymentRepository, stayRepository, chargeRepository, auditLogRepository, Clock.systemDefaultZone())
+                .refund(payment.getId(), new PaymentRefundRequest("Guest cancelled"));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertNotNull(captor.getValue());
+    }
+
+    /** Confirms invalid record-paid input returns the standard bad-request response. */
+    private void assertBadRequestForOperation(org.junit.jupiter.api.function.Executable operation) {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, operation);
+        assertEquals(400, exception.getStatusCode().value());
+    }
+
+    /** Creates a record-paid Payment for a checked-in Stay whose Reservation has the given currency. */
+    private PaymentResponse recordPaidPayment(
+            BigDecimal amount, PaymentCurrency currency, BigDecimal exchangeRate, String reservationCurrency) {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN, reservationCurrency);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("999999999"));
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        return service(paymentRepository, stayRepository, chargeRepository)
+                .recordPaid(stayId, request(amount, currency, exchangeRate, PaymentMethod.CASH, null));
+    }
+
+    /** Supplies every approved Payment method except OTA, whose reference is mandatory. */
+    private static Stream<PaymentMethod> nonOtaPaymentMethods() {
         return Stream.of(
-                PaymentMethod.CASH,
-                PaymentMethod.CREDIT_CARD,
-                PaymentMethod.BANK_TRANSFER,
-                PaymentMethod.OTA,
-                PaymentMethod.OTHER);
+                PaymentMethod.CASH, PaymentMethod.CREDIT_CARD, PaymentMethod.BANK_TRANSFER, PaymentMethod.OTHER);
     }
 
     /** Creates a valid pending Payment and returns its API representation. */
@@ -508,16 +812,33 @@ class PaymentServiceTest {
         when(stay.getStatus()).thenReturn(status);
         Reservation reservation = mock(Reservation.class);
         when(reservation.getCurrency()).thenReturn(reservationCurrency);
+        when(reservation.getId()).thenReturn(UUID.randomUUID());
         when(stay.getReservation()).thenReturn(reservation);
         return stay;
     }
 
-    /** Creates the Payment service under test. */
+    /** Creates the Payment service under test with a real (non-fixed) Clock and a mocked AuditLogRepository. */
     private PaymentService service(
             PaymentRepository paymentRepository,
             StayRepository stayRepository,
             ChargeRepository chargeRepository) {
-        return new PaymentService(paymentRepository, stayRepository, chargeRepository, new PaymentMapper());
+        return service(
+                paymentRepository,
+                stayRepository,
+                chargeRepository,
+                mock(AuditLogRepository.class),
+                Clock.systemDefaultZone());
+    }
+
+    /** Creates the Payment service under test with full control over its Clock and AuditLogRepository. */
+    private PaymentService service(
+            PaymentRepository paymentRepository,
+            StayRepository stayRepository,
+            ChargeRepository chargeRepository,
+            AuditLogRepository auditLogRepository,
+            Clock clock) {
+        return new PaymentService(
+                paymentRepository, stayRepository, chargeRepository, new PaymentMapper(), auditLogRepository, clock);
     }
 
     /** Establishes the authenticated user used for Payment audit attribution. */

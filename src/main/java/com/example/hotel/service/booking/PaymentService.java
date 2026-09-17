@@ -1,20 +1,26 @@
 package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
+import com.example.hotel.dto.booking.request.PaymentRefundRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.entity.booking.Payment;
 import com.example.hotel.entity.booking.PaymentCurrency;
+import com.example.hotel.entity.booking.PaymentMethod;
 import com.example.hotel.entity.booking.PaymentStatus;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.mapper.booking.PaymentMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.PaymentRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -32,6 +38,8 @@ public class PaymentService {
     private final StayRepository stayRepository;
     private final ChargeRepository chargeRepository;
     private final PaymentMapper paymentMapper;
+    private final AuditLogRepository auditLogRepository;
+    private final Clock clock;
 
     /**
      * Creates the Payment service with the persistence collaborators required by Payment v1.
@@ -40,16 +48,22 @@ public class PaymentService {
      * @param stayRepository repository used to resolve and lock Stays
      * @param chargeRepository repository used only for overpayment-prevention aggregation
      * @param paymentMapper mapper used to return client-safe Payment responses
+     * @param auditLogRepository repository used to write the approved REFUND_PAYMENT audit entry
+     * @param clock authoritative hotel business clock used for {@code paidAt}
      */
     public PaymentService(
             PaymentRepository paymentRepository,
             StayRepository stayRepository,
             ChargeRepository chargeRepository,
-            PaymentMapper paymentMapper) {
+            PaymentMapper paymentMapper,
+            AuditLogRepository auditLogRepository,
+            Clock clock) {
         this.paymentRepository = paymentRepository;
         this.stayRepository = stayRepository;
         this.chargeRepository = chargeRepository;
         this.paymentMapper = paymentMapper;
+        this.auditLogRepository = auditLogRepository;
+        this.clock = clock;
     }
 
     /**
@@ -77,6 +91,47 @@ public class PaymentService {
                 appliedAmount,
                 request.method(),
                 request.reference());
+        payment.audit(currentUser().id());
+        return paymentMapper.toResponse(paymentRepository.save(payment));
+    }
+
+    /**
+     * Atomically creates and marks as paid a Payment for money already received by Staff — the
+     * approved shortcut for ordinary manual hotel payments, so Staff need not create a PENDING
+     * Payment and separately mark it paid. Reuses the exact same validation, currency-conversion,
+     * and overpayment-prevention logic as {@link #create} and {@link #markPaid}; no intermediate
+     * PENDING Payment is ever persisted, and any failure leaves nothing persisted since every step
+     * runs inside this one transaction. The existing {@link #create} + {@link #markPaid} flow
+     * remains fully available and unchanged for Payments that must stay PENDING (e.g. awaiting
+     * bank/gateway/OTA confirmation).
+     *
+     * @param stayId owning Stay identifier from the URL path
+     * @param request client-controlled Payment data
+     * @return the created, already-paid Payment response
+     */
+    @Transactional
+    public PaymentResponse recordPaid(UUID stayId, PaymentCreateRequest request) {
+        validateCreationRequest(request);
+        Stay stay = findStayForUpdate(stayId);
+        requireCheckedIn(stay);
+        PaymentCurrency reservationCurrency = resolveReservationCurrency(stay);
+        BigDecimal appliedAmount = calculateAppliedAmount(
+                request.amount(), request.currency(), reservationCurrency, request.exchangeRate());
+        BigDecimal totalCharges = zeroIfNull(chargeRepository.sumAmountByStayId(stay.getId()));
+        BigDecimal totalPaidApplied = zeroIfNull(
+                paymentRepository.sumAppliedAmountByStayIdAndStatus(stay.getId(), PaymentStatus.PAID));
+        if (totalPaidApplied.add(appliedAmount).compareTo(totalCharges) > 0) {
+            throw conflict("Payment would exceed total charges");
+        }
+        Payment payment = Payment.create(
+                stay,
+                request.amount(),
+                request.currency(),
+                request.exchangeRate(),
+                appliedAmount,
+                request.method(),
+                request.reference());
+        payment.markPaid(Instant.now(clock));
         payment.audit(currentUser().id());
         return paymentMapper.toResponse(paymentRepository.save(payment));
     }
@@ -115,7 +170,7 @@ public class PaymentService {
         if (totalPaidApplied.add(payment.getAppliedAmount()).compareTo(totalCharges) > 0) {
             throw conflict("Payment would exceed total charges");
         }
-        payment.markPaid();
+        payment.markPaid(Instant.now(clock));
         payment.audit(currentUser().id());
         return paymentMapper.toResponse(paymentRepository.save(payment));
     }
@@ -135,22 +190,41 @@ public class PaymentService {
     }
 
     /**
-     * Refunds a paid Payment using the same Payment record.
+     * Refunds a paid Payment using the same Payment record. V1 supports full refund only; the
+     * approved refund reason is required and is persisted on the same row. {@code updatedAt}/
+     * {@code updatedBy} remain the authoritative refund timestamp/user, since REFUNDED is
+     * terminal. Writes the approved {@code REFUND_PAYMENT} audit entry using the existing
+     * AuditLog convention (same style as {@code ReservationService}/{@code RoomChangeService}).
      *
      * @param paymentId Payment identifier
+     * @param request client-supplied refund reason
      * @return refunded Payment response
      */
     @Transactional
-    public PaymentResponse refund(UUID paymentId) {
+    public PaymentResponse refund(UUID paymentId, PaymentRefundRequest request) {
+        String reason = request == null ? null : request.reason();
+        if (reason == null || reason.isBlank()) {
+            throw badRequest("reason is required");
+        }
+        String trimmedReason = reason.trim();
         Payment payment = findPaymentForUpdate(paymentId);
-        requireCheckedIn(findStayForUpdate(payment.getStay().getId()));
+        Stay stay = findStayForUpdate(payment.getStay().getId());
+        requireCheckedIn(stay);
         try {
-            payment.refund();
+            payment.refund(trimmedReason);
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
         }
-        payment.audit(currentUser().id());
-        return paymentMapper.toResponse(paymentRepository.save(payment));
+        CurrentUser user = currentUser();
+        payment.audit(user.id());
+        Payment saved = paymentRepository.save(payment);
+        auditLogRepository.save(new AuditLog(
+                user.id(),
+                "REFUND_PAYMENT",
+                stay.getReservation().getId(),
+                "Payment " + payment.getId() + " status=PAID",
+                "Payment " + payment.getId() + " status=REFUNDED, reason=" + trimmedReason));
+        return paymentMapper.toResponse(saved);
     }
 
     /**
@@ -181,6 +255,10 @@ public class PaymentService {
         }
         if (request.method() == null) {
             throw badRequest("method is required");
+        }
+        if (request.method() == PaymentMethod.OTA
+                && (request.reference() == null || request.reference().isBlank())) {
+            throw badRequest("reference is required for OTA payments");
         }
     }
 

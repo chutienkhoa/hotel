@@ -314,7 +314,8 @@ class GuestAuthorizationTest {
         mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("View Passport")))
-                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("storageKey"))));
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("storageKey"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("passport.jpg"))));
         mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
                         .with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
@@ -329,6 +330,76 @@ class GuestAuthorizationTest {
                         .with(user("no-permission").authorities(
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isForbidden());
+    }
+
+    /** Confirms a Guest without an uploaded passport shows no avoidable View Passport action. */
+    @Test
+    void shouldNotRenderViewPassportActionWhenNoPassportUploaded() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassport(GUEST_ID)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "href=\"/guests/" + GUEST_ID + "/passport-image\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("No passport image uploaded.")));
+    }
+
+    /** Confirms the redesigned Guest Detail breadcrumb links to the Guest List and shows the actual guestCode. */
+    @Test
+    void shouldRenderBreadcrumbWithGuestListLinkAndActualGuestCode() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("class=\"breadcrumb\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/guests\">Guests</a>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"breadcrumb-current\">G000001</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "Back to guests"))));
+    }
+
+    /** Confirms guestCode is used as the page title and Personal Information card renders every field. */
+    @Test
+    void shouldRenderGuestCodeAsTitleAndPersonalInformationFields() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(new GuestResponse(
+                GUEST_ID,
+                "DEMO-G001",
+                "Thanh",
+                "Le",
+                "demo.guest1@example.test",
+                "+840900000001",
+                "Vietnam",
+                java.time.LocalDate.of(1971, 1, 1),
+                "1 Demo Street, Ho Chi Minh City"));
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("<h1>DEMO-G001</h1>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("class=\"card reservation-detail-section\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Personal Information")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Thanh")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Le")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Vietnam")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("01/01/1971")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("demo.guest1@example.test")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("+840900000001")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("1 Demo Street, Ho Chi Minh City")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("1971-01-01"))));
+    }
+
+    /** Confirms optional fields with no stored value render the neutral placeholder, never null/N/A. */
+    @Test
+    void shouldRenderNeutralPlaceholderForMissingOptionalFields() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(new GuestResponse(
+                GUEST_ID, "G000002", "First", "Last", null, null, null, null, null));
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("null"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("N/A"))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("—")));
     }
 
     /** Confirms the Guest list renders five independent filter fields and no generic Search field. */

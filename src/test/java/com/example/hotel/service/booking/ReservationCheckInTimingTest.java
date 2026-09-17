@@ -19,6 +19,7 @@ import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.booking.StayRoomAssignmentRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
@@ -122,6 +123,7 @@ class ReservationCheckInTimingTest {
         GuestRepository guestRepository = mock(GuestRepository.class);
         RoomRepository roomRepository = mock(RoomRepository.class);
         StayRepository stayRepository = mock(StayRepository.class);
+        StayRoomAssignmentRepository stayRoomAssignmentRepository = mock(StayRoomAssignmentRepository.class);
         ChargeRepository chargeRepository = mock(ChargeRepository.class);
         AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
         ReservationNumberGenerator reservationNumberGenerator = mock(ReservationNumberGenerator.class);
@@ -164,6 +166,7 @@ class ReservationCheckInTimingTest {
                 guestRepository,
                 roomRepository,
                 stayRepository,
+                stayRoomAssignmentRepository,
                 chargeRepository,
                 auditLogRepository,
                 new ReservationMapper(),

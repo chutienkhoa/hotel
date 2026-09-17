@@ -2,6 +2,7 @@ package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
+import com.example.hotel.dto.booking.request.PaymentRefundRequest;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.entity.booking.ChargeType;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -155,6 +157,42 @@ public class FolioPageController {
     }
 
     /**
+     * Atomically records a Payment already received by Staff as PAID, through the existing
+     * Payment service, without an intermediate PENDING Payment.
+     *
+     * @param reservationId Reservation identifier used to resolve the owning Stay
+     * @param paymentForm client-controlled Payment form data
+     * @param bindingResult structural validation result
+     * @param model model used to redisplay invalid input
+     * @param authentication current browser authentication
+     * @param redirectAttributes attributes used to display post-redirect feedback
+     * @return Folio redirect on success or the Folio template on validation or business failure
+     */
+    @PostMapping("/reservations/{reservationId}/folio/payments/record-paid")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    public String recordPaidPayment(
+            @PathVariable UUID reservationId,
+            @Valid @ModelAttribute("paymentForm") PaymentCreateRequest paymentForm,
+            BindingResult bindingResult,
+            Model model,
+            Authentication authentication,
+            RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            addFolioAttributes(model, reservationId, emptyChargeForm(), paymentForm, authentication);
+            return "stay/folio";
+        }
+        try {
+            paymentService.recordPaid(stayForReservation(reservationId).id(), paymentForm);
+            redirectAttributes.addFlashAttribute("successMessage", "Payment recorded as paid.");
+            return folioRedirect(reservationId);
+        } catch (ResponseStatusException exception) {
+            addFolioAttributes(model, reservationId, emptyChargeForm(), paymentForm, authentication);
+            model.addAttribute("errorMessage", safeMessage(exception));
+            return "stay/folio";
+        }
+    }
+
+    /**
      * Marks a pending Payment as paid through the existing Payment service.
      *
      * @param reservationId Reservation identifier used for the Folio redirect
@@ -197,10 +235,12 @@ public class FolioPageController {
     }
 
     /**
-     * Refunds a paid Payment through the existing Payment service.
+     * Refunds a paid Payment through the existing Payment service. V1 supports full refund only
+     * and requires a non-blank refund reason.
      *
      * @param reservationId Reservation identifier used for the Folio redirect
      * @param paymentId Payment identifier
+     * @param reason staff-supplied refund reason
      * @param redirectAttributes attributes used to display post-redirect feedback
      * @return redirect to the Folio
      */
@@ -209,12 +249,13 @@ public class FolioPageController {
     public String refundPayment(
             @PathVariable UUID reservationId,
             @PathVariable UUID paymentId,
+            @RequestParam(required = false) String reason,
             RedirectAttributes redirectAttributes) {
         return redirectAfterPaymentAction(
                 reservationId,
                 redirectAttributes,
                 "Payment refunded successfully.",
-                () -> paymentService.refund(paymentId));
+                () -> paymentService.refund(paymentId, new PaymentRefundRequest(reason)));
     }
 
     /**
