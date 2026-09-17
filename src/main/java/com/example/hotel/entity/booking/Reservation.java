@@ -44,6 +44,9 @@ public class Reservation extends AuditedEntity {
     @Column(name = "external_booking_id")
     private String externalBookingId;
 
+    @Column(name = "ota_booking_reference")
+    private String otaBookingReference;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ReservationStatus status;
@@ -93,6 +96,33 @@ public class Reservation extends AuditedEntity {
             BookingSource source,
             String currency,
             String notes) {
+        this(id, reservationNumber, guest, checkInDate, checkOutDate, source, null, currency, notes);
+    }
+
+    /**
+     * Creates a draft Reservation with its staff-entered external OTA booking reference.
+     *
+     * @param id định danh reservation
+     * @param reservationNumber mã số reservation do backend tạo
+     * @param guest khách thực hiện đặt phòng
+     * @param checkInDate ngày nhận phòng
+     * @param checkOutDate ngày trả phòng
+     * @param source nguồn tạo reservation
+     * @param otaBookingReference the external booking reference entered by staff for an OTA
+     *     source; discarded when {@code source} is {@link BookingSource#DIRECT}
+     * @param currency mã tiền tệ
+     * @param notes ghi chú đặt phòng
+     */
+    public Reservation(
+            UUID id,
+            String reservationNumber,
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            BookingSource source,
+            String otaBookingReference,
+            String currency,
+            String notes) {
         this.id = id;
         this.reservationNumber = reservationNumber;
         this.guest = guest;
@@ -101,6 +131,7 @@ public class Reservation extends AuditedEntity {
         this.currency = currency;
         this.notes = notes;
         this.source = source;
+        this.otaBookingReference = normalizeOtaBookingReference(source, otaBookingReference);
         status = ReservationStatus.DRAFT;
         reservedAt = Instant.now();
     }
@@ -163,6 +194,32 @@ public class Reservation extends AuditedEntity {
             String currency,
             String notes,
             List<ReservationRoom> updatedRooms) {
+        updateDraft(guest, checkInDate, checkOutDate, source, null, currency, notes, updatedRooms);
+    }
+
+    /**
+     * Updates the editable data, source-dependent OTA booking reference, and complete room-price
+     * snapshots of a draft Reservation.
+     *
+     * @param guest replacement Guest
+     * @param checkInDate replacement planned check-in date
+     * @param checkOutDate replacement planned check-out date
+     * @param source replacement booking source
+     * @param otaBookingReference replacement external OTA booking reference; discarded when
+     *     {@code source} is {@link BookingSource#DIRECT}
+     * @param currency replacement currency code
+     * @param notes replacement optional notes
+     * @param updatedRooms complete submitted room snapshots
+     */
+    public void updateDraft(
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            BookingSource source,
+            String otaBookingReference,
+            String currency,
+            String notes,
+            List<ReservationRoom> updatedRooms) {
         if (status != ReservationStatus.DRAFT) {
             throw new IllegalStateException("Only draft reservations can be edited");
         }
@@ -170,10 +227,23 @@ public class Reservation extends AuditedEntity {
         this.checkInDate = checkInDate;
         this.checkOutDate = checkOutDate;
         this.source = source;
+        this.otaBookingReference = normalizeOtaBookingReference(source, otaBookingReference);
         this.currency = currency;
         this.notes = notes;
         reconcileDraftRooms(updatedRooms);
         calculateTotal();
+    }
+
+    /**
+     * Discards any external OTA booking reference for a DIRECT reservation, since the Hotel
+     * System does not generate this value and it must never persist stale OTA data.
+     *
+     * @param source the reservation's booking source
+     * @param otaBookingReference the staff-entered reference, stored verbatim without transformation
+     * @return the value to persist: {@code null} for DIRECT, otherwise the value unchanged
+     */
+    private static String normalizeOtaBookingReference(BookingSource source, String otaBookingReference) {
+        return source == BookingSource.DIRECT ? null : otaBookingReference;
     }
 
     /** Reconciles draft room snapshots by Room identity to avoid replacing unchanged children. */
@@ -236,6 +306,15 @@ public class Reservation extends AuditedEntity {
      */
     public BookingSource getSource() {
         return source;
+    }
+
+    /**
+     * Returns the external OTA booking reference entered by staff, stored verbatim.
+     *
+     * @return the OTA booking reference, or {@code null} for a DIRECT reservation
+     */
+    public String getOtaBookingReference() {
+        return otaBookingReference;
     }
 
     /**

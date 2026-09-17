@@ -19,6 +19,7 @@
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
         <form class="form-card" data-confirm-message="Save this guest?" data-confirm-severity="NORMAL"
+              enctype="multipart/form-data"
               th:attr="data-confirm-title=${guest == null} ? 'Create guest' : 'Update guest',data-confirm-label=${guest == null} ? 'Create guest' : 'Update guest'" method="post"
               th:action="${guest == null} ? @{/guests} : @{/guests/{id}(id=${guest.id})}"
               th:object="${guestForm}">
@@ -28,13 +29,13 @@
 
             <div class="form-grid guest-form-grid">
                 <div class="form-field">
-                    <label for="firstName">First name</label>
-                    <input id="firstName" maxlength="100" th:field="*{firstName}" type="text" />
+                    <label for="firstName">First name *</label>
+                    <input id="firstName" maxlength="100" required th:field="*{firstName}" type="text" />
                     <p class="field-error" th:errors="*{firstName}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="lastName">Last name</label>
-                    <input id="lastName" maxlength="100" th:field="*{lastName}" type="text" />
+                    <label for="lastName">Last name *</label>
+                    <input id="lastName" maxlength="100" required th:field="*{lastName}" type="text" />
                     <p class="field-error" th:errors="*{lastName}"></p>
                 </div>
                 <div class="form-field">
@@ -48,8 +49,8 @@
                     <p class="field-error" th:errors="*{phone}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="nationality">Nationality</label>
-                    <select id="nationality" th:field="*{nationality}">
+                    <label for="nationality">Nationality *</label>
+                    <select id="nationality" required th:field="*{nationality}">
                         <option value="">Select nationality</option>
                         <option th:if="${unmappedNationality != null}"
                                 th:selected="${unmappedNationality == guestForm.nationality}"
@@ -73,6 +74,20 @@
                     <textarea id="address" rows="4" th:field="*{address}"></textarea>
                     <p class="field-error" th:errors="*{address}"></p>
                 </div>
+
+                <section aria-labelledby="passport-heading" class="guest-passport-section guest-form-address">
+                    <h2 id="passport-heading">Passport</h2>
+                    <p th:if="${passportDocument == null}">No passport image uploaded.</p>
+                    <p th:if="${passportDocument != null}">
+                        Current: <a th:href="@{/guests/{id}/passport-image(id=${guest.id})}" target="_blank">View Passport</a>
+                    </p>
+                    <div class="form-field">
+                        <label for="passportImage" th:text="${passportDocument == null} ? 'Passport image' : 'Replace passport image'">Passport image</label>
+                        <input accept="image/jpeg,image/png" id="passportImage" name="passportImage" type="file" />
+                        <p class="form-hint">JPG or PNG, maximum 5 MB.</p>
+                        <p class="field-error" th:if="${passportError}" th:text="${passportError}"></p>
+                    </div>
+                </section>
             </div>
 
             <div class="form-actions">

@@ -60,7 +60,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(15, flyway.info().applied().length);
+        assertEquals(21, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -74,6 +74,7 @@ class MigrationIntegrationTest {
                         "MANAGE_BOOKING",
                         "MANAGE_PAYMENT",
                         "MANAGE_EXPENSE",
+                        "MANAGE_ADDITIONAL_REVENUE",
                         "MANAGE_GUEST",
                         "VIEW_REPORT",
                         "VIEW_BOOKING",
@@ -85,11 +86,13 @@ class MigrationIntegrationTest {
                         "MANAGE_BOOKING",
                         "MANAGE_PAYMENT",
                         "MANAGE_EXPENSE",
+                        "MANAGE_ADDITIONAL_REVENUE",
                         "VIEW_REPORT",
                         "MANAGE_GUEST",
                         "VIEW_BOOKING",
+                        "CHECK_IN",
                         "CHECK_OUT"));
-        assertPermissionCodes("STAFF", Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT"));
+        assertPermissionCodes("STAFF", Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT"));
         assertRolePermissionRelationshipCount("ADMIN", "VIEW_REPORT", 1);
         assertRolePermissionRelationshipCount("MANAGER", "VIEW_REPORT", 1);
         assertRolePermissionRelationshipCount("STAFF", "VIEW_REPORT", 0);
@@ -99,6 +102,96 @@ class MigrationIntegrationTest {
         assertRolePermissionRelationshipCount("ADMIN", "MANAGE_EXPENSE", 1);
         assertRolePermissionRelationshipCount("MANAGER", "MANAGE_EXPENSE", 1);
         assertRolePermissionRelationshipCount("STAFF", "MANAGE_EXPENSE", 0);
+        assertRolePermissionRelationshipCount("ADMIN", "MANAGE_ADDITIONAL_REVENUE", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "MANAGE_ADDITIONAL_REVENUE", 1);
+        assertRolePermissionRelationshipCount("STAFF", "MANAGE_ADDITIONAL_REVENUE", 0);
+        assertRolePermissionRelationshipCount("ADMIN", "MANAGE_PAYMENT", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "MANAGE_PAYMENT", 1);
+        assertRolePermissionRelationshipCount("STAFF", "MANAGE_PAYMENT", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "CHECK_IN", 1);
+        assertRolePermissionRelationshipCount("STAFF", "CHECK_IN", 1);
+    }
+
+    /** Verifies V16 preserves MANAGE_GUEST and adds a distinct Additional Revenue permission. */
+    @Test
+    void additionalRevenuePermissionUsesAUniqueDeterministicId() {
+        String guestPermissionCode = jdbcTemplate.queryForObject(
+                "SELECT code FROM permission WHERE id = '00000000-0000-0000-0000-000000000111'",
+                String.class);
+        UUID additionalRevenuePermissionId = jdbcTemplate.queryForObject(
+                "SELECT id FROM permission WHERE code = 'MANAGE_ADDITIONAL_REVENUE'", UUID.class);
+        Integer additionalRevenuePermissionCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM permission WHERE code = 'MANAGE_ADDITIONAL_REVENUE'", Integer.class);
+        Integer uniquePermissionIdCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(DISTINCT id) FROM permission", Integer.class);
+        Integer permissionCount = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM permission", Integer.class);
+        Integer additionalRevenueCategoryCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM additional_revenue_category "
+                        + "WHERE (id = '00000000-0000-0000-0000-000000000401' "
+                        + "AND code = 'ELECTRIC_CART_RENTAL') "
+                        + "OR (id = '00000000-0000-0000-0000-000000000402' AND code = 'OTHER')",
+                Integer.class);
+
+        assertEquals("MANAGE_GUEST", guestPermissionCode);
+        assertEquals(UUID.fromString("00000000-0000-0000-0000-000000000112"), additionalRevenuePermissionId);
+        assertEquals(1, additionalRevenuePermissionCount);
+        assertEquals(permissionCount, uniquePermissionIdCount);
+        assertEquals(2, additionalRevenueCategoryCount);
+    }
+
+    /** Verifies V17 aligns Additional Revenue currency with the validated VARCHAR convention. */
+    @Test
+    void additionalRevenueCurrencyUsesVarcharAndRetainsTheVndConstraint() {
+        String currencyType = jdbcTemplate.queryForObject(
+                "SELECT data_type FROM information_schema.columns "
+                        + "WHERE table_name = 'additional_revenue' AND column_name = 'currency'",
+                String.class);
+        Boolean vndConstraintExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint "
+                        + "WHERE conname = 'additional_revenue_currency_vnd')",
+                Boolean.class);
+        String vndConstraintDefinition = jdbcTemplate.queryForObject(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                        + "WHERE conname = 'additional_revenue_currency_vnd'",
+                String.class);
+
+        assertEquals("character varying", currencyType);
+        assertTrue(Boolean.TRUE.equals(vndConstraintExists));
+        assertTrue(vndConstraintDefinition.contains("'VND'"));
+    }
+
+    /** Verifies V18 creates the one-passport-per-Guest metadata table with an enforcing key. */
+    @Test
+    void guestDocumentSchemaEnforcesOnePassportImagePerGuest() {
+        Boolean guestIdIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' FROM information_schema.columns "
+                        + "WHERE table_name = 'guest_document' AND column_name = 'guest_id'",
+                Boolean.class);
+        Boolean uniquePassportConstraintExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint "
+                        + "WHERE conname = 'guest_document_one_per_type')",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(guestIdIsRequired));
+        assertTrue(Boolean.TRUE.equals(uniquePassportConstraintExists));
+    }
+
+    /** Verifies V19 adds a nullable, unconstrained OTA booking reference column to reservation. */
+    @Test
+    void reservationOtaBookingReferenceColumnIsNullableAndUnconstrained() {
+        Boolean columnIsNullable = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'YES' FROM information_schema.columns "
+                        + "WHERE table_name = 'reservation' AND column_name = 'ota_booking_reference'",
+                Boolean.class);
+        Integer uniqueConstraintCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_constraint c "
+                        + "JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey) "
+                        + "WHERE c.conrelid = 'reservation'::regclass "
+                        + "AND c.contype = 'u' AND a.attname = 'ota_booking_reference'",
+                Integer.class);
+
+        assertTrue(Boolean.TRUE.equals(columnIsNullable));
+        assertEquals(0, uniqueConstraintCount);
     }
 
     /** Verifies that PostgreSQL allocates distinct, correctly formatted reservation numbers. */

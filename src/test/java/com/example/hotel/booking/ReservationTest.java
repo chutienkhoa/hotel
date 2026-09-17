@@ -114,6 +114,71 @@ class ReservationTest {
         assertEquals(BookingSource.BOOKING_COM, reservation.getSource());
     }
 
+    /** Confirms an OTA source stores the staff-entered booking reference verbatim. */
+    @Test
+    void shouldStoreOtaBookingReferenceVerbatimForOtaSource() {
+        Reservation reservation = new Reservation(
+                UUID.randomUUID(), RESERVATION_NUMBER, null,
+                LocalDate.of(2027, 1, 10), LocalDate.of(2027, 1, 12),
+                BookingSource.AGODA, "AbC-123", "VND", null);
+
+        assertEquals("AbC-123", reservation.getOtaBookingReference());
+    }
+
+    /** Confirms a DIRECT reservation never persists an OTA booking reference, even if supplied. */
+    @Test
+    void shouldDiscardOtaBookingReferenceForDirectSource() {
+        Reservation reservation = new Reservation(
+                UUID.randomUUID(), RESERVATION_NUMBER, null,
+                LocalDate.of(2027, 1, 10), LocalDate.of(2027, 1, 12),
+                BookingSource.DIRECT, "STALE-REF", "VND", null);
+
+        assertEquals(null, reservation.getOtaBookingReference());
+    }
+
+    /** Confirms switching an OTA draft's source back to DIRECT clears its stale OTA reference. */
+    @Test
+    void shouldClearOtaBookingReferenceWhenDraftSourceChangesToDirect() {
+        Reservation reservation = new Reservation(
+                UUID.randomUUID(), RESERVATION_NUMBER, null,
+                LocalDate.of(2027, 1, 10), LocalDate.of(2027, 1, 12),
+                BookingSource.AGODA, "123456789", "VND", null);
+        assertEquals("123456789", reservation.getOtaBookingReference());
+
+        reservation.updateDraft(
+                null,
+                LocalDate.of(2027, 1, 10),
+                LocalDate.of(2027, 1, 12),
+                BookingSource.DIRECT,
+                "123456789",
+                "VND",
+                null,
+                List.of());
+
+        assertEquals(null, reservation.getOtaBookingReference());
+    }
+
+    /** Confirms editing an OTA draft's reference preserves the exact staff-entered text. */
+    @Test
+    void shouldUpdateOtaBookingReferenceWithoutTransformation() {
+        Reservation reservation = new Reservation(
+                UUID.randomUUID(), RESERVATION_NUMBER, null,
+                LocalDate.of(2027, 1, 10), LocalDate.of(2027, 1, 12),
+                BookingSource.AIRBNB, "hmabc123", "VND", null);
+
+        reservation.updateDraft(
+                null,
+                LocalDate.of(2027, 1, 10),
+                LocalDate.of(2027, 1, 12),
+                BookingSource.BOOKING_COM,
+                "BK-987654",
+                "VND",
+                null,
+                List.of());
+
+        assertEquals("BK-987654", reservation.getOtaBookingReference());
+    }
+
     /** Confirms draft editing replaces every room snapshot without changing its identity or state. */
     @Test
     void draftUpdateRebuildsRoomSnapshotsAndRecalculatesTotal() {

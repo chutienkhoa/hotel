@@ -7,6 +7,9 @@ import com.example.hotel.dto.booking.response.ReservationRoomResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.Reservation;
+import com.example.hotel.entity.customer.Guest;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,16 +34,22 @@ public class ReservationMapper {
     }
 
     /**
-     * Converts a reservation entity into the compact representation used by list views.
+     * Converts a reservation entity into the compact representation used by list views, with its
+     * assigned room numbers supplied separately to avoid an N+1 collection fetch.
      *
      * @param reservation the reservation entity to convert
+     * @param roomNumbers the reservation's assigned room numbers, pre-joined for compact display
      * @return the reservation list representation
      */
-    public ReservationSummaryResponse toSummaryResponse(Reservation reservation) {
+    public ReservationSummaryResponse toSummaryResponse(Reservation reservation, String roomNumbers) {
         return new ReservationSummaryResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
+                guestFullName(reservation.getGuest()),
+                roomNumbers,
                 reservation.getStatus().name(),
+                reservation.getSource(),
+                reservation.getOtaBookingReference(),
                 reservation.getCheckInDate(),
                 reservation.getCheckOutDate(),
                 reservation.getTotalAmount(),
@@ -60,6 +69,8 @@ public class ReservationMapper {
                 reservation.getGuest().getId(),
                 reservation.getGuest().getGuestCode(),
                 reservation.getStatus().name(),
+                reservation.getSource(),
+                reservation.getOtaBookingReference(),
                 reservation.getCheckInDate(),
                 reservation.getCheckOutDate(),
                 reservation.getTotalAmount(),
@@ -77,9 +88,27 @@ public class ReservationMapper {
                 reservation.getCheckInDate(),
                 reservation.getCheckOutDate(),
                 reservation.getSource(),
+                reservation.getOtaBookingReference(),
                 reservation.getCurrency(),
                 reservation.getNotes(),
                 reservation.getRooms().stream().map(this::toRoomResponse).toList());
+    }
+
+    /**
+     * Joins the optional Guest name components for presentation without changing Guest data.
+     *
+     * @param guest Guest whose name is displayed
+     * @return the trimmed display name, or an empty string when no name component is present or
+     *     no Guest is associated
+     */
+    private String guestFullName(Guest guest) {
+        if (guest == null) {
+            return "";
+        }
+        return Stream.of(guest.getFirstName(), guest.getLastName())
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining(" "));
     }
 
     /**

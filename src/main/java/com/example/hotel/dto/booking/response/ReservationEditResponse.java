@@ -13,6 +13,7 @@ public record ReservationEditResponse(
         LocalDate checkInDate,
         LocalDate checkOutDate,
         BookingSource source,
+        String otaBookingReference,
         String currency,
         String notes,
         List<ReservationRoomResponse> rooms) {}

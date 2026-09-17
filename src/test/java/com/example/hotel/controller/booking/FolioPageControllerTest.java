@@ -404,6 +404,8 @@ class FolioPageControllerTest {
                 UUID.randomUUID(),
                 "GUEST-001",
                 status,
+                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                null,
                 LocalDate.of(2026, 9, 11),
                 LocalDate.of(2026, 9, 12),
                 BigDecimal.TEN,

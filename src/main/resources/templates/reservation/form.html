@@ -90,6 +90,13 @@
                         <span aria-hidden="true" class="button button-danger reservation-details-row__spacer">Remove</span>
                     </div>
 
+                    <div class="form-field" data-ota-booking-reference-field
+                         th:hidden="${reservationForm.source == null or reservationForm.source.name() == 'DIRECT'}">
+                        <label for="otaBookingReference">OTA Booking Reference *</label>
+                        <input id="otaBookingReference" required th:field="*{otaBookingReference}" type="text" />
+                        <p class="field-error" th:errors="*{otaBookingReference}"></p>
+                    </div>
+
                     <div class="form-field reservation-notes">
                         <label for="notes">Notes</label>
                         <textarea id="notes" maxlength="5000" rows="3" th:field="*{notes}"></textarea>

@@ -34,6 +34,14 @@
             <dt>Address</dt>
             <dd th:text="${guest.address}">Address</dd>
         </dl>
+
+        <section aria-labelledby="passport-heading" class="card guest-passport-section">
+            <h2 id="passport-heading">Passport</h2>
+            <p th:if="${passportDocument == null}">No passport image uploaded.</p>
+            <p th:if="${passportDocument != null}">
+                <a class="button button-secondary" th:href="@{/guests/{id}/passport-image(id=${guest.id})}" target="_blank">View Passport</a>
+            </p>
+        </section>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>

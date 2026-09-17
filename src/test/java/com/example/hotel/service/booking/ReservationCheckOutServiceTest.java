@@ -27,6 +27,7 @@ import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -224,7 +225,8 @@ class ReservationCheckOutServiceTest {
                         auditLogRepository,
                         new ReservationMapper(),
                         reservationNumberGenerator,
-                        stayBalanceService),
+                        stayBalanceService,
+                        Clock.systemDefaultZone()),
                 reservationRepository,
                 roomRepository,
                 stayRepository,

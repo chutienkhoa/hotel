@@ -5,12 +5,17 @@ import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.entity.booking.Reservation;
+import com.example.hotel.entity.booking.ReservationRoom;
+import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ReservationRepository;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -52,8 +57,11 @@ public class ReservationQueryService {
      */
     @Transactional(readOnly = true)
     public List<ReservationSummaryResponse> findAll() {
-        return reservationRepository.findAll().stream()
-                .map(reservationMapper::toSummaryResponse)
+        List<Reservation> reservations = reservationRepository.findAll();
+        Map<UUID, String> roomNumbersByReservationId = roomNumbersByReservationId(reservations);
+        return reservations.stream()
+                .map(reservation -> reservationMapper.toSummaryResponse(
+                        reservation, roomNumbersByReservationId.getOrDefault(reservation.getId(), "")))
                 .toList();
     }
 
@@ -70,8 +78,33 @@ public class ReservationQueryService {
                 Math.max(page, 0),
                 RESERVATION_PAGE_SIZE,
                 Sort.by(Sort.Order.desc("checkInDate"), Sort.Order.asc("reservationNumber")));
-        return reservationRepository.findAll(specificationFor(criteria), pageable)
-                .map(reservationMapper::toSummaryResponse);
+        Page<Reservation> reservationPage = reservationRepository.findAll(specificationFor(criteria), pageable);
+        Map<UUID, String> roomNumbersByReservationId = roomNumbersByReservationId(reservationPage.getContent());
+        return reservationPage.map(reservation -> reservationMapper.toSummaryResponse(
+                reservation, roomNumbersByReservationId.getOrDefault(reservation.getId(), "")));
+    }
+
+    /**
+     * Batch-loads and joins each Reservation's assigned room numbers in a single extra query,
+     * avoiding an N+1 lookup per row and any duplicate Reservation rows a room join would cause.
+     *
+     * @param reservations Reservations whose assigned room numbers are loaded
+     * @return each Reservation identifier mapped to its compact, comma-separated room numbers
+     */
+    private Map<UUID, String> roomNumbersByReservationId(List<Reservation> reservations) {
+        if (reservations.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> reservationIds = reservations.stream().map(Reservation::getId).toList();
+        Map<UUID, List<String>> roomNumbersById = new LinkedHashMap<>();
+        for (Object[] row : reservationRepository.findRoomNumbersByReservationIdIn(reservationIds)) {
+            UUID reservationId = (UUID) row[0];
+            String roomNumber = (String) row[1];
+            roomNumbersById.computeIfAbsent(reservationId, id -> new ArrayList<>()).add(roomNumber);
+        }
+        Map<UUID, String> joined = new LinkedHashMap<>();
+        roomNumbersById.forEach((reservationId, roomNumbers) -> joined.put(reservationId, String.join(", ", roomNumbers)));
+        return joined;
     }
 
     /** Builds the database predicate containing only the supplied filters. */
@@ -82,6 +115,28 @@ public class ReservationQueryService {
                 predicates.add(criteriaBuilder.like(
                         criteriaBuilder.lower(root.get("reservationNumber")),
                         "%" + criteria.getReservationNumber().toLowerCase(Locale.ROOT) + "%"));
+            }
+            if (criteria.getGuest() != null) {
+                Join<Reservation, Guest> guestJoin = root.join("guest");
+                String pattern = "%" + criteria.getGuest().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.like(criteriaBuilder.lower(guestJoin.get("firstName")), pattern),
+                        criteriaBuilder.like(criteriaBuilder.lower(guestJoin.get("lastName")), pattern)));
+            }
+            if (criteria.getRoom() != null) {
+                Join<Reservation, ReservationRoom> roomJoin = root.join("rooms");
+                predicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(roomJoin.get("room").get("roomNumber")),
+                        "%" + criteria.getRoom().toLowerCase(Locale.ROOT) + "%"));
+                query.distinct(true);
+            }
+            if (criteria.getSource() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("source"), criteria.getSource()));
+            }
+            if (criteria.getOtaBookingReference() != null) {
+                predicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(root.get("otaBookingReference")),
+                        "%" + criteria.getOtaBookingReference().toLowerCase(Locale.ROOT) + "%"));
             }
             if (criteria.getStatus() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("status"), criteria.getStatus()));

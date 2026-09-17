@@ -1660,6 +1660,150 @@ Các bước phải nằm trong business transaction phù hợp.
 
 ---
 
+## 23.1 Check-in Flow — V1 Operational Detail
+
+`/check-in` là route vận hành thực tế, protected bởi `CHECK_IN`.
+
+Cung cấp ba entry flow:
+
+```text
+A. Existing Reservation
+B. OTA Booking Not Entered
+C. Walk-in
+```
+
+### A. Existing Reservation
+
+Tìm kiếm CHỈ trong database nội bộ (không tích hợp Agoda/Booking.com/Airbnb API).
+
+Hỗ trợ tra cứu theo:
+
+```text
+Reservation Number
+Guest name
+OTA Booking Reference
+```
+
+Chỉ Reservation ở trạng thái `CONFIRMED` mới actionable cho Check-in. Chọn một kết quả
+sẽ chuyển sang trang Check-in Review (read-only).
+
+### Check-in Review (read-only)
+
+Hiển thị:
+
+```text
+Guest: tên, guest code, nationality (nếu có), passport availability, secure View Passport
+Booking: Reservation Number, Source, OTA Booking Reference (chỉ khi source là OTA),
+         planned check-in date, planned check-out date, actual check-in date/time preview
+Room/financial: assigned room(s), room type (nếu có), nightly rate, số đêm, room total,
+                reservation total, currency
+```
+
+Không cho phép thay đổi Guest, Room, Source, OTA reference, booking dates, nightly rate,
+currency, totals từ trang này.
+
+### Early / Normal / Late Check-in
+
+So sánh hotel current `LocalDate` (từ Clock nghiệp vụ hiện có, KHÔNG dùng giờ trình duyệt)
+với `Reservation.checkInDate`:
+
+```text
+today < checkInDate  → EARLY  → check-in bị chặn, không hiển thị nút Confirm Check-in.
+                                 Staff phải tạo một DIRECT reservation riêng cho khoảng
+                                 lưu trú sớm hơn.
+today == checkInDate → NORMAL → cho phép check-in bình thường.
+today > checkInDate  → LATE   → cho phép check-in, Review page hiển thị cảnh báo rõ ràng;
+                                 nút "Confirm Check-in" trên trang cảnh báo này CHÍNH LÀ
+                                 xác nhận của con người — không có popup xác nhận thứ hai
+                                 riêng cho late check-in.
+```
+
+Rule EARLY được backend (`ReservationService.checkIn`) enforce độc lập với UI. Gọi POST/API
+trực tiếp không thể bypass rule này.
+
+Late check-in KHÔNG được thay đổi: `Reservation.checkInDate`, `checkOutDate`,
+`ReservationRoom` snapshots, số đêm, nightly rate, totals, ROOM Charge. ROOM Charge tiếp tục
+được tính từ `ReservationRoom` snapshot y như hiện tại (không dùng actual check-in time).
+
+### B. OTA Booking Not Entered
+
+KHÔNG phải Walk-in. Đại diện cho: khách đã có booking Agoda/Booking.com/Airbnb nhưng Staff
+chưa/quên nhập vào Hotel System trước khi khách đến.
+
+Tái sử dụng nghiệp vụ tạo Reservation hiện có (`CreateRequest`, `ReservationService.create`).
+Staff chọn Guest hiện có hoặc tạo Guest mới (theo rule Guest hiện có), chọn OTA Source
+(`AGODA`/`BOOKING_COM`/`AIRBNB` — không chấp nhận `DIRECT` ở flow này), nhập OTA Booking
+Reference, ngày theo đúng booking OTA, chọn Room, nhập nightly rate/currency, rồi tạo
+Reservation thật (`source` = OTA source đã chọn, `otaBookingReference` = giá trị Staff nhập).
+Sau khi tạo + confirm thành công, Staff được chuyển thẳng vào Check-in Review flow ở trên
+(không phải quay lại Reservation List để tìm kiếm). Toàn bộ rule Early/Normal/Late vẫn áp
+dụng — nhập OTA reservation trễ tại quầy không cho phép check-in sớm hơn ngày OTA đã đặt.
+Hai reservation (DIRECT cho đêm phát sinh sớm hơn, và OTA cho phần còn lại) KHÔNG được tự
+động liên kết.
+
+### C. Walk-in
+
+Khách không có reservation, đến trong ngày:
+
+```text
+source        = DIRECT (không cho chọn source khác)
+checkInDate   = hotel current date (authoritative, từ Clock)
+checkOutDate  = Staff chọn
+```
+
+Staff chọn Guest hiện có hoặc tạo Guest mới (theo rule Guest hiện có), chọn checkout date,
+chọn (các) room còn trống cho TOÀN BỘ khoảng ngày yêu cầu — danh sách room phải date-range
+aware, KHÔNG chỉ lọc theo `Room.status` hiện tại (tái sử dụng overlap semantics của
+`ReservationRepository.hasOverlap`, cộng với loại trừ room đang `OUT_OF_ORDER`). Danh sách
+này chỉ phục vụ UX; validation cuối cùng tại bước confirm mới có tính authoritative (lock
+room bằng pessimistic lock hiện có, re-check overlap).
+
+Walk-in luôn tạo một DIRECT Reservation thật, đi qua đúng lifecycle hiện có
+(`create → confirm → checkIn`), KHÔNG có đường tạo Stay bỏ qua Reservation.
+
+Trước khi xác nhận, hiển thị Review read-only (Guest + Passport, Source = Direct,
+check-in/check-out date, actual check-in time preview, room(s), nightly rate, số đêm,
+currency, total) — trang Review không được âm thầm thay đổi dữ liệu.
+
+"Confirm & Check-in" là MỘT operation atomic duy nhất đối với Staff:
+
+```text
+validate
+  → lock/revalidate Room availability (RoomRepository.lockAllByIdIn + hasOverlap, y như
+    confirm() hiện có)
+  → create DIRECT Reservation
+  → confirm Reservation
+  → check in Reservation (tạo Stay, tạo ROOM Charge, Room → OCCUPIED)
+  → commit
+```
+
+Toàn bộ nằm trong một transaction boundary duy nhất (orchestration method mới, gọi lại
+nguyên vẹn `ReservationService.create/confirm/checkIn` — không tạo alternate Stay path,
+không nhân bản locking logic). Nếu bất kỳ bước nào fail, toàn bộ operation phải rollback:
+không được để lại orphan Reservation, Reservation nửa vời, Stay không đi kèm lifecycle, ROOM
+Charge một phần, hoặc Room status sai.
+
+### Direct + OTA Consecutive Stays (V1)
+
+V1 cố tình giữ các reservation liên tiếp (ví dụ DIRECT 19/09→20/09 rồi BOOKING_COM
+20/09→23/09 cùng một Room) tách biệt. Vận hành là check-out DIRECT rồi check-in OTA. KHÔNG
+implement Continue Stay, linked reservations, automatic Stay transfer, hay automatic room
+continuation trong V1.
+
+### Passport Authorization (V1 adjustment)
+
+`MANAGE_GUEST` tiếp tục là permission quản lý Guest. `CHECK_IN` được cấp thêm quyền ĐỌC ảnh
+passport Guest (secure passport-image endpoint) khi cần cho Check-in — không cấp thêm bất kỳ
+Guest management/edit capability nào cho Staff chỉ có `CHECK_IN`. Passport image vẫn là
+optional; thiếu passport KHÔNG chặn check-in.
+
+### Sidebar
+
+Sau khi `/check-in` tồn tại như route thật, "Check-in" xuất hiện trong nhóm OPERATIONS của
+sidebar hiện có theo đúng permission-aware rule sẵn có (hiển thị khi user có `CHECK_IN`).
+
+---
+
 # 24. Check-out Flow
 
 Check-out operates atomically on the entire Reservation.
@@ -1838,6 +1982,7 @@ MANAGER
  ├── VIEW_REPORT
  ├── VIEW_BOOKING
  ├── MANAGE_GUEST
+ ├── CHECK_IN
  └── CHECK_OUT
 ```
 
@@ -1845,10 +1990,16 @@ MANAGER
 STAFF
  ├── VIEW_BOOKING
  ├── CHECK_IN
- └── CHECK_OUT
+ ├── CHECK_OUT
+ └── MANAGE_PAYMENT
 ```
 
 `DELETE_RESERVATION` được xác định là permission có thể tồn tại trong hệ thống, nhưng business flow reservation không sử dụng hard delete.
+
+`MANAGE_PAYMENT` được cấp cho STAFF để hỗ trợ thao tác Payment vận hành khi check-out (xem
+Operational Sidebar Restructure). `CHECK_IN` được cấp cho MANAGER để đảm bảo cả ba role
+(ADMIN/MANAGER/STAFF) đều có thể thực hiện Check-in (xem 23.1). `CHECK_IN` còn cấp quyền ĐỌC
+ảnh passport Guest qua secure passport-image endpoint, không cấp Guest management.
 
 ---
 

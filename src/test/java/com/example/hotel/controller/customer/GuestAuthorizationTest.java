@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,11 +15,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.hotel.controller.common.NavigationModelAdvice;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
 import com.example.hotel.dto.customer.response.GuestListResponse;
+import com.example.hotel.dto.customer.response.GuestDocumentResponse;
+import com.example.hotel.dto.customer.response.GuestPassportImage;
 import com.example.hotel.dto.customer.response.GuestResponse;
+import com.example.hotel.exception.GuestDocumentValidationException;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.customer.GuestService;
+import com.example.hotel.service.customer.GuestDocumentService;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -30,6 +36,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -52,6 +60,9 @@ class GuestAuthorizationTest {
 
     @MockitoBean
     private GuestQueryService guestQueryService;
+
+    @MockitoBean
+    private GuestDocumentService guestDocumentService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -123,7 +134,7 @@ class GuestAuthorizationTest {
         mockMvc.perform(get("/guests/new").with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
-                        "<select id=\"nationality\" name=\"nationality\">")))
+                        "<select id=\"nationality\" required name=\"nationality\">")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
                         "id=\"nationality\" maxlength=\"100\""))))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
@@ -174,19 +185,150 @@ class GuestAuthorizationTest {
     /** Confirms creating a guest persists the canonical country name selected from the dropdown. */
     @Test
     void shouldSubmitCanonicalCountryNameWhenCreatingGuest() throws Exception {
-        when(guestService.create(org.mockito.ArgumentMatchers.any())).thenReturn(guestResponse("Japan"));
+        when(guestService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(guestResponse("Japan"));
         org.mockito.ArgumentCaptor<com.example.hotel.dto.customer.request.GuestCreateRequest> captor =
                 org.mockito.ArgumentCaptor.forClass(com.example.hotel.dto.customer.request.GuestCreateRequest.class);
 
         mockMvc.perform(post("/guests")
                         .param("firstName", "Khoa")
+                        .param("lastName", "Nguyen")
                         .param("nationality", "Japan")
                         .with(user("admin").authorities(manageGuestAuthority()))
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection());
 
-        verify(guestService).create(captor.capture());
+        verify(guestService).create(captor.capture(), org.mockito.ArgumentMatchers.any());
         org.junit.jupiter.api.Assertions.assertEquals("Japan", captor.getValue().nationality());
+    }
+
+    /** Confirms missing or manipulated required Guest values remain on the form with field errors. */
+    @Test
+    void shouldRejectMissingAndUnsupportedRequiredGuestFields() throws Exception {
+        mockMvc.perform(post("/guests")
+                        .param("firstName", "   ")
+                        .param("lastName", "")
+                        .param("nationality", "Atlantis")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("First name is required.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Last name is required.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Nationality is not supported.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"Atlantis\"")));
+
+        org.mockito.Mockito.verifyNoInteractions(guestService);
+    }
+
+    /** Confirms direct API callers cannot bypass canonical nationality validation. */
+    @Test
+    void shouldRejectManipulatedNationalityThroughGuestApi() throws Exception {
+        mockMvc.perform(post("/api/guests")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"firstName\":\"First\",\"lastName\":\"Last\",\"nationality\":\"Atlantis\"}")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** Confirms the forms mark required fields and expose the optional private-image upload affordance. */
+    @Test
+    void shouldRenderRequiredGuestFieldsAndOptionalPassportUpload() throws Exception {
+        mockMvc.perform(get("/guests/new").with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("First name *")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Last name *")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Nationality *")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("enctype=\"multipart/form-data\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"passportImage\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("image/jpeg,image/png")));
+    }
+
+    /**
+     * Confirms an oversized Create Guest passport upload returns to the form with a friendly
+     * field-level error, preserved input, and no redirect (no raw 413).
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldReturnCreateFormWithFriendlyPassportErrorAndPreservedFieldsWhenUploadTooLarge() throws Exception {
+        when(guestService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new GuestDocumentValidationException("Passport image must not exceed 5 MB."));
+        MockMultipartFile passportImage =
+                new MockMultipartFile("passportImage", "oversized.jpg", "image/jpeg", new byte[6 * 1024 * 1024]);
+
+        mockMvc.perform(multipart("/guests")
+                        .file(passportImage)
+                        .param("firstName", "Khoa")
+                        .param("lastName", "Nguyen")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Passport image must not exceed 5 MB.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"Khoa\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"Nguyen\"")));
+    }
+
+    /**
+     * Confirms an oversized Edit Guest passport replacement returns to the form with a friendly
+     * field-level error while the existing passport remains presented (no raw 413).
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldReturnEditFormWithFriendlyPassportErrorAndPreservedPassportWhenReplacementTooLarge() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestService.update(
+                        org.mockito.ArgumentMatchers.eq(GUEST_ID),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new GuestDocumentValidationException("Passport image must not exceed 5 MB."));
+        when(guestDocumentService.findPassport(GUEST_ID))
+                .thenReturn(Optional.of(new GuestDocumentResponse("existing-passport.jpg")));
+        MockMultipartFile passportImage =
+                new MockMultipartFile("passportImage", "oversized.png", "image/png", new byte[6 * 1024 * 1024]);
+
+        mockMvc.perform(multipart("/guests/{id}", GUEST_ID)
+                        .file(passportImage)
+                        .param("firstName", "First")
+                        .param("lastName", "Last")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Passport image must not exceed 5 MB.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("View Passport")));
+    }
+
+    /** Confirms the Guest detail presents only a safe passport-view link and never storage metadata. */
+    @Test
+    void shouldRenderAndSecurelyServePassportImage() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassport(GUEST_ID)).thenReturn(Optional.of(new GuestDocumentResponse("passport.jpg")));
+        when(guestDocumentService.loadPassport(GUEST_ID)).thenReturn(new GuestPassportImage(
+                new ByteArrayResource(new byte[] {1, 2, 3}), "image/jpeg", "passport.jpg"));
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("View Passport")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("storageKey"))));
+        mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.IMAGE_JPEG));
+        mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
+                        .with(user("staff").authorities(staffAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
+                        .contentType(MediaType.IMAGE_JPEG));
+        mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
+                        .with(user("no-permission").authorities(
+                                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isForbidden());
     }
 
     /** Confirms the Guest list renders five independent filter fields and no generic Search field. */
@@ -325,7 +467,8 @@ class GuestAuthorizationTest {
     void shouldIgnoreClientSuppliedGuestCode() throws Exception {
         when(guestService.create(org.mockito.ArgumentMatchers.any())).thenReturn(guestResponse());
         String body =
-                "{\"firstName\":\"First\",\"guestCode\":\"CLIENT-OVERRIDE\"}";
+                "{\"firstName\":\"First\",\"lastName\":\"Last\",\"nationality\":\"Japan\","
+                        + "\"guestCode\":\"CLIENT-OVERRIDE\"}";
 
         mockMvc.perform(post("/api/guests")
                         .contentType(MediaType.APPLICATION_JSON)

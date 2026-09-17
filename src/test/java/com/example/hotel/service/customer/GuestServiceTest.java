@@ -39,7 +39,7 @@ class GuestServiceTest {
     @Test
     void shouldCreateGuestWithGeneratedCodeAndAuditUser() {
         GuestRepository guestRepository = mock(GuestRepository.class);
-        GuestService guestService = new GuestService(guestRepository, new GuestMapper());
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), mock(GuestDocumentService.class));
         UUID creatorId = UUID.randomUUID();
         setCurrentUser(creatorId);
         when(guestRepository.nextGuestCodeSequence()).thenReturn(1L);
@@ -58,7 +58,7 @@ class GuestServiceTest {
     @Test
     void shouldSkipAnExistingGuestCodeWhenGeneratingGuestCode() {
         GuestRepository guestRepository = mock(GuestRepository.class);
-        GuestService guestService = new GuestService(guestRepository, new GuestMapper());
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), mock(GuestDocumentService.class));
         setCurrentUser(UUID.randomUUID());
         when(guestRepository.nextGuestCodeSequence()).thenReturn(1L, 2L);
         when(guestRepository.existsByGuestCode("G000001")).thenReturn(true);
@@ -76,7 +76,7 @@ class GuestServiceTest {
     @Test
     void shouldPreserveCreatorAndGuestCodeWhenUpdatingGuest() {
         GuestRepository guestRepository = mock(GuestRepository.class);
-        GuestService guestService = new GuestService(guestRepository, new GuestMapper());
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), mock(GuestDocumentService.class));
         UUID guestId = UUID.randomUUID();
         UUID creatorId = UUID.randomUUID();
         UUID updaterId = UUID.randomUUID();

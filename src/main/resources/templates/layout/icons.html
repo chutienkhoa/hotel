@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Small, local, dependency-free outline icons shared by the sidebar navigation and the
+     Reservation Detail information tiles. -->
+
+<svg th:fragment="user" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <circle cx="12" cy="8" r="3.5"></circle>
+    <path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"></path>
+</svg>
+
+<svg th:fragment="building" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <rect height="16" width="12" x="6" y="3"></rect>
+    <path d="M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1"></path>
+    <path d="M10.5 19v-3h3v3"></path>
+</svg>
+
+<svg th:fragment="calendar" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <rect height="16" rx="1.5" width="16" x="4" y="5"></rect>
+    <path d="M4 9.5h16M8 3v3.5M16 3v3.5"></path>
+</svg>
+
+<svg th:fragment="coins" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <ellipse cx="9" cy="7" rx="5.5" ry="3"></ellipse>
+    <path d="M3.5 7v4c0 1.66 2.46 3 5.5 3s5.5-1.34 5.5-3V7"></path>
+    <path d="M3.5 11v4c0 1.66 2.46 3 5.5 3 .93 0 1.8-.13 2.56-.35"></path>
+    <ellipse cx="15.5" cy="14" rx="5" ry="2.7"></ellipse>
+    <path d="M10.5 14v3.3c0 1.5 2.24 2.7 5 2.7s5-1.2 5-2.7V14"></path>
+</svg>
+
+<svg th:fragment="note" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <path d="M6 3.5h9l3.5 3.5V20a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5Z"></path>
+    <path d="M15 3.5V7h3.5"></path>
+    <path d="M8.5 12h7M8.5 15.5h5"></path>
+</svg>
+
+<svg th:fragment="chevronRight" aria-hidden="true" fill="none" height="18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" viewBox="0 0 24 24" width="18">
+    <path d="M9 5l7 7-7 7"></path>
+</svg>
+
+<svg th:fragment="home" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <path d="M4 11.5 12 4l8 7.5"></path>
+    <path d="M6 10v9.5a.5.5 0 0 0 .5.5H10v-5.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V20h3.5a.5.5 0 0 0 .5-.5V10"></path>
+</svg>
+
+<svg th:fragment="bed" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <path d="M3.5 19v-7a2 2 0 0 1 2-2H10a2 2 0 0 1 2 2v2"></path>
+    <path d="M12 14h8.5a2 2 0 0 1 2 2v3"></path>
+    <path d="M2.5 19v2M21.5 19v2"></path>
+    <path d="M6 12V8.5a1.5 1.5 0 0 1 1.5-1.5H8a1.5 1.5 0 0 1 1.5 1.5V12"></path>
+</svg>
+
+<svg th:fragment="minusCircle" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <circle cx="12" cy="12" r="8.5"></circle>
+    <path d="M8 12h8"></path>
+</svg>
+
+<svg th:fragment="plusCircle" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <circle cx="12" cy="12" r="8.5"></circle>
+    <path d="M12 8v8M8 12h8"></path>
+</svg>
+
+<svg th:fragment="login" aria-hidden="true" fill="none" height="20" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24" width="20">
+    <path d="M11 4H6.5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1H11"></path>
+    <path d="M14.5 8l4 4-4 4"></path>
+    <path d="M18 12H9.5"></path>
+</svg>
+</body>
+</html>

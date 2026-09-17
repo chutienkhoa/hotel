@@ -92,7 +92,11 @@ public class ReservationPageController {
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         searchCriteria.normalizeReservationNumber();
+        searchCriteria.normalizeGuest();
+        searchCriteria.normalizeRoom();
+        searchCriteria.normalizeOtaBookingReference();
         model.addAttribute("reservationStatuses", ReservationStatus.values());
+        model.addAttribute("bookingSources", BookingSource.values());
 
         String validationMessage = validateSearchCriteria(searchCriteria, bindingResult);
         if (validationMessage != null) {
@@ -154,6 +158,7 @@ public class ReservationPageController {
                 reservation.checkInDate(),
                 reservation.checkOutDate(),
                 reservation.source(),
+                reservation.otaBookingReference(),
                 reservation.currency(),
                 reservation.notes(),
                 reservation.rooms().stream()
@@ -468,7 +473,7 @@ public class ReservationPageController {
      * @return the initial reservation form model
      */
     private CreateRequest emptyReservationForm() {
-        return new CreateRequest(null, null, null, null, null, null, List.of(new RoomRequest(null, null)));
+        return new CreateRequest(null, null, null, null, null, null, null, List.of(new RoomRequest(null, null)));
     }
 
     /**

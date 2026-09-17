@@ -1,5 +1,6 @@
 package com.example.hotel.dto.booking.request;
 
+import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.ReservationStatus;
 import java.time.LocalDate;
 
@@ -9,6 +10,10 @@ import java.time.LocalDate;
 public class ReservationSearchCriteria {
 
     private String reservationNumber;
+    private String guest;
+    private String room;
+    private BookingSource source;
+    private String otaBookingReference;
     private ReservationStatus status;
     private LocalDate checkInFrom;
     private LocalDate checkInTo;
@@ -23,6 +28,46 @@ public class ReservationSearchCriteria {
     /** Sets the Reservation-number fragment supplied by the list form. */
     public void setReservationNumber(String reservationNumber) {
         this.reservationNumber = reservationNumber;
+    }
+
+    /** Returns the optional case-insensitive Guest first/last name fragment. */
+    public String getGuest() {
+        return guest;
+    }
+
+    /** Sets the Guest name fragment supplied by the list form. */
+    public void setGuest(String guest) {
+        this.guest = guest;
+    }
+
+    /** Returns the optional case-insensitive Room-number fragment. */
+    public String getRoom() {
+        return room;
+    }
+
+    /** Sets the Room-number fragment supplied by the list form. */
+    public void setRoom(String room) {
+        this.room = room;
+    }
+
+    /** Returns the optional exact booking source. */
+    public BookingSource getSource() {
+        return source;
+    }
+
+    /** Sets the optional exact booking source. */
+    public void setSource(BookingSource source) {
+        this.source = source;
+    }
+
+    /** Returns the optional case-insensitive OTA booking reference fragment. */
+    public String getOtaBookingReference() {
+        return otaBookingReference;
+    }
+
+    /** Sets the OTA booking reference fragment supplied by the list form. */
+    public void setOtaBookingReference(String otaBookingReference) {
+        this.otaBookingReference = otaBookingReference;
     }
 
     /** Returns the optional exact Reservation status. */
@@ -77,11 +122,35 @@ public class ReservationSearchCriteria {
 
     /** Trims the optional Reservation-number fragment and converts blank input to absent input. */
     public void normalizeReservationNumber() {
-        if (reservationNumber != null) {
-            reservationNumber = reservationNumber.trim();
-            if (reservationNumber.isEmpty()) {
-                reservationNumber = null;
-            }
+        reservationNumber = normalizeFragment(reservationNumber);
+    }
+
+    /** Trims the optional Guest-name fragment and converts blank input to absent input. */
+    public void normalizeGuest() {
+        guest = normalizeFragment(guest);
+    }
+
+    /** Trims the optional Room-number fragment and converts blank input to absent input. */
+    public void normalizeRoom() {
+        room = normalizeFragment(room);
+    }
+
+    /** Trims the optional OTA booking reference fragment and converts blank input to absent input. */
+    public void normalizeOtaBookingReference() {
+        otaBookingReference = normalizeFragment(otaBookingReference);
+    }
+
+    /**
+     * Trims a submitted filter fragment and converts blank input to absent input.
+     *
+     * @param value submitted filter fragment
+     * @return the trimmed fragment, or {@code null} when absent or blank
+     */
+    private String normalizeFragment(String value) {
+        if (value == null) {
+            return null;
         }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

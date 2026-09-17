@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Additional Revenue')}"></head>
+<body>
+<div class="app-shell page-additional-revenues">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Additional Revenue</h1>
+                <p>Record hotel revenue that is separate from room charges and folios.</p>
+            </div>
+            <div class="action-row">
+                <a class="button button-secondary" th:href="@{/additional-revenue-categories}">Manage Categories</a>
+                <a class="button button-primary" th:href="@{/additional-revenues/new}">Record Revenue</a>
+            </div>
+        </div>
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <section class="form-card" aria-label="Filter additional revenue">
+            <form method="get" th:action="@{/additional-revenues}">
+                <div class="form-grid">
+                    <div class="form-field"><label for="fromDate">From Date</label>
+                        <input class="js-date-picker" id="fromDate" name="fromDate" type="text"
+                               th:value="${searchCriteria.fromDate == null ? '' : #temporals.format(searchCriteria.fromDate, 'yyyy-MM-dd')}" /></div>
+                    <div class="form-field"><label for="toDate">To Date</label>
+                        <input class="js-date-picker" id="toDate" name="toDate" type="text"
+                               th:value="${searchCriteria.toDate == null ? '' : #temporals.format(searchCriteria.toDate, 'yyyy-MM-dd')}" /></div>
+                    <div class="form-field"><label for="categoryId">Category</label>
+                        <select id="categoryId" name="categoryId"><option th:selected="${searchCriteria.categoryId == null}" value="">All categories</option>
+                            <option th:each="category : ${categories}" th:selected="${category.id == searchCriteria.categoryId}" th:text="${category.name}" th:value="${category.id}">Other</option>
+                        </select></div>
+                    <div class="form-field"><label for="status">Status</label>
+                        <select id="status" name="status"><option th:selected="${searchCriteria.status == null}" value="">All statuses</option>
+                            <option th:each="revenueStatus : ${statuses}" th:selected="${revenueStatus == searchCriteria.status}" th:text="${revenueStatus}" th:value="${revenueStatus}">RECORDED</option>
+                        </select></div>
+                </div>
+                <div class="action-row expense-filter-actions"><a class="button button-secondary" th:href="@{/additional-revenues}">Clear</a><button class="button button-primary" type="submit">Filter</button></div>
+            </form>
+        </section>
+        <section class="expense-results">
+            <div class="results-toolbar" th:if="${revenuePage != null}"><p><span th:text="${revenuePage.totalElements}">0</span> <span th:text="${revenuePage.totalElements == 1 ? 'result' : 'results'}">results</span></p>
+                <nav aria-label="Additional Revenue pages" class="pagination expense-pagination" th:if="${revenuePage.totalPages > 1}">
+                    <a class="pagination__segment" th:if="${!revenuePage.first}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (revenuePage.number - 1)}">Previous</a>
+                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}"><span aria-current="page" class="pagination__segment pagination__segment--current" th:if="${pageNumber == revenuePage.number}" th:text="${pageNumber + 1}">1</span><a class="pagination__segment" th:unless="${pageNumber == revenuePage.number}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}" th:text="${pageNumber + 1}">2</a></th:block>
+                    <span class="pagination__segment pagination__segment--ellipsis" th:if="${paginationEndPage + 1 < revenuePage.totalPages - 1}">...</span>
+                    <a class="pagination__segment" th:if="${paginationEndPage < revenuePage.totalPages - 1}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (revenuePage.totalPages - 1)}" th:text="${revenuePage.totalPages}">2</a>
+                    <a class="pagination__segment" th:if="${!revenuePage.last}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (revenuePage.number + 1)}">Next</a>
+                </nav>
+            </div>
+            <div th:if="${revenuePage != null and revenuePage.empty and errorMessage == null}"><p class="empty-state" th:if="${filtersActive}">No additional revenue matches the selected filters. <a th:href="@{/additional-revenues}">Clear filters</a></p><p class="empty-state" th:unless="${filtersActive}">No additional revenue has been recorded.</p></div>
+        <div class="table-wrap" th:if="${revenuePage != null and not revenuePage.empty}">
+            <table>
+                <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Payment method</th><th>Status</th></tr></thead>
+                <tbody>
+                <tr th:each="revenue : ${revenuePage.content}">
+                    <td><span th:replace="~{layout/datetime :: date(${revenue.revenueDate})}">—</span></td>
+                    <td><a th:href="@{/additional-revenues/{id}(id=${revenue.id})}" th:text="${revenue.category.code}">OTHER</a></td>
+                    <td th:text="${revenue.description == null ? '—' : revenue.description}">—</td>
+                    <td class="table-number"><span th:replace="~{layout/money :: amount(${revenue.amount}, ${revenue.currency})}">0 VND</span></td>
+                    <td><span th:replace="~{layout/payment-method :: label(${revenue.paymentMethod})}">Cash</span></td>
+                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(revenue.status)}" th:text="${revenue.status}">RECORDED</span></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        </section>
+    </main>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

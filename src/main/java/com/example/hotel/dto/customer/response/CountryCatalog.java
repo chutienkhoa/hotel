@@ -99,6 +99,21 @@ public final class CountryCatalog {
     }
 
     /**
+     * Determines whether submitted text exactly matches one canonical country name accepted by
+     * the Create and Edit Guest forms.
+     *
+     * @param rawText submitted nationality text
+     * @return {@code true} when the value is a canonical country name
+     */
+    public static boolean isCanonicalCountryName(String rawText) {
+        if (rawText == null) {
+            return false;
+        }
+        String trimmed = rawText.trim();
+        return !trimmed.isEmpty() && CODE_BY_NAME_LOWER.containsKey(trimmed.toLowerCase(Locale.ROOT));
+    }
+
+    /**
      * Returns every stored-value variant that should be treated as belonging to the given
      * canonical country: the canonical name itself, plus any known legacy demonym that maps to
      * it. Used to match historical free-text Guest data when filtering by a selected country.

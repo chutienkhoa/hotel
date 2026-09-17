@@ -2,20 +2,53 @@
 <html lang="en" xmlns:th="https://www.thymeleaf.org">
 <body>
 <nav aria-label="Main navigation" class="sidebar" th:fragment="sidebar">
-    <div class="nav-section" th:if="${canViewReport}">
-        <p class="nav-section-label">Overview</p>
-        <a class="nav-link sidebar-nav-link nav-dashboard" th:href="@{/dashboard}">Dashboard</a>
+    <a class="sidebar-brand" th:href="@{/reservations}">
+        <span class="sidebar-brand-icon"><svg th:replace="~{layout/icons :: building}"></svg></span>
+        <span class="sidebar-brand-text">
+            <span class="sidebar-brand-name">Hotel Management</span>
+            <span class="sidebar-brand-tagline">System</span>
+        </span>
+    </a>
+
+    <a class="sidebar-nav-link nav-dashboard" th:href="@{/dashboard}" th:if="${canViewReport}">
+        <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
+        <span>Dashboard</span>
+    </a>
+
+    <div class="nav-section" th:if="${canCheckIn or canViewBooking or canManageGuest}">
+        <p class="nav-section-label">Operations</p>
+        <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
+            <span>Check-in</span>
+        </a>
+        <a class="sidebar-nav-link nav-reservations" th:href="@{/reservations}" th:if="${canViewBooking}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+            <span>Reservations</span>
+        </a>
+        <a class="sidebar-nav-link nav-guests" th:href="@{/guests}" th:if="${canManageGuest}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
+            <span>Guests</span>
+        </a>
     </div>
-    <div class="nav-section">
-        <p class="nav-section-label">Front desk</p>
-        <a class="nav-link sidebar-nav-link nav-reservations" th:href="@{/reservations}">Reservations</a>
-        <a class="nav-link sidebar-nav-link nav-reservation-create" th:if="${canManageBooking}" th:href="@{/reservations/new}">Create Reservation</a>
-        <a class="nav-link sidebar-nav-link nav-guests" th:if="${canManageGuest}" th:href="@{/guests}">Guests</a>
-        <a class="nav-link sidebar-nav-link nav-rooms" th:if="${canManageRoom}" th:href="@{/rooms}">Rooms</a>
+
+    <div class="nav-section" th:if="${canManageRoom}">
+        <p class="nav-section-label">Hotel</p>
+        <a class="sidebar-nav-link nav-rooms" th:href="@{/rooms}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: bed}"></svg></span>
+            <span>Rooms</span>
+        </a>
     </div>
-    <div class="nav-section" th:if="${canManageExpense}">
+
+    <div class="nav-section" th:if="${canManageExpense or canManageAdditionalRevenue}">
         <p class="nav-section-label">Finance</p>
-        <a class="nav-link sidebar-nav-link nav-expenses" th:href="@{/expenses}">Expenses</a>
+        <a class="sidebar-nav-link nav-expenses" th:href="@{/expenses}" th:if="${canManageExpense}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: minusCircle}"></svg></span>
+            <span>Expenses</span>
+        </a>
+        <a class="sidebar-nav-link nav-additional-revenues" th:href="@{/additional-revenues}" th:if="${canManageAdditionalRevenue}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: plusCircle}"></svg></span>
+            <span>Additional Revenue</span>
+        </a>
     </div>
 </nav>
 </body>

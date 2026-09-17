@@ -1,5 +1,6 @@
 package com.example.hotel.dto.booking.response;
 
+import com.example.hotel.entity.booking.BookingSource;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -13,6 +14,8 @@ import java.util.UUID;
  * @param guestId the associated guest identifier
  * @param guestCode the associated guest's display code
  * @param status the current reservation status
+ * @param source the reservation's booking source
+ * @param otaBookingReference the external OTA booking reference, or {@code null} for DIRECT
  * @param checkInDate the planned check-in date
  * @param checkOutDate the planned check-out date
  * @param totalAmount the snapshot total amount
@@ -26,6 +29,8 @@ public record ReservationDetailResponse(
         UUID guestId,
         String guestCode,
         String status,
+        BookingSource source,
+        String otaBookingReference,
         LocalDate checkInDate,
         LocalDate checkOutDate,
         BigDecimal totalAmount,

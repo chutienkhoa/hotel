@@ -25,6 +25,8 @@ import com.example.hotel.security.SessionUserPrincipal;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.Currency;
 import java.util.HashSet;
@@ -50,6 +52,7 @@ public class ReservationService {
     private final ReservationMapper reservationMapper;
     private final ReservationNumberGenerator reservationNumberGenerator;
     private final StayBalanceService stayBalanceService;
+    private final Clock clock;
 
     /**
      * Tạo dịch vụ với các repository phụ thuộc.
@@ -63,6 +66,7 @@ public class ReservationService {
      * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
      * @param reservationNumberGenerator generator tạo reservation number hằng ngày
      * @param stayBalanceService service tính số dư của Stay khi check-out
+     * @param clock authoritative hotel business clock used for Check-in date rules
      */
     ReservationService(
             ReservationRepository reservations,
@@ -73,7 +77,8 @@ public class ReservationService {
             AuditLogRepository audits,
             ReservationMapper reservationMapper,
             ReservationNumberGenerator reservationNumberGenerator,
-            StayBalanceService stayBalanceService) {
+            StayBalanceService stayBalanceService,
+            Clock clock) {
         this.reservations = reservations;
         this.guests = guests;
         this.rooms = rooms;
@@ -83,6 +88,7 @@ public class ReservationService {
         this.reservationMapper = reservationMapper;
         this.reservationNumberGenerator = reservationNumberGenerator;
         this.stayBalanceService = stayBalanceService;
+        this.clock = clock;
     }
 
     /**
@@ -103,6 +109,7 @@ public class ReservationService {
                         request.checkInDate(),
                         request.checkOutDate(),
                         request.source(),
+                        request.otaBookingReference(),
                         draftData.currency().getCurrencyCode(),
                         request.notes());
         reservation.audit(user.id());
@@ -135,6 +142,7 @@ public class ReservationService {
                     request.checkInDate(),
                     request.checkOutDate(),
                     request.source(),
+                    request.otaBookingReference(),
                     draftData.currency().getCurrencyCode(),
                     request.notes(),
                     updatedRooms);
@@ -282,6 +290,10 @@ public class ReservationService {
         CurrentUser user = currentUser();
         if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
             throw conflict("Invalid reservation state transition");
+        }
+        if (LocalDate.now(clock).isBefore(reservation.getCheckInDate())) {
+            throw conflict("Early check-in is not allowed. Create a separate DIRECT reservation for the "
+                    + "additional earlier stay.");
         }
         if (stays.existsByReservationId(id)) {
             throw conflict("Stay already exists");

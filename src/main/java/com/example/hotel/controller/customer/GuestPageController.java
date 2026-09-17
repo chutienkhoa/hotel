@@ -4,14 +4,24 @@ import com.example.hotel.dto.customer.request.GuestCreateRequest;
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.request.GuestUpdateRequest;
 import com.example.hotel.dto.customer.response.CountryCatalog;
+import com.example.hotel.dto.customer.response.GuestDocumentResponse;
+import com.example.hotel.dto.customer.response.GuestPassportImage;
 import com.example.hotel.dto.customer.response.GuestResponse;
+import com.example.hotel.exception.GuestDocumentValidationException;
+import com.example.hotel.service.customer.GuestDocumentService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.customer.GuestService;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -23,6 +33,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -33,16 +44,22 @@ public class GuestPageController {
 
     private final GuestService guestService;
     private final GuestQueryService guestQueryService;
+    private final GuestDocumentService guestDocumentService;
 
     /**
      * Creates the guest page controller with the guest-management service.
      *
      * @param guestService service used to load and update guest data
      * @param guestQueryService service used to load paginated Guest list data
+     * @param guestDocumentService service used to load private passport metadata and content
      */
-    public GuestPageController(GuestService guestService, GuestQueryService guestQueryService) {
+    public GuestPageController(
+            GuestService guestService,
+            GuestQueryService guestQueryService,
+            GuestDocumentService guestDocumentService) {
         this.guestService = guestService;
         this.guestQueryService = guestQueryService;
+        this.guestDocumentService = guestDocumentService;
     }
 
     /**
@@ -82,7 +99,33 @@ public class GuestPageController {
     public String detail(@PathVariable UUID id, Model model, Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("guest", guestService.findById(id));
+        addPassportAttributes(model, id);
         return "customer/detail";
+    }
+
+    /**
+     * Returns one authorized Guest passport image for inline browser viewing.
+     *
+     * <p>Granted to MANAGE_GUEST (Guest management) and, separately, to CHECK_IN, since Staff
+     * performing Check-in must be able to securely view a Guest's passport during the Check-in
+     * workflow without receiving any Guest management/edit capability.</p>
+     *
+     * @param id guest identifier
+     * @return the private image with its validated content type and safe inline header
+     */
+    @GetMapping("/guests/{id}/passport-image")
+    @PreAuthorize("hasAnyAuthority('PERM_MANAGE_GUEST', 'PERM_CHECK_IN')")
+    public ResponseEntity<Resource> passportImage(@PathVariable UUID id) {
+        GuestPassportImage passportImage = guestDocumentService.loadPassport(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(passportImage.contentType()))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename(passportImage.originalName(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .body(passportImage.resource());
     }
 
     /**
@@ -115,17 +158,22 @@ public class GuestPageController {
     public String create(
             @Valid @ModelAttribute("guestForm") GuestCreateRequest guestForm,
             BindingResult bindingResult,
+            @RequestParam(name = "passportImage", required = false) MultipartFile passportImage,
             Model model,
             Authentication authentication,
-            RedirectAttributes redirectAttributes) {
+        RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
-            addFormAttributes(model, guestForm, authentication, null);
+            addFormAttributes(model, guestForm, authentication, unmappedSubmittedNationality(guestForm));
             return "customer/form";
         }
         try {
-            GuestResponse guest = guestService.create(guestForm);
+            GuestResponse guest = guestService.create(guestForm, passportImage);
             redirectAttributes.addFlashAttribute("successMessage", "Guest created successfully.");
             return "redirect:/guests/" + guest.id();
+        } catch (GuestDocumentValidationException exception) {
+            addFormAttributes(model, guestForm, authentication, null);
+            model.addAttribute("passportError", exception.getMessage());
+            return "customer/form";
         } catch (ResponseStatusException exception) {
             addFormAttributes(model, guestForm, authentication, null);
             model.addAttribute("errorMessage", safeMessage(exception));
@@ -152,6 +200,7 @@ public class GuestPageController {
                 authentication,
                 nationalitySelection.unmappedValue());
         model.addAttribute("guest", guest);
+        addPassportAttributes(model, id);
         return "customer/form";
     }
 
@@ -172,21 +221,30 @@ public class GuestPageController {
             @PathVariable UUID id,
             @Valid @ModelAttribute("guestForm") GuestUpdateRequest guestForm,
             BindingResult bindingResult,
+            @RequestParam(name = "passportImage", required = false) MultipartFile passportImage,
             Model model,
             Authentication authentication,
-            RedirectAttributes redirectAttributes) {
+        RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
-            addFormAttributes(model, guestForm, authentication, null);
+            addFormAttributes(model, guestForm, authentication, unmappedSubmittedNationality(guestForm));
             model.addAttribute("guest", guestService.findById(id));
+            addPassportAttributes(model, id);
             return "customer/form";
         }
         try {
-            guestService.update(id, guestForm);
+            guestService.update(id, guestForm, passportImage);
             redirectAttributes.addFlashAttribute("successMessage", "Guest updated successfully.");
             return "redirect:/guests/" + id;
+        } catch (GuestDocumentValidationException exception) {
+            addFormAttributes(model, guestForm, authentication, null);
+            model.addAttribute("guest", guestService.findById(id));
+            addPassportAttributes(model, id);
+            model.addAttribute("passportError", exception.getMessage());
+            return "customer/form";
         } catch (ResponseStatusException exception) {
             addFormAttributes(model, guestForm, authentication, null);
             model.addAttribute("guest", guestService.findById(id));
+            addPassportAttributes(model, id);
             model.addAttribute("errorMessage", safeMessage(exception));
             return "customer/form";
         }
@@ -227,6 +285,18 @@ public class GuestPageController {
     }
 
     /**
+     * Adds safe passport metadata for Guest detail and edit templates without exposing storage
+     * keys or physical paths.
+     *
+     * @param model model used to render the page
+     * @param guestId Guest identifier
+     */
+    private void addPassportAttributes(Model model, UUID guestId) {
+        GuestDocumentResponse passportDocument = guestDocumentService.findPassport(guestId).orElse(null);
+        model.addAttribute("passportDocument", passportDocument);
+    }
+
+    /**
      * Resolves a Guest's stored nationality to the value the Edit dropdown should preselect.
      *
      * <p>A canonical country name or a known legacy demonym resolves to its canonical country
@@ -244,6 +314,24 @@ public class GuestPageController {
         return CountryCatalog.canonicalNameFor(storedNationality)
                 .map(canonicalName -> new NationalitySelection(canonicalName, null))
                 .orElseGet(() -> new NationalitySelection(storedNationality, storedNationality));
+    }
+
+    /**
+     * Retains an invalid submitted nationality as a selected option while presenting its field
+     * error, so a validation failure never silently discards browser-entered form data.
+     *
+     * @param guestForm invalid submitted create or update form
+     * @return unsupported submitted nationality, or {@code null} when canonical or blank
+     */
+    private String unmappedSubmittedNationality(Object guestForm) {
+        String nationality = switch (guestForm) {
+            case GuestCreateRequest createRequest -> createRequest.nationality();
+            case GuestUpdateRequest updateRequest -> updateRequest.nationality();
+            default -> null;
+        };
+        return nationality != null && !nationality.isBlank() && !CountryCatalog.isCanonicalCountryName(nationality)
+                ? nationality
+                : null;
     }
 
     /**

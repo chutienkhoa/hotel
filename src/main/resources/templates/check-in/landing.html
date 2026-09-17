@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Check-in')}"></head>
+<body>
+<div class="app-shell page-check-in">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Check-in</h1>
+                <p>Choose how this guest's stay is entered into Hotel System.</p>
+            </div>
+        </div>
+
+        <div class="check-in-options">
+            <a class="card check-in-option-card check-in-option-card--existing" th:href="@{/check-in/existing}">
+                <span class="reservation-info-icon reservation-info-icon--blue">
+                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                </span>
+                <h2>Existing Reservation</h2>
+                <p>Find a reservation already entered into Hotel System.</p>
+            </a>
+
+            <a class="card check-in-option-card check-in-option-card--ota" th:href="@{/check-in/ota-entry}">
+                <span class="reservation-info-icon reservation-info-icon--green">
+                    <svg th:replace="~{layout/icons :: building}"></svg>
+                </span>
+                <h2>OTA Booking Not Entered</h2>
+                <p>Guest has an Agoda / Booking.com / Airbnb booking that has not yet been entered into Hotel System.</p>
+            </a>
+
+            <a class="card check-in-option-card check-in-option-card--walk-in" th:href="@{/check-in/walk-in}">
+                <span class="reservation-info-icon reservation-info-icon--purple">
+                    <svg th:replace="~{layout/icons :: user}"></svg>
+                </span>
+                <h2>Walk-in</h2>
+                <p>Guest has no existing reservation.</p>
+            </a>
+        </div>
+    </main>
+</div>
+</body>
+</html>

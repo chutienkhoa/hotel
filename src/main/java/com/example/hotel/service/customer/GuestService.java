@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 /** Provides guest management operations while keeping audit and guest-code ownership on the server. */
@@ -23,16 +24,20 @@ public class GuestService {
 
     private final GuestRepository guestRepository;
     private final GuestMapper guestMapper;
+    private final GuestDocumentService guestDocumentService;
 
     /**
      * Creates the guest service with persistence and response-mapping collaborators.
      *
      * @param guestRepository repository used to access guests and the guest-code sequence
      * @param guestMapper mapper used to prepare client-safe guest responses
+     * @param guestDocumentService service used to manage an optional passport image
      */
-    public GuestService(GuestRepository guestRepository, GuestMapper guestMapper) {
+    public GuestService(
+            GuestRepository guestRepository, GuestMapper guestMapper, GuestDocumentService guestDocumentService) {
         this.guestRepository = guestRepository;
         this.guestMapper = guestMapper;
+        this.guestDocumentService = guestDocumentService;
     }
 
     /**
@@ -65,18 +70,34 @@ public class GuestService {
      */
     @Transactional
     public GuestResponse create(GuestCreateRequest request) {
+        return create(request, null);
+    }
+
+    /**
+     * Creates a guest and, when supplied, an optional validated passport image within the same
+     * database transaction.
+     *
+     * @param request client-supplied mutable guest profile data
+     * @param passportImage optional browser-uploaded passport image
+     * @return the persisted guest profile
+     */
+    @Transactional
+    public GuestResponse create(GuestCreateRequest request, MultipartFile passportImage) {
+        CurrentUser currentUser = currentUser();
         Guest guest = Guest.create(
                 UUID.randomUUID(),
                 nextAvailableGuestCode(),
-                request.firstName(),
-                request.lastName(),
+                trimRequired(request.firstName()),
+                trimRequired(request.lastName()),
                 request.email(),
                 request.phone(),
-                request.nationality(),
+                trimRequired(request.nationality()),
                 request.dateOfBirth(),
                 request.address());
-        guest.audit(currentUser().id());
-        return guestMapper.toResponse(guestRepository.save(guest));
+        guest.audit(currentUser.id());
+        Guest savedGuest = guestRepository.save(guest);
+        guestDocumentService.storeOrReplacePassport(savedGuest, passportImage, currentUser.id());
+        return guestMapper.toResponse(savedGuest);
     }
 
     /**
@@ -89,17 +110,34 @@ public class GuestService {
      */
     @Transactional
     public GuestResponse update(UUID id, GuestUpdateRequest request) {
+        return update(id, request, null);
+    }
+
+    /**
+     * Updates a guest profile and, when supplied, safely replaces the one passport image.
+     *
+     * @param id guest identifier
+     * @param request client-supplied mutable guest profile data
+     * @param passportImage optional browser-uploaded replacement passport image
+     * @return the updated guest profile
+     * @throws ResponseStatusException if no guest exists for the identifier
+     */
+    @Transactional
+    public GuestResponse update(UUID id, GuestUpdateRequest request, MultipartFile passportImage) {
         Guest guest = findGuest(id);
+        CurrentUser currentUser = currentUser();
         guest.updateProfile(
-                request.firstName(),
-                request.lastName(),
+                trimRequired(request.firstName()),
+                trimRequired(request.lastName()),
                 request.email(),
                 request.phone(),
-                request.nationality(),
+                trimRequired(request.nationality()),
                 request.dateOfBirth(),
                 request.address());
-        guest.audit(currentUser().id());
-        return guestMapper.toResponse(guestRepository.save(guest));
+        guest.audit(currentUser.id());
+        Guest savedGuest = guestRepository.save(guest);
+        guestDocumentService.storeOrReplacePassport(savedGuest, passportImage, currentUser.id());
+        return guestMapper.toResponse(savedGuest);
     }
 
     /**
@@ -126,6 +164,16 @@ public class GuestService {
             guestCode = "G%06d".formatted(guestRepository.nextGuestCodeSequence());
         } while (guestRepository.existsByGuestCode(guestCode));
         return guestCode;
+    }
+
+    /**
+     * Trims a required form value after Bean Validation has guaranteed it is not blank.
+     *
+     * @param value required submitted value
+     * @return the value without surrounding whitespace
+     */
+    private String trimRequired(String value) {
+        return value.trim();
     }
 
     /**

@@ -17,6 +17,14 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
     List<Room> findByActiveTrueAndStatus(RoomStatus status);
 
     /**
+     * Retrieves every active Room regardless of current operational status, for date-range-aware
+     * availability queries that must not rely solely on the current {@code Room.status}.
+     *
+     * @return every active Room
+     */
+    List<Room> findByActiveTrue();
+
+    /**
      * Counts active Rooms grouped by their current operational status.
      *
      * @return status and count rows for active Rooms in stable status order

@@ -71,6 +71,40 @@ class ReservationControllerValidationTest {
                         .andExpect(status().isBadRequest()));
     }
 
+    /** Confirms an OTA source without an OTA booking reference is rejected. */
+    @Test
+    void rejectsOtaSourceWithoutOtaBookingReference() {
+        String body =
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"AGODA\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+
+        assertDoesNotThrow(
+                () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isBadRequest()));
+    }
+
+    /** Confirms a whitespace-only OTA booking reference is rejected for an OTA source. */
+    @Test
+    void rejectsWhitespaceOnlyOtaBookingReferenceForOtaSource() {
+        String body =
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"BOOKING_COM\",\"otaBookingReference\":\"   \",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+
+        assertDoesNotThrow(
+                () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
+                        .andExpect(status().isBadRequest()));
+    }
+
+    /** Confirms a DIRECT reservation is accepted without an OTA booking reference. */
+    @Test
+    void allowsDirectSourceWithoutOtaBookingReference() throws Exception {
+        when(reservationService.create(any()))
+                .thenReturn(new Response(UUID.randomUUID(), "R20260911-000002", "DRAFT", BigDecimal.ONE, "VND"));
+        String body =
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+
+        mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+    }
+
     /** Confirms that a client-supplied reservation number cannot replace the backend-generated value. */
     @Test
     void ignoresClientSuppliedReservationNumber() throws Exception {

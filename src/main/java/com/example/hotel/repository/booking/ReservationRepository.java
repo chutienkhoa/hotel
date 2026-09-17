@@ -7,14 +7,55 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.repository.query.Param;
 
 /** Cung cấp truy vấn lưu trữ và kiểm tra xung đột reservation. */
 public interface ReservationRepository
         extends JpaRepository<Reservation, UUID>, JpaSpecificationExecutor<Reservation> {
+
+    /**
+     * Loads every Reservation with its Guest eagerly fetched, avoiding a per-row lazy load.
+     *
+     * @return every Reservation, Guest included
+     */
+    @Override
+    @EntityGraph(attributePaths = "guest")
+    List<Reservation> findAll();
+
+    /**
+     * Loads one filtered, sorted page of Reservations with its Guest eagerly fetched, avoiding a
+     * per-row lazy load. Room data is intentionally not fetch-joined here since it is a
+     * collection association; batch-loading room numbers separately keeps this page free of
+     * duplicate Reservation rows and incorrect pagination totals.
+     *
+     * @param spec the Specification containing only the supplied filters
+     * @param pageable the requested page, size, and sort order
+     * @return the matching Reservation page, Guest included
+     */
+    @Override
+    @EntityGraph(attributePaths = "guest")
+    Page<Reservation> findAll(Specification<Reservation> spec, Pageable pageable);
+
+    /**
+     * Batch-loads each Room number assigned to the supplied Reservations, avoiding an N+1 query
+     * per row when rendering a Reservation list or detail page.
+     *
+     * @param reservationIds Reservation identifiers whose assigned rooms are loaded
+     * @return reservation identifier and room number pairs, ordered by room number
+     */
+    @Query(
+            "SELECT rr.reservation.id, rr.room.roomNumber FROM ReservationRoom rr "
+                    + "WHERE rr.reservation.id IN :reservationIds "
+                    + "ORDER BY rr.room.roomNumber")
+    List<Object[]> findRoomNumbersByReservationIdIn(@Param("reservationIds") Collection<UUID> reservationIds);
+
     /**
      * Counts all Reservations grouped by their current lifecycle status.
      *

@@ -61,6 +61,17 @@ public class DemoDataSeeder {
     private static final List<String> RECENT_STATUS_CYCLE =
             List.of("DRAFT", "SUBMITTED", "APPROVED", "POSTED");
     private static final int REJECTED_EVERY_NTH_HISTORICAL_EXPENSE = 25;
+    private static final List<String> ADDITIONAL_REVENUE_CATEGORY_CODES =
+            List.of("ELECTRIC_CART_RENTAL", "OTHER");
+    private static final List<Integer> OTHER_ADDITIONAL_REVENUE_INDICES =
+            List.of(1, 6, 10, 15, 20, 24, 29, 34);
+    private static final List<Integer> VOIDED_ADDITIONAL_REVENUE_INDICES = List.of(2, 11, 20, 31);
+    private static final List<Integer> BANK_TRANSFER_ADDITIONAL_REVENUE_INDICES =
+            List.of(4, 9, 14, 19, 24, 29, 34);
+    private static final List<Integer> CREDIT_CARD_ADDITIONAL_REVENUE_INDICES = List.of(7, 18, 30);
+    private static final List<Integer> OTHER_PAYMENT_ADDITIONAL_REVENUE_INDICES = List.of(12, 26);
+    private static final List<String> ADDITIONAL_REVENUE_VOID_REASONS =
+            List.of("Duplicate entry", "Incorrect amount", "Entered by mistake", "Wrong category");
 
     /** Creates the profile-gated runner that generates the demo dataset exactly once. */
     @Bean
@@ -69,11 +80,12 @@ public class DemoDataSeeder {
         return arguments -> transactionTemplate.executeWithoutResult(status -> seed(jdbcTemplate, dashboardClock));
     }
 
-    /** Inserts only marked demo rows; existing marked data makes the operation a no-op. */
+    /** Inserts marked demo rows and safely backfills a newly introduced demo data slice once. */
     void seed(JdbcTemplate jdbcTemplate, Clock dashboardClock) {
         Integer markerCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM app_user WHERE username = ?", Integer.class, MARKER_USERNAME);
         if (markerCount != null && markerCount > 0) {
+            insertAdditionalRevenues(jdbcTemplate, deterministicId(MARKER_USERNAME), LocalDate.now(dashboardClock));
             return;
         }
 
@@ -89,6 +101,7 @@ public class DemoDataSeeder {
         insertReservations(jdbcTemplate, guestIds, roomIds, roomNumbers, auditUserId, today, nowTimestamp);
         setOperationalRoomMix(jdbcTemplate, roomIds, auditUserId, nowTimestamp);
         insertExpenses(jdbcTemplate, auditUserId, today);
+        insertAdditionalRevenues(jdbcTemplate, auditUserId, today);
     }
 
     private void insertAuditUser(JdbcTemplate jdbcTemplate, UUID userId, Timestamp now) {
@@ -176,7 +189,10 @@ public class DemoDataSeeder {
                 int nights = nightsFor(today, checkInDate, monthIndex, random);
                 String status = reservationStatus(today, checkInDate, monthIndex);
                 UUID reservationId = deterministicId(PREFIX + "RESERVATION-" + reservationIndex);
-                UUID reservationNumber = deterministicId(PREFIX + "RESERVATION-NUMBER-" + reservationIndex);
+                String reservationNumber = String.format(
+                        "R%s-%06d",
+                        checkInDate.minusDays(21).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE),
+                        reservationIndex + 1);
                 UUID roomId = roomIds.get(roomIndex(status, reservationIndex));
                 BigDecimal totalAmount = reservationTotal(nights);
                 String source = BOOKING_SOURCES.get(sourceRandom.nextInt(BOOKING_SOURCES.size()));
@@ -480,6 +496,107 @@ public class DemoDataSeeder {
             return sequenceIndex % 5 == 0 ? "CREDIT_CARD" : "CASH";
         }
         return sequenceIndex % 4 == 0 ? "OTHER" : sequenceIndex % 4 == 1 ? "CREDIT_CARD" : "CASH";
+    }
+
+    /**
+     * Seeds 36 deterministic Additional Revenue records — exactly three in every current business
+     * year month — without changing any existing demo rows. The records retain stable UUIDs. A
+     * previously marked dataset is backfilled only when this deterministic slice is absent.
+     */
+    private void insertAdditionalRevenues(JdbcTemplate jdbcTemplate, UUID auditUserId, LocalDate today) {
+        UUID firstRevenueId = deterministicId(PREFIX + "ADDITIONAL-REVENUE-0");
+        Integer existingCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM additional_revenue WHERE id = ?", Integer.class, firstRevenueId);
+        if (existingCount != null && existingCount > 0) {
+            return;
+        }
+
+        Map<String, UUID> categoryIds = additionalRevenueCategoryIds(jdbcTemplate);
+        int sequenceIndex = 0;
+        for (int month = 1; month <= 12; month++) {
+            for (int recordInMonth = 0; recordInMonth < 3; recordInMonth++) {
+                boolean otherCategory = OTHER_ADDITIONAL_REVENUE_INDICES.contains(sequenceIndex);
+                String categoryCode = otherCategory ? "OTHER" : "ELECTRIC_CART_RENTAL";
+                LocalDate revenueDate = LocalDate.of(today.getYear(), month, List.of(5, 14, 23).get(recordInMonth));
+                boolean voided = VOIDED_ADDITIONAL_REVENUE_INDICES.contains(sequenceIndex);
+                Instant createdAt = revenueDate.atTime(9, 0).atZone(BUSINESS_ZONE).toInstant();
+                Instant voidedAt = voided
+                        ? revenueDate.plusDays(1).atTime(10, 0).atZone(BUSINESS_ZONE).toInstant()
+                        : null;
+                String status = voided ? "VOIDED" : "RECORDED";
+                String voidReason = voided
+                        ? ADDITIONAL_REVENUE_VOID_REASONS.get(VOIDED_ADDITIONAL_REVENUE_INDICES.indexOf(sequenceIndex))
+                        : null;
+                jdbcTemplate.update(
+                        "INSERT INTO additional_revenue (id, category_id, amount, currency, revenue_date, "
+                                + "payment_method, description, status, void_reason, voided_at, voided_by, "
+                                + "created_at, created_by, updated_at, updated_by) "
+                                + "VALUES (?, ?, ?, 'VND', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        deterministicId(PREFIX + "ADDITIONAL-REVENUE-" + sequenceIndex),
+                        categoryIds.get(categoryCode),
+                        additionalRevenueAmount(otherCategory, sequenceIndex),
+                        revenueDate,
+                        additionalRevenuePaymentMethod(sequenceIndex),
+                        additionalRevenueDescription(otherCategory, month),
+                        status,
+                        voidReason,
+                        timestamp(voidedAt),
+                        voided ? auditUserId : null,
+                        timestamp(createdAt),
+                        auditUserId,
+                        timestamp(voided ? voidedAt : createdAt),
+                        auditUserId);
+                sequenceIndex++;
+            }
+        }
+    }
+
+    /** Resolves the Task 1 reference categories rather than embedding their database UUIDs. */
+    private Map<String, UUID> additionalRevenueCategoryIds(JdbcTemplate jdbcTemplate) {
+        Map<String, UUID> categoryIds = jdbcTemplate.query(
+                "SELECT id, code FROM additional_revenue_category WHERE code IN (?, ?)",
+                resultSet -> {
+                    Map<String, UUID> values = new java.util.HashMap<>();
+                    while (resultSet.next()) {
+                        values.put(resultSet.getString("code"), resultSet.getObject("id", UUID.class));
+                    }
+                    return values;
+                },
+                ADDITIONAL_REVENUE_CATEGORY_CODES.toArray());
+        for (String code : ADDITIONAL_REVENUE_CATEGORY_CODES) {
+            if (categoryIds.get(code) == null) {
+                throw new IllegalStateException("Approved Additional Revenue category is missing: " + code);
+            }
+        }
+        return categoryIds;
+    }
+
+    private BigDecimal additionalRevenueAmount(boolean otherCategory, int sequenceIndex) {
+        if (otherCategory) {
+            return BigDecimal.valueOf(50_000L + (sequenceIndex % 20) * 50_000L);
+        }
+        return BigDecimal.valueOf(100_000L + (sequenceIndex % 41) * 10_000L);
+    }
+
+    private String additionalRevenuePaymentMethod(int sequenceIndex) {
+        if (BANK_TRANSFER_ADDITIONAL_REVENUE_INDICES.contains(sequenceIndex)) {
+            return "BANK_TRANSFER";
+        }
+        if (CREDIT_CARD_ADDITIONAL_REVENUE_INDICES.contains(sequenceIndex)) {
+            return "CREDIT_CARD";
+        }
+        if (OTHER_PAYMENT_ADDITIONAL_REVENUE_INDICES.contains(sequenceIndex)) {
+            return "OTHER";
+        }
+        return "CASH";
+    }
+
+    private String additionalRevenueDescription(boolean otherCategory, int month) {
+        if (otherCategory) {
+            return List.of("Guest transport service", "Miscellaneous hotel revenue")
+                    .get(month % 2);
+        }
+        return "Electric cart rental";
     }
 
     private UUID deterministicId(String value) {

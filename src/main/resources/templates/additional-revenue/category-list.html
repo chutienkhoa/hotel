@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Additional Revenue Categories')}"></head>
+<body>
+<div class="app-shell page-additional-revenues">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+    <main class="content">
+        <a class="back-link" th:href="@{/additional-revenues}">Back to Additional Revenue</a>
+        <div class="page-header">
+            <div>
+                <h1>Additional Revenue Categories</h1>
+                <p>Configure the categories available to classify Additional Revenue.</p>
+            </div>
+            <a class="button button-primary" th:href="@{/additional-revenue-categories/new}">Add Category</a>
+        </div>
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <p class="empty-state" th:if="${#lists.isEmpty(categories)}">No Additional Revenue categories found.</p>
+        <div class="table-wrap" th:unless="${#lists.isEmpty(categories)}">
+            <table>
+                <thead><tr><th scope="col">Code</th><th scope="col">Name</th><th scope="col">Status</th><th class="table-actions" scope="col">Actions</th></tr></thead>
+                <tbody>
+                <tr th:each="category : ${categories}">
+                    <td th:text="${category.code}">ELECTRIC_CART_RENTAL</td>
+                    <td th:text="${category.name}">Electric Cart Rental</td>
+                    <td><span class="status-badge" th:classappend="${category.active} ? ' status-badge--available' : ' status-badge--checked_out'" th:text="${category.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span></td>
+                    <td class="table-actions"><div class="action-row">
+                        <a class="button button-secondary table-action" th:href="@{/additional-revenue-categories/{id}/edit(id=${category.id})}">Edit</a>
+                        <form th:if="${category.active}" data-confirm-label="Deactivate category" data-confirm-severity="WARNING" data-confirm-title="Deactivate category" method="post" th:action="@{/additional-revenue-categories/{id}/deactivate(id=${category.id})}" th:attr="data-confirm-message=|Deactivate category ${category.code}?|">
+                            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                            <button class="button button-danger table-action" type="submit">Deactivate</button>
+                        </form>
+                        <form th:unless="${category.active}" data-confirm-label="Reactivate category" data-confirm-severity="NORMAL" data-confirm-title="Reactivate category" method="post" th:action="@{/additional-revenue-categories/{id}/reactivate(id=${category.id})}" th:attr="data-confirm-message=|Reactivate category ${category.code}?|">
+                            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                            <button class="button button-primary table-action" type="submit">Reactivate</button>
+                        </form>
+                    </div></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

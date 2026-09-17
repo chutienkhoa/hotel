@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Check-in — Walk-in')}"></head>
+<body>
+<div class="app-shell page-check-in">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/check-in}">Back to Check-in</a>
+        <div class="page-header">
+            <div>
+                <h1>Walk-in</h1>
+                <p>Guest has no existing reservation and is arriving today. Source is always Direct and check-in date is always today's hotel date.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <form class="form-card" method="post" th:action="@{/check-in/walk-in/review}" th:object="${walkInForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <fieldset aria-label="Reservation information" class="reservation-overview-section">
+                <section aria-labelledby="guest-section-title" class="reservation-form-section">
+                    <h2 id="guest-section-title">Guest</h2>
+                    <div class="form-field" data-guest-verification>
+                        <label for="guestId">Guest</label>
+                        <select data-guest-select id="guestId" required th:field="*{guestId}">
+                            <option value="">Select a guest</option>
+                            <option th:each="guest : ${guests}"
+                                    th:attr="data-guest-code=${guest.guestCode},data-full-name=${guest.fullName},data-email=${guest.email},data-phone=${guest.phone},data-nationality=${guest.nationality}"
+                                    th:text="${guest.guestCode + ' · ' + guest.fullName}"
+                                    th:value="${guest.id}">G000001 · Guest name</option>
+                        </select>
+                        <p class="field-error" th:errors="*{guestId}"></p>
+                    </div>
+
+                    <div class="reservation-guest-actions">
+                        <details class="guest-information" data-guest-information hidden>
+                            <summary>Guest Information</summary>
+                            <dl class="guest-information__list">
+                                <div><dt>Guest Code</dt><dd data-guest-code>G000001</dd></div>
+                                <div><dt>Full Name</dt><dd data-guest-full-name>Guest name</dd></div>
+                                <div><dt>Email</dt><dd data-guest-email>guest@example.com</dd></div>
+                                <div><dt>Phone</dt><dd data-guest-phone>Phone number</dd></div>
+                                <div><dt>Nationality</dt><dd data-guest-nationality>Nationality</dd></div>
+                            </dl>
+                        </details>
+                        <a class="inline-link" th:href="@{/guests/new}">+ Create New Guest</a>
+                    </div>
+                </section>
+
+                <section aria-labelledby="stay-section-title" class="reservation-form-section">
+                    <h2 id="stay-section-title">Stay Details</h2>
+                    <div class="form-grid reservation-details-grid">
+                        <div class="form-field">
+                            <label>Check-in date</label>
+                            <p><strong th:text="${#temporals.format(T(java.time.LocalDate).now(), 'dd/MM/yyyy')}">Today</strong> (hotel current date)</p>
+                        </div>
+                        <div class="form-field">
+                            <label for="checkOutDate">Check-out date</label>
+                            <input class="js-date-picker" id="checkOutDate" required
+                                   name="checkOutDate"
+                                   th:value="${walkInForm.checkOutDate == null ? '' : #temporals.format(walkInForm.checkOutDate, 'yyyy-MM-dd')}"
+                                   type="text" />
+                            <p class="field-error" th:errors="*{checkOutDate}"></p>
+                        </div>
+                        <div class="form-field">
+                            <label>Source</label>
+                            <p><strong>Direct</strong> (Walk-in is always Direct)</p>
+                        </div>
+                    </div>
+
+                    <div class="form-field reservation-notes">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" maxlength="5000" rows="3" th:field="*{notes}"></textarea>
+                        <p class="field-error" th:errors="*{notes}"></p>
+                    </div>
+                </section>
+            </fieldset>
+
+            <fieldset class="reservation-rooms-section">
+                <legend>Rooms</legend>
+                <p class="field-error" th:errors="*{rooms}"></p>
+                <p class="form-hint" id="room-availability-empty" hidden>No rooms are available for the entire selected date range.</p>
+                <div id="room-rows">
+                    <div class="room-row" th:each="roomRequest, roomRowStat : *{rooms}">
+                        <div class="room-fields-three-column-grid">
+                            <div class="form-field">
+                                <label th:for="${'room-' + roomRowStat.index}">Room</label>
+                                <select data-room-select required th:field="*{rooms[__${roomRowStat.index}__].roomId}"
+                                        th:id="${'room-' + roomRowStat.index}">
+                                    <option value="">Select a check-out date first</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label th:for="${'nightly-rate-' + roomRowStat.index}">Nightly rate</label>
+                                <input class="js-money-input" data-nightly-rate inputmode="decimal" required
+                                       th:field="*{rooms[__${roomRowStat.index}__].nightlyRate}"
+                                       th:id="${'nightly-rate-' + roomRowStat.index}"
+                                       type="text" />
+                            </div>
+                            <div class="form-field room-currency-field" th:if="${roomRowStat.first}">
+                                <label for="currency">Currency</label>
+                                <select id="currency" required th:field="*{currency}">
+                                    <option value="">Select currency</option>
+                                    <option value="VND">VND</option>
+                                    <option value="USD">USD</option>
+                                </select>
+                                <p class="field-error" th:errors="*{currency}"></p>
+                            </div>
+                            <div aria-hidden="true" class="room-currency-spacer" th:unless="${roomRowStat.first}"></div>
+                        </div>
+                        <button class="button button-danger remove-room" type="button">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                <button class="button button-secondary" disabled id="add-room" type="button">Add room</button>
+            </fieldset>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/check-in}">Cancel</a>
+                <button class="button button-primary" type="submit">Review Walk-in</button>
+            </div>
+        </form>
+    </main>
+</div>
+<script defer th:src="@{/js/reservation/form.js}"></script>
+<script defer th:src="@{/js/booking/check-in-walk-in.js}"></script>
+</body>
+</html>

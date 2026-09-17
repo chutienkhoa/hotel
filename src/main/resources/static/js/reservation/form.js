@@ -4,6 +4,21 @@
     const addRoomButton = document.getElementById("add-room");
     const guestVerification = document.querySelector("[data-guest-verification]");
 
+    const initializeOtaBookingReferenceToggle = () => {
+        const sourceSelect = document.getElementById("source");
+        const otaField = document.querySelector("[data-ota-booking-reference-field]");
+        const otaInput = document.getElementById("otaBookingReference");
+        if (!sourceSelect || !otaField || !otaInput) return;
+        const update = () => {
+            const isDirectOrUnset = sourceSelect.value === "" || sourceSelect.value === "DIRECT";
+            otaField.hidden = isDirectOrUnset;
+            otaInput.required = !isDirectOrUnset;
+        };
+        sourceSelect.addEventListener("change", update);
+        update();
+    };
+    initializeOtaBookingReferenceToggle();
+
     const initializeGuestVerification = () => {
         if (!guestVerification) return;
         const select = guestVerification.querySelector("[data-guest-select]");

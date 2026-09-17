@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${revenue == null} ? 'Record additional revenue' : 'Edit additional revenue')}"></head>
+<body>
+<div class="app-shell page-additional-revenues">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+    <main class="content">
+        <a class="back-link" th:href="@{/additional-revenues}">Back to additional revenue</a>
+        <div class="page-header"><div>
+            <h1 th:text="${revenue == null} ? 'Record additional revenue' : 'Edit additional revenue'">Additional Revenue form</h1>
+            <p>Currency is set to VND by the backend.</p>
+        </div></div>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <form class="form-card" data-confirm-message="Save this additional revenue?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${revenue == null} ? 'Record additional revenue' : 'Update additional revenue',data-confirm-label=${revenue == null} ? 'Record revenue' : 'Update revenue'"
+              method="post" th:action="${revenue == null} ? @{/additional-revenues} : @{/additional-revenues/{id}(id=${revenue.id})}" th:object="${revenueForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">Please correct the highlighted fields.</p>
+            <div class="form-grid">
+                <div class="form-field"><label for="categoryId">Category</label>
+                    <select id="categoryId" required th:field="*{categoryId}"><option value="">Select a category</option>
+                        <option th:each="category : ${categories}" th:value="${category.id}" th:text="${category.active} ? ${category.name} : ${category.name + ' (Inactive)'}">Other</option>
+                    </select><p class="field-error" th:errors="*{categoryId}"></p>
+                </div>
+                <div class="form-field"><label for="amount">Amount</label>
+                    <input class="js-money-input" id="amount" inputmode="decimal" required th:field="*{amount}" type="text" /><p class="field-error" th:errors="*{amount}"></p>
+                </div>
+                <div class="form-field"><label for="revenueDate">Revenue date</label>
+                    <input class="js-date-picker" id="revenueDate" name="revenueDate" required type="text" th:value="${revenueForm.revenueDate == null ? '' : #temporals.format(revenueForm.revenueDate, 'yyyy-MM-dd')}" /><p class="field-error" th:errors="*{revenueDate}"></p>
+                </div>
+                <div class="form-field"><label for="paymentMethod">Payment method</label>
+                    <select id="paymentMethod" required th:field="*{paymentMethod}"><option value="">Select a payment method</option><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CREDIT_CARD">Credit card</option><option value="OTHER">Other</option></select><p class="field-error" th:errors="*{paymentMethod}"></p>
+                </div>
+            </div>
+            <div class="form-field"><label for="description">Description</label><textarea id="description" rows="4" th:field="*{description}"></textarea><p class="field-error" th:errors="*{description}"></p></div>
+            <div class="form-actions"><a class="button button-secondary" th:href="@{/additional-revenues}">Cancel</a><button class="button button-primary" th:text="${revenue == null} ? 'Record Revenue' : 'Update Revenue'" type="submit">Save</button></div>
+        </form>
+    </main>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

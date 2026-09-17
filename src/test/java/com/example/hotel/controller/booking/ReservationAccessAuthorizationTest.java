@@ -238,6 +238,8 @@ class ReservationAccessAuthorizationTest {
                 UUID.randomUUID(),
                 "GUEST-001",
                 "CONFIRMED",
+                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                null,
                 LocalDate.of(2026, 9, 11),
                 LocalDate.of(2026, 9, 12),
                 new BigDecimal("123456789.000000"),
@@ -269,7 +271,6 @@ class ReservationAccessAuthorizationTest {
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("app-shell page-reservation-create")))
-                .andExpect(content().string(containsString("nav-reservation-create")))
                 .andExpect(content().string(containsString("data-confirm-title=\"Create reservation\"")))
                 .andExpect(content().string(containsString("data-confirm-message=\"Create this reservation?\"")))
                 .andExpect(content().string(containsString("data-confirm-label=\"Create reservation\"")))
@@ -289,8 +290,8 @@ class ReservationAccessAuthorizationTest {
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
                                 new SimpleGrantedAuthority("PERM_CHECK_IN"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("data-confirm-title=\"Check in reservation\"")))
-                .andExpect(content().string(containsString("data-confirm-severity=\"WARNING\"")));
+                .andExpect(content().string(containsString(
+                        "href=\"/check-in/reservations/" + RESERVATION_ID + "\">Check-in</a>")));
     }
 
     /** Confirms the reservation Guest field remains one native select with collapsible details. */
@@ -422,6 +423,7 @@ class ReservationAccessAuthorizationTest {
                 LocalDate.of(2026, 9, 20),
                 LocalDate.of(2026, 9, 22),
                 com.example.hotel.entity.booking.BookingSource.AGODA,
+                "AG-998877",
                 "VND",
                 "Quiet room",
                 List.of(new ReservationRoomResponse(
@@ -452,6 +454,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("value=\"2026-09-22\"")))
                 .andExpect(content().string(not(containsString("value=\"2026-01-01\""))))
                 .andExpect(content().string(containsString("value=\"AGODA\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("value=\"AG-998877\"")))
                 .andExpect(content().string(containsString("Quiet room")))
                 .andExpect(content().string(containsString("class=\"js-money-input\"")));
     }
@@ -527,6 +530,104 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("nav-reservations")));
     }
 
+    /** Confirms Reservations stays active while creating a reservation, a child of the Reservations section. */
+    @Test
+    void shouldKeepReservationsActiveOnCreateReservationChildRoute() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
+
+        mockMvc.perform(get("/reservations/new")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("app-shell page-reservation-create")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-reservations\"")));
+    }
+
+    /** Confirms the ADMIN sidebar renders every currently implemented and authorized V1 section/item. */
+    @Test
+    void shouldRenderAdminSidebarNavigation() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        String body = mockMvc.perform(get("/reservations").with(user("admin").authorities(fullAdminAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-dashboard\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-reservations\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-guests\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-rooms\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
+                .andExpect(content().string(containsString(">Operations<")))
+                .andExpect(content().string(containsString(">Hotel<")))
+                .andExpect(content().string(containsString(">Finance<")))
+                .andReturn().getResponse().getContentAsString();
+
+        assertFakeNavigationAbsent(body);
+    }
+
+    /** Confirms the MANAGER sidebar shows Guests, Expenses, and Additional Revenue but never Users. */
+    @Test
+    void shouldRenderManagerSidebarNavigation() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        String body = mockMvc.perform(get("/reservations").with(user("manager").authorities(fullManagerAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-guests\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
+                .andReturn().getResponse().getContentAsString();
+
+        assertFakeNavigationAbsent(body);
+    }
+
+    /** Confirms STAFF sees only Reservations and never Guests, Expenses, Additional Revenue, or Dashboard. */
+    @Test
+    void shouldRenderStaffSidebarNavigation() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        String body = mockMvc.perform(get("/reservations").with(user("staff").authorities(fullStaffAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-reservations\"")))
+                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-dashboard\""))))
+                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-guests\""))))
+                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-rooms\""))))
+                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-expenses\""))))
+                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-additional-revenues\""))))
+                .andReturn().getResponse().getContentAsString();
+
+        assertFakeNavigationAbsent(body);
+    }
+
+    /** Confirms empty sections (Hotel, Finance) render no heading at all for STAFF, never an empty group. */
+    @Test
+    void shouldHideEmptySidebarSectionHeadingsForStaff() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        mockMvc.perform(get("/reservations").with(user("staff").authorities(fullStaffAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">Operations<")))
+                .andExpect(content().string(not(containsString(">Hotel<"))))
+                .andExpect(content().string(not(containsString(">Finance<"))));
+    }
+
+    /**
+     * Confirms no sidebar item exists for a target-mockup feature without a real V1 route: no
+     * Housekeeping, Hotel Settings, Staff, Users, standalone Payments, or Reports item.
+     *
+     * @param body rendered page HTML
+     */
+    private void assertFakeNavigationAbsent(String body) {
+        assertEquals(false, body.contains("Housekeeping"));
+        assertEquals(false, body.contains("Hotel Settings"));
+        assertEquals(false, body.contains(">Staff<"));
+        assertEquals(false, body.contains(">Users<"));
+        assertEquals(false, body.contains("nav-payments"));
+        assertEquals(false, body.contains(">Overview<"));
+        assertEquals(false, body.contains(">Financial<"));
+        assertEquals(false, body.contains(">Occupancy<"));
+        assertEquals(false, body.contains("href=\"#\""));
+        assertEquals(false, body.contains("javascript:void(0)"));
+    }
+
     /** Confirms the reservation number is the sole detail link in the reservation list. */
     @Test
     void shouldRenderReservationNumberAsDetailLinkWithoutViewColumn() throws Exception {
@@ -535,7 +636,11 @@ class ReservationAccessAuthorizationTest {
                         List.of(new ReservationSummaryResponse(
                                 RESERVATION_ID,
                                 "R20260911-000001",
+                                "Nguyen Van A",
+                                "101",
                                 "CONFIRMED",
+                                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                                null,
                                 LocalDate.of(2026, 9, 11),
                                 LocalDate.of(2026, 9, 12),
                                 BigDecimal.TEN,
@@ -652,6 +757,249 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(not(containsString("Next"))));
     }
 
+    /** Confirms the Create form hides the OTA field for DIRECT and shows it for an OTA source after redisplay. */
+    @Test
+    void shouldToggleOtaBookingReferenceFieldByRedisplayedSource() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
+
+        mockMvc.perform(get("/reservations/new")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-ota-booking-reference-field")))
+                .andExpect(content().string(containsString("hidden=\"hidden\"")));
+
+        mockMvc.perform(post("/reservations")
+                        .param("source", "AGODA")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("OTA Booking Reference is required for this source.")))
+                .andExpect(content().string(not(containsString("hidden=\"hidden\""))));
+    }
+
+    /** Confirms Reservation Detail shows human-friendly Source and, only for an OTA source, the reference. */
+    @Test
+    void shouldRenderSourceAndConditionalOtaBookingReferenceOnDetail() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
+                RESERVATION_ID,
+                "R20260911-000001",
+                UUID.randomUUID(),
+                "GUEST-001",
+                "CONFIRMED",
+                com.example.hotel.entity.booking.BookingSource.AGODA,
+                "123456789",
+                LocalDate.of(2026, 9, 11),
+                LocalDate.of(2026, 9, 12),
+                BigDecimal.TEN,
+                "VND",
+                null,
+                List.of()));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Agoda")))
+                .andExpect(content().string(containsString("Ref: 123456789")))
+                .andExpect(content().string(containsString("123456789")));
+
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Direct")))
+                .andExpect(content().string(not(containsString("Ref:"))));
+    }
+
+    /** Confirms the Reservation list renders all ten filters in the required three-column layout. */
+    @Test
+    void shouldRenderTenFiltersInThreeColumnLayout() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"reservationNumber\"")))
+                .andExpect(content().string(containsString("id=\"guest\"")))
+                .andExpect(content().string(containsString("id=\"room\"")))
+                .andExpect(content().string(containsString("id=\"source\"")))
+                .andExpect(content().string(containsString("id=\"otaBookingReference\"")))
+                .andExpect(content().string(containsString("id=\"status\"")))
+                .andExpect(content().string(containsString("id=\"checkInFrom\"")))
+                .andExpect(content().string(containsString("id=\"checkInTo\"")))
+                .andExpect(content().string(containsString("id=\"checkOutFrom\"")))
+                .andExpect(content().string(containsString("id=\"checkOutTo\"")))
+                .andExpect(content().string(containsString("All sources")))
+                .andExpect(content().string(containsString(">Agoda<")))
+                .andExpect(content().string(containsString(">Booking.com<")))
+                .andExpect(content().string(containsString(">Airbnb<")))
+                .andExpect(content().string(not(containsString(">BOOKING_COM<"))));
+    }
+
+    /** Confirms the Reservation list table exposes the new Guest, Room, Source, and OTA columns. */
+    @Test
+    void shouldRenderGuestRoomSourceAndOtaColumnsInReservationList() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(
+                List.of(
+                        new ReservationSummaryResponse(
+                                RESERVATION_ID,
+                                "R20260911-000001",
+                                "Nguyen Van A",
+                                "201, 202",
+                                "CONFIRMED",
+                                com.example.hotel.entity.booking.BookingSource.BOOKING_COM,
+                                "BK-987654",
+                                LocalDate.of(2026, 9, 11),
+                                LocalDate.of(2026, 9, 12),
+                                BigDecimal.TEN,
+                                "VND"),
+                        new ReservationSummaryResponse(
+                                UUID.randomUUID(),
+                                "R20260911-000002",
+                                "Tran Van B",
+                                "301",
+                                "DRAFT",
+                                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                                null,
+                                LocalDate.of(2026, 9, 13),
+                                LocalDate.of(2026, 9, 14),
+                                BigDecimal.ONE,
+                                "VND")),
+                PageRequest.of(0, 10),
+                2));
+
+        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Nguyen Van A")))
+                .andExpect(content().string(containsString("201, 202")))
+                .andExpect(content().string(containsString("Booking.com")))
+                .andExpect(content().string(containsString("BK-987654")))
+                .andExpect(content().string(containsString("Tran Van B")))
+                .andExpect(content().string(containsString("301")))
+                .andExpect(content().string(containsString("Direct")))
+                .andExpect(content().string(containsString(">—<")));
+    }
+
+    /** Confirms Reservation list filters are preserved with the four new filters in pagination links. */
+    @Test
+    void shouldPreserveNewFiltersInPaginationLinks() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(1)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 23));
+
+        mockMvc.perform(get("/reservations")
+                        .param("guest", "Nguyen")
+                        .param("room", "201")
+                        .param("source", "AGODA")
+                        .param("otaBookingReference", "123")
+                        .param("page", "1")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("guest=Nguyen")))
+                .andExpect(content().string(containsString("room=201")))
+                .andExpect(content().string(containsString("source=AGODA")))
+                .andExpect(content().string(containsString("otaBookingReference=123")));
+
+        ArgumentCaptor<ReservationSearchCriteria> criteriaCaptor =
+                ArgumentCaptor.forClass(ReservationSearchCriteria.class);
+        verify(reservationQueryService).findPage(criteriaCaptor.capture(), eq(1));
+        assertEquals("Nguyen", criteriaCaptor.getValue().getGuest());
+        assertEquals("201", criteriaCaptor.getValue().getRoom());
+        assertEquals(com.example.hotel.entity.booking.BookingSource.AGODA, criteriaCaptor.getValue().getSource());
+        assertEquals("123", criteriaCaptor.getValue().getOtaBookingReference());
+    }
+
+    /** Confirms the redesigned Reservation Information card renders all five tiles and a full-width Notes row. */
+    @Test
+    void shouldRenderReservationInformationTilesAndFullWidthNotes() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"reservation-info-grid\"")))
+                .andExpect(content().string(containsString(">Guest<")))
+                .andExpect(content().string(containsString(">Source<")))
+                .andExpect(content().string(containsString(">Check-in<")))
+                .andExpect(content().string(containsString(">Check-out<")))
+                .andExpect(content().string(containsString(">Total<")))
+                .andExpect(content().string(containsString("class=\"reservation-info-item reservation-info-notes\"")))
+                .andExpect(content().string(containsString(">Notes<")));
+    }
+
+    /** Confirms the Assigned Rooms header uses correct singular and plural room-count wording. */
+    @Test
+    void shouldUseSingularAndPluralRoomCountWording() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
+                RESERVATION_ID, "R20260911-000001", UUID.randomUUID(), "GUEST-001", "CONFIRMED",
+                com.example.hotel.entity.booking.BookingSource.DIRECT, null,
+                LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.TEN, "VND", null,
+                List.of(new ReservationRoomResponse(
+                        roomId, "101", LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12),
+                        BigDecimal.TEN, BigDecimal.TEN))));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">1</strong>")))
+                .andExpect(content().string(containsString(">room<")));
+
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
+                RESERVATION_ID, "R20260911-000001", UUID.randomUUID(), "GUEST-001", "CONFIRMED",
+                com.example.hotel.entity.booking.BookingSource.DIRECT, null,
+                LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.TEN, "VND", null,
+                List.of(
+                        new ReservationRoomResponse(roomId, "101", LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.ONE, BigDecimal.ONE),
+                        new ReservationRoomResponse(UUID.randomUUID(), "102", LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.ONE, BigDecimal.ONE))));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">2</strong>")))
+                .andExpect(content().string(containsString(">rooms<")));
+    }
+
+    /** Confirms Confirm never renders twice: not in the header, only once in Available Actions for DRAFT. */
+    @Test
+    void shouldNotDuplicateConfirmActionBetweenHeaderAndAvailableActions() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("DRAFT"));
+
+        String body = mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        int headerStart = body.indexOf("<div class=\"page-header\">");
+        int headerEnd = body.indexOf("<div class=\"reservation-detail\">");
+        String header = body.substring(headerStart, headerEnd);
+        assertEquals(false, header.contains("type=\"submit\">Confirm<"));
+        int confirmFormCount = body.split("action=\"/reservations/" + RESERVATION_ID + "/confirm\"", -1).length - 1;
+        assertEquals(1, confirmFormCount);
+    }
+
+    /** Confirms the Guest Information summary links to Guest Detail only when the user can manage guests. */
+    @Test
+    void shouldLinkGuestSummaryOnlyWhenAuthorizedToManageGuests() throws Exception {
+        UUID guestId = UUID.fromString("55555555-5555-5555-5555-555555555555");
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
+                RESERVATION_ID, "R20260911-000001", guestId, "GUEST-001", "CONFIRMED",
+                com.example.hotel.entity.booking.BookingSource.DIRECT, null,
+                LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.TEN, "VND", null, List.of()));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("admin").authorities(
+                                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                                new SimpleGrantedAuthority("PERM_MANAGE_GUEST"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "class=\"guest-summary\" href=\"/guests/" + guestId + "\"")));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("href=\"/guests/" + guestId + "\""))))
+                .andExpect(content().string(containsString("class=\"guest-summary\"")))
+                .andExpect(content().string(containsString("GUEST-001")));
+    }
+
     /** Confirms invalid date ranges render safely without executing an unrestricted query. */
     @Test
     void shouldRejectReservationDateRangeLongerThanOneCalendarYear() throws Exception {
@@ -675,6 +1023,8 @@ class ReservationAccessAuthorizationTest {
                 UUID.randomUUID(),
                 "GUEST-001",
                 "CHECKED_IN",
+                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                null,
                 LocalDate.of(2026, 9, 11),
                 LocalDate.of(2026, 9, 12),
                 BigDecimal.TEN,
@@ -698,6 +1048,8 @@ class ReservationAccessAuthorizationTest {
                 UUID.randomUUID(),
                 "GUEST-001",
                 status,
+                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                null,
                 LocalDate.of(2026, 9, 11),
                 LocalDate.of(2026, 9, 12),
                 BigDecimal.TEN,
@@ -747,6 +1099,47 @@ class ReservationAccessAuthorizationTest {
         return List.of(
                 new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"),
                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
+    }
+
+    /**
+     * Builds the complete authority set actually granted to ADMIN by the applied Flyway
+     * migrations, for end-to-end sidebar navigation assertions.
+     *
+     * @return every authority ADMIN currently holds
+     */
+    private static List<SimpleGrantedAuthority> fullAdminAuthorities() {
+        return Stream.of(
+                        "MANAGE_BOOKING", "CHECK_IN", "MANAGE_USER", "MANAGE_ROOM", "MANAGE_PAYMENT",
+                        "MANAGE_EXPENSE", "VIEW_BOOKING", "MANAGE_GUEST", "VIEW_REPORT", "CHECK_OUT",
+                        "MANAGE_ADDITIONAL_REVENUE")
+                .map(permission -> new SimpleGrantedAuthority("PERM_" + permission))
+                .toList();
+    }
+
+    /**
+     * Builds the complete authority set actually granted to MANAGER by the applied Flyway
+     * migrations, for end-to-end sidebar navigation assertions.
+     *
+     * @return every authority MANAGER currently holds
+     */
+    private static List<SimpleGrantedAuthority> fullManagerAuthorities() {
+        return Stream.of(
+                        "MANAGE_BOOKING", "MANAGE_ROOM", "MANAGE_PAYMENT", "VIEW_REPORT", "VIEW_BOOKING",
+                        "MANAGE_GUEST", "CHECK_OUT", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE")
+                .map(permission -> new SimpleGrantedAuthority("PERM_" + permission))
+                .toList();
+    }
+
+    /**
+     * Builds the complete authority set actually granted to STAFF by the applied Flyway
+     * migrations (including the V20 Payment grant), for end-to-end sidebar navigation assertions.
+     *
+     * @return every authority STAFF currently holds
+     */
+    private static List<SimpleGrantedAuthority> fullStaffAuthorities() {
+        return Stream.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT")
+                .map(permission -> new SimpleGrantedAuthority("PERM_" + permission))
+                .toList();
     }
 
     /** Builds the authority set required to view reservation detail and detailed Folio access. */

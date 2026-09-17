@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Check-in — OTA Booking Not Entered')}"></head>
+<body>
+<div class="app-shell page-check-in">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/check-in}">Back to Check-in</a>
+        <div class="page-header">
+            <div>
+                <h1>OTA Booking Not Entered</h1>
+                <p>Guest already has an Agoda / Booking.com / Airbnb booking that has not yet been entered into Hotel System. Enter it exactly as booked, then continue to Check-in Review.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <form class="form-card" data-confirm-label="Create &amp; Continue" data-confirm-message="Create this reservation and continue to Check-in review?"
+              data-confirm-severity="NORMAL" data-confirm-title="Create reservation" method="post"
+              th:action="@{/check-in/ota-entry}" th:object="${otaEntryForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <fieldset aria-label="Reservation information" class="reservation-overview-section">
+                <section aria-labelledby="guest-section-title" class="reservation-form-section">
+                    <h2 id="guest-section-title">Guest</h2>
+                    <div class="form-field" data-guest-verification>
+                        <label for="guestId">Guest</label>
+                        <select data-guest-select id="guestId" required th:field="*{guestId}">
+                            <option value="">Select a guest</option>
+                            <option th:each="guest : ${guests}"
+                                    th:attr="data-guest-code=${guest.guestCode},data-full-name=${guest.fullName},data-email=${guest.email},data-phone=${guest.phone},data-nationality=${guest.nationality}"
+                                    th:text="${guest.guestCode + ' · ' + guest.fullName}"
+                                    th:value="${guest.id}">G000001 · Guest name</option>
+                        </select>
+                        <p class="field-error" th:errors="*{guestId}"></p>
+                    </div>
+
+                    <div class="reservation-guest-actions">
+                        <details class="guest-information" data-guest-information hidden>
+                            <summary>Guest Information</summary>
+                            <dl class="guest-information__list">
+                                <div><dt>Guest Code</dt><dd data-guest-code>G000001</dd></div>
+                                <div><dt>Full Name</dt><dd data-guest-full-name>Guest name</dd></div>
+                                <div><dt>Email</dt><dd data-guest-email>guest@example.com</dd></div>
+                                <div><dt>Phone</dt><dd data-guest-phone>Phone number</dd></div>
+                                <div><dt>Nationality</dt><dd data-guest-nationality>Nationality</dd></div>
+                            </dl>
+                        </details>
+                        <a class="inline-link" th:href="@{/guests/new}">+ Create New Guest</a>
+                    </div>
+                </section>
+
+                <section aria-labelledby="reservation-details-section-title" class="reservation-form-section">
+                    <h2 id="reservation-details-section-title">OTA Booking Details</h2>
+                    <div class="reservation-details-row">
+                        <div class="form-grid reservation-details-grid">
+                            <div class="form-field">
+                                <label for="checkInDate">Check-in date</label>
+                                <input class="js-date-picker" id="checkInDate" required
+                                       name="checkInDate"
+                                       th:value="${otaEntryForm.checkInDate == null ? '' : #temporals.format(otaEntryForm.checkInDate, 'yyyy-MM-dd')}"
+                                       type="text" />
+                                <p class="field-error" th:errors="*{checkInDate}"></p>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="checkOutDate">Check-out date</label>
+                                <input class="js-date-picker" id="checkOutDate" required
+                                       name="checkOutDate"
+                                       th:value="${otaEntryForm.checkOutDate == null ? '' : #temporals.format(otaEntryForm.checkOutDate, 'yyyy-MM-dd')}"
+                                       type="text" />
+                                <p class="field-error" th:errors="*{checkOutDate}"></p>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="source">Source</label>
+                                <select id="source" required th:field="*{source}">
+                                    <option value="">Select OTA source</option>
+                                    <option th:each="source : ${otaSources}"
+                                            th:text="${source.displayName}"
+                                            th:value="${source}">
+                                        Agoda
+                                    </option>
+                                </select>
+                                <p class="field-error" th:errors="*{source}"></p>
+                            </div>
+                        </div>
+                        <span aria-hidden="true" class="button button-danger reservation-details-row__spacer">Remove</span>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="otaBookingReference">OTA Booking Reference *</label>
+                        <input id="otaBookingReference" required th:field="*{otaBookingReference}" type="text" />
+                        <p class="field-error" th:errors="*{otaBookingReference}"></p>
+                    </div>
+
+                    <div class="form-field reservation-notes">
+                        <label for="notes">Notes</label>
+                        <textarea id="notes" maxlength="5000" rows="3" th:field="*{notes}"></textarea>
+                        <p class="field-error" th:errors="*{notes}"></p>
+                    </div>
+                </section>
+            </fieldset>
+
+            <fieldset class="reservation-rooms-section">
+                <legend>Rooms</legend>
+                <p class="field-error" th:errors="*{rooms}"></p>
+                <div id="room-rows">
+                    <div class="room-row" th:each="roomRequest, roomRowStat : *{rooms}">
+                        <div class="room-fields-three-column-grid">
+                            <div class="form-field">
+                                <label th:for="${'room-' + roomRowStat.index}">Room</label>
+                                <select required th:field="*{rooms[__${roomRowStat.index}__].roomId}"
+                                        th:id="${'room-' + roomRowStat.index}">
+                                    <option value="">Select a room</option>
+                                    <option th:each="room : ${rooms}"
+                                            th:text="${room.status == 'AVAILABLE' ? room.roomNumber : room.roomNumber + ' — ' + room.status}"
+                                            th:value="${room.id}">
+                                        Room
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label th:for="${'nightly-rate-' + roomRowStat.index}">Nightly rate</label>
+                                <input class="js-money-input" inputmode="decimal" required
+                                       th:field="*{rooms[__${roomRowStat.index}__].nightlyRate}"
+                                       th:id="${'nightly-rate-' + roomRowStat.index}"
+                                       type="text" />
+                            </div>
+                            <div class="form-field room-currency-field" th:if="${roomRowStat.first}">
+                                <label for="currency">Currency</label>
+                                <select id="currency" required th:field="*{currency}">
+                                    <option value="">Select currency</option>
+                                    <option value="VND">VND</option>
+                                    <option value="USD">USD</option>
+                                </select>
+                                <p class="field-error" th:errors="*{currency}"></p>
+                            </div>
+                            <div aria-hidden="true" class="room-currency-spacer" th:unless="${roomRowStat.first}"></div>
+                        </div>
+                        <button class="button button-danger remove-room" type="button">
+                            Remove
+                        </button>
+                    </div>
+                </div>
+                <button class="button button-secondary" id="add-room" type="button">Add room</button>
+            </fieldset>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/check-in}">Cancel</a>
+                <button class="button button-primary" type="submit">Create &amp; Continue</button>
+            </div>
+        </form>
+
+        <template id="room-row-template">
+            <div class="room-row">
+                <div class="room-fields-three-column-grid">
+                    <div class="form-field">
+                        <label>Room
+                            <select data-room-id required>
+                                <option value="">Select a room</option>
+                                <option th:each="room : ${rooms}"
+                                        th:text="${room.status == 'AVAILABLE' ? room.roomNumber : room.roomNumber + ' — ' + room.status}"
+                                        th:value="${room.id}">
+                                    Room
+                                </option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="form-field">
+                        <label>Nightly rate
+                            <input class="js-money-input" data-nightly-rate inputmode="decimal" required type="text" />
+                        </label>
+                    </div>
+                    <div aria-hidden="true" class="room-currency-spacer"></div>
+                </div>
+                <button class="button button-danger remove-room" type="button">
+                    Remove
+                </button>
+            </div>
+        </template>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+<script defer th:src="@{/js/reservation/form.js}"></script>
+</body>
+</html>
