@@ -3532,4 +3532,233 @@ EXPENSE ────────────────────────
                        AUDIT LOG
 ```
 
+---
+
+# 56. Staff Management + Daily Work Record
+
+V1 bổ sung đúng hai khả năng nhỏ, tách biệt hoàn toàn khỏi User Management (Task 24) và Role/
+Permission Management (Task 25):
+
+```text
+A. Staff Management
+B. Daily Work Record
+```
+
+Đây KHÔNG phải hệ thống chấm công/lịch làm việc/payroll.
+
+## 56.1 Staff ≠ AppUser
+
+`Staff` đại diện cho một NHÂN VIÊN/CON NGƯỜI của khách sạn. `AppUser` đại diện cho một TÀI
+KHOẢN đăng nhập PMS. Hai khái niệm này hoàn toàn tách biệt trong V1:
+
+```text
+Staff
+   │
+   └── (chưa liên kết với AppUser trong V1)
+```
+
+Một nhân viên (ví dụ Housekeeping) có thể tồn tại trong `Staff` mà KHÔNG cần bất kỳ tài khoản
+PMS nào. V1 KHÔNG triển khai liên kết `Staff ↔ AppUser` — quan hệ đó thuộc phạm vi Task 24 (User
+Management) trong tương lai.
+
+## 56.2 Staff
+
+Fields:
+
+```text
+id
+staff_code
+first_name
+last_name
+phone
+email
+position
+start_date
+active
+notes
+created_at / created_by / updated_at / updated_by
+```
+
+Bắt buộc: `staff_code` (backend-generated), `first_name`, `last_name`, `start_date`. Còn lại là
+tùy chọn. `position` là free text V1 (ví dụ Manager, Receptionist, Housekeeping, Security,
+Maintenance, Night Reception, Accountant, Part-time) — KHÔNG có `StaffPosition` enum, KHÔNG có
+Position Management riêng.
+
+`staff_code` được sinh bởi backend qua một PostgreSQL sequence riêng (`staff_code_sequence`,
+tách biệt hoàn toàn khỏi `guest_code_sequence`), theo đúng kiến trúc sinh mã đã duyệt của Guest
+(`GuestService.nextAvailableGuestCode` → tương đương `StaffService`), định dạng `STF-000001`,
+`STF-000002`, ... Mã này bất biến sau khi tạo và không bao giờ do người dùng nhập tay.
+
+Vòng đời Staff KHÔNG có physical delete. Yêu cầu "Delete Staff" ban đầu của người dùng được hiện
+thực hóa bằng `active = true/false` với hai thao tác tường minh: Deactivate / Reactivate, theo
+đúng pattern đã duyệt của ExpenseCategory/AdditionalRevenueCategory (transition có kiểm tra
+trạng thái hiện tại, từ chối an toàn nếu chuyển đổi không hợp lệ). Deactivate/Reactivate KHÔNG
+bao giờ xóa hay cascade-xóa lịch sử `DailyWorkRecord` của Staff đó.
+
+## 56.3 Daily Work Record
+
+Fields:
+
+```text
+id
+staff_id (FK → staff)
+work_date    (LocalDate)
+start_time   (LocalTime)
+end_time     (LocalTime)
+notes
+created_at / created_by / updated_at / updated_by
+```
+
+Bất biến nghiệp vụ: một Staff có TỐI ĐA MỘT `DailyWorkRecord` cho một `work_date`, được enforce
+ở cả tầng ứng dụng (tìm-rồi-cập nhật-hoặc-tạo-mới, không bao giờ tạo dòng thứ hai) lẫn tầng
+database (`UNIQUE (staff_id, work_date)`, index `ux_daily_work_record_staff_date`).
+
+V1 chỉ hỗ trợ ca làm việc TRONG NGÀY (same-day). Khi một dòng được lưu, bắt buộc
+`start_time < end_time` (enforced bằng CHECK constraint `daily_work_record_start_before_end`
+và tại entity). V1 KHÔNG suy luận ca qua đêm (overnight), KHÔNG có cờ overnight, KHÔNG có khái
+niệm Shift.
+
+Working Time (ví dụ "9h00", "8h55") là giá trị DẪN XUẤT, tính từ `end_time - start_time`, KHÔNG
+được lưu trữ trong database và luôn được tính lại phía server trước khi hiển thị — never trusted
+from the client.
+
+### Nhập liệu hàng loạt (bulk entry)
+
+Màn hình Daily Work Record cho một `work_date` được chọn: tải toàn bộ Staff đang `active`, mỗi
+Staff một dòng, cho phép nhập Start/End/Notes cho nhiều Staff cùng lúc, lưu trong MỘT thao tác
+transactional duy nhất (`DailyWorkRecordService.saveBulk`).
+
+Quy tắc theo từng dòng:
+
+```text
+Cả Start và End đều trống
+    → không tạo/không có DailyWorkRecord cho Staff/ngày đó
+    → nếu đã tồn tại record cho Staff/ngày đó, record đó bị XÓA (ngoại lệ hard-delete
+      được duyệt cho DailyWorkRecord — vì đây là dòng nhập liệu hàng ngày có thể chỉnh sửa,
+      không phải Staff master/business identity)
+
+Cả hai đều có giá trị, Start < End
+    → tạo mới (nếu chưa có record) hoặc CẬP NHẬT record hiện có (không bao giờ tạo dòng thứ hai)
+
+Chỉ Start có giá trị
+    → lỗi validation
+
+Chỉ End có giá trị
+    → lỗi validation
+
+Start >= End
+    → lỗi validation
+```
+
+Toàn bộ request được validate TRƯỚC khi thực hiện bất kỳ thay đổi nào (all-or-nothing): một dòng
+không hợp lệ trong nhiều dòng gửi lên sẽ từ chối TOÀN BỘ thao tác lưu, không có dòng nào được lưu
+một phần. Ràng buộc UNIQUE ở database vẫn là lớp bảo vệ cuối cùng chống race-condition khi hai
+request ghi đồng thời cho cùng một Staff/ngày.
+
+### Staff không còn active
+
+Màn hình nhập liệu MỚI chỉ tải Staff đang `active`; Staff không active sẽ không xuất hiện để
+nhận dòng nhập mới, và server từ chối bất kỳ dòng gửi lên cho một Staff không còn active (ví dụ
+do trạng thái đổi ngay trong lúc chỉnh sửa). Lịch sử `DailyWorkRecord` đã có của Staff không active
+KHÔNG bị xóa và vẫn được truy vấn được — dữ liệu lịch sử luôn được bảo toàn.
+
+## 56.4 Permissions
+
+```text
+MANAGE_STAFF        — bảo vệ Staff list/create/edit/deactivate/reactivate
+MANAGE_ATTENDANCE   — bảo vệ màn hình Daily Work Record (tải ngày, lưu hàng loạt)
+```
+
+Cấp cho `ADMIN` và `MANAGER`. KHÔNG cấp cho role `STAFF` (role đăng nhập hiện có — không nhầm
+với domain `Staff`/nhân viên mới ở trên). Hai permission này tách biệt hoàn toàn với
+`MANAGE_USER` (permission đã seed từ trước, dành riêng cho Task 24 User Management, không được
+tái sử dụng ở đây) và không có `VIEW_STAFF`/`VIEW_ATTENDANCE` trong V1.
+
+## 56.5 Navigation
+
+Sidebar có thêm nhóm mới **ADMINISTRATION** chứa mục **Staff**, hiển thị khi user có
+`MANAGE_STAFF` HOẶC `MANAGE_ATTENDANCE` (qua `NavigationModelAdvice`). Trong module Staff, hai
+khả năng (Staff Management, Daily Work Record) được liên kết chéo với nhau nhưng mỗi khả năng
+tự enforce permission riêng — có `MANAGE_STAFF` không tự động cho phép truy cập Daily Work
+Record và ngược lại, dù ADMIN/MANAGER hiện có cả hai.
+
+## 56.6 Staff Detail + Work History (by Staff)
+
+Hai màn hình vận hành bổ sung cho nhau, cùng dùng chung dữ liệu `Staff`/`DailyWorkRecord`, không
+tạo bảng hay entity mới:
+
+```text
+BY DATE  — Daily Work Record (mục 56.3): "Ngày này, mỗi Staff làm việc mấy giờ?"
+BY STAFF — Staff Detail → Work History (mục này): "Staff này, lịch sử làm việc thế nào?"
+```
+
+`GET /staff/{id}` (bảo vệ bởi `MANAGE_STAFF`, không tạo permission mới) hiển thị hồ sơ Staff
+(Staff Information) cùng Work History — danh sách `DailyWorkRecord` của riêng Staff đó, lọc theo
+khoảng ngày `fromDate`/`toDate` (cả hai đều inclusive, `LocalDate`, định dạng hiển thị
+`dd/MM/yyyy`), sắp xếp `work_date` giảm dần (mới nhất trước). Truy vấn qua
+`DailyWorkRecordRepository.findByStaffIdAndWorkDateBetweenOrderByWorkDateDesc`, không có bảng
+hay tầng lưu trữ lịch sử riêng.
+
+Khoảng ngày mặc định khi không truyền tham số: từ ngày đầu tháng hiện tại (theo hotel `Clock`)
+đến ngày hiện tại (theo hotel `Clock`) — không dùng `LocalDate.now()` trần. Nếu `fromDate` sau
+`toDate`, trả về thông báo validation an toàn ("From date must not be after To date."), KHÔNG lỗi
+trang chung.
+
+Work History CHỈ hiển thị những ngày thực sự có `DailyWorkRecord` được lưu — KHÔNG tự sinh dòng
+cho những ngày không có record. Một ngày không có record nghĩa là "không có dữ liệu", KHÔNG ngầm
+định là nghỉ phép/vắng mặt/ngày lễ. Working Time trong Work History dùng lại đúng công thức dẫn
+xuất ở mục 56.3 (`DailyWorkRecordService`), không tạo công thức thứ hai, không lưu trữ.
+
+Staff Detail vẫn truy cập được và hiển thị đầy đủ lịch sử cho Staff đã `INACTIVE` — deactivate
+không ẩn hay xóa `DailyWorkRecord`. Màn hình này không cho tạo mới `DailyWorkRecord`; nhập liệu
+mới vẫn chỉ qua màn hình Daily Work Record (chỉ Staff `active`, mục 56.3).
+
+Trên UI, nhãn hiển thị cho người dùng dùng **Work Check-in** / **Work Check-out** thay cho
+Start/End (ở cả màn hình Daily Work Record lẫn Work History), ánh xạ trực tiếp tới
+`startTime`/`endTime`. Đây CHỈ là thuật ngữ hiển thị — field/DB column nội bộ vẫn giữ nguyên
+`startTime`/`endTime`; KHÔNG có nghĩa là chấm công tự động, thời gian vẫn do Manager/Admin nhập
+tay.
+
+## 56.7 Daily Work Record — By Date / By Staff
+
+Màn hình Daily Work Record có hai chế độ xem, chuyển đổi qua lại bằng tab đơn giản, đều bảo vệ
+bởi `MANAGE_ATTENDANCE` (không có permission mới):
+
+```text
+Daily Work Record
+├── By Date  (GET/POST /staff/daily-work-record)
+│   └── bulk manual entry — không thay đổi hành vi nghiệp vụ ở mục 56.3
+│
+└── By Staff (GET /staff/daily-work-record/by-staff)
+    └── tìm kiếm lịch sử theo Staff + khoảng ngày, chỉ đọc (read-only)
+```
+
+**By Date** giữ nguyên hành vi hiện có (mục 56.3): chọn một `work_date`, tải toàn bộ Staff
+`active`, nhập/lưu hàng loạt.
+
+**By Staff** là một màn hình tìm kiếm trực tiếp, không cần đi vòng qua Staff List → View → Staff
+Detail: chọn một Staff (hiển thị `Staff Code - Họ tên`, danh sách chọn bao gồm CẢ Staff `active`
+lẫn `inactive` vì lịch sử của Staff không active vẫn phải tìm được), nhập khoảng ngày
+`fromDate`/`toDate` (mặc định: từ ngày đầu tháng hiện tại đến ngày hiện tại theo hotel `Clock`),
+và xem kết quả. Đây là read-only — màn hình này KHÔNG tạo hay sửa bất kỳ `DailyWorkRecord` nào,
+kể cả cho Staff `active`.
+
+By Staff tái sử dụng đúng `DailyWorkRecordService.history(...)` và
+`DailyWorkRecordRepository.findByStaffIdAndWorkDateBetweenOrderByWorkDateDesc(...)` đã có ở mục
+56.6 (Staff Detail → Work History) — không có truy vấn hay implementation lịch sử thứ hai. Quy
+tắc hiển thị giống hệt mục 56.6: chỉ hiện ngày có record thực sự (không tự sinh ngày trống), sắp
+xếp mới nhất trước, Working Time luôn dẫn xuất và không lưu trữ, `fromDate > toDate` trả về thông
+báo validation an toàn thay vì lỗi trang chung.
+
+Staff Detail → Work History (mục 56.6) vẫn được giữ nguyên như một lối vào khác, hữu ích khi đang
+xem hồ sơ một nhân viên cụ thể; cả hai lối vào dùng chung một service/query/business logic.
+
+## 56.8 V1 Exclusions
+
+Không triển khai trong V1: Staff↔AppUser linking, User Management, Role/Permission Management
+UI, Shift, Shift Scheduling, chấm công tự động, nhân viên tự check-in/check-out, nhiều session
+làm việc/ngày, break/lunch tracking, ca qua đêm, tính đi trễ/về sớm, overtime, payroll, salary,
+leave/holiday management, GPS, fingerprint, face recognition, biometrics, attendance reports,
+Excel/PDF export.
+
 **End of Specification v1.0**

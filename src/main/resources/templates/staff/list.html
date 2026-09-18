@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Staff')}"></head>
+<body>
+<div class="app-shell page-staff">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Staff</h1>
+                <p>Staff Management</p>
+            </div>
+            <a class="button button-primary" th:href="@{/staff/new}">Add Staff</a>
+        </div>
+
+        <div class="action-row" th:if="${canManageAttendance}">
+            <a class="button button-secondary" th:href="@{/staff/daily-work-record}">Daily Work Record</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" aria-label="Filter staff">
+            <form method="get" th:action="@{/staff}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="query">Search staff</label>
+                        <input id="query" name="query" placeholder="Staff Code, name, phone, email, position"
+                               th:value="${searchCriteria.query}" type="search" />
+                    </div>
+                    <div class="form-field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option th:selected="${!searchCriteria.hasStatusFilter()}" value="ALL">All</option>
+                            <option th:selected="${searchCriteria.isActiveFilter()}" value="ACTIVE">Active</option>
+                            <option th:selected="${searchCriteria.hasStatusFilter() and not searchCriteria.isActiveFilter()}"
+                                    value="INACTIVE">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-row">
+                    <a class="button button-secondary" th:href="@{/staff}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <p class="empty-state" th:if="${#lists.isEmpty(staffList)}">No Staff match the current filters.</p>
+
+        <div class="table-wrap" th:unless="${#lists.isEmpty(staffList)}">
+            <table>
+                <thead>
+                <tr>
+                    <th scope="col">Code</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Position</th>
+                    <th scope="col">Phone</th>
+                    <th scope="col">Status</th>
+                    <th class="table-actions" scope="col">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="staffMember : ${staffList}">
+                    <td>
+                        <a th:href="@{/staff/{id}/edit(id=${staffMember.id})}" th:text="${staffMember.staffCode}">STF-000001</a>
+                    </td>
+                    <td th:text="${staffMember.firstName + ' ' + staffMember.lastName}">Nguyen Van A</td>
+                    <td th:text="${staffMember.position} ?: '—'">Receptionist</td>
+                    <td th:text="${staffMember.phone} ?: '—'">—</td>
+                    <td>
+                        <span class="status-badge"
+                              th:classappend="${staffMember.active} ? ' status-badge--available' : ' status-badge--checked_out'"
+                              th:text="${staffMember.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+                    </td>
+                    <td class="table-actions">
+                        <div class="action-row">
+                            <a class="button button-secondary table-action"
+                               th:href="@{/staff/{id}(id=${staffMember.id})}">View</a>
+                            <a class="button button-secondary table-action"
+                               th:href="@{/staff/{id}/edit(id=${staffMember.id})}">Edit</a>
+                            <form th:if="${staffMember.active}" data-confirm-label="Deactivate staff"
+                                  data-confirm-severity="WARNING" data-confirm-title="Deactivate staff" method="post"
+                                  th:action="@{/staff/{id}/deactivate(id=${staffMember.id})}"
+                                  th:attr="data-confirm-message=|Deactivate ${staffMember.staffCode}?|">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-danger table-action" type="submit">Deactivate</button>
+                            </form>
+                            <form th:unless="${staffMember.active}" data-confirm-label="Reactivate staff"
+                                  data-confirm-severity="NORMAL" data-confirm-title="Reactivate staff" method="post"
+                                  th:action="@{/staff/{id}/reactivate(id=${staffMember.id})}"
+                                  th:attr="data-confirm-message=|Reactivate ${staffMember.staffCode}?|">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-primary table-action" type="submit">Reactivate</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

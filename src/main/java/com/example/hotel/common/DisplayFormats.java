@@ -2,6 +2,7 @@ package com.example.hotel.common;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
@@ -22,6 +23,7 @@ public final class DisplayFormats {
     private static final DateTimeFormatter DATE_TIME_FORMATTER =
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
     private DisplayFormats() {}
 
@@ -44,5 +46,15 @@ public final class DisplayFormats {
      */
     public static String formatDate(LocalDate date) {
         return date == null ? null : DATE_FORMATTER.format(date);
+    }
+
+    /**
+     * Formats a time-only value as {@code HH:mm} (24-hour, no seconds).
+     *
+     * @param time the time to format, or {@code null}
+     * @return the formatted display string, or {@code null} when the time is {@code null}
+     */
+    public static String formatTime(LocalTime time) {
+        return time == null ? null : TIME_FORMATTER.format(time);
     }
 }

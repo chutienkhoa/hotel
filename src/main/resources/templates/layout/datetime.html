@@ -8,5 +8,9 @@
 <!-- Renders a date-only value as dd/MM/yyyy. Never use this for Instant/timestamp values. -->
 <span th:fragment="date(value)"
       th:text="${value == null ? '—' : T(com.example.hotel.common.DisplayFormats).formatDate(value)}">—</span>
+
+<!-- Renders a time-only (LocalTime) value as HH:mm (24-hour, no seconds). -->
+<span th:fragment="time(value)"
+      th:text="${value == null ? '—' : T(com.example.hotel.common.DisplayFormats).formatTime(value)}">—</span>
 </body>
 </html>

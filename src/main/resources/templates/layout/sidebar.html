@@ -54,6 +54,14 @@
             <span>Additional Revenue</span>
         </a>
     </div>
+
+    <div class="nav-section" th:if="${canManageStaff or canManageAttendance}">
+        <p class="nav-section-label">Administration</p>
+        <a class="sidebar-nav-link nav-staff" th:href="@{/staff}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
+            <span>Staff</span>
+        </a>
+    </div>
 </nav>
 </body>
 </html>

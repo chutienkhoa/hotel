@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Daily Work Record - By Staff')}"></head>
+<body>
+<div class="app-shell page-staff">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/staff}">Back to Staff</a>
+        <div class="page-header">
+            <div>
+                <h1>Daily Work Record</h1>
+                <p>Search one Staff member's Work History within a date range.</p>
+            </div>
+        </div>
+
+        <div class="action-row" th:if="${canManageStaff}">
+            <a class="button button-secondary" th:href="@{/staff}">Staff Management</a>
+        </div>
+
+        <div class="action-row" role="tablist" aria-label="Daily Work Record view">
+            <a class="button button-secondary" th:href="@{/staff/daily-work-record}">By Date</a>
+            <a aria-current="page" class="button button-primary" th:href="@{/staff/daily-work-record/by-staff}">By Staff</a>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" aria-label="Search Work History by Staff">
+            <form method="get" th:action="@{/staff/daily-work-record/by-staff}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="staffId">Staff</label>
+                        <select id="staffId" name="staffId">
+                            <option value="">Select a Staff member</option>
+                            <option th:each="staffOption : ${staffOptions}"
+                                    th:selected="${selectedStaffId != null and selectedStaffId == staffOption.id}"
+                                    th:text="${staffOption.staffCode + ' - ' + staffOption.firstName + ' ' + staffOption.lastName}"
+                                    th:value="${staffOption.id}">STF-000001 - Nguyen Van A</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label for="fromDate">From</label>
+                        <input class="js-date-picker" id="fromDate" name="fromDate" th:value="${fromDate}" type="text" />
+                    </div>
+                    <div class="form-field">
+                        <label for="toDate">To</label>
+                        <input class="js-date-picker" id="toDate" name="toDate" th:value="${toDate}" type="text" />
+                    </div>
+                </div>
+                <div class="action-row">
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <section aria-labelledby="work-history-heading" class="card">
+            <h2 id="work-history-heading">Work History</h2>
+
+            <p class="empty-state" th:if="${selectedStaffId == null}">Select a Staff member to search their Work History.</p>
+            <p class="empty-state" th:if="${selectedStaffId != null and #lists.isEmpty(workHistory)}">
+                No work records found for this period.
+            </p>
+
+            <div class="table-wrap" th:if="${selectedStaffId != null and not #lists.isEmpty(workHistory)}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Work Check-in</th>
+                        <th scope="col">Work Check-out</th>
+                        <th scope="col">Working Time</th>
+                        <th scope="col">Notes</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="entry : ${workHistory}">
+                        <td><span th:replace="~{layout/datetime :: date(${entry.workDate})}">—</span></td>
+                        <td><span th:replace="~{layout/datetime :: time(${entry.startTime})}">—</span></td>
+                        <td><span th:replace="~{layout/datetime :: time(${entry.endTime})}">—</span></td>
+                        <td th:text="${entry.workingTime} ?: '—'">9h00</td>
+                        <td th:text="${entry.notes} ?: '—'">—</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

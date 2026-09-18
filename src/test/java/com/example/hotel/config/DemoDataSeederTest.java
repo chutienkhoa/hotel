@@ -30,6 +30,12 @@ class DemoDataSeederTest {
         when(jdbcTemplate.queryForObject(
                         eq("SELECT COUNT(*) FROM additional_revenue WHERE id = ?"), eq(Integer.class), any()))
                 .thenReturn(1);
+        when(jdbcTemplate.queryForObject(
+                        eq("SELECT COUNT(*) FROM staff WHERE id = ?"), eq(Integer.class), any()))
+                .thenReturn(1);
+        when(jdbcTemplate.queryForObject(
+                        eq("SELECT COUNT(*) FROM daily_work_record WHERE id = ?"), eq(Integer.class), any()))
+                .thenReturn(1);
 
         new DemoDataSeeder().seed(
                 jdbcTemplate,
@@ -38,6 +44,10 @@ class DemoDataSeederTest {
         verify(jdbcTemplate).queryForObject(anyString(), eq(Integer.class), eq("demo-data-seeder"));
         verify(jdbcTemplate).queryForObject(
                 eq("SELECT COUNT(*) FROM additional_revenue WHERE id = ?"), eq(Integer.class), any());
+        verify(jdbcTemplate).queryForObject(
+                eq("SELECT COUNT(*) FROM staff WHERE id = ?"), eq(Integer.class), any());
+        verify(jdbcTemplate).queryForObject(
+                eq("SELECT COUNT(*) FROM daily_work_record WHERE id = ?"), eq(Integer.class), any());
         verifyNoMoreInteractions(jdbcTemplate);
     }
 }

@@ -6,6 +6,7 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.Month;
 import java.time.ZoneId;
 import java.time.format.TextStyle;
@@ -72,6 +73,12 @@ public class DemoDataSeeder {
     private static final List<Integer> OTHER_PAYMENT_ADDITIONAL_REVENUE_INDICES = List.of(12, 26);
     private static final List<String> ADDITIONAL_REVENUE_VOID_REASONS =
             List.of("Duplicate entry", "Incorrect amount", "Entered by mistake", "Wrong category");
+    private static final List<String> STAFF_POSITIONS = List.of(
+            "Manager", "Receptionist", "Housekeeping", "Maintenance", "Security", "Accountant",
+            "Night Reception", "Receptionist", "Housekeeping", "Part-time");
+    private static final int STAFF_COUNT = 10;
+    private static final int INACTIVE_STAFF_COUNT = 2;
+    private static final int ACTIVE_STAFF_WORK_RECORD_DAYS = 5;
 
     /** Creates the profile-gated runner that generates the demo dataset exactly once. */
     @Bean
@@ -85,7 +92,12 @@ public class DemoDataSeeder {
         Integer markerCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM app_user WHERE username = ?", Integer.class, MARKER_USERNAME);
         if (markerCount != null && markerCount > 0) {
-            insertAdditionalRevenues(jdbcTemplate, deterministicId(MARKER_USERNAME), LocalDate.now(dashboardClock));
+            UUID existingAuditUserId = deterministicId(MARKER_USERNAME);
+            LocalDate existingToday = LocalDate.now(dashboardClock);
+            insertAdditionalRevenues(jdbcTemplate, existingAuditUserId, existingToday);
+            List<UUID> existingStaffIds =
+                    insertStaff(jdbcTemplate, existingAuditUserId, existingToday, timestamp(dashboardClock.instant()));
+            insertDailyWorkRecords(jdbcTemplate, existingStaffIds, existingAuditUserId, existingToday);
             return;
         }
 
@@ -102,6 +114,85 @@ public class DemoDataSeeder {
         setOperationalRoomMix(jdbcTemplate, roomIds, auditUserId, nowTimestamp);
         insertExpenses(jdbcTemplate, auditUserId, today);
         insertAdditionalRevenues(jdbcTemplate, auditUserId, today);
+        List<UUID> staffIds = insertStaff(jdbcTemplate, auditUserId, today, nowTimestamp);
+        insertDailyWorkRecords(jdbcTemplate, staffIds, auditUserId, today);
+    }
+
+    /**
+     * Inserts a fixed, deterministic set of demo Staff members (mostly active, a small number
+     * inactive), or returns their already-existing identifiers on a subsequent application start.
+     *
+     * @param jdbcTemplate JDBC access used to insert demo rows
+     * @param auditUserId demo marker user recorded as the creator/updater
+     * @param today current hotel business date, used to derive a plausible Start Date
+     * @param now timestamp recorded for the audit columns
+     * @return the demo Staff identifiers, in seeded order
+     */
+    private List<UUID> insertStaff(JdbcTemplate jdbcTemplate, UUID auditUserId, LocalDate today, Timestamp now) {
+        List<UUID> staffIds = new java.util.ArrayList<>();
+        for (int index = 1; index <= STAFF_COUNT; index++) {
+            staffIds.add(deterministicId(PREFIX + "STAFF-" + index));
+        }
+        Integer existingCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM staff WHERE id = ?", Integer.class, staffIds.get(0));
+        if (existingCount != null && existingCount > 0) {
+            return List.copyOf(staffIds);
+        }
+
+        for (int index = 1; index <= STAFF_COUNT; index++) {
+            String firstName = FIRST_NAMES.get((index - 1) % FIRST_NAMES.size());
+            String lastName = LAST_NAMES.get((index - 1) % LAST_NAMES.size());
+            String position = STAFF_POSITIONS.get((index - 1) % STAFF_POSITIONS.size());
+            boolean active = index > INACTIVE_STAFF_COUNT;
+            jdbcTemplate.update(
+                    "INSERT INTO staff (id, staff_code, first_name, last_name, phone, email, position, "
+                            + "start_date, active, notes, created_at, created_by, updated_at, updated_by) "
+                            + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    staffIds.get(index - 1), PREFIX + "STF-" + String.format("%03d", index), firstName, lastName,
+                    "+8409" + String.format("%07d", index), "demo.staff" + index + "@example.test", position,
+                    today.minusYears(1).minusMonths(index), active, null, now, auditUserId, now, auditUserId);
+        }
+        return List.copyOf(staffIds);
+    }
+
+    /**
+     * Inserts a small, deterministic set of recent Daily Work Record rows for the demo Staff
+     * members: several recent workdays for active Staff, and one older record for each inactive
+     * Staff member to demonstrate that their history remains preserved after deactivation.
+     *
+     * @param jdbcTemplate JDBC access used to insert demo rows
+     * @param staffIds demo Staff identifiers, in the same order {@link #insertStaff} seeded them
+     * @param auditUserId demo marker user recorded as the creator/updater
+     * @param today current hotel business date
+     */
+    private void insertDailyWorkRecords(
+            JdbcTemplate jdbcTemplate, List<UUID> staffIds, UUID auditUserId, LocalDate today) {
+        UUID firstRecordId = deterministicId(PREFIX + "WORK-1-0");
+        Integer existingCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM daily_work_record WHERE id = ?", Integer.class, firstRecordId);
+        if (existingCount != null && existingCount > 0) {
+            return;
+        }
+
+        LocalTime startTime = LocalTime.of(8, 0);
+        LocalTime endTime = LocalTime.of(17, 0);
+        for (int staffIndex = 0; staffIndex < staffIds.size(); staffIndex++) {
+            boolean active = staffIndex >= INACTIVE_STAFF_COUNT;
+            int recordCount = active ? ACTIVE_STAFF_WORK_RECORD_DAYS : 1;
+            for (int recordIndex = 0; recordIndex < recordCount; recordIndex++) {
+                LocalDate workDate = active
+                        ? today.minusDays(recordIndex + 1)
+                        : today.minusDays(30 + recordIndex);
+                Instant recordedAt = workDate.atTime(18, 0).atZone(BUSINESS_ZONE).toInstant();
+                Timestamp recordedAtTimestamp = timestamp(recordedAt);
+                jdbcTemplate.update(
+                        "INSERT INTO daily_work_record (id, staff_id, work_date, start_time, end_time, notes, "
+                                + "created_at, created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        deterministicId(PREFIX + "WORK-" + (staffIndex + 1) + "-" + recordIndex),
+                        staffIds.get(staffIndex), workDate, startTime, endTime, null,
+                        recordedAtTimestamp, auditUserId, recordedAtTimestamp, auditUserId);
+            }
+        }
     }
 
     private void insertAuditUser(JdbcTemplate jdbcTemplate, UUID userId, Timestamp now) {

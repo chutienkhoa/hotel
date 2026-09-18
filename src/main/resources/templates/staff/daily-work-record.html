@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Daily Work Record')}"></head>
+<body>
+<div class="app-shell page-staff">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/staff}">Back to Staff</a>
+        <div class="page-header">
+            <div>
+                <h1>Daily Work Record</h1>
+                <p>Enter each active Staff member's start and end time for one work date.</p>
+            </div>
+        </div>
+
+        <div class="action-row" th:if="${canManageStaff}">
+            <a class="button button-secondary" th:href="@{/staff}">Staff Management</a>
+        </div>
+
+        <div class="action-row" role="tablist" aria-label="Daily Work Record view">
+            <a aria-current="page" class="button button-primary" th:href="@{/staff/daily-work-record}">By Date</a>
+            <a class="button button-secondary" th:href="@{/staff/daily-work-record/by-staff}">By Staff</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" aria-label="Select work date">
+            <form method="get" th:action="@{/staff/daily-work-record}">
+                <div class="form-field">
+                    <label for="workDateSelector">Work Date</label>
+                    <input class="js-date-picker" id="workDateSelector" name="workDate"
+                           th:value="${form.workDate}" type="text" />
+                </div>
+                <div class="action-row">
+                    <button class="button button-primary" type="submit">Load</button>
+                </div>
+            </form>
+        </section>
+
+        <p class="empty-state" th:if="${#lists.isEmpty(form.lines)}">No active Staff found.</p>
+
+        <form th:unless="${#lists.isEmpty(form.lines)}" data-confirm-label="Save"
+              data-confirm-message="Save the Daily Work Record for this date?" data-confirm-severity="NORMAL"
+              data-confirm-title="Save Daily Work Record" method="post"
+              th:action="@{/staff/daily-work-record}" th:object="${form}">
+            <input th:field="*{workDate}" type="hidden" />
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Staff</th>
+                        <th scope="col">Work Check-in</th>
+                        <th scope="col">Work Check-out</th>
+                        <th scope="col">Working Time</th>
+                        <th scope="col">Notes</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="line, iterStat : *{lines}">
+                        <td>
+                            <p class="reservation-info-value" th:text="${line.staffCode}">STF-000001</p>
+                            <p class="reservation-info-secondary" th:text="${line.staffName}">Nguyen Van A</p>
+                            <input th:field="*{lines[__${iterStat.index}__].staffId}" type="hidden" />
+                            <input th:field="*{lines[__${iterStat.index}__].staffCode}" type="hidden" />
+                            <input th:field="*{lines[__${iterStat.index}__].staffName}" type="hidden" />
+                        </td>
+                        <td>
+                            <input th:field="*{lines[__${iterStat.index}__].startTime}" type="time" />
+                        </td>
+                        <td>
+                            <input th:field="*{lines[__${iterStat.index}__].endTime}" type="time" />
+                        </td>
+                        <td>
+                            <span th:text="${line.workingTime} ?: '—'">9h00</span>
+                        </td>
+                        <td>
+                            <input maxlength="255" placeholder="Optional"
+                                   th:field="*{lines[__${iterStat.index}__].notes}" type="text" />
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-actions">
+                <button class="button button-primary" type="submit">Save</button>
+            </div>
+        </form>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

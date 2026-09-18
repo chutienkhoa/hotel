@@ -1,6 +1,7 @@
 package com.example.hotel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.hotel.entity.common.Role;
@@ -60,7 +61,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(24, flyway.info().applied().length);
+        assertEquals(26, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -79,7 +80,9 @@ class MigrationIntegrationTest {
                         "VIEW_REPORT",
                         "VIEW_BOOKING",
                         "CHECK_OUT",
-                        "CHANGE_ROOM"));
+                        "CHANGE_ROOM",
+                        "MANAGE_STAFF",
+                        "MANAGE_ATTENDANCE"));
         assertPermissionCodes(
                 "MANAGER",
                 Set.of(
@@ -93,7 +96,9 @@ class MigrationIntegrationTest {
                         "VIEW_BOOKING",
                         "CHECK_IN",
                         "CHECK_OUT",
-                        "CHANGE_ROOM"));
+                        "CHANGE_ROOM",
+                        "MANAGE_STAFF",
+                        "MANAGE_ATTENDANCE"));
         assertPermissionCodes(
                 "STAFF",
                 Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT", "CHANGE_ROOM"));
@@ -118,6 +123,12 @@ class MigrationIntegrationTest {
         assertRolePermissionRelationshipCount("MANAGER", "CHANGE_ROOM", 1);
         assertRolePermissionRelationshipCount("STAFF", "CHANGE_ROOM", 1);
         assertRolePermissionRelationshipCount("STAFF", "MANAGE_BOOKING", 0);
+        assertRolePermissionRelationshipCount("ADMIN", "MANAGE_STAFF", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "MANAGE_STAFF", 1);
+        assertRolePermissionRelationshipCount("STAFF", "MANAGE_STAFF", 0);
+        assertRolePermissionRelationshipCount("ADMIN", "MANAGE_ATTENDANCE", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "MANAGE_ATTENDANCE", 1);
+        assertRolePermissionRelationshipCount("STAFF", "MANAGE_ATTENDANCE", 0);
     }
 
     /** Verifies V16 preserves MANAGE_GUEST and adds a distinct Additional Revenue permission. */
@@ -145,6 +156,113 @@ class MigrationIntegrationTest {
         assertEquals(1, additionalRevenuePermissionCount);
         assertEquals(permissionCount, uniquePermissionIdCount);
         assertEquals(2, additionalRevenueCategoryCount);
+    }
+
+    /**
+     * Verifies V26 creates the Staff and Daily Work Record tables with the approved constraints:
+     * a unique Staff Code, a unique (staff_id, work_date) pair, a start-before-end CHECK, and
+     * Staff/app_user foreign keys.
+     */
+    @Test
+    void staffAndDailyWorkRecordSchemaMatchesV1Rules() {
+        Boolean staffCodeIsUnique = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint c "
+                        + "JOIN pg_class t ON t.oid = c.conrelid "
+                        + "WHERE t.relname = 'staff' AND c.contype = 'u')",
+                Boolean.class);
+        Boolean staffDateUniqueIndexExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                        + "WHERE tablename = 'daily_work_record' AND indexname = 'ux_daily_work_record_staff_date')",
+                Boolean.class);
+        Boolean startBeforeEndCheckExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint "
+                        + "WHERE conname = 'daily_work_record_start_before_end')",
+                Boolean.class);
+        String startBeforeEndCheckDefinition = jdbcTemplate.queryForObject(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                        + "WHERE conname = 'daily_work_record_start_before_end'",
+                String.class);
+        Boolean staffIdForeignKeyExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.table_constraints tc "
+                        + "JOIN information_schema.constraint_column_usage ccu "
+                        + "ON tc.constraint_name = ccu.constraint_name "
+                        + "WHERE tc.table_name = 'daily_work_record' AND tc.constraint_type = 'FOREIGN KEY' "
+                        + "AND ccu.table_name = 'staff')",
+                Boolean.class);
+        Boolean staffIdIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' FROM information_schema.columns "
+                        + "WHERE table_name = 'daily_work_record' AND column_name = 'staff_id'",
+                Boolean.class);
+        Boolean activeIsRequired = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'NO' FROM information_schema.columns "
+                        + "WHERE table_name = 'staff' AND column_name = 'active'",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(staffCodeIsUnique));
+        assertTrue(Boolean.TRUE.equals(staffDateUniqueIndexExists));
+        assertTrue(Boolean.TRUE.equals(startBeforeEndCheckExists));
+        assertTrue(startBeforeEndCheckDefinition.contains("start_time") && startBeforeEndCheckDefinition.contains("end_time"));
+        assertTrue(Boolean.TRUE.equals(staffIdForeignKeyExists));
+        assertTrue(Boolean.TRUE.equals(staffIdIsRequired));
+        assertTrue(Boolean.TRUE.equals(activeIsRequired));
+    }
+
+    /** Verifies inserting two Daily Work Record rows for the same Staff/date is rejected by the unique index. */
+    @Test
+    @Transactional
+    void dailyWorkRecordRejectsDuplicateStaffDatePair() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO app_user (id, username, password_hash, active, created_at, created_by, "
+                        + "updated_at, updated_by) VALUES (?, ?, 'x', TRUE, NOW(), ?, NOW(), ?)",
+                userId, "staff-migration-" + userId, userId, userId);
+        UUID staffId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO staff (id, staff_code, first_name, last_name, start_date, active, created_at, "
+                        + "created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, 'First', 'Last', CURRENT_DATE, TRUE, NOW(), ?, NOW(), ?)",
+                staffId, "STF-TEST-" + staffId.toString().substring(0, 8), userId, userId);
+        jdbcTemplate.update(
+                "INSERT INTO daily_work_record (id, staff_id, work_date, start_time, end_time, created_at, "
+                        + "created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, CURRENT_DATE, '08:00', '17:00', NOW(), ?, NOW(), ?)",
+                UUID.randomUUID(), staffId, userId, userId);
+
+        org.springframework.dao.DataIntegrityViolationException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.dao.DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        "INSERT INTO daily_work_record (id, staff_id, work_date, start_time, end_time, "
+                                + "created_at, created_by, updated_at, updated_by) "
+                                + "VALUES (?, ?, CURRENT_DATE, '09:00', '18:00', NOW(), ?, NOW(), ?)",
+                        UUID.randomUUID(), staffId, userId, userId));
+
+        assertTrue(exception.getMessage().toLowerCase(java.util.Locale.ROOT).contains("duplicate")
+                || exception.getMessage().toLowerCase(java.util.Locale.ROOT).contains("unique"));
+    }
+
+    /** Verifies the database rejects a Daily Work Record row where Start is not strictly before End. */
+    @Test
+    @Transactional
+    void dailyWorkRecordRejectsStartNotBeforeEnd() {
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO app_user (id, username, password_hash, active, created_at, created_by, "
+                        + "updated_at, updated_by) VALUES (?, ?, 'x', TRUE, NOW(), ?, NOW(), ?)",
+                userId, "staff-check-" + userId, userId, userId);
+        UUID staffId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO staff (id, staff_code, first_name, last_name, start_date, active, created_at, "
+                        + "created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, 'First', 'Last', CURRENT_DATE, TRUE, NOW(), ?, NOW(), ?)",
+                staffId, "STF-CHK-" + staffId.toString().substring(0, 8), userId, userId);
+
+        assertThrows(
+                org.springframework.dao.DataIntegrityViolationException.class,
+                () -> jdbcTemplate.update(
+                        "INSERT INTO daily_work_record (id, staff_id, work_date, start_time, end_time, "
+                                + "created_at, created_by, updated_at, updated_by) "
+                                + "VALUES (?, ?, CURRENT_DATE, '17:00', '08:00', NOW(), ?, NOW(), ?)",
+                        UUID.randomUUID(), staffId, userId, userId));
     }
 
     /** Verifies V17 aligns Additional Revenue currency with the validated VARCHAR convention. */

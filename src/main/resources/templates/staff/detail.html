@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Staff detail')}"></head>
+<body>
+<div class="app-shell page-staff">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/staff}">Back to Staff</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="${staff.firstName + ' ' + staff.lastName}">Nguyen Van A</h1>
+                <p th:text="${staff.position} ?: 'Staff'">Receptionist</p>
+            </div>
+            <a class="button button-primary" th:href="@{/staff/{id}/edit(id=${staff.id})}">Edit Staff</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section aria-labelledby="staff-information-heading" class="card">
+            <h2 id="staff-information-heading">Staff Information</h2>
+            <dl class="detail-list">
+                <dt>Staff Code</dt>
+                <dd th:text="${staff.staffCode}">STF-000001</dd>
+                <dt>First Name</dt>
+                <dd th:text="${staff.firstName}">Van A</dd>
+                <dt>Last Name</dt>
+                <dd th:text="${staff.lastName}">Nguyen</dd>
+                <dt>Phone</dt>
+                <dd th:text="${staff.phone} ?: '—'">—</dd>
+                <dt>Email</dt>
+                <dd th:text="${staff.email} ?: '—'">—</dd>
+                <dt>Position</dt>
+                <dd th:text="${staff.position} ?: '—'">Receptionist</dd>
+                <dt>Start Date</dt>
+                <dd><span th:replace="~{layout/datetime :: date(${staff.startDate})}">—</span></dd>
+                <dt>Status</dt>
+                <dd>
+                    <span class="status-badge"
+                          th:classappend="${staff.active} ? ' status-badge--available' : ' status-badge--checked_out'"
+                          th:text="${staff.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+                </dd>
+            </dl>
+        </section>
+
+        <section aria-labelledby="work-history-heading" class="card">
+            <h2 id="work-history-heading">Work History</h2>
+            <form class="form-card" method="get" th:action="@{/staff/{id}(id=${staff.id})}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="fromDate">From</label>
+                        <input class="js-date-picker" id="fromDate" name="fromDate" th:value="${fromDate}" type="text" />
+                    </div>
+                    <div class="form-field">
+                        <label for="toDate">To</label>
+                        <input class="js-date-picker" id="toDate" name="toDate" th:value="${toDate}" type="text" />
+                    </div>
+                </div>
+                <div class="action-row">
+                    <button class="button button-primary" type="submit">Filter</button>
+                </div>
+            </form>
+
+            <p class="empty-state" th:if="${#lists.isEmpty(workHistory)}">No work records found for this period.</p>
+
+            <div class="table-wrap" th:unless="${#lists.isEmpty(workHistory)}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Work Check-in</th>
+                        <th scope="col">Work Check-out</th>
+                        <th scope="col">Working Time</th>
+                        <th scope="col">Notes</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="entry : ${workHistory}">
+                        <td><span th:replace="~{layout/datetime :: date(${entry.workDate})}">—</span></td>
+                        <td><span th:replace="~{layout/datetime :: time(${entry.startTime})}">—</span></td>
+                        <td><span th:replace="~{layout/datetime :: time(${entry.endTime})}">—</span></td>
+                        <td th:text="${entry.workingTime} ?: '—'">9h00</td>
+                        <td th:text="${entry.notes} ?: '—'">—</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

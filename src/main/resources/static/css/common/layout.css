@@ -220,7 +220,8 @@ p {
 .app-shell.page-guests .nav-guests,
 .app-shell.page-rooms .nav-rooms,
 .app-shell.page-expenses .nav-expenses,
-.app-shell.page-additional-revenues .nav-additional-revenues {
+.app-shell.page-additional-revenues .nav-additional-revenues,
+.app-shell.page-staff .nav-staff {
   background: var(--color-primary);
   color: #fff;
 }
@@ -232,7 +233,8 @@ p {
 .app-shell.page-guests .nav-guests .sidebar-nav-icon,
 .app-shell.page-rooms .nav-rooms .sidebar-nav-icon,
 .app-shell.page-expenses .nav-expenses .sidebar-nav-icon,
-.app-shell.page-additional-revenues .nav-additional-revenues .sidebar-nav-icon {
+.app-shell.page-additional-revenues .nav-additional-revenues .sidebar-nav-icon,
+.app-shell.page-staff .nav-staff .sidebar-nav-icon {
   color: #fff;
 }
 .app-shell.page-dashboard .nav-dashboard:hover,
@@ -243,7 +245,8 @@ p {
 .app-shell.page-guests .nav-guests:hover,
 .app-shell.page-rooms .nav-rooms:hover,
 .app-shell.page-expenses .nav-expenses:hover,
-.app-shell.page-additional-revenues .nav-additional-revenues:hover {
+.app-shell.page-additional-revenues .nav-additional-revenues:hover,
+.app-shell.page-staff .nav-staff:hover {
   background: var(--color-primary);
   color: #fff;
 }

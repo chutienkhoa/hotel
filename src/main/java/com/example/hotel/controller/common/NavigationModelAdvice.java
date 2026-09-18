@@ -31,6 +31,8 @@ public class NavigationModelAdvice {
         model.addAttribute("canManagePayment", hasAuthority(authentication, "PERM_MANAGE_PAYMENT"));
         model.addAttribute("canCheckIn", hasAuthority(authentication, "PERM_CHECK_IN"));
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
+        model.addAttribute("canManageStaff", hasAuthority(authentication, "PERM_MANAGE_STAFF"));
+        model.addAttribute("canManageAttendance", hasAuthority(authentication, "PERM_MANAGE_ATTENDANCE"));
     }
 
     /**
