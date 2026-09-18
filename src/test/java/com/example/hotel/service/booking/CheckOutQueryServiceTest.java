@@ -166,6 +166,104 @@ class CheckOutQueryServiceTest {
         assertEquals("CHECKED_OUT", review.status());
     }
 
+    /**
+     * Confirms Room search matches the Stay's CURRENT open StayRoomAssignment room, not the
+     * original ReservationRoom — after a Room Change, searching the replacement room (305) must
+     * find the stay, and searching the released original room (201) must not.
+     */
+    @Test
+    void shouldMatchCurrentRoomAfterRoomChangeNotOriginalRoom() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of(summary()), PageRequest.of(0, 10), 1));
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
+        when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(List.of(currentRoom("305")));
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
+        CheckOutQueryService service =
+                service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService);
+
+        ReservationSearchCriteria matchingCurrentRoom = new ReservationSearchCriteria();
+        matchingCurrentRoom.setRoom("305");
+        List<CheckOutListItemResponse> matched = service.search(matchingCurrentRoom, 0).getContent();
+        assertEquals(1, matched.size());
+        assertEquals("305", matched.get(0).currentRoomNumbers());
+
+        ReservationSearchCriteria searchingReleasedOriginalRoom = new ReservationSearchCriteria();
+        searchingReleasedOriginalRoom.setRoom("201");
+        List<CheckOutListItemResponse> notMatched = service.search(searchingReleasedOriginalRoom, 0).getContent();
+        assertTrue(notMatched.isEmpty(), "the released original room must no longer find the stay");
+    }
+
+    /** Confirms a multi-room stay's current-room search matches on any of its current rooms. */
+    @Test
+    void shouldMatchMultiRoomStayByAnyCurrentRoom() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of(summary()), PageRequest.of(0, 10), 1));
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
+        when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID))
+                .thenReturn(List.of(currentRoom("305"), currentRoom("202")));
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
+        ReservationSearchCriteria criteria = new ReservationSearchCriteria();
+        criteria.setRoom("202");
+
+        List<CheckOutListItemResponse> matched =
+                service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService)
+                        .search(criteria, 0)
+                        .getContent();
+
+        assertEquals(1, matched.size());
+        assertEquals("305, 202", matched.get(0).currentRoomNumbers());
+    }
+
+    /** Confirms the caller's Room filter value is preserved after search, so a re-rendered form keeps it. */
+    @Test
+    void shouldPreserveRoomFilterValueOnCriteriaAfterSearch() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        ReservationSearchCriteria criteria = new ReservationSearchCriteria();
+        criteria.setRoom("305");
+
+        service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService)
+                .search(criteria, 0);
+
+        assertEquals("305", criteria.getRoom());
+    }
+
+    /** Confirms Reservation Number and Guest filters still pass through to the shared search. */
+    @Test
+    void shouldForwardReservationNumberAndGuestFiltersToSharedSearch() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        ReservationSearchCriteria criteria = new ReservationSearchCriteria();
+        criteria.setReservationNumber("R20260917-000009");
+        criteria.setGuest("DEMO-G013");
+
+        ArgumentCaptor<ReservationSearchCriteria> captor = ArgumentCaptor.forClass(ReservationSearchCriteria.class);
+        service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService)
+                .search(criteria, 0);
+
+        verify(reservationQueryService).findPage(captor.capture(), org.mockito.ArgumentMatchers.eq(0));
+        assertEquals("R20260917-000009", captor.getValue().getReservationNumber());
+        assertEquals("DEMO-G013", captor.getValue().getGuest());
+    }
+
     /** Confirms search never queries Outstanding amounts, only the non-financial readiness label. */
     @Test
     void shouldNeverExposeMonetaryAmountsFromSearch() {

@@ -10,9 +10,11 @@ import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.entity.booking.ReservationStatus;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,8 +56,18 @@ public class CheckOutQueryService {
 
     /**
      * Searches CHECKED_IN Reservations only, reusing the existing Reservation search/pagination
-     * infrastructure, and enriches each row with the Stay's current rooms and non-financial
-     * readiness.
+     * infrastructure for Reservation Number and Guest, and enriches each row with the Stay's
+     * current rooms and non-financial readiness.
+     *
+     * <p>The Room filter cannot be delegated to {@link ReservationQueryService}, because its Room
+     * filter joins the immutable original {@code ReservationRoom} booking snapshot. After a Room
+     * Change, that no longer reflects the Stay's current physical room, so this method instead
+     * clears the Room filter before delegating and matches it itself against each row's current
+     * open {@code StayRoomAssignment} room numbers. This match applies to the CHECKED_IN
+     * Reservations returned on the requested page only, not across the entire filtered result
+     * set — an accepted, narrowly-scoped tradeoff for this bounded operational queue (V1 does not
+     * introduce a new cross-page search infrastructure here; see Task 26 for general Data Table UX
+     * standardization).
      *
      * @param criteria submitted Reservation Number / Guest / Room filters
      * @param page zero-based requested page number
@@ -64,7 +76,20 @@ public class CheckOutQueryService {
     @Transactional(readOnly = true)
     public Page<CheckOutListItemResponse> search(ReservationSearchCriteria criteria, int page) {
         criteria.setStatus(ReservationStatus.CHECKED_IN);
-        return reservationQueryService.findPage(criteria, page).map(this::toListItem);
+        String currentRoomFilter = criteria.getRoom();
+        criteria.setRoom(null);
+        Page<ReservationSummaryResponse> reservationPage = reservationQueryService.findPage(criteria, page);
+        criteria.setRoom(currentRoomFilter);
+        List<CheckOutListItemResponse> items =
+                reservationPage.getContent().stream().map(this::toListItem).toList();
+        if (currentRoomFilter == null || currentRoomFilter.isBlank()) {
+            return new PageImpl<>(items, reservationPage.getPageable(), reservationPage.getTotalElements());
+        }
+        String normalizedFilter = currentRoomFilter.toLowerCase(Locale.ROOT);
+        List<CheckOutListItemResponse> matchingCurrentRoom = items.stream()
+                .filter(item -> item.currentRoomNumbers().toLowerCase(Locale.ROOT).contains(normalizedFilter))
+                .toList();
+        return new PageImpl<>(matchingCurrentRoom, reservationPage.getPageable(), matchingCurrentRoom.size());
     }
 
     /**

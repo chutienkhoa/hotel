@@ -601,6 +601,16 @@ class ReservationAccessAuthorizationTest {
         assertFakeNavigationAbsent(body);
     }
 
+    /** Confirms a VIEW_BOOKING-only user without CHECK_OUT never sees the Check-out sidebar link. */
+    @Test
+    void shouldNotRenderCheckOutSidebarLinkWithoutCheckOutPermission() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-check-out\""))));
+    }
+
     /** Confirms empty sections (Hotel, Finance) render no heading at all for STAFF, never an empty group. */
     @Test
     void shouldHideEmptySidebarSectionHeadingsForStaff() throws Exception {

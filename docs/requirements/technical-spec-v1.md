@@ -2115,10 +2115,24 @@ Reservation Number, Guest, Room, tái dùng infrastructure search/pagination hi�
 Reservation (`ReservationSearchCriteria`/`ReservationQueryService`), buộc `status=CHECKED_IN`
 giống cách Check-in search buộc `status=CONFIRMED`.
 
+Reservation Number và Guest được ủy quyền trực tiếp cho `ReservationQueryService.findPage()`
+không thay đổi. Riêng filter Room KHÔNG được ủy quyền nguyên trạng: query Room có sẵn của
+`ReservationQueryService` join trên `ReservationRoom` (snapshot đặt phòng gốc, bất biến), nên sau
+Room Change nó không còn phản ánh đúng phòng vật lý hiện tại của Stay. Vì vậy
+`CheckOutQueryService.search()` tạm xóa filter Room trước khi gọi `findPage()` (khôi phục lại
+ngay sau đó để form tìm kiếm không mất giá trị đã nhập), rồi tự so khớp filter Room với danh sách
+current Room (từ open `StayRoomAssignment`) của từng dòng kết quả đã trả về. Giới hạn được ghi
+nhận rõ ràng: việc so khớp Room chỉ áp dụng trong phạm vi trang kết quả CHECKED_IN hiện tại (kích
+thước trang cố định, xem `ReservationQueryService`), không phải tìm kiếm Room xuyên trang — chấp
+nhận được cho quy mô hàng đợi vận hành V1 (số lượt lưu trú đang CHECKED_IN đồng thời tại một thời
+điểm), không phải chuẩn hóa Data Table UX tổng quát (đó là phạm vi Task 26).
+
 Cột "Current Room(s)" trên danh sách và trên Check-out Review luôn đọc từ open
 `StayRoomAssignment` (current Rooms), không phải `ReservationRoom` gốc — cùng nguyên tắc current-
 room đã mô tả ở đầu mục 24. Ví dụ: Reservation đặt phòng 201 + 202, sau Room Change 201 → 305,
-danh sách và Review phải hiển thị "305, 202", không hiển thị "201, 202".
+danh sách và Review phải hiển thị "305, 202", không hiển thị "201, 202". Tìm theo Room "305" (phòng
+hiện tại) phải tìm thấy Stay này; tìm theo Room "201" (phòng gốc đã được giải phóng bởi Room
+Change) không được tìm thấy nữa.
 
 Guest hiển thị dưới dạng Guest Code (ví dụ "DEMO-G013"), không hiển thị mini profile
 (passport/nationality/address/phone/email/DOB). Guest Code chỉ là link khi user có

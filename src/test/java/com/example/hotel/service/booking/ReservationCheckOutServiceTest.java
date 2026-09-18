@@ -139,6 +139,21 @@ class ReservationCheckOutServiceTest {
         verify(fixture.roomRepository(), never()).lockAllByIdIn(any());
     }
 
+    /** Confirms a negative outstanding balance (overpayment) also prevents check-out, not only a positive one. */
+    @Test
+    void shouldRejectNegativeOutstandingBalanceBeforeChangingStates() {
+        Fixture fixture = fixture(List.of(RoomStatus.OCCUPIED));
+        when(fixture.stayBalanceService().calculate(fixture.stay().getId()))
+                .thenReturn(balance(BigDecimal.TEN, new BigDecimal("15")));
+
+        assertConflict(() -> fixture.service().checkOut(fixture.reservation().getId()));
+
+        assertEquals(ReservationStatus.CHECKED_IN, fixture.reservation().getStatus());
+        assertEquals(StayStatus.CHECKED_IN, fixture.stay().getStatus());
+        assertEquals(RoomStatus.OCCUPIED, fixture.rooms().getFirst().getStatus());
+        verify(fixture.roomRepository(), never()).lockAllByIdIn(any());
+    }
+
     /** Confirms non-contributing Payment statuses leave a positive outstanding balance. */
     @ParameterizedTest
     @MethodSource("nonContributingPaymentStatuses")

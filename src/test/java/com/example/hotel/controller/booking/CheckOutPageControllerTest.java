@@ -180,6 +180,27 @@ class CheckOutPageControllerTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-out\"")));
     }
 
+    /** Confirms the Check-out sidebar link marks itself active while on the Check-out queue page. */
+    @Test
+    void shouldMarkSidebarActiveOnCheckOutSearchPage() throws Exception {
+        when(checkOutQueryService.search(any(), org.mockito.ArgumentMatchers.eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        mockMvc.perform(get("/check-out").with(user("staff").authorities(checkOutAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"app-shell page-check-out\"")));
+    }
+
+    /** Confirms the Check-out sidebar link marks itself active while on the Check-out Review page. */
+    @Test
+    void shouldMarkSidebarActiveOnCheckOutReviewPage() throws Exception {
+        when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(review(true, "READY"));
+
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"app-shell page-check-out\"")));
+    }
+
     /** Builds a representative Check-out list item. */
     private CheckOutListItemResponse listItem() {
         return new CheckOutListItemResponse(
