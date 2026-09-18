@@ -35,7 +35,7 @@
                             <p class="reservation-info-secondary" th:text="${review.guestCode}">GUEST-001</p>
                             <p class="reservation-info-secondary" th:if="${!review.passportAvailable}">No passport image on file.</p>
                             <p class="reservation-info-secondary" th:if="${review.passportAvailable}">
-                                <a th:href="@{/guests/{id}/passport-image(id=${review.guestId})}" target="_blank">View Passport</a>
+                                <a th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${review.guestId},documentId=${review.firstPassportDocumentId})}" target="_blank">View Passport</a>
                             </p>
                         </div>
                     </div>

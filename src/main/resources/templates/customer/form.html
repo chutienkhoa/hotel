@@ -76,16 +76,37 @@
                 </div>
 
                 <section aria-labelledby="passport-heading" class="guest-passport-section guest-form-address">
-                    <h2 id="passport-heading">Passport</h2>
-                    <p th:if="${passportDocument == null}">No passport image uploaded.</p>
-                    <p th:if="${passportDocument != null}">
-                        Current: <a th:href="@{/guests/{id}/passport-image(id=${guest.id})}" target="_blank">View Passport</a>
-                    </p>
+                    <h2 id="passport-heading">Passport Images</h2>
+                    <p>Upload passport images for the guest and accompanying travelers.</p>
+
+                    <div th:if="${guest != null}" class="profile-document-existing">
+                        <h3>Existing documents</h3>
+                        <p th:if="${#lists.isEmpty(passportDocuments)}">No passport images uploaded.</p>
+                        <ul class="profile-document-list" th:if="${not #lists.isEmpty(passportDocuments)}">
+                            <li class="profile-document-row" th:each="document, iterStat : ${passportDocuments}">
+                                <span class="profile-document-label" th:text="${'Passport ' + (iterStat.index + 1)}">Passport 1</span>
+                                <span class="profile-document-actions">
+                                    <a class="button button-secondary" target="_blank"
+                                       th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${guest.id},documentId=${document.id})}">View Passport</a>
+                                    <!--
+                                        HTML forms cannot be nested inside the surrounding Edit Guest form, so this
+                                        removal control is a button bound by id to its own standalone form element,
+                                        rendered outside the Edit Guest form below (see #remove-passport-forms).
+                                    -->
+                                    <button class="button button-danger" type="submit"
+                                            th:form="${'remove-passport-' + document.id}">Remove</button>
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
+
                     <div class="form-field">
-                        <label for="passportImage" th:text="${passportDocument == null} ? 'Passport image' : 'Replace passport image'">Passport image</label>
-                        <input accept="image/jpeg,image/png" id="passportImage" name="passportImage" type="file" />
-                        <p class="form-hint">JPG or PNG, maximum 5 MB.</p>
+                        <label for="passportImages" th:text="${guest == null} ? 'Passport images' : 'New images'">Passport images</label>
+                        <input accept="image/jpeg,image/png" class="js-passport-images-input" id="passportImages"
+                               multiple="multiple" name="passportImages" type="file" />
+                        <p class="form-hint">JPG or PNG, maximum 5 MB per image.</p>
                         <p class="field-error" th:if="${passportError}" th:text="${passportError}"></p>
+                        <p class="field-error js-passport-size-warning" hidden></p>
                     </div>
                 </section>
             </div>
@@ -97,9 +118,28 @@
                 </button>
             </div>
         </form>
+
+        <!--
+            Standalone removal forms for existing passport documents, kept OUTSIDE the Edit Guest
+            form above (HTML forms cannot be nested). Each Remove button inside the Edit Guest form
+            targets its matching form here by id via the standard HTML "form" attribute.
+        -->
+        <div id="remove-passport-forms" th:if="${guest != null}">
+            <form th:each="document : ${passportDocuments}"
+                  th:id="${'remove-passport-' + document.id}"
+                  method="post"
+                  th:action="@{/guests/{guestId}/documents/{documentId}/remove(guestId=${guest.id},documentId=${document.id})}"
+                  data-confirm-title="Remove passport image?"
+                  data-confirm-message="This image will be permanently removed."
+                  data-confirm-label="Remove"
+                  data-confirm-severity="DANGER">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            </form>
+        </div>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
+<script defer th:src="@{/js/customer/guest-passport-upload.js}"></script>
 </body>
 </html>

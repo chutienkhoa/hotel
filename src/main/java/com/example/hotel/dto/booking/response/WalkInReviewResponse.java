@@ -13,7 +13,9 @@ import java.util.UUID;
  * @param guestId the selected guest identifier
  * @param guestFullName the selected guest's display name
  * @param guestCode the selected guest's display code
- * @param passportAvailable {@code true} when a passport image has been uploaded for this guest
+ * @param passportAvailable {@code true} when at least one passport image has been uploaded for this guest
+ * @param firstPassportDocumentId identifier of the Guest's oldest passport image, used to build the
+ *     secure View Passport link; {@code null} when no passport image exists
  * @param checkInDate the authoritative hotel current date that will be used as check-in date
  * @param checkOutDate the staff-selected check-out date
  * @param actualCheckInPreview a preview of the check-in timestamp that would be recorded now
@@ -26,6 +28,7 @@ public record WalkInReviewResponse(
         String guestFullName,
         String guestCode,
         boolean passportAvailable,
+        UUID firstPassportDocumentId,
         LocalDate checkInDate,
         LocalDate checkOutDate,
         Instant actualCheckInPreview,

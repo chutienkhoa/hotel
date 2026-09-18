@@ -73,23 +73,40 @@
             <section aria-labelledby="passport-heading" class="card reservation-detail-section">
                 <div class="reservation-detail-section-header">
                     <div>
-                        <h2 id="passport-heading">Passport</h2>
+                        <h2 id="passport-heading">Passport Images</h2>
+                    </div>
+                    <div class="action-row">
+                        <span class="reservation-info-secondary">
+                            <span th:text="${#lists.size(passportDocuments)}">0</span>
+                            <span th:text="${#lists.size(passportDocuments) == 1 ? 'image' : 'images'}">images</span>
+                        </span>
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                        </span>
                     </div>
                 </div>
 
-                <div class="reservation-info-item">
-                    <span class="reservation-info-icon reservation-info-icon--purple">
-                        <svg th:replace="~{layout/icons :: note}"></svg>
-                    </span>
-                    <div class="reservation-info-content">
-                        <p class="reservation-info-value">Passport image</p>
-                        <p class="reservation-info-secondary">View the stored passport image for this guest.</p>
-                        <p th:if="${passportDocument == null}" class="reservation-info-secondary">No passport image uploaded.</p>
-                        <p th:if="${passportDocument != null}">
-                            <a class="button button-secondary" th:href="@{/guests/{id}/passport-image(id=${guest.id})}" target="_blank">View Passport</a>
-                        </p>
-                    </div>
-                </div>
+                <p class="reservation-info-secondary" th:if="${#lists.isEmpty(passportDocuments)}">No passport images on file.</p>
+
+                <ul class="profile-document-list" th:if="${not #lists.isEmpty(passportDocuments)}">
+                    <li class="passport-document-item" th:each="document, iterStat : ${passportDocuments}">
+                        <div class="passport-document-visual" aria-hidden="true">
+                            <svg th:replace="~{layout/icons :: globe}"></svg>
+                            <span class="passport-document-visual-label">Passport</span>
+                        </div>
+                        <div class="passport-document-content">
+                            <p class="passport-document-title" th:text="${'Passport ' + (iterStat.index + 1)}">Passport 1</p>
+                            <p class="passport-document-description">Stored passport image</p>
+                            <div class="passport-document-actions">
+                                <a class="button button-secondary" target="_blank"
+                                   th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${guest.id},documentId=${document.id})}">
+                                    <svg th:replace="~{layout/icons :: eye}"></svg>
+                                    View Passport
+                                </a>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
             </section>
         </div>
     </main>

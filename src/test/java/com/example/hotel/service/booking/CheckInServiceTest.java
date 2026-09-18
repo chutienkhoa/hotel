@@ -73,7 +73,7 @@ class CheckInServiceTest {
                 LocalDate.of(2026, 9, 15).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
         Reservation reservation = reservationWithRoom(LocalDate.of(2026, 9, 15), false);
         when(fixture.reservationRepository.findById(reservation.getId())).thenReturn(Optional.of(reservation));
-        when(fixture.guestDocumentService.findPassport(any())).thenReturn(Optional.empty());
+        when(fixture.guestDocumentService.hasPassport(any())).thenReturn(false);
 
         CheckInReviewResponse response = fixture.service.review(reservation.getId());
 
@@ -192,7 +192,7 @@ class CheckInServiceTest {
         when(fixture.guestRepository.findById(guestId)).thenReturn(Optional.of(guest));
         when(fixture.guestMapper.toLookupResponse(guest))
                 .thenReturn(new GuestLookupResponse(guestId, "GUEST-001", "Nguyen Van A", null, null, null));
-        when(fixture.guestDocumentService.findPassport(guestId)).thenReturn(Optional.empty());
+        when(fixture.guestDocumentService.findPassports(guestId)).thenReturn(List.of());
         Room room = activeRoom(RoomStatus.AVAILABLE);
         when(fixture.roomRepository.findById(room.getId())).thenReturn(Optional.of(room));
         LocalDate checkOut = LocalDate.now().plusDays(2);
@@ -212,7 +212,7 @@ class CheckInServiceTest {
         Fixture fixture = fixture(Clock.fixed(today.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
         Reservation reservation = reservationWithRoom(scheduledCheckIn, true);
         when(fixture.reservationRepository.findById(reservation.getId())).thenReturn(Optional.of(reservation));
-        when(fixture.guestDocumentService.findPassport(any())).thenReturn(Optional.empty());
+        when(fixture.guestDocumentService.hasPassport(any())).thenReturn(false);
         return fixture.service.review(reservation.getId());
     }
 

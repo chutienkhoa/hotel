@@ -1,7 +1,6 @@
 package com.example.hotel.controller.customer;
 
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -10,11 +9,17 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.FlashMap;
 
-/** Converts oversized Guest passport form uploads into a safe form-level message. */
+/**
+ * Converts an oversized Guest passport form upload into a safe form-level message when the
+ * multipart size failure surfaces during normal Spring MVC dispatch (for example, while Spring
+ * resolves the {@code passportImages} controller argument). A failure surfaced earlier — while
+ * Spring Security reads the CSRF request parameter from the same multipart body, before dispatch
+ * ever begins — never reaches a {@code @ControllerAdvice} and is instead handled by
+ * {@link GuestMultipartUploadFilter}. Both share their message and Guest-route mapping through
+ * {@link GuestMultipartFormRoutes} so the two paths behave identically.
+ */
 @ControllerAdvice
 public class GuestMultipartExceptionHandler {
-
-    private static final String PASSPORT_SIZE_MESSAGE = "Passport image must not exceed 5 MB.";
 
     /**
      * Redirects an oversized Guest form upload back to its Create or Edit page with a friendly
@@ -27,44 +32,16 @@ public class GuestMultipartExceptionHandler {
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public Object handle(MaxUploadSizeExceededException exception, HttpServletRequest request) {
-        String redirectPath = guestFormRedirectPath(request);
+        String redirectPath = GuestMultipartFormRoutes.redirectPathFor(request.getMethod(), applicationPath(request));
         if (redirectPath == null) {
             return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).build();
         }
 
         FlashMap flashMap = (FlashMap) request.getAttribute(DispatcherServlet.OUTPUT_FLASH_MAP_ATTRIBUTE);
         if (flashMap != null) {
-            flashMap.put("errorMessage", PASSPORT_SIZE_MESSAGE);
+            flashMap.put("passportError", GuestMultipartFormRoutes.PASSPORT_SIZE_MESSAGE);
         }
         return "redirect:" + redirectPath;
-    }
-
-    /**
-     * Maps only the two Guest mutation URLs to their form pages.
-     *
-     * @param request browser request that failed multipart parsing
-     * @return safe application-relative form path, or {@code null} for non-Guest requests
-     */
-    private String guestFormRedirectPath(HttpServletRequest request) {
-        if (!"POST".equalsIgnoreCase(request.getMethod())) {
-            return null;
-        }
-
-        String path = applicationPath(request);
-        if ("/guests".equals(path)) {
-            return "/guests/new";
-        }
-        if (!path.startsWith("/guests/")) {
-            return null;
-        }
-
-        String id = path.substring("/guests/".length());
-        try {
-            UUID.fromString(id);
-            return "/guests/" + id + "/edit";
-        } catch (IllegalArgumentException exception) {
-            return null;
-        }
     }
 
     /**

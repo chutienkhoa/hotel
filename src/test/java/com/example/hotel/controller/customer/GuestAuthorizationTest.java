@@ -1,5 +1,7 @@
 package com.example.hotel.controller.customer;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -24,13 +26,13 @@ import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.customer.GuestService;
 import com.example.hotel.service.customer.GuestDocumentService;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -51,6 +53,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class GuestAuthorizationTest {
 
     private static final UUID GUEST_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID DOCUMENT_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
 
     @Autowired
     private MockMvc mockMvc;
@@ -240,7 +243,8 @@ class GuestAuthorizationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Last name *")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("Nationality *")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("enctype=\"multipart/form-data\"")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"passportImage\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("name=\"passportImages\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("multiple=\"multiple\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("image/jpeg,image/png")));
     }
 
@@ -255,7 +259,7 @@ class GuestAuthorizationTest {
         when(guestService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new GuestDocumentValidationException("Passport image must not exceed 5 MB."));
         MockMultipartFile passportImage =
-                new MockMultipartFile("passportImage", "oversized.jpg", "image/jpeg", new byte[6 * 1024 * 1024]);
+                new MockMultipartFile("passportImages", "oversized.jpg", "image/jpeg", new byte[6 * 1024 * 1024]);
 
         mockMvc.perform(multipart("/guests")
                         .file(passportImage)
@@ -272,6 +276,64 @@ class GuestAuthorizationTest {
     }
 
     /**
+     * Confirms an oversized file among several selected images safely rejects the whole Create
+     * Guest submission with a friendly message rather than an error page, since one invalid file
+     * must never let the others be silently persisted.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldRejectCreateGuestWhenOneOfSeveralSelectedImagesIsOversized() throws Exception {
+        when(guestService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new GuestDocumentValidationException("Passport image must not exceed 5 MB."));
+        MockMultipartFile validImage =
+                new MockMultipartFile("passportImages", "small.jpg", "image/jpeg", new byte[3 * 1024 * 1024]);
+        MockMultipartFile oversizedImage =
+                new MockMultipartFile("passportImages", "oversized.png", "image/png", new byte[7 * 1024 * 1024]);
+
+        mockMvc.perform(multipart("/guests")
+                        .file(validImage)
+                        .file(oversizedImage)
+                        .param("firstName", "Khoa")
+                        .param("lastName", "Nguyen")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Passport image must not exceed 5 MB.")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "Whitelabel Error Page"))));
+    }
+
+    /**
+     * Confirms a non-JPEG/PNG passport upload returns to the Create Guest form with a friendly
+     * message instead of an error page.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldReturnCreateFormWithFriendlyMessageForUnsupportedFileType() throws Exception {
+        when(guestService.create(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new GuestDocumentValidationException("Passport image must be a JPG or PNG file."));
+        MockMultipartFile passportDocument =
+                new MockMultipartFile("passportImages", "passport.pdf", "application/pdf", "pdf-bytes".getBytes());
+
+        mockMvc.perform(multipart("/guests")
+                        .file(passportDocument)
+                        .param("firstName", "Khoa")
+                        .param("lastName", "Nguyen")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "Passport image must be a JPG or PNG file.")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "Whitelabel Error Page"))));
+    }
+
+    /**
      * Confirms an oversized Edit Guest passport replacement returns to the form with a friendly
      * field-level error while the existing passport remains presented (no raw 413).
      *
@@ -285,10 +347,10 @@ class GuestAuthorizationTest {
                         org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new GuestDocumentValidationException("Passport image must not exceed 5 MB."));
-        when(guestDocumentService.findPassport(GUEST_ID))
-                .thenReturn(Optional.of(new GuestDocumentResponse("existing-passport.jpg")));
+        when(guestDocumentService.findPassports(GUEST_ID))
+                .thenReturn(List.of(new GuestDocumentResponse(DOCUMENT_ID, "existing-passport.jpg")));
         MockMultipartFile passportImage =
-                new MockMultipartFile("passportImage", "oversized.png", "image/png", new byte[6 * 1024 * 1024]);
+                new MockMultipartFile("passportImages", "oversized.png", "image/png", new byte[6 * 1024 * 1024]);
 
         mockMvc.perform(multipart("/guests/{id}", GUEST_ID)
                         .file(passportImage)
@@ -303,12 +365,13 @@ class GuestAuthorizationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("View Passport")));
     }
 
-    /** Confirms the Guest detail presents only a safe passport-view link and never storage metadata. */
+    /** Confirms the Guest detail presents only safe passport-view links and never storage metadata. */
     @Test
     void shouldRenderAndSecurelyServePassportImage() throws Exception {
         when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
-        when(guestDocumentService.findPassport(GUEST_ID)).thenReturn(Optional.of(new GuestDocumentResponse("passport.jpg")));
-        when(guestDocumentService.loadPassport(GUEST_ID)).thenReturn(new GuestPassportImage(
+        when(guestDocumentService.findPassports(GUEST_ID))
+                .thenReturn(List.of(new GuestDocumentResponse(DOCUMENT_ID, "passport.jpg")));
+        when(guestDocumentService.loadPassport(GUEST_ID, DOCUMENT_ID)).thenReturn(new GuestPassportImage(
                 new ByteArrayResource(new byte[] {1, 2, 3}), "image/jpeg", "passport.jpg"));
 
         mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
@@ -316,33 +379,297 @@ class GuestAuthorizationTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("View Passport")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("storageKey"))))
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("passport.jpg"))));
-        mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
+        mockMvc.perform(get("/guests/{guestId}/documents/{documentId}/passport", GUEST_ID, DOCUMENT_ID)
                         .with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
                         .contentType(MediaType.IMAGE_JPEG));
-        mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
+        mockMvc.perform(get("/guests/{guestId}/documents/{documentId}/passport", GUEST_ID, DOCUMENT_ID)
                         .with(user("staff").authorities(staffAuthorities())))
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content()
                         .contentType(MediaType.IMAGE_JPEG));
-        mockMvc.perform(get("/guests/{id}/passport-image", GUEST_ID)
+        mockMvc.perform(get("/guests/{guestId}/documents/{documentId}/passport", GUEST_ID, DOCUMENT_ID)
                         .with(user("no-permission").authorities(
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isForbidden());
     }
 
-    /** Confirms a Guest without an uploaded passport shows no avoidable View Passport action. */
+    /** Confirms a Guest without an uploaded passport shows the intentional empty state, count 0, and no row/button. */
     @Test
     void shouldNotRenderViewPassportActionWhenNoPassportUploaded() throws Exception {
         when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
-        when(guestDocumentService.findPassport(GUEST_ID)).thenReturn(Optional.empty());
+        when(guestDocumentService.findPassports(GUEST_ID)).thenReturn(List.of());
 
         mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
-                        "href=\"/guests/" + GUEST_ID + "/passport-image\""))))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("No passport image uploaded.")));
+                        "/passport\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("No passport images on file.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">0</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">images</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "class=\"profile-document-list\""))));
+    }
+
+    /** Confirms Guest Detail renders one document tile (icon + label + secondary text + button) per image. */
+    @Test
+    void shouldRenderPassportDocumentTileForSingleImage() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID))
+                .thenReturn(List.of(new GuestDocumentResponse(DOCUMENT_ID, "passport1.jpg")));
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"passport-document-item\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"passport-document-visual\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Passport 1")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Stored passport image")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "class=\"passport-document-actions\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("class=\"button button-secondary\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("View Passport")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">1</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">image</span>")));
+    }
+
+    /** Confirms Guest Detail lists every passport image as its own tile with its own View action when multiple exist. */
+    @Test
+    void shouldRenderAllViewActionsWhenGuestHasMultiplePassportImages() throws Exception {
+        UUID secondDocumentId = UUID.fromString("44444444-4444-4444-4444-444444444444");
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID)).thenReturn(List.of(
+                new GuestDocumentResponse(DOCUMENT_ID, "passport1.jpg"),
+                new GuestDocumentResponse(secondDocumentId, "passport2.png")));
+
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Passport 1")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Passport 2")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "/guests/" + GUEST_ID + "/documents/" + DOCUMENT_ID + "/passport")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "/guests/" + GUEST_ID + "/documents/" + secondDocumentId + "/passport")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">2</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(">images</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "passport1.jpg"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "passport2.png"))));
+    }
+
+    /** Confirms removing one passport image is a CSRF-protected, MANAGE_GUEST-only mutation. */
+    @Test
+    void shouldRemovePassportImageOnlyWithCsrfAndManageGuestPermission() throws Exception {
+        mockMvc.perform(post("/guests/{guestId}/documents/{documentId}/remove", GUEST_ID, DOCUMENT_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/guests/{guestId}/documents/{documentId}/remove", GUEST_ID, DOCUMENT_ID)
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/guests/{guestId}/documents/{documentId}/remove", GUEST_ID, DOCUMENT_ID)
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
+                        "/guests/" + GUEST_ID + "/edit"));
+
+        verify(guestDocumentService).removePassportImage(GUEST_ID, DOCUMENT_ID);
+    }
+
+    /** Confirms a Guest A URL combined with a Guest B document identifier cannot resolve (IDOR). */
+    @Test
+    void shouldRejectPassportViewWhenDocumentDoesNotBelongToRequestedGuest() throws Exception {
+        UUID otherGuestId = UUID.fromString("55555555-5555-5555-5555-555555555555");
+        when(guestDocumentService.loadPassport(otherGuestId, DOCUMENT_ID))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Passport image not found."));
+
+        mockMvc.perform(get("/guests/{guestId}/documents/{documentId}/passport", otherGuestId, DOCUMENT_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isNotFound());
+    }
+
+    /** Confirms Update Guest succeeds and redirects when zero new passport images are selected. */
+    @Test
+    void shouldUpdateGuestSuccessfullyWithZeroNewPassportImages() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID)).thenReturn(List.of());
+        when(guestService.update(
+                        org.mockito.ArgumentMatchers.eq(GUEST_ID),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(guestResponse());
+
+        mockMvc.perform(multipart("/guests/{id}", GUEST_ID)
+                        .param("firstName", "First")
+                        .param("lastName", "Last")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
+                        "/guests/" + GUEST_ID));
+
+        verify(guestService).update(
+                org.mockito.ArgumentMatchers.eq(GUEST_ID), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.isNull());
+    }
+
+    /** Confirms Update Guest appends exactly one new passport image without discarding existing ones. */
+    @Test
+    void shouldUpdateGuestAndAppendOneNewPassportImage() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID))
+                .thenReturn(List.of(new GuestDocumentResponse(DOCUMENT_ID, "existing.jpg")));
+        when(guestService.update(org.mockito.ArgumentMatchers.eq(GUEST_ID), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(guestResponse());
+        MockMultipartFile newImage = new MockMultipartFile(
+                "passportImages", "new.jpg", "image/jpeg", "new-image".getBytes());
+
+        mockMvc.perform(multipart("/guests/{id}", GUEST_ID)
+                        .file(newImage)
+                        .param("firstName", "First")
+                        .param("lastName", "Last")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
+                        "/guests/" + GUEST_ID));
+
+        ArgumentCaptor<List<org.springframework.web.multipart.MultipartFile>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(guestService).update(
+                org.mockito.ArgumentMatchers.eq(GUEST_ID), org.mockito.ArgumentMatchers.any(), captor.capture());
+        assertEquals(1, captor.getValue().size());
+        assertEquals("new.jpg", captor.getValue().get(0).getOriginalFilename());
+    }
+
+    /** Confirms Update Guest appends multiple new passport images in one submission. */
+    @Test
+    void shouldUpdateGuestAndAppendMultipleNewPassportImages() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID)).thenReturn(List.of());
+        when(guestService.update(org.mockito.ArgumentMatchers.eq(GUEST_ID), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(guestResponse());
+        MockMultipartFile firstImage = new MockMultipartFile(
+                "passportImages", "one.jpg", "image/jpeg", "one".getBytes());
+        MockMultipartFile secondImage = new MockMultipartFile(
+                "passportImages", "two.png", "image/png", "two".getBytes());
+
+        mockMvc.perform(multipart("/guests/{id}", GUEST_ID)
+                        .file(firstImage)
+                        .file(secondImage)
+                        .param("firstName", "First")
+                        .param("lastName", "Last")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        ArgumentCaptor<List<org.springframework.web.multipart.MultipartFile>> captor =
+                ArgumentCaptor.forClass(List.class);
+        verify(guestService).update(
+                org.mockito.ArgumentMatchers.eq(GUEST_ID), org.mockito.ArgumentMatchers.any(), captor.capture());
+        assertEquals(2, captor.getValue().size());
+    }
+
+    /** Confirms a validation failure on Update Guest returns a visible error instead of appearing to do nothing. */
+    @Test
+    void shouldReturnVisibleErrorWhenUpdateGuestValidationFails() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID)).thenReturn(List.of());
+
+        mockMvc.perform(multipart("/guests/{id}", GUEST_ID)
+                        .param("firstName", "")
+                        .param("lastName", "Last")
+                        .param("nationality", "Japan")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("First name is required.")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Please correct the highlighted fields.")));
+
+        org.mockito.Mockito.verify(guestService, org.mockito.Mockito.never())
+                .update(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyList());
+    }
+
+    /** Confirms the rendered Edit Guest page contains no nested &lt;form&gt; elements (HTML forms cannot nest). */
+    @Test
+    void shouldNotRenderNestedFormsOnEditGuestPage() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID)).thenReturn(List.of(
+                new GuestDocumentResponse(DOCUMENT_ID, "passport1.jpg"),
+                new GuestDocumentResponse(UUID.fromString("66666666-6666-6666-6666-666666666666"), "passport2.jpg")));
+
+        String html = mockMvc.perform(get("/guests/{id}/edit", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        assertFormsAreNeverNested(html);
+    }
+
+    /** Confirms the Update Guest submit button is a real submit control inside the Edit Guest form. */
+    @Test
+    void shouldKeepUpdateGuestSubmitButtonInsideTheEditGuestForm() throws Exception {
+        when(guestService.findById(GUEST_ID)).thenReturn(guestResponse());
+        when(guestDocumentService.findPassports(GUEST_ID))
+                .thenReturn(List.of(new GuestDocumentResponse(DOCUMENT_ID, "passport1.jpg")));
+
+        String html = mockMvc.perform(get("/guests/{id}/edit", GUEST_ID)
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        int formStart = html.indexOf("<form class=\"form-card\"");
+        int updateButton = html.indexOf(">Update Guest</button>");
+        int formEnd = html.indexOf("</form>", formStart);
+        assertTrue(formStart >= 0, "Edit Guest form must render");
+        assertTrue(updateButton > formStart && updateButton < formEnd,
+                "Update Guest submit button must be located inside the Edit Guest form boundaries");
+    }
+
+    /**
+     * Fails when {@code <form} tags are nested in the given HTML, since browsers silently close
+     * an already-open form when a nested form start tag is encountered, which can strand controls
+     * declared afterward (such as a Submit button) outside of any form.
+     *
+     * @param html rendered page content
+     */
+    private void assertFormsAreNeverNested(String html) {
+        String withoutComments = html.replaceAll("(?s)<!--.*?-->", "");
+        int index = 0;
+        int depth = 0;
+        while (index < withoutComments.length()) {
+            int nextOpen = withoutComments.indexOf("<form", index);
+            int nextClose = withoutComments.indexOf("</form>", index);
+            if (nextOpen == -1 && nextClose == -1) {
+                break;
+            }
+            if (nextOpen != -1 && (nextClose == -1 || nextOpen < nextClose)) {
+                depth++;
+                assertTrue(depth <= 1, "Found a <form> nested inside another <form> in the rendered page: "
+                        + withoutComments.substring(
+                                Math.max(0, nextOpen - 20), Math.min(withoutComments.length(), nextOpen + 80)));
+                index = nextOpen + 5;
+            } else {
+                depth--;
+                index = nextClose + 7;
+            }
+        }
+        assertEquals(0, depth, "Every opened <form> must be closed (no dangling/mismatched form tags)");
     }
 
     /** Confirms the redesigned Guest Detail breadcrumb links to the Guest List and shows the actual guestCode. */

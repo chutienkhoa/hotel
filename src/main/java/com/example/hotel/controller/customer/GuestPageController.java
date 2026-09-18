@@ -14,6 +14,7 @@ import com.example.hotel.service.customer.GuestService;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -104,19 +105,22 @@ public class GuestPageController {
     }
 
     /**
-     * Returns one authorized Guest passport image for inline browser viewing.
+     * Returns one specific authorized Guest passport image for inline browser viewing.
      *
      * <p>Granted to MANAGE_GUEST (Guest management) and, separately, to CHECK_IN, since Staff
      * performing Check-in must be able to securely view a Guest's passport during the Check-in
-     * workflow without receiving any Guest management/edit capability.</p>
+     * workflow without receiving any Guest management/edit capability. The requested document
+     * must belong to the requested Guest and be a passport image, so a Guest A URL combined with
+     * a Guest B document identifier can never resolve.</p>
      *
-     * @param id guest identifier
+     * @param guestId guest identifier the document must belong to
+     * @param documentId requested passport document identifier
      * @return the private image with its validated content type and safe inline header
      */
-    @GetMapping("/guests/{id}/passport-image")
+    @GetMapping("/guests/{guestId}/documents/{documentId}/passport")
     @PreAuthorize("hasAnyAuthority('PERM_MANAGE_GUEST', 'PERM_CHECK_IN')")
-    public ResponseEntity<Resource> passportImage(@PathVariable UUID id) {
-        GuestPassportImage passportImage = guestDocumentService.loadPassport(id);
+    public ResponseEntity<Resource> passportImage(@PathVariable UUID guestId, @PathVariable UUID documentId) {
+        GuestPassportImage passportImage = guestDocumentService.loadPassport(guestId, documentId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(passportImage.contentType()))
                 .header(
@@ -126,6 +130,25 @@ public class GuestPageController {
                                 .build()
                                 .toString())
                 .body(passportImage.resource());
+    }
+
+    /**
+     * Removes one specific passport image belonging to a Guest and redirects back to its Edit
+     * form. This is a Guest-management mutation and removes only the identified document; every
+     * other passport image owned by the Guest remains untouched.
+     *
+     * @param guestId guest identifier the document must belong to
+     * @param documentId passport document identifier to remove
+     * @param redirectAttributes attributes used to show post-redirect feedback
+     * @return a redirect back to the Guest's Edit form
+     */
+    @PostMapping("/guests/{guestId}/documents/{documentId}/remove")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
+    public String removePassportImage(
+            @PathVariable UUID guestId, @PathVariable UUID documentId, RedirectAttributes redirectAttributes) {
+        guestDocumentService.removePassportImage(guestId, documentId);
+        redirectAttributes.addFlashAttribute("successMessage", "Passport image removed successfully.");
+        return "redirect:/guests/" + guestId + "/edit";
     }
 
     /**
@@ -158,7 +181,7 @@ public class GuestPageController {
     public String create(
             @Valid @ModelAttribute("guestForm") GuestCreateRequest guestForm,
             BindingResult bindingResult,
-            @RequestParam(name = "passportImage", required = false) MultipartFile passportImage,
+            @RequestParam(name = "passportImages", required = false) List<MultipartFile> passportImages,
             Model model,
             Authentication authentication,
         RedirectAttributes redirectAttributes) {
@@ -167,7 +190,7 @@ public class GuestPageController {
             return "customer/form";
         }
         try {
-            GuestResponse guest = guestService.create(guestForm, passportImage);
+            GuestResponse guest = guestService.create(guestForm, passportImages);
             redirectAttributes.addFlashAttribute("successMessage", "Guest created successfully.");
             return "redirect:/guests/" + guest.id();
         } catch (GuestDocumentValidationException exception) {
@@ -221,7 +244,7 @@ public class GuestPageController {
             @PathVariable UUID id,
             @Valid @ModelAttribute("guestForm") GuestUpdateRequest guestForm,
             BindingResult bindingResult,
-            @RequestParam(name = "passportImage", required = false) MultipartFile passportImage,
+            @RequestParam(name = "passportImages", required = false) List<MultipartFile> passportImages,
             Model model,
             Authentication authentication,
         RedirectAttributes redirectAttributes) {
@@ -232,7 +255,7 @@ public class GuestPageController {
             return "customer/form";
         }
         try {
-            guestService.update(id, guestForm, passportImage);
+            guestService.update(id, guestForm, passportImages);
             redirectAttributes.addFlashAttribute("successMessage", "Guest updated successfully.");
             return "redirect:/guests/" + id;
         } catch (GuestDocumentValidationException exception) {
@@ -285,15 +308,15 @@ public class GuestPageController {
     }
 
     /**
-     * Adds safe passport metadata for Guest detail and edit templates without exposing storage
-     * keys or physical paths.
+     * Adds safe passport metadata for every passport image owned by a Guest to detail and edit
+     * templates, without exposing storage keys or physical paths.
      *
      * @param model model used to render the page
      * @param guestId Guest identifier
      */
     private void addPassportAttributes(Model model, UUID guestId) {
-        GuestDocumentResponse passportDocument = guestDocumentService.findPassport(guestId).orElse(null);
-        model.addAttribute("passportDocument", passportDocument);
+        List<GuestDocumentResponse> passportDocuments = guestDocumentService.findPassports(guestId);
+        model.addAttribute("passportDocuments", passportDocuments);
     }
 
     /**

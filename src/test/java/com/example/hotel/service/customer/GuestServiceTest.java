@@ -16,13 +16,16 @@ import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.security.CurrentUser;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Verifies guest-code ownership and authenticated-user audit behavior in guest operations. */
 class GuestServiceTest {
@@ -101,6 +104,48 @@ class GuestServiceTest {
         assertEquals("Updated", updated.firstName());
         assertEquals(creatorId, guest.getCreatedBy());
         assertEquals(updaterId, guest.getUpdatedBy());
+    }
+
+    /** Confirms Create Guest passes every selected passport image through to document storage as one batch. */
+    @Test
+    void shouldPassMultiplePassportImagesToDocumentServiceOnCreate() {
+        GuestRepository guestRepository = mock(GuestRepository.class);
+        GuestDocumentService guestDocumentService = mock(GuestDocumentService.class);
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), guestDocumentService);
+        UUID creatorId = UUID.randomUUID();
+        setCurrentUser(creatorId);
+        when(guestRepository.nextGuestCodeSequence()).thenReturn(1L);
+        when(guestRepository.existsByGuestCode("G000001")).thenReturn(false);
+        when(guestRepository.save(any(Guest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        List<MultipartFile> passportImages = List.of(
+                new MockMultipartFile("passportImages", "p1.jpg", "image/jpeg", "one".getBytes()),
+                new MockMultipartFile("passportImages", "p2.jpg", "image/jpeg", "two".getBytes()));
+
+        guestService.create(createRequest(), passportImages);
+
+        ArgumentCaptor<Guest> guestCaptor = ArgumentCaptor.forClass(Guest.class);
+        verify(guestDocumentService).addPassportImages(guestCaptor.capture(), org.mockito.ArgumentMatchers.eq(passportImages), org.mockito.ArgumentMatchers.eq(creatorId));
+        assertEquals("G000001", guestCaptor.getValue().getGuestCode());
+    }
+
+    /** Confirms Edit Guest appends newly selected passport images without touching existing ones. */
+    @Test
+    void shouldAppendPassportImagesOnUpdateWithoutReplacingExistingOnes() {
+        GuestRepository guestRepository = mock(GuestRepository.class);
+        GuestDocumentService guestDocumentService = mock(GuestDocumentService.class);
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), guestDocumentService);
+        UUID guestId = UUID.randomUUID();
+        UUID updaterId = UUID.randomUUID();
+        Guest guest = Guest.create(guestId, "G000123", "Original", "Guest", null, null, null, null, null);
+        when(guestRepository.findById(guestId)).thenReturn(Optional.of(guest));
+        when(guestRepository.save(any(Guest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        setCurrentUser(updaterId);
+        List<MultipartFile> passportImages = List.of(
+                new MockMultipartFile("passportImages", "new.jpg", "image/jpeg", "new".getBytes()));
+
+        guestService.update(guestId, updateRequest(), passportImages);
+
+        verify(guestDocumentService).addPassportImages(guest, passportImages, updaterId);
     }
 
     /** Confirms client request contracts cannot carry the immutable guest code. */

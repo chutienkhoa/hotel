@@ -7,17 +7,23 @@ import com.example.hotel.entity.customer.GuestDocument;
 import com.example.hotel.entity.customer.GuestDocumentType;
 import com.example.hotel.exception.GuestDocumentValidationException;
 import com.example.hotel.repository.customer.GuestDocumentRepository;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
-/** Manages one optional, privately stored passport image for each Guest. */
+/**
+ * Manages the privately stored passport images owned by each Guest. A Guest may own zero to many
+ * PASSPORT_IMAGE documents, representing the booking Guest and any accompanying travelers, without
+ * modeling which individual each image belongs to.
+ */
 @Service
 public class GuestDocumentService {
 
@@ -39,70 +45,94 @@ public class GuestDocumentService {
     }
 
     /**
-     * Stores a new passport image or safely replaces the existing one when a file was selected.
+     * Appends newly selected passport images to a Guest's existing documents without touching
+     * any of them. Every selected file is validated before any file is stored or any metadata is
+     * persisted, so one invalid file rejects the entire batch instead of silently accepting the
+     * others.
      *
-     * @param guest guest owning the document
-     * @param upload optional browser upload
+     * @param guest guest owning the new documents
+     * @param uploads optional browser uploads; a {@code null} list or one containing only empty,
+     *     untouched optional file inputs is a no-op
      * @param auditUserId authenticated user responsible for the change
      */
-    public void storeOrReplacePassport(Guest guest, MultipartFile upload, UUID auditUserId) {
-        if (!hasSelectedFile(upload)) {
+    public void addPassportImages(Guest guest, List<MultipartFile> uploads, UUID auditUserId) {
+        List<MultipartFile> selectedUploads = selectedFiles(uploads);
+        if (selectedUploads.isEmpty()) {
             return;
         }
 
-        ValidatedUpload validatedUpload = validate(upload);
-        String newStorageKey = storageService.store(upload, validatedUpload.extension());
-        registerRollbackCleanup(newStorageKey);
-        try {
-            Optional<GuestDocument> existing = findPassportEntity(guest.getId());
-            if (existing.isPresent()) {
-                GuestDocument document = existing.get();
-                String oldStorageKey = document.getStorageKey();
-                document.replace(
-                        validatedUpload.originalName(),
-                        validatedUpload.contentType(),
-                        validatedUpload.fileSize(),
-                        newStorageKey);
-                document.audit(auditUserId);
-                guestDocumentRepository.save(document);
-                registerCommittedReplacementCleanup(oldStorageKey);
-                return;
-            }
-
+        List<ValidatedUpload> validatedUploads = selectedUploads.stream().map(this::validate).toList();
+        for (int index = 0; index < selectedUploads.size(); index++) {
+            MultipartFile upload = selectedUploads.get(index);
+            ValidatedUpload validatedUpload = validatedUploads.get(index);
+            String storageKey = storageService.store(upload, validatedUpload.extension());
+            registerRollbackCleanup(storageKey);
             GuestDocument document = GuestDocument.passportImage(
                     UUID.randomUUID(),
                     guest,
                     validatedUpload.originalName(),
                     validatedUpload.contentType(),
                     validatedUpload.fileSize(),
-                    newStorageKey);
+                    storageKey);
             document.audit(auditUserId);
             guestDocumentRepository.save(document);
-        } catch (RuntimeException exception) {
-            storageService.deleteQuietly(newStorageKey);
-            throw exception;
         }
     }
 
     /**
-     * Returns safe metadata used by Guest detail and edit pages.
+     * Removes one specific passport image belonging to a Guest.
      *
-     * @param guestId Guest identifier
-     * @return passport metadata when one exists
+     * @param guestId Guest identifier the document must belong to
+     * @param documentId document identifier to remove
+     * @throws ResponseStatusException if no matching passport document exists for that Guest
      */
-    public Optional<GuestDocumentResponse> findPassport(UUID guestId) {
-        return findPassportEntity(guestId).map(document -> new GuestDocumentResponse(document.getOriginalName()));
+    @Transactional
+    public void removePassportImage(UUID guestId, UUID documentId) {
+        GuestDocument document = findPassportEntity(guestId, documentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Passport image not found."));
+        String storageKey = document.getStorageKey();
+        guestDocumentRepository.delete(document);
+        registerCommittedDeletionCleanup(storageKey);
     }
 
     /**
-     * Loads one passport image for an already authorized Guest-management request.
+     * Returns safe metadata for every passport image owned by a Guest, in deterministic display
+     * order, used by Guest detail and edit pages.
      *
      * @param guestId Guest identifier
-     * @return image resource and response-safe content metadata
-     * @throws ResponseStatusException if no passport image exists
+     * @return the Guest's passport documents, oldest first
      */
-    public GuestPassportImage loadPassport(UUID guestId) {
-        GuestDocument document = findPassportEntity(guestId)
+    public List<GuestDocumentResponse> findPassports(UUID guestId) {
+        return guestDocumentRepository
+                .findByGuestIdAndDocumentTypeOrderByCreatedAtAscIdAsc(guestId, GuestDocumentType.PASSPORT_IMAGE)
+                .stream()
+                .map(document -> new GuestDocumentResponse(document.getId(), document.getOriginalName()))
+                .toList();
+    }
+
+    /**
+     * Determines whether a Guest has at least one passport image on file. V1 does not require
+     * the passport image count to match the number of staying people.
+     *
+     * @param guestId Guest identifier
+     * @return {@code true} when at least one passport image exists
+     */
+    public boolean hasPassport(UUID guestId) {
+        return guestDocumentRepository.existsByGuestIdAndDocumentType(guestId, GuestDocumentType.PASSPORT_IMAGE);
+    }
+
+    /**
+     * Loads one specific passport image for an already authorized Guest-management or Check-in
+     * request. The requested document must belong to the requested Guest and be a passport image,
+     * preventing an unrelated Guest/document identifier pairing from resolving.
+     *
+     * @param guestId Guest identifier the document must belong to
+     * @param documentId requested document identifier
+     * @return image resource and response-safe content metadata
+     * @throws ResponseStatusException if no matching passport image exists for that Guest
+     */
+    public GuestPassportImage loadPassport(UUID guestId, UUID documentId) {
+        GuestDocument document = findPassportEntity(guestId, documentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Passport image not found."));
         return new GuestPassportImage(
                 storageService.load(document.getStorageKey()), document.getContentType(), document.getOriginalName());
@@ -119,6 +149,19 @@ public class GuestDocumentService {
         return upload != null
                 && (!upload.isEmpty()
                         || (upload.getOriginalFilename() != null && !upload.getOriginalFilename().isBlank()));
+    }
+
+    /**
+     * Filters a submitted multipart file list down to actually selected files.
+     *
+     * @param uploads optional browser uploads
+     * @return the selected files, in submitted order; never {@code null}
+     */
+    private List<MultipartFile> selectedFiles(List<MultipartFile> uploads) {
+        if (uploads == null) {
+            return List.of();
+        }
+        return uploads.stream().filter(this::hasSelectedFile).toList();
     }
 
     /**
@@ -169,13 +212,15 @@ public class GuestDocumentService {
     }
 
     /**
-     * Loads the one permitted passport metadata record for a Guest.
+     * Loads one passport document metadata record only when it belongs to the given Guest.
      *
-     * @param guestId Guest identifier
+     * @param guestId Guest identifier the document must belong to
+     * @param documentId requested document identifier
      * @return matching passport document when present
      */
-    private Optional<GuestDocument> findPassportEntity(UUID guestId) {
-        return guestDocumentRepository.findByGuestIdAndDocumentType(guestId, GuestDocumentType.PASSPORT_IMAGE);
+    private Optional<GuestDocument> findPassportEntity(UUID guestId, UUID documentId) {
+        return guestDocumentRepository.findByIdAndGuestIdAndDocumentType(
+                documentId, guestId, GuestDocumentType.PASSPORT_IMAGE);
     }
 
     /**
@@ -198,19 +243,20 @@ public class GuestDocumentService {
     }
 
     /**
-     * Removes an obsolete passport only after replacement metadata commits successfully.
+     * Removes a deleted document's physical file only after its database removal commits
+     * successfully, so a rolled-back deletion never leaves the metadata pointing at a missing file.
      *
-     * @param oldStorageKey previous private storage key
+     * @param storageKey removed document's private storage key
      */
-    private void registerCommittedReplacementCleanup(String oldStorageKey) {
+    private void registerCommittedDeletionCleanup(String storageKey) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            storageService.deleteQuietly(oldStorageKey);
+            storageService.deleteQuietly(storageKey);
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                storageService.deleteQuietly(oldStorageKey);
+                storageService.deleteQuietly(storageKey);
             }
         });
     }

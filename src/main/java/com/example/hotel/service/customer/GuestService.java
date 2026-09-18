@@ -31,7 +31,7 @@ public class GuestService {
      *
      * @param guestRepository repository used to access guests and the guest-code sequence
      * @param guestMapper mapper used to prepare client-safe guest responses
-     * @param guestDocumentService service used to manage an optional passport image
+     * @param guestDocumentService service used to manage a Guest's passport images
      */
     public GuestService(
             GuestRepository guestRepository, GuestMapper guestMapper, GuestDocumentService guestDocumentService) {
@@ -74,15 +74,17 @@ public class GuestService {
     }
 
     /**
-     * Creates a guest and, when supplied, an optional validated passport image within the same
-     * database transaction.
+     * Creates a guest and, when supplied, validated passport images within the same database
+     * transaction. Every selected image is validated before any is stored, so one invalid image
+     * rejects the entire creation instead of leaving a Guest with a partial passport batch.
      *
      * @param request client-supplied mutable guest profile data
-     * @param passportImage optional browser-uploaded passport image
+     * @param passportImages optional browser-uploaded passport images for the booking Guest and
+     *     any accompanying travelers
      * @return the persisted guest profile
      */
     @Transactional
-    public GuestResponse create(GuestCreateRequest request, MultipartFile passportImage) {
+    public GuestResponse create(GuestCreateRequest request, List<MultipartFile> passportImages) {
         CurrentUser currentUser = currentUser();
         Guest guest = Guest.create(
                 UUID.randomUUID(),
@@ -96,7 +98,7 @@ public class GuestService {
                 request.address());
         guest.audit(currentUser.id());
         Guest savedGuest = guestRepository.save(guest);
-        guestDocumentService.storeOrReplacePassport(savedGuest, passportImage, currentUser.id());
+        guestDocumentService.addPassportImages(savedGuest, passportImages, currentUser.id());
         return guestMapper.toResponse(savedGuest);
     }
 
@@ -114,16 +116,17 @@ public class GuestService {
     }
 
     /**
-     * Updates a guest profile and, when supplied, safely replaces the one passport image.
+     * Updates a guest profile and, when supplied, appends validated passport images to the
+     * Guest's existing documents without replacing or removing any of them.
      *
      * @param id guest identifier
      * @param request client-supplied mutable guest profile data
-     * @param passportImage optional browser-uploaded replacement passport image
+     * @param passportImages optional browser-uploaded passport images to append
      * @return the updated guest profile
      * @throws ResponseStatusException if no guest exists for the identifier
      */
     @Transactional
-    public GuestResponse update(UUID id, GuestUpdateRequest request, MultipartFile passportImage) {
+    public GuestResponse update(UUID id, GuestUpdateRequest request, List<MultipartFile> passportImages) {
         Guest guest = findGuest(id);
         CurrentUser currentUser = currentUser();
         guest.updateProfile(
@@ -136,7 +139,7 @@ public class GuestService {
                 request.address());
         guest.audit(currentUser.id());
         Guest savedGuest = guestRepository.save(guest);
-        guestDocumentService.storeOrReplacePassport(savedGuest, passportImage, currentUser.id());
+        guestDocumentService.addPassportImages(savedGuest, passportImages, currentUser.id());
         return guestMapper.toResponse(savedGuest);
     }
 

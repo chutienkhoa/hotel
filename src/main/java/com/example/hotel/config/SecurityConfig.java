@@ -1,5 +1,6 @@
 package com.example.hotel.config;
 
+import com.example.hotel.controller.customer.GuestMultipartUploadFilter;
 import com.example.hotel.security.JwtFilter;
 import com.example.hotel.security.SessionUserDetailsService;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CsrfFilter;
 
 /**
  * Configures separate stateless API security and session-backed Thymeleaf MVC security.
@@ -79,13 +81,18 @@ public class SecurityConfig {
      *
      * @param http builder used to configure HTTP security
      * @param sessionAuthenticationProvider provider used for browser form login
+     * @param guestMultipartUploadFilter filter that safely recovers from an oversized Guest
+     *     passport upload rejected while Spring Security reads the CSRF request parameter, before
+     *     that failure would otherwise reach the servlet container's default error page
      * @return the configured MVC security filter chain
      * @throws Exception if Spring Security cannot build the filter chain
      */
     @Bean
     @Order(2)
     SecurityFilterChain mvcSecurityFilterChain(
-            HttpSecurity http, DaoAuthenticationProvider sessionAuthenticationProvider)
+            HttpSecurity http,
+            DaoAuthenticationProvider sessionAuthenticationProvider,
+            GuestMultipartUploadFilter guestMultipartUploadFilter)
             throws Exception {
         return http
                 .securityMatcher("/**")
@@ -99,6 +106,7 @@ public class SecurityConfig {
                         .loginPage("/login")
                         .defaultSuccessUrl("/reservations", true)
                         .permitAll())
+                .addFilterBefore(guestMultipartUploadFilter, CsrfFilter.class)
                 .build();
     }
 }

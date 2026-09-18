@@ -244,6 +244,62 @@ nationality text remains authoritative Guest data and is never rewritten; the fl
 presentation-only. Blank nationality is displayed as `—`, and an unknown historical
 nationality is displayed without a generated flag.
 
+## 4.3 Guest Passport Images (0..N)
+
+A Guest owns **zero to many** `GuestDocument` rows of type `PASSPORT_IMAGE` (previously a
+maximum of one). Each is an independently secured stored file representing the booking Guest
+or an accompanying traveler:
+
+```text
+Guest
+    |
+    +-- 0..N GuestDocument(PASSPORT_IMAGE)
+```
+
+V1 explicitly does **not** model which individual a given passport image belongs to. There is
+no Traveler/Occupant/Companion entity, no passport-holder name/number/expiry field on
+`GuestDocument`, and no rule tying the passport image count to Reservation guest count or Room
+occupancy — the system does not model occupants sufficiently to enforce that, and V1
+deliberately does not attempt it.
+
+`GuestDocument` fields, constraints, and storage architecture are otherwise unchanged from the
+original one-passport design: server-generated `storage_key`, private filesystem storage under
+`hotel.storage.guest-documents.path`, `guest_id`/`document_type` required, `storage_key`
+globally unique. Only the constraint that limited a Guest to one document per type
+(`guest_document_one_per_type`) was removed (migration V25); existing Guests with zero or one
+passport image continue to work without any manual data migration.
+
+Validation is per file, not per request: each selected image must independently be JPEG or
+PNG and at most 5 MB. Two files of 4 MB each are both valid in the same submission — the 5 MB
+limit is never interpreted as a combined/request-level limit. All selected files are validated
+before any file is stored or any metadata is persisted, so one invalid file rejects the entire
+selection instead of silently accepting the others.
+
+Create Guest accepts multiple selected images in one submission. Edit Guest additionally lists
+every existing passport image and lets Staff **append** new images — uploading never replaces
+or removes an existing image. Removing one specific image is a separate, explicit,
+CSRF-protected Guest-management mutation (`POST .../documents/{documentId}/remove`) that
+identifies the document by its own identifier and never removes any other document owned by
+the Guest.
+
+Every "View Passport" action resolves through a secure, per-document endpoint
+(`GET /guests/{guestId}/documents/{documentId}/passport`) that independently verifies the
+requested document exists, belongs to the requested Guest, and is a `PASSPORT_IMAGE` — a Guest
+A URL combined with a Guest B document identifier never resolves. Guest Detail and Edit render
+documents in deterministic order (`created_at ASC`, then `id ASC`) as `Passport 1`,
+`Passport 2`, … — a display label only, not an identity or ownership claim. Neither storage
+key nor filesystem path is ever exposed to the client.
+
+Authorization is unchanged: `MANAGE_GUEST` continues to own every Guest-management mutation
+(upload, append, remove); `CHECK_IN` continues to be separately granted read-only access to
+the secure passport view endpoint for Check-in identity verification, without gaining any
+Guest management/edit capability. No new permission was introduced.
+
+The multipart `max-request-size` was widened from 7 MB to 40 MB (`max-file-size` stays 6 MB,
+above the 5 MB business limit) so that several individually valid images can be selected in
+one Create/Edit submission without hitting the servlet-level request-size ceiling before the
+per-file business validation ever runs. This remains a bounded limit, not an unlimited one.
+
 ---
 
 # 5. Room Domain
@@ -1968,9 +2024,11 @@ continuation trong V1.
 ### Passport Authorization (V1 adjustment)
 
 `MANAGE_GUEST` tiếp tục là permission quản lý Guest. `CHECK_IN` được cấp thêm quyền ĐỌC ảnh
-passport Guest (secure passport-image endpoint) khi cần cho Check-in — không cấp thêm bất kỳ
-Guest management/edit capability nào cho Staff chỉ có `CHECK_IN`. Passport image vẫn là
-optional; thiếu passport KHÔNG chặn check-in.
+passport Guest (secure per-document passport-image endpoint, xem mục 4.3) khi cần cho Check-in
+— không cấp thêm bất kỳ Guest management/edit capability nào cho Staff chỉ có `CHECK_IN`.
+Passport image vẫn là optional; Guest có 0, 1, hay nhiều ảnh passport đều KHÔNG chặn check-in
+— "đủ điều kiện passport" (khi được hiển thị) nghĩa là `passportImages.size() >= 1`, không phải
+`== 1`, và Check-in không yêu cầu số ảnh passport khớp số người lưu trú.
 
 ### Sidebar
 

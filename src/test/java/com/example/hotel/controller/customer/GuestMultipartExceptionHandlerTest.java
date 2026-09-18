@@ -26,7 +26,7 @@ class GuestMultipartExceptionHandlerTest {
         Object result = handler.handle(new MaxUploadSizeExceededException(5L * 1024 * 1024), request);
 
         assertEquals("redirect:/guests/new", result);
-        assertEquals("Passport image must not exceed 5 MB.", flashMap.get("errorMessage"));
+        assertEquals("Passport image must not exceed 5 MB.", flashMap.get("passportError"));
     }
 
     /** Confirms an oversized replacement returns to the corresponding Guest edit form. */
@@ -39,7 +39,7 @@ class GuestMultipartExceptionHandlerTest {
         Object result = handler.handle(new MaxUploadSizeExceededException(5L * 1024 * 1024), request);
 
         assertEquals("redirect:/guests/" + guestId + "/edit", result);
-        assertEquals("Passport image must not exceed 5 MB.", flashMap.get("errorMessage"));
+        assertEquals("Passport image must not exceed 5 MB.", flashMap.get("passportError"));
     }
 
     /** Confirms unrelated multipart failures do not receive a misleading Guest passport message. */

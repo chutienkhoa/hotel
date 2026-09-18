@@ -10,6 +10,7 @@ import com.example.hotel.dto.booking.response.CheckInTiming;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.WalkInReviewResponse;
+import com.example.hotel.dto.customer.response.GuestDocumentResponse;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.Reservation;
@@ -116,7 +117,7 @@ public class CheckInService {
         CheckInTiming timing = classify(today, reservation.getCheckInDate());
         boolean eligible = reservation.getStatus() == ReservationStatus.CONFIRMED && timing != CheckInTiming.EARLY;
         Guest guest = reservation.getGuest();
-        boolean passportAvailable = guestDocumentService.findPassport(guest.getId()).isPresent();
+        boolean passportAvailable = guestDocumentService.hasPassport(guest.getId());
         return new CheckInReviewResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
@@ -221,12 +222,14 @@ public class CheckInService {
                 .map(roomRequest -> toPreviewRoomLine(roomRequest, checkInDate, request.checkOutDate()))
                 .toList();
         BigDecimal total = rooms.stream().map(CheckInRoomLine::totalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        boolean passportAvailable = guestDocumentService.findPassport(guest.getId()).isPresent();
+        List<GuestDocumentResponse> passports = guestDocumentService.findPassports(guest.getId());
+        UUID firstPassportDocumentId = passports.isEmpty() ? null : passports.get(0).id();
         return new WalkInReviewResponse(
                 guest.getId(),
                 guestMapper.toLookupResponse(guest).fullName(),
                 guest.getGuestCode(),
-                passportAvailable,
+                !passports.isEmpty(),
+                firstPassportDocumentId,
                 checkInDate,
                 request.checkOutDate(),
                 Instant.now(clock),

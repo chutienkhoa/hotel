@@ -9,16 +9,16 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import java.util.UUID;
 
-/** Stores metadata for one privately held Guest document without storing its binary content in the database. */
+/**
+ * Stores metadata for one privately held Guest document without storing its binary content in
+ * the database. A Guest may own zero to many PASSPORT_IMAGE documents; each is an independently
+ * secured stored file representing the booking Guest or an accompanying traveler, without
+ * modeling which individual it belongs to.
+ */
 @Entity
-@Table(
-        name = "guest_document",
-        uniqueConstraints = @UniqueConstraint(
-                name = "guest_document_one_per_type",
-                columnNames = {"guest_id", "document_type"}))
+@Table(name = "guest_document")
 public class GuestDocument extends AuditedEntity {
 
     @Id
@@ -69,23 +69,11 @@ public class GuestDocument extends AuditedEntity {
         document.id = id;
         document.guest = guest;
         document.documentType = GuestDocumentType.PASSPORT_IMAGE;
-        document.replace(originalName, contentType, fileSize, storageKey);
+        document.originalName = originalName;
+        document.contentType = contentType;
+        document.fileSize = fileSize;
+        document.storageKey = storageKey;
         return document;
-    }
-
-    /**
-     * Replaces mutable metadata after a new physical passport image has been safely stored.
-     *
-     * @param originalName original upload filename retained as metadata
-     * @param contentType validated media type
-     * @param fileSize validated file size in bytes
-     * @param storageKey server-generated private storage key
-     */
-    public void replace(String originalName, String contentType, long fileSize, String storageKey) {
-        this.originalName = originalName;
-        this.contentType = contentType;
-        this.fileSize = fileSize;
-        this.storageKey = storageKey;
     }
 
     /**

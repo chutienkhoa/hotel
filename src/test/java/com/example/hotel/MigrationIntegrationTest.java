@@ -168,20 +168,60 @@ class MigrationIntegrationTest {
         assertTrue(vndConstraintDefinition.contains("'VND'"));
     }
 
-    /** Verifies V18 creates the one-passport-per-Guest metadata table with an enforcing key. */
+    /** Verifies V18 creates the Guest document metadata table with a required Guest relationship. */
     @Test
-    void guestDocumentSchemaEnforcesOnePassportImagePerGuest() {
+    void guestDocumentSchemaRequiresGuestRelationship() {
         Boolean guestIdIsRequired = jdbcTemplate.queryForObject(
                 "SELECT is_nullable = 'NO' FROM information_schema.columns "
                         + "WHERE table_name = 'guest_document' AND column_name = 'guest_id'",
                 Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(guestIdIsRequired));
+    }
+
+    /** Verifies V25 removes the one-passport-per-Guest constraint so a Guest may own many. */
+    @Test
+    void guestDocumentSchemaAllowsMultiplePassportImagesPerGuest() {
         Boolean uniquePassportConstraintExists = jdbcTemplate.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM pg_constraint "
                         + "WHERE conname = 'guest_document_one_per_type')",
                 Boolean.class);
 
-        assertTrue(Boolean.TRUE.equals(guestIdIsRequired));
-        assertTrue(Boolean.TRUE.equals(uniquePassportConstraintExists));
+        assertTrue(Boolean.FALSE.equals(uniquePassportConstraintExists));
+    }
+
+    /** Verifies V25 actually permits inserting two PASSPORT_IMAGE rows for the same Guest. */
+    @Test
+    @Transactional
+    void guestDocumentTableAcceptsMultiplePassportImageRowsForOneGuest() {
+        UUID guestId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO app_user (id, username, password_hash, active, created_at, created_by, "
+                        + "updated_at, updated_by) VALUES (?, ?, 'x', TRUE, NOW(), ?, NOW(), ?)",
+                userId, "seed-" + userId, userId, userId);
+        jdbcTemplate.update(
+                "INSERT INTO guest (id, guest_code, first_name, last_name, nationality, created_at, created_by, "
+                        + "updated_at, updated_by) VALUES (?, ?, 'First', 'Last', 'Vietnam', NOW(), ?, NOW(), ?)",
+                guestId, "G900001", userId, userId);
+
+        jdbcTemplate.update(
+                "INSERT INTO guest_document (id, guest_id, document_type, original_name, content_type, file_size, "
+                        + "storage_key, created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, 'PASSPORT_IMAGE', 'p1.jpg', 'image/jpeg', 10, ?, NOW(), ?, NOW(), ?)",
+                UUID.randomUUID(), guestId, UUID.randomUUID() + ".jpg", userId, userId);
+        jdbcTemplate.update(
+                "INSERT INTO guest_document (id, guest_id, document_type, original_name, content_type, file_size, "
+                        + "storage_key, created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, 'PASSPORT_IMAGE', 'p2.jpg', 'image/jpeg', 10, ?, NOW(), ?, NOW(), ?)",
+                UUID.randomUUID(), guestId, UUID.randomUUID() + ".jpg", userId, userId);
+
+        Integer passportCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM guest_document WHERE guest_id = ? AND document_type = 'PASSPORT_IMAGE'",
+                Integer.class,
+                guestId);
+
+        assertEquals(2, passportCount);
     }
 
     /** Verifies V19 adds a nullable, unconstrained OTA booking reference column to reservation. */
