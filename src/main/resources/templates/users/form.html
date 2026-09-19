@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${user == null} ? 'Add User' : 'Edit User')}"></head>
+<body>
+<div class="app-shell page-users">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/users}">Back to Users</a>
+        <div class="page-header"><div>
+            <h1 th:text="${user == null} ? 'Add User' : 'Edit User'">User form</h1>
+        </div></div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form class="form-card" data-confirm-message="Save this user account?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${user == null} ? 'Add User' : 'Update User',data-confirm-label=${user == null} ? 'Create User' : 'Update User'"
+              method="post"
+              th:action="${user == null} ? @{/users} : @{/users/{id}(id=${user.id})}"
+              th:object="${userForm}">
+
+            <div class="form-field" th:if="${user != null}">
+                <label for="usernameDisplay">Username</label>
+                <input disabled id="usernameDisplay" th:value="${user.username}" type="text" />
+            </div>
+
+            <div class="form-grid">
+                <div class="form-field" th:if="${user == null}">
+                    <label for="username">Username *</label>
+                    <input autocomplete="off" id="username" maxlength="50" required th:field="*{username}" type="text" />
+                </div>
+                <div class="form-field">
+                    <label for="staffId">Staff</label>
+                    <select id="staffId" th:field="*{staffId}">
+                        <option value="">— None —</option>
+                        <option th:each="staffOption : ${staffOptions}" th:value="${staffOption.id}"
+                                th:text="${staffOption.staffCode + ' - ' + staffOption.firstName + ' ' + staffOption.lastName + (staffOption.active ? '' : ' (inactive)')}">
+                            STF-000001 - Nguyen Van A
+                        </option>
+                    </select>
+                </div>
+                <div class="form-field" th:if="${user == null or !isSelf}">
+                    <label for="role">Role *</label>
+                    <select id="role" required th:field="*{role}">
+                        <option value="">Select a role</option>
+                        <option th:each="roleOption : ${roleOptions}" th:value="${roleOption}" th:text="${roleOption}">ADMIN</option>
+                    </select>
+                </div>
+                <div class="form-field" th:if="${user != null and isSelf}">
+                    <label for="roleDisplay">Role</label>
+                    <input disabled id="roleDisplay" th:value="${user.role}" type="text" />
+                    <input name="role" th:value="${user.role}" type="hidden" />
+                </div>
+            </div>
+
+            <div class="form-grid" th:if="${user == null}">
+                <div class="form-field">
+                    <label for="password">Password *</label>
+                    <input autocomplete="new-password" id="password" maxlength="72" minlength="8" name="password" required type="password" />
+                </div>
+                <div class="form-field">
+                    <label for="confirmPassword">Confirm Password *</label>
+                    <input autocomplete="new-password" id="confirmPassword" maxlength="72" minlength="8" name="confirmPassword" required type="password" />
+                </div>
+            </div>
+
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/users}">Cancel</a>
+                <button class="button button-primary" th:text="${user == null} ? 'Create User' : 'Update User'" type="submit">
+                    Save User
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

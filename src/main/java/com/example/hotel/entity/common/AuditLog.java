@@ -50,10 +50,25 @@ public class AuditLog {
      * @param newValue trạng thái hoặc giá trị sau thao tác
      */
     public AuditLog(UUID user, String action, UUID entity, String oldValue, String newValue) {
+        this(user, action, "RESERVATION", entity, oldValue, newValue);
+    }
+
+    /**
+     * Tạo bản ghi audit cho một loại thực thể xác định.
+     *
+     * @param user định danh người thực hiện
+     * @param action thao tác được ghi nhận
+     * @param entityType loại thực thể bị tác động, ví dụ {@code APP_USER}
+     * @param entity định danh thực thể liên quan
+     * @param oldValue trạng thái hoặc giá trị trước thao tác
+     * @param newValue trạng thái hoặc giá trị sau thao tác
+     */
+    public AuditLog(
+            UUID user, String action, String entityType, UUID entity, String oldValue, String newValue) {
         id = UUID.randomUUID();
         userId = user;
         this.action = action;
-        entityType = "RESERVATION";
+        this.entityType = entityType;
         entityId = entity;
         this.oldValue = oldValue;
         this.newValue = newValue;

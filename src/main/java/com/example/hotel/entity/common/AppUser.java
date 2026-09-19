@@ -105,4 +105,48 @@ public class AppUser extends AuditedEntity {
     public void addRole(Role role) {
         roles.add(role);
     }
+
+    /**
+     * Replaces the user's role set with exactly one role, as User Management V1 manages a single
+     * role per account.
+     *
+     * @param role the only role the user will hold after this operation
+     */
+    public void replaceRoles(Role role) {
+        roles.clear();
+        roles.add(role);
+    }
+
+    /**
+     * Replaces the stored password hash. The caller must supply an already-encoded hash.
+     *
+     * @param newPasswordHash the encoded replacement password hash
+     */
+    public void resetPassword(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+    }
+
+    /**
+     * Deactivates the account so it can no longer authenticate.
+     *
+     * @throws IllegalStateException if the account is already inactive
+     */
+    public void deactivate() {
+        if (!active) {
+            throw new IllegalStateException("User account cannot deactivate from its current state");
+        }
+        active = false;
+    }
+
+    /**
+     * Reactivates the account so it can authenticate again.
+     *
+     * @throws IllegalStateException if the account is already active
+     */
+    public void activate() {
+        if (active) {
+            throw new IllegalStateException("User account cannot activate from its current state");
+        }
+        active = true;
+    }
 }

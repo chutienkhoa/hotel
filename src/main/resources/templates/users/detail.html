@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('User detail')}"></head>
+<body>
+<div class="app-shell page-users">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/users}">Back to Users</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="${user.username}">an.le</h1>
+                <p th:text="${user.role} ?: 'No role'">STAFF</p>
+            </div>
+            <a class="button button-primary" th:href="@{/users/{id}/edit(id=${user.id})}">Edit User</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt>Username</dt>
+            <dd th:text="${user.username}">an.le</dd>
+            <dt>Staff</dt>
+            <dd>
+                <a th:href="@{/staff/{id}(id=${user.staffId})}" th:if="${user.staffId != null and canManageStaff}"
+                   th:text="${user.staffCode + ' - ' + user.staffName}">STF-000001 - An Le</a>
+                <span th:if="${user.staffId != null and !canManageStaff}" th:text="${user.staffCode + ' - ' + user.staffName}">STF-000001</span>
+                <span th:if="${user.staffId == null}">—</span>
+            </dd>
+            <dt>Role</dt>
+            <dd th:text="${user.role} ?: '—'">STAFF</dd>
+            <dt>Status</dt>
+            <dd>
+                <span class="status-badge"
+                      th:classappend="${user.active} ? ' status-badge--available' : ' status-badge--checked_out'"
+                      th:text="${user.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+            </dd>
+        </dl>
+
+        <section aria-labelledby="actions-heading" class="card actions">
+            <h2 id="actions-heading">Available actions</h2>
+            <div class="action-row">
+                <a class="button button-secondary" th:href="@{/users/{id}/reset-password(id=${user.id})}">Reset Password</a>
+                <form th:if="${user.active and !isSelf}" data-confirm-label="Deactivate user"
+                      data-confirm-severity="WARNING" data-confirm-title="Deactivate user" method="post"
+                      th:action="@{/users/{id}/deactivate(id=${user.id})}"
+                      th:attr="data-confirm-message=|Deactivate ${user.username}?|">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-danger" type="submit">Deactivate</button>
+                </form>
+                <form th:unless="${user.active}" data-confirm-label="Activate user"
+                      data-confirm-severity="NORMAL" data-confirm-title="Activate user" method="post"
+                      th:action="@{/users/{id}/activate(id=${user.id})}"
+                      th:attr="data-confirm-message=|Activate ${user.username}?|">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-primary" type="submit">Activate</button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

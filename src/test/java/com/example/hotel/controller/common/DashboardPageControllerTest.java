@@ -59,6 +59,15 @@ class DashboardPageControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("SEP 2026")));
     }
 
+    /** Verifies the application root redirects to the Dashboard without loading any Dashboard data. */
+    @org.junit.jupiter.api.Test
+    void shouldRedirectRootToDashboard() throws Exception {
+        mockMvc.perform(get("/").with(user("admin").authorities(new SimpleGrantedAuthority("PERM_VIEW_REPORT"))))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/dashboard"));
+        org.mockito.Mockito.verifyNoInteractions(dashboardService);
+    }
+
     /** Verifies STAFF cannot access the Dashboard without VIEW_REPORT. */
     @org.junit.jupiter.api.Test
     void shouldRejectStaffWithoutViewReport() throws Exception {

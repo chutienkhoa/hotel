@@ -293,6 +293,22 @@ class StaffPageControllerTest {
                 .andExpect(content().string(containsString("class=\"app-shell page-staff\"")));
     }
 
+    /** Confirms the Users sidebar link appears only when the user also holds MANAGE_USER. */
+    @Test
+    void shouldShowUsersSidebarLinkOnlyWithManageUser() throws Exception {
+        when(staffService.search(any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/staff").with(user("manager").authorities(manageStaffAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("nav-users"))))
+                .andExpect(content().string(containsString("nav-staff")));
+
+        mockMvc.perform(get("/staff").with(user("admin").authorities(
+                        new SimpleGrantedAuthority("PERM_MANAGE_STAFF"), new SimpleGrantedAuthority("PERM_MANAGE_USER"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-users\"")));
+    }
+
     /** Builds a representative active Staff response. */
     private StaffResponse activeStaff() {
         return new StaffResponse(

@@ -34,7 +34,7 @@ public class BootstrapAdmin {
         return arguments -> {
             if (!username.isBlank()
                     && !password.isBlank()
-                    && users.findByUsername(username).isEmpty()) {
+                    && users.findByUsernameIgnoreCase(username).isEmpty()) {
                 AppUser user = new AppUser(
                         UUID.randomUUID(),
                         username,

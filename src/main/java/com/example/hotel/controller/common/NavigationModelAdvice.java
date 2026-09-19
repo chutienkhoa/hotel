@@ -20,6 +20,7 @@ public class NavigationModelAdvice {
      */
     @ModelAttribute
     public void addNavigationAttributes(Model model, Authentication authentication) {
+        model.addAttribute("currentUsername", authentication == null ? null : authentication.getName());
         model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
         model.addAttribute("canViewBooking", hasAuthority(authentication, "PERM_VIEW_BOOKING"));
         model.addAttribute("canManageBooking", hasAuthority(authentication, "PERM_MANAGE_BOOKING"));
@@ -33,6 +34,7 @@ public class NavigationModelAdvice {
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
         model.addAttribute("canManageStaff", hasAuthority(authentication, "PERM_MANAGE_STAFF"));
         model.addAttribute("canManageAttendance", hasAuthority(authentication, "PERM_MANAGE_ATTENDANCE"));
+        model.addAttribute("canManageUser", hasAuthority(authentication, "PERM_MANAGE_USER"));
     }
 
     /**

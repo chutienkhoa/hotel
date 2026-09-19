@@ -186,6 +186,45 @@ class StaffServiceTest {
         assertFalse(response.active());
     }
 
+    /** Confirms deactivating Staff asks User Management to deactivate the linked account, once, with the actor. */
+    @Test
+    void shouldCascadeDeactivationToLinkedAccountInSameOperation() {
+        StaffRepository repository = mock(StaffRepository.class);
+        UserService userService = mock(UserService.class);
+        UUID staffId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        Staff staff = Staff.create(
+                staffId, "STF-000001", "Nguyen", "Van A", null, null, null, LocalDate.of(2026, 1, 1), null);
+        staff.linkAppUser(UUID.randomUUID());
+        setCurrentUser(actorId);
+        when(repository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(repository.save(any(Staff.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        new StaffService(repository, new StaffMapper(), userService).deactivate(staffId);
+
+        org.mockito.Mockito.verify(userService).deactivateLinkedAccount(staff, actorId);
+    }
+
+    /** Confirms reactivating Staff never touches the linked account. */
+    @Test
+    void shouldNotReactivateLinkedAccountWhenStaffReactivated() {
+        StaffRepository repository = mock(StaffRepository.class);
+        UserService userService = mock(UserService.class);
+        UUID staffId = UUID.randomUUID();
+        Staff staff = Staff.create(
+                staffId, "STF-000001", "Nguyen", "Van A", null, null, null, LocalDate.of(2026, 1, 1), null);
+        staff.linkAppUser(UUID.randomUUID());
+        staff.deactivate();
+        setCurrentUser(UUID.randomUUID());
+        when(repository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(repository.save(any(Staff.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        new StaffService(repository, new StaffMapper(), userService).reactivate(staffId);
+
+        org.mockito.Mockito.verifyNoInteractions(userService);
+        assertTrue(staff.isActive());
+    }
+
     /** Confirms an inactive Staff member can be reactivated. */
     @Test
     void shouldReactivateInactiveStaff() {
@@ -312,6 +351,6 @@ class StaffServiceTest {
 
     /** Creates the Staff service under test with a mocked repository. */
     private StaffService service(StaffRepository repository) {
-        return new StaffService(repository, new StaffMapper());
+        return new StaffService(repository, new StaffMapper(), org.mockito.Mockito.mock(UserService.class));
     }
 }

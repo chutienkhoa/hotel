@@ -163,6 +163,26 @@ p {
   font-size: 0.75rem;
   font-weight: 600;
 }
+.sidebar-account {
+  border-top: 1px solid rgb(255 255 255 / 12%);
+  display: grid;
+  gap: var(--space-1);
+  margin-top: auto;
+  padding-top: var(--space-3);
+}
+.sidebar-account-name {
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin: 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+.sidebar-logout {
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
 .nav-section {
   display: grid;
   gap: var(--space-1);
@@ -221,7 +241,8 @@ p {
 .app-shell.page-rooms .nav-rooms,
 .app-shell.page-expenses .nav-expenses,
 .app-shell.page-additional-revenues .nav-additional-revenues,
-.app-shell.page-staff .nav-staff {
+.app-shell.page-staff .nav-staff,
+.app-shell.page-users .nav-users {
   background: var(--color-primary);
   color: #fff;
 }
@@ -234,7 +255,8 @@ p {
 .app-shell.page-rooms .nav-rooms .sidebar-nav-icon,
 .app-shell.page-expenses .nav-expenses .sidebar-nav-icon,
 .app-shell.page-additional-revenues .nav-additional-revenues .sidebar-nav-icon,
-.app-shell.page-staff .nav-staff .sidebar-nav-icon {
+.app-shell.page-staff .nav-staff .sidebar-nav-icon,
+.app-shell.page-users .nav-users .sidebar-nav-icon {
   color: #fff;
 }
 .app-shell.page-dashboard .nav-dashboard:hover,
@@ -246,7 +268,8 @@ p {
 .app-shell.page-rooms .nav-rooms:hover,
 .app-shell.page-expenses .nav-expenses:hover,
 .app-shell.page-additional-revenues .nav-additional-revenues:hover,
-.app-shell.page-staff .nav-staff:hover {
+.app-shell.page-staff .nav-staff:hover,
+.app-shell.page-users .nav-users:hover {
   background: var(--color-primary);
   color: #fff;
 }

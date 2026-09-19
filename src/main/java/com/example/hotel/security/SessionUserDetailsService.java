@@ -1,7 +1,6 @@
 package com.example.hotel.security;
 
 import com.example.hotel.entity.common.AppUser;
-import com.example.hotel.entity.common.Permission;
 import com.example.hotel.repository.common.AppUserRepository;
 import java.util.List;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -37,15 +36,10 @@ public class SessionUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) {
         AppUser user = appUserRepository
-                .findByUsername(username)
+                .findByUsernameIgnoreCase(username)
                 .filter(AppUser::isActive)
                 .orElseThrow(() -> new UsernameNotFoundException("Invalid credentials"));
-        List<SimpleGrantedAuthority> authorities = user.getRoles().stream()
-                .flatMap(role -> role.getPermissions().stream())
-                .map(Permission::getCode)
-                .distinct()
-                .map(permission -> new SimpleGrantedAuthority("PERM_" + permission))
-                .toList();
+        List<SimpleGrantedAuthority> authorities = UserAuthorities.resolve(user);
         return new SessionUserPrincipal(
                 user.getId(), user.getUsername(), user.getPasswordHash(), authorities);
     }

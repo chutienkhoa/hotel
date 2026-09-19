@@ -560,6 +560,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-rooms\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-users\"")))
                 .andExpect(content().string(containsString(">Operations<")))
                 .andExpect(content().string(containsString(">Hotel<")))
                 .andExpect(content().string(containsString(">Finance<")))
@@ -578,6 +579,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-guests\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
+                .andExpect(content().string(not(containsString("nav-users"))))
                 .andReturn().getResponse().getContentAsString();
 
         assertFakeNavigationAbsent(body);
@@ -625,7 +627,8 @@ class ReservationAccessAuthorizationTest {
 
     /**
      * Confirms no sidebar item exists for a target-mockup feature without a real V1 route: no
-     * Housekeeping, Hotel Settings, Staff, Users, standalone Payments, or Reports item.
+     * Housekeeping, Hotel Settings, Staff, standalone Payments, or Reports item. The Users item is a real
+     * V1 route since Task 24 and is asserted separately per role.
      *
      * @param body rendered page HTML
      */
@@ -633,7 +636,6 @@ class ReservationAccessAuthorizationTest {
         assertEquals(false, body.contains("Housekeeping"));
         assertEquals(false, body.contains("Hotel Settings"));
         assertEquals(false, body.contains(">Staff<"));
-        assertEquals(false, body.contains(">Users<"));
         assertEquals(false, body.contains("nav-payments"));
         assertEquals(false, body.contains(">Overview<"));
         assertEquals(false, body.contains(">Financial<"));

@@ -1,7 +1,10 @@
 package com.example.hotel.config;
 
 import com.example.hotel.controller.customer.GuestMultipartUploadFilter;
+import com.example.hotel.repository.common.AppUserRepository;
+import com.example.hotel.security.ActiveUserSessionFilter;
 import com.example.hotel.security.JwtFilter;
+import com.example.hotel.security.JwtService;
 import com.example.hotel.security.SessionUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +36,29 @@ public class SecurityConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    /**
+     * Creates the JWT filter, which revalidates the account on every API request.
+     *
+     * @param jwtService service that parses and validates tokens
+     * @param appUserRepository repository used to reload the current account
+     * @return the JWT authentication filter
+     */
+    @Bean
+    JwtFilter jwtFilter(JwtService jwtService, AppUserRepository appUserRepository) {
+        return new JwtFilter(jwtService, appUserRepository);
+    }
+
+    /**
+     * Creates the filter that revalidates browser sessions against the current account.
+     *
+     * @param appUserRepository repository used to reload the current account
+     * @return the active-session filter
+     */
+    @Bean
+    ActiveUserSessionFilter activeUserSessionFilter(AppUserRepository appUserRepository) {
+        return new ActiveUserSessionFilter(appUserRepository);
     }
 
     /**
@@ -84,6 +110,7 @@ public class SecurityConfig {
      * @param guestMultipartUploadFilter filter that safely recovers from an oversized Guest
      *     passport upload rejected while Spring Security reads the CSRF request parameter, before
      *     that failure would otherwise reach the servlet container's default error page
+     * @param activeUserSessionFilter filter that rejects sessions of deactivated accounts
      * @return the configured MVC security filter chain
      * @throws Exception if Spring Security cannot build the filter chain
      */
@@ -92,7 +119,8 @@ public class SecurityConfig {
     SecurityFilterChain mvcSecurityFilterChain(
             HttpSecurity http,
             DaoAuthenticationProvider sessionAuthenticationProvider,
-            GuestMultipartUploadFilter guestMultipartUploadFilter)
+            GuestMultipartUploadFilter guestMultipartUploadFilter,
+            ActiveUserSessionFilter activeUserSessionFilter)
             throws Exception {
         return http
                 .securityMatcher("/**")
@@ -107,6 +135,7 @@ public class SecurityConfig {
                         .defaultSuccessUrl("/reservations", true)
                         .permitAll())
                 .addFilterBefore(guestMultipartUploadFilter, CsrfFilter.class)
+                .addFilterAfter(activeUserSessionFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }

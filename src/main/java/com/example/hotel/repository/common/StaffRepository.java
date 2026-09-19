@@ -1,7 +1,9 @@
 package com.example.hotel.repository.common;
 
 import com.example.hotel.entity.common.Staff;
+import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -33,4 +35,27 @@ public interface StaffRepository extends JpaRepository<Staff, UUID>, JpaSpecific
      * @return active Staff members ordered by Staff Code
      */
     List<Staff> findByActiveTrueOrderByStaffCodeAsc();
+
+    /**
+     * Finds the Staff member linked to a user account, if any.
+     *
+     * @param appUserId user account identifier
+     * @return the linked Staff member, when one exists
+     */
+    Optional<Staff> findByAppUserId(UUID appUserId);
+
+    /**
+     * Retrieves every Staff member not linked to any user account, in Staff Code order.
+     *
+     * @return unlinked Staff members ordered by Staff Code
+     */
+    List<Staff> findByAppUserIdIsNullOrderByStaffCodeAsc();
+
+    /**
+     * Retrieves every Staff member that is linked to one of the supplied user accounts.
+     *
+     * @param appUserIds user account identifiers
+     * @return Staff members linked to those accounts
+     */
+    List<Staff> findByAppUserIdIn(Collection<UUID> appUserIds);
 }

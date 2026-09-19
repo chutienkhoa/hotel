@@ -3554,12 +3554,12 @@ KHOẢN đăng nhập PMS. Hai khái niệm này hoàn toàn tách biệt trong 
 ```text
 Staff
    │
-   └── (chưa liên kết với AppUser trong V1)
+   └── (tùy chọn) staff.app_user_id → AppUser — xem mục 57
 ```
 
 Một nhân viên (ví dụ Housekeeping) có thể tồn tại trong `Staff` mà KHÔNG cần bất kỳ tài khoản
-PMS nào. V1 KHÔNG triển khai liên kết `Staff ↔ AppUser` — quan hệ đó thuộc phạm vi Task 24 (User
-Management) trong tương lai.
+PMS nào. Liên kết tùy chọn `Staff 0..1 AppUser` được định nghĩa ở mục 57 (Task 24, User
+Management).
 
 ## 56.2 Staff
 
@@ -3755,10 +3755,82 @@ xem hồ sơ một nhân viên cụ thể; cả hai lối vào dùng chung một
 
 ## 56.8 V1 Exclusions
 
-Không triển khai trong V1: Staff↔AppUser linking, User Management, Role/Permission Management
+Không triển khai trong V1 của Task 23: Role/Permission Management
 UI, Shift, Shift Scheduling, chấm công tự động, nhân viên tự check-in/check-out, nhiều session
 làm việc/ngày, break/lunch tracking, ca qua đêm, tính đi trễ/về sớm, overtime, payroll, salary,
 leave/holiday management, GPS, fingerprint, face recognition, biometrics, attendance reports,
 Excel/PDF export.
+
+# 57. PMS User Account Management
+
+Task 24 bổ sung quản lý tài khoản đăng nhập PMS (`AppUser`). `Staff` (nhân viên/con người) và
+`AppUser` (tài khoản xác thực/bảo mật) vẫn là hai khái niệm tách biệt.
+
+## 57.1 Quan hệ Staff 0..1 AppUser
+
+```text
+staff.app_user_id   NULLABLE, UNIQUE (uq_staff_app_user), FK → app_user(id) (fk_staff_app_user)
+```
+
+Staff có thể tồn tại không có tài khoản; AppUser có thể tồn tại không có Staff (ví dụ tài khoản
+bootstrap/hệ thống); một AppUser liên kết tối đa một Staff và một Staff liên kết tối đa một
+AppUser (UNIQUE ở database, cùng validation ở service với thông báo thân thiện). `AppUser` KHÔNG
+phụ thuộc `Staff`. Không dùng bảng liên kết.
+
+## 57.2 Quyền và điều hướng
+
+Mọi thao tác User Management (MVC) yêu cầu `PERM_MANAGE_USER` — permission đã seed từ V1 và chỉ
+cấp cho `ADMIN`; KHÔNG cấp cho MANAGER/STAFF, KHÔNG thêm permission mới. Độc lập với
+`MANAGE_STAFF`/`MANAGE_ATTENDANCE`. Mọi mutation dùng POST + CSRF. Sidebar nhóm ADMINISTRATION có
+mục **Users** (cờ `canManageUser` trong `NavigationModelAdvice`). Routes: `GET /users`,
+`GET /users/new`, `POST /users`, `GET /users/{id}`, `GET|POST /users/{id}/edit`-`/users/{id}`,
+`GET|POST /users/{id}/reset-password`, `POST /users/{id}/activate`, `POST /users/{id}/deactivate`.
+Không có hard delete.
+
+## 57.3 Username, mật khẩu, email, role
+
+- Username bất biến sau khi tạo; chuẩn hóa chữ thường; 3..50 ký tự; chỉ `a-z 0-9 . _ -`; duy nhất
+  KHÔNG phân biệt hoa/thường (ứng dụng + unique index `ux_app_user_username_lower` trên
+  `LOWER(username)`); đăng nhập (MVC và API) cũng không phân biệt hoa/thường. Migration V27 dừng
+  với lỗi rõ ràng nếu dữ liệu hiện có xung đột không phân biệt hoa/thường và KHÔNG tự đổi username.
+- Mật khẩu: 8..72 ký tự, phải khớp xác nhận, mã hóa bằng BCrypt hiện có, không lưu/log/trả về
+  plaintext hay hash. Không có expiry, history, complexity, forgot-password, reset token hay
+  buộc đổi mật khẩu. Admin reset mật khẩu qua luồng riêng (`/users/{id}/reset-password`).
+- `AppUser.email` không hiển thị/không chỉnh sửa trong V1 và không đồng bộ với `Staff.email`.
+- V1 quản lý ĐÚNG MỘT role cho mỗi user (ADMIN, MANAGER, STAFF); đổi role thay thế toàn bộ tập
+  role trong một transaction. Schema N:M `user_role` giữ nguyên. Không có custom role, role CRUD,
+  chỉnh permission (thuộc Task 25).
+
+## 57.4 Vòng đời và ràng buộc an toàn
+
+- Deactivate user: `active=false`, giữ role, giữ liên kết Staff, không xóa.
+- Activate user: bị từ chối nếu user liên kết Staff INACTIVE. Tạo user hoặc gắn Staff cho user
+  ACTIVE bị từ chối nếu Staff INACTIVE.
+- Deactivate Staff → tự động deactivate AppUser liên kết trong CÙNG transaction (có audit).
+  Reactivate Staff KHÔNG reactivate AppUser. Deactivate AppUser KHÔNG deactivate Staff.
+- Admin KHÔNG được tự deactivate và KHÔNG được tự đổi role; được xem tài khoản của mình và reset
+  mật khẩu của mình. Chặn ở server; UI cũng ẩn/vô hiệu hóa.
+- Luôn giữ ít nhất một AppUser ADMIN đang ACTIVE: chặn deactivate hoặc hạ role ADMIN cuối cùng
+  (kể cả khi bị deactivate qua Staff). Cài đặt bằng khóa dòng
+  `SELECT ... FOR UPDATE` trên toàn bộ ADMIN active (`AppUserRepository.lockActiveAdminIds`) trong
+  transaction, nên các thay đổi đồng thời được tuần tự hóa.
+
+## 57.5 Vô hiệu hóa ngay lập tức và phân quyền hiện hành
+
+- MVC: `ActiveUserSessionFilter` kiểm tra tài khoản trong DB ở MỌI request đã xác thực; nếu
+  không còn tồn tại/không active thì xóa security context, invalidate session và chuyển về
+  `/login`.
+- JWT: `JwtFilter` chỉ dùng token để định danh; mỗi request đọc lại AppUser từ DB, không active/
+  không tồn tại thì không xác thực (401).
+- Đổi role có hiệu lực từ request kế tiếp: cả hai đường đều dựng authorities từ role/permission
+  HIỆN TẠI trong DB, không tin snapshot permission trong session/JWT. Không có Redis, blacklist,
+  refresh token.
+
+## 57.6 Audit
+
+Thao tác nhạy cảm ghi `AuditLog` với `entity_type=APP_USER`, `entity_id`=AppUser bị tác động:
+`USER_ACTIVATE`, `USER_DEACTIVATE` (gồm deactivate tự động do Staff bị deactivate),
+`USER_ROLE_CHANGE` (old/new là mã role), `USER_PASSWORD_RESET` (không có dữ liệu mật khẩu).
+Đọc/liệt kê user không ghi audit.
 
 **End of Specification v1.0**

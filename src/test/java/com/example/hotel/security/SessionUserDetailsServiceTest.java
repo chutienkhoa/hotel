@@ -31,7 +31,7 @@ class SessionUserDetailsServiceTest {
         Permission permission = mock(Permission.class);
         UUID userId = UUID.randomUUID();
 
-        when(appUserRepository.findByUsername("staff"))
+        when(appUserRepository.findByUsernameIgnoreCase("staff"))
                 .thenReturn(Optional.of(user));
         when(user.isActive()).thenReturn(true);
         when(user.getId()).thenReturn(userId);
@@ -58,7 +58,7 @@ class SessionUserDetailsServiceTest {
     void shouldRejectInactiveUser() {
         AppUserRepository appUserRepository = mock(AppUserRepository.class);
         AppUser user = mock(AppUser.class);
-        when(appUserRepository.findByUsername("inactive"))
+        when(appUserRepository.findByUsernameIgnoreCase("inactive"))
                 .thenReturn(Optional.of(user));
         when(user.isActive()).thenReturn(false);
 

@@ -43,6 +43,15 @@ public class Role extends AuditedEntity {
     }
 
     /**
+     * Returns the role code, such as ADMIN, MANAGER, or STAFF.
+     *
+     * @return the role code
+     */
+    public String getCode() {
+        return code;
+    }
+
+    /**
      * Trả về các permission thuộc role.
      *
      * @return tập permission của role

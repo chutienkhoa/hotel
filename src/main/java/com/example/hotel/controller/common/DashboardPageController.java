@@ -23,6 +23,17 @@ public class DashboardPageController {
     }
 
     /**
+     * Sends the application root to the Dashboard. Authentication and authorization are still
+     * enforced by the security chain and by the Dashboard route itself.
+     *
+     * @return redirect to the Dashboard route
+     */
+    @GetMapping("/")
+    public String root() {
+        return "redirect:/dashboard";
+    }
+
+    /**
      * Displays approved Dashboard v1 metrics to users with reporting permission.
      *
      * @param model model used to render the Dashboard

@@ -9,8 +9,8 @@ import java.util.UUID;
 
 /**
  * Represents a hotel employee/person managed by Staff Management. A Staff member is distinct
- * from {@link AppUser}: Staff may exist without ever holding a PMS login account. Linking Staff
- * to an {@link AppUser} is explicitly out of V1 scope.
+ * from {@link AppUser}: Staff may exist without ever holding a PMS login account, and a Staff
+ * member is linked to at most one account through the nullable, unique {@code app_user_id}.
  */
 @Entity
 @Table(name = "staff")
@@ -41,6 +41,9 @@ public class Staff extends AuditedEntity {
     private boolean active;
 
     private String notes;
+
+    @Column(name = "app_user_id", unique = true)
+    private UUID appUserId;
 
     /** Creates an empty Staff instance for JPA. */
     protected Staff() {}
@@ -228,5 +231,28 @@ public class Staff extends AuditedEntity {
      */
     public String getNotes() {
         return notes;
+    }
+
+    /**
+     * Returns the identifier of the PMS account linked to this Staff member, if any.
+     *
+     * @return the linked user account identifier, or {@code null} when no account is linked
+     */
+    public UUID getAppUserId() {
+        return appUserId;
+    }
+
+    /**
+     * Links this Staff member to a PMS user account. Uniqueness is guarded by the database.
+     *
+     * @param appUserId identifier of the user account to link
+     */
+    public void linkAppUser(UUID appUserId) {
+        this.appUserId = appUserId;
+    }
+
+    /** Removes any link between this Staff member and a PMS user account. */
+    public void unlinkAppUser() {
+        this.appUserId = null;
     }
 }

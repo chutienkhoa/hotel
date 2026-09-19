@@ -48,7 +48,7 @@ public class AuthenticationService {
      */
     public LoginResponse authenticate(LoginRequest request) {
         AppUser user = appUserRepository
-                .findByUsername(request.username())
+                .findByUsernameIgnoreCase(request.username())
                 .filter(AppUser::isActive)
                 .orElseThrow(this::invalidCredentials);
 

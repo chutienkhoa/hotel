@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.example.hotel.entity.common.Role;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.repository.booking.ReservationRepository;
+import com.example.hotel.repository.common.AppUserRepository;
 import com.example.hotel.repository.common.RoleRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import java.util.Set;
@@ -49,6 +50,9 @@ class MigrationIntegrationTest {
     RoleRepository roleRepository;
 
     @Autowired
+    AppUserRepository appUserRepository;
+
+    @Autowired
     ReservationRepository reservationRepository;
 
     @Autowired
@@ -61,7 +65,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(26, flyway.info().applied().length);
+        assertEquals(27, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -205,6 +209,79 @@ class MigrationIntegrationTest {
         assertTrue(Boolean.TRUE.equals(staffIdForeignKeyExists));
         assertTrue(Boolean.TRUE.equals(staffIdIsRequired));
         assertTrue(Boolean.TRUE.equals(activeIsRequired));
+    }
+
+    /** Verifies the V27 user-management schema: nullable unique Staff link and case-insensitive usernames. */
+    @Test
+    void userManagementSchemaMatchesV1Rules() {
+        Boolean appUserIdIsNullable = jdbcTemplate.queryForObject(
+                "SELECT is_nullable = 'YES' FROM information_schema.columns "
+                        + "WHERE table_name = 'staff' AND column_name = 'app_user_id'",
+                Boolean.class);
+        Boolean appUserIdIsUnique = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_staff_app_user' AND contype = 'u')",
+                Boolean.class);
+        Boolean appUserForeignKeyExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_staff_app_user' AND contype = 'f')",
+                Boolean.class);
+        Boolean lowerUsernameIndexExists = jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM pg_indexes "
+                        + "WHERE tablename = 'app_user' AND indexname = 'ux_app_user_username_lower')",
+                Boolean.class);
+
+        assertTrue(Boolean.TRUE.equals(appUserIdIsNullable));
+        assertTrue(Boolean.TRUE.equals(appUserIdIsUnique));
+        assertTrue(Boolean.TRUE.equals(appUserForeignKeyExists));
+        assertTrue(Boolean.TRUE.equals(lowerUsernameIndexExists));
+    }
+
+    /** Verifies usernames differing only by letter case cannot both be stored. */
+    @Test
+    @Transactional
+    void appUserUsernameUniquenessIsCaseInsensitive() {
+        insertUser(UUID.randomUUID(), "CaseUser");
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> insertUser(UUID.randomUUID(), "caseuser"));
+    }
+
+    /** Verifies one account can be linked to at most one Staff member. */
+    @Test
+    @Transactional
+    void staffAppUserLinkIsUnique() {
+        UUID userId = UUID.randomUUID();
+        insertUser(userId, "linked.user");
+        insertStaff("MIG-STF-1", userId, userId);
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+                () -> insertStaff("MIG-STF-2", userId, userId));
+    }
+
+    /** Verifies the last-active-ADMIN row-lock query is valid PostgreSQL and finds active ADMIN accounts. */
+    @Test
+    @Transactional
+    void lockActiveAdminIdsFindsActiveAdmins() {
+        UUID adminId = UUID.randomUUID();
+        insertUser(adminId, "lock.admin");
+        jdbcTemplate.update(
+                "INSERT INTO user_role (user_id, role_id) SELECT ?, id FROM role WHERE code = 'ADMIN'", adminId);
+
+        assertTrue(appUserRepository.lockActiveAdminIds().contains(adminId));
+    }
+
+    private void insertUser(UUID id, String username) {
+        jdbcTemplate.update(
+                "INSERT INTO app_user (id, username, password_hash, active, created_at, updated_at) "
+                        + "VALUES (?, ?, 'hash', TRUE, now(), now())",
+                id, username);
+    }
+
+    private void insertStaff(String staffCode, UUID appUserId, UUID auditUserId) {
+        jdbcTemplate.update(
+                "INSERT INTO staff (id, staff_code, first_name, last_name, start_date, active, app_user_id, "
+                        + "created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, 'A', 'B', CURRENT_DATE, TRUE, ?, now(), ?, now(), ?)",
+                UUID.randomUUID(), staffCode, appUserId, auditUserId, auditUserId);
     }
 
     /** Verifies inserting two Daily Work Record rows for the same Staff/date is rejected by the unique index. */

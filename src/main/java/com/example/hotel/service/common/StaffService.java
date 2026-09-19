@@ -35,16 +35,19 @@ public class StaffService {
 
     private final StaffRepository staffRepository;
     private final StaffMapper staffMapper;
+    private final UserService userService;
 
     /**
      * Creates the Staff service with its persistence and mapping collaborators.
      *
      * @param staffRepository repository used to persist Staff members
      * @param staffMapper mapper used to produce client-safe Staff responses
+     * @param userService service that deactivates the linked user account with the Staff member
      */
-    public StaffService(StaffRepository staffRepository, StaffMapper staffMapper) {
+    public StaffService(StaffRepository staffRepository, StaffMapper staffMapper, UserService userService) {
         this.staffRepository = staffRepository;
         this.staffMapper = staffMapper;
+        this.userService = userService;
     }
 
     /**
@@ -128,7 +131,7 @@ public class StaffService {
      */
     @Transactional
     public StaffResponse deactivate(UUID id) {
-        return transition(id, Staff::deactivate);
+        return transition(id, Staff::deactivate, true);
     }
 
     /**
@@ -141,7 +144,7 @@ public class StaffService {
      */
     @Transactional
     public StaffResponse reactivate(UUID id) {
-        return transition(id, Staff::reactivate);
+        return transition(id, Staff::reactivate, false);
     }
 
     /**
@@ -149,17 +152,24 @@ public class StaffService {
      *
      * @param id Staff identifier
      * @param operation approved explicit domain operation
+     * @param cascadeToLinkedAccount whether the linked user account is deactivated in the same
+     *     transaction; reactivation never reactivates the account
      * @return the transitioned Staff response
      */
-    private StaffResponse transition(UUID id, Consumer<Staff> operation) {
+    private StaffResponse transition(UUID id, Consumer<Staff> operation, boolean cascadeToLinkedAccount) {
         Staff staff = findStaff(id);
         try {
             operation.accept(staff);
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
         }
-        staff.audit(currentUser().id());
-        return staffMapper.toResponse(staffRepository.save(staff));
+        UUID actorId = currentUser().id();
+        staff.audit(actorId);
+        Staff saved = staffRepository.save(staff);
+        if (cascadeToLinkedAccount) {
+            userService.deactivateLinkedAccount(saved, actorId);
+        }
+        return staffMapper.toResponse(saved);
     }
 
     /**

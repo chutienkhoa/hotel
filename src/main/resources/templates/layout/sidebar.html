@@ -55,12 +55,27 @@
         </a>
     </div>
 
-    <div class="nav-section" th:if="${canManageStaff or canManageAttendance}">
+    <div class="nav-section" th:if="${canManageStaff or canManageAttendance or canManageUser}">
         <p class="nav-section-label">Administration</p>
-        <a class="sidebar-nav-link nav-staff" th:href="@{/staff}">
+        <a class="sidebar-nav-link nav-staff" th:href="@{/staff}" th:if="${canManageStaff or canManageAttendance}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
             <span>Staff</span>
         </a>
+        <a class="sidebar-nav-link nav-users" th:href="@{/users}" th:if="${canManageUser}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
+            <span>Users</span>
+        </a>
+    </div>
+
+    <div class="sidebar-account" th:if="${currentUsername != null}">
+        <p class="sidebar-account-name" th:text="${currentUsername}">admin</p>
+        <form method="post" th:action="@{/logout}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <button class="sidebar-nav-link sidebar-logout" type="submit">
+                <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
+                <span>Logout</span>
+            </button>
+        </form>
     </div>
 </nav>
 </body>
