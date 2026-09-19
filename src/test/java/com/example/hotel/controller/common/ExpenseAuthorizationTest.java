@@ -207,13 +207,15 @@ class ExpenseAuthorizationTest {
         ExtendedModelMap grantedModel = new ExtendedModelMap();
         new NavigationModelAdvice().addNavigationAttributes(
                 grantedModel,
-                new UsernamePasswordAuthenticationToken("manager", null, managerAuthorities()));
+                new UsernamePasswordAuthenticationToken("manager", null, managerAuthorities()),
+                new org.springframework.mock.web.MockHttpServletRequest());
         assertTrue((Boolean) grantedModel.getAttribute("canManageExpense"));
 
         ExtendedModelMap deniedModel = new ExtendedModelMap();
         new NavigationModelAdvice().addNavigationAttributes(
                 deniedModel,
-                new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()));
+                new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()),
+                new org.springframework.mock.web.MockHttpServletRequest());
         assertFalse((Boolean) deniedModel.getAttribute("canManageExpense"));
     }
 

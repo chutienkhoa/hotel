@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
 <span th:fragment="label(paymentMethod)" th:switch="${paymentMethod}">
     <span th:case="'CASH'">Cash</span>

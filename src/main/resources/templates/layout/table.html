@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
 <!-- Sortable column header. Requires tableSortBase/tableSortKey/tableSortDir from PaginationSupport.populate.
      A sort link never carries a page parameter, so changing the sort always returns to the first page. -->
@@ -14,13 +14,13 @@
 
 <!-- "Showing 1-10 of 83" from the Page already loaded; no extra query. -->
 <span th:fragment="resultSummary(page)"
-      th:text="${page.totalElements == 0 ? '0 results' : 'Showing ' + (page.number * page.size + 1) + '&#8211;' + (page.number * page.size + page.numberOfElements) + ' of ' + page.totalElements}">Showing 1&#8211;10 of 83</span>
+      th:text="${page.totalElements == 0} ? #{table.summary.none} : #{table.summary(${'' + (page.number * page.size + 1)}, ${'' + (page.number * page.size + page.numberOfElements)}, ${'' + page.totalElements})}">Showing 1&#8211;10 of 83</span>
 
 <!-- Paginator. Links preserve filters, sort and direction through tablePageBase. -->
 <nav th:fragment="pagination(page, ariaLabel, cssClass)" th:aria-label="${ariaLabel}"
      th:class="${cssClass}" th:if="${page.totalPages > 1}">
     <a class="pagination__segment" th:if="${!page.first}"
-       th:href="${tablePageBase + 'page=' + (page.number - 1)}">Previous</a>
+       th:href="${tablePageBase + 'page=' + (page.number - 1)}" th:text="#{table.previous}">Previous</a>
     <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
         <span aria-current="page" class="pagination__segment pagination__segment--current"
               th:if="${pageNumber == page.number}" th:text="${pageNumber + 1}">1</span>
@@ -32,7 +32,7 @@
     <a class="pagination__segment" th:if="${paginationEndPage < page.totalPages - 1}"
        th:href="${tablePageBase + 'page=' + (page.totalPages - 1)}" th:text="${page.totalPages}">2</a>
     <a class="pagination__segment" th:if="${!page.last}"
-       th:href="${tablePageBase + 'page=' + (page.number + 1)}">Next</a>
+       th:href="${tablePageBase + 'page=' + (page.number + 1)}" th:text="#{table.next}">Next</a>
 </nav>
 
 <!-- Hidden fields that keep the active sort when the filter form is submitted (the page resets to 0). -->

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
 <span th:fragment="amount(value, currency)"
       th:text="${currency == 'VND'

@@ -1,4 +1,8 @@
 spring:
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
   servlet:
     multipart:
       max-file-size: 6MB
@@ -22,3 +26,5 @@ hotel:
   storage:
     guest-documents:
       path: ${GUEST_DOCUMENTS_PATH:var/guest-documents}
+  i18n:
+    cookie-secure: ${HOTEL_I18N_COOKIE_SECURE:false}

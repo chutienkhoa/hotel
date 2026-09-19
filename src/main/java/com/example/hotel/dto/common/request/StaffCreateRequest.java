@@ -20,10 +20,10 @@ import org.springframework.format.annotation.DateTimeFormat;
  * @param notes optional notes
  */
 public record StaffCreateRequest(
-        @NotBlank(message = "First name is required.") @Size(max = 100) String firstName,
-        @NotBlank(message = "Last name is required.") @Size(max = 100) String lastName,
-        @Size(max = 100) String phone,
-        @Email(message = "Email must be a valid email address.") @Size(max = 255) String email,
-        @Size(max = 100) String position,
-        @NotNull(message = "Start date is required.") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
-        @Size(max = 1000) String notes) {}
+        @NotBlank(message = "{validation.staff.firstName.required}") @Size(max = 100, message = "{validation.size.max}") String firstName,
+        @NotBlank(message = "{validation.staff.lastName.required}") @Size(max = 100, message = "{validation.size.max}") String lastName,
+        @Size(max = 100, message = "{validation.size.max}") String phone,
+        @Email(message = "{validation.staff.email.invalid}") @Size(max = 255, message = "{validation.size.max}") String email,
+        @Size(max = 100, message = "{validation.size.max}") String position,
+        @NotNull(message = "{validation.staff.startDate.required}") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+        @Size(max = 1000, message = "{validation.size.max}") String notes) {}

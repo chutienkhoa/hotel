@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Sign in')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{auth.login.title})}"></head>
 <body class="login-page">
 <main aria-labelledby="login-heading" class="login-panel">
-    <h1 id="login-heading">Sign in</h1>
+    <h1 id="login-heading" th:text="#{auth.login.title}">Sign in</h1>
+    <nav th:replace="~{layout/language :: switcher}"></nav>
 
-    <p class="message message-error" th:if="${param.error}">
+    <p class="message message-error" th:if="${param.error}" th:text="#{auth.login.error}">
         Invalid username or password.
     </p>
 
@@ -13,16 +14,16 @@
         <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
 
         <div class="form-field">
-            <label for="username">Username</label>
+            <label for="username" th:text="#{auth.login.username}">Username</label>
             <input autocomplete="username" id="username" name="username" required type="text" />
         </div>
 
         <div class="form-field">
-            <label for="password">Password</label>
+            <label for="password" th:text="#{auth.login.password}">Password</label>
             <input autocomplete="current-password" id="password" name="password" required type="password" />
         </div>
 
-        <button class="button button-primary" type="submit">Sign in</button>
+        <button class="button button-primary" th:text="#{auth.login.submit}" type="submit">Sign in</button>
     </form>
 </main>
 </body>

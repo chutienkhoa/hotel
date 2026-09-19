@@ -174,7 +174,8 @@ class RoomAuthorizationTest {
         ExtendedModelMap model = new ExtendedModelMap();
         new NavigationModelAdvice().addNavigationAttributes(
                 model,
-                new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()));
+                new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()),
+                new org.springframework.mock.web.MockHttpServletRequest());
 
         assertFalse((Boolean) model.getAttribute("canManageRoom"));
     }

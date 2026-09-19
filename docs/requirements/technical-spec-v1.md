@@ -3932,4 +3932,79 @@ Expenses và Additional Revenue: nếu cả `fromDate` và `toDate` có giá tr�
 không, hiển thị thông báo thân thiện ("From Date must not be after To Date."), giữ nguyên giá trị đã
 nhập và không thực hiện tìm kiếm (hành vi này đã có từ trước; Task 26 xác nhận và bổ sung kiểm thử).
 
+# 60. EN / VI Internationalization Foundation (Task 27A)
+
+## 60.1 Ngôn ngữ và cơ chế
+
+PMS UI hỗ trợ đúng hai ngôn ngữ: Tiếng Việt (`vi`) và Tiếng Anh (`en`). Ngôn ngữ chạy thực tế mặc định
+là **Tiếng Việt**; tiếng Anh là ngôn ngữ dự phòng (khóa thiếu trong `messages_vi.properties` dùng bản
+`messages.properties`). `Accept-Language` của trình duyệt KHÔNG được dùng để chọn ngôn ngữ ban đầu. Không
+lưu ngôn ngữ trong `AppUser`, không có thay đổi schema.
+
+- **Cookie**: `pms-lang` (`vi`/`en`), `Path=/`, `HttpOnly`, `SameSite=Lax`, tuổi thọ 365 ngày; cờ `Secure`
+  cấu hình bằng `hotel.i18n.cookie-secure` (bật khi chạy HTTPS). Cookie không chứa dữ liệu cá nhân và không
+  gắn với session nên vẫn còn sau logout/login và khi khởi động lại trình duyệt.
+- **Chuyển ngôn ngữ**: `?lang=vi` hoặc `?lang=en` (`LocaleChangeInterceptor`); giá trị khác hoặc cookie bị
+  sửa được bỏ qua và quay về mặc định (không tạo locale tùy ý, không lỗi). Bộ chuyển `VI | EN` có ở trang
+  login và sidebar (giữ nguyên URL và query hiện tại).
+  Với trang được render sau một POST (ví dụ form lỗi validation), liên kết ngôn ngữ KHÔNG trỏ tới URL của POST:
+  controller có thể đặt `languageSwitchPath` là route GET tương ứng (Staff: `/staff/new`, `/staff/{id}/edit`);
+  nếu không, dùng đích an toàn `/reservations`. Không replay POST và không đưa dữ liệu form vào URL.
+- `<html lang>` phản ánh ngôn ngữ đang dùng.
+- **Môi trường test**: mặc định `en` (`src/test/resources/application.properties`,
+  `hotel.i18n.default-locale=en`) để giữ các test hiện có; các test i18n chuyên biệt ghim `vi` rõ ràng.
+- **/api/****: luôn tiếng Anh, không phụ thuộc cookie UI và `?lang=` không có tác dụng.
+
+## 60.2 Message bundle và quy ước khóa
+
+`messages.properties` (English, nền/fallback) và `messages_vi.properties` (UTF-8). Khóa ngữ nghĩa, phân
+tách bằng dấu chấm, không dùng câu tiếng Anh làm khóa và không đặt tên theo hình thức hiển thị:
+`navigation.*`, `common.*`, `table.*`, `auth.*`, `dashboard.*`, `reservation.*`, `guest.*`, `room.*`,
+`checkin.*`, `checkout.*`, `payment.*`, `expense.*`, `revenue.*`, `staff.*`, `user.*`, `role.*`,
+`validation.*`, `error.*`, `enum.*`, `js.*`. Thông điệp có giá trị động dùng tham số MessageFormat
+(`{0}`), không nối chuỗi; nhân đôi dấu nháy đơn trong thông điệp có tham số. Test `MessageBundlesTest`
+bảo đảm hai bundle cùng tập khóa và cùng placeholder.
+
+**Quy tắc cho lập trình viên: văn bản giao diện MỚI KHÔNG ĐƯỢC hard-code. Màn hình mới (kể cả Task 33) phải
+dùng khóa message ngay từ khi tạo.**
+
+## 60.3 Enum / trạng thái
+
+Giá trị nội bộ (DB, form, URL, enum Java, class CSS) KHÔNG đổi; chỉ nhãn hiển thị được dịch, khóa
+`enum.<semanticType>.<VALUE>` (ví dụ `enum.reservationStatus.CHECKED_IN`). Template dùng fragment
+`layout/enum :: label(type, value)` / `badge(...)`; mã Java (báo cáo/PDF/Excel về sau) dùng
+`UiMessages.enumLabel(locale, type, value)`. Giá trị chưa có nhãn hiển thị nguyên giá trị.
+
+## 60.4 Lỗi nghiệp vụ và validation
+
+Service/domain không biết locale: ném `LocalizedResponseStatusException(status, messageKey, defaultEnglish,
+args...)` (kế thừa `ResponseStatusException`, giữ nguyên HTTP status và lý do tiếng Anh). Lớp trình bày dùng
+`UiMessages.error(exception)` (thay `safeMessage` lặp lại trong controller) để dịch theo locale hiện tại;
+exception thường giữ nguyên hành vi cũ. Đã di chuyển mẫu cho Staff (`staff.error.*`, `staff.flash.*`);
+các nơi còn lại sẽ di chuyển dần. Bean Validation dùng khóa `{validation.*}` (ví dụ
+`@NotBlank(message = "{validation.staff.firstName.required}")`, `@Size(max = 100, message =
+"{validation.size.max}")`) được Spring resolve qua MessageSource theo locale của request; `/api/**` luôn
+nhận tiếng Anh vì locale của API cố định.
+
+## 60.5 JavaScript
+
+Chuỗi dịch cho JS được server render vào `<head>` dưới dạng `<meta name="pms-i18n:KEY" content="...">`
+(`layout/base`) và đọc bằng `PmsI18n.t(key, fallbackEnglish)` (`static/js/common/i18n.js`); không cần
+framework. `confirmation.js` giữ nguyên: nội dung `data-confirm-*` do server render từ khóa message.
+
+## 60.6 Định dạng và dữ liệu
+
+Ngày hiển thị `dd/MM/yyyy` và `dd/MM/yyyy HH:mm` cho cả hai ngôn ngữ; định dạng HTML/form vẫn `yyyy-MM-dd`.
+Tiền tệ giữ cách nhóm số hiện tại (ví dụ `1,500,000 VND`). Dữ liệu nghiệp vụ trong database (ghi chú, tên
+danh mục/loại phòng người dùng nhập, quốc tịch) KHÔNG bị dịch hay sửa; chỉ nhãn hệ thống (enum, vai trò,
+quyền) mới có nhãn dịch. Trang lỗi (403/404/500) chỉ có sẵn khóa `error.*`; thiết kế trang thuộc Task 33.
+Báo cáo/PDF/Excel (Task 28–32) dùng lại `MessageSource`, chưa triển khai ở đây.
+
+## 60.7 Thuật ngữ tiếng Việt ban đầu
+
+Reservation = Đặt phòng; Guest = Khách; Room = Phòng; Check-in = Nhận phòng; Check-out = Trả phòng;
+Payment = Thanh toán; Expense = Chi phí; Additional Revenue = Doanh thu bổ sung; Staff = Nhân viên.
+CẦN XÁC NHẬN theo ngữ cảnh nghiệp vụ trước khi dịch: **Folio**, **Stay**, Working Time / Work Check-in,
+Room Change, OTA.
+
 **End of Specification v1.0**

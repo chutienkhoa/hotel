@@ -1,5 +1,6 @@
 package com.example.hotel.controller.common;
 
+import com.example.hotel.common.i18n.UiMessages;
 import com.example.hotel.dto.common.request.StaffCreateRequest;
 import com.example.hotel.dto.common.request.StaffSearchCriteria;
 import com.example.hotel.dto.common.request.StaffUpdateRequest;
@@ -12,7 +13,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
+import org.springframework.context.MessageSource;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -32,6 +33,7 @@ public class StaffPageController {
     private final StaffService staffService;
     private final DailyWorkRecordService dailyWorkRecordService;
     private final Clock clock;
+    private final UiMessages messages;
 
     /**
      * Creates the Staff page controller.
@@ -39,11 +41,17 @@ public class StaffPageController {
      * @param staffService service used to load and mutate Staff members
      * @param dailyWorkRecordService service used to load the Staff Detail Work History
      * @param clock authoritative hotel business clock used to default the Work History range
+     * @param messageSource message source used to translate user-facing messages
      */
-    public StaffPageController(StaffService staffService, DailyWorkRecordService dailyWorkRecordService, Clock clock) {
+    public StaffPageController(
+            StaffService staffService,
+            DailyWorkRecordService dailyWorkRecordService,
+            Clock clock,
+            MessageSource messageSource) {
         this.staffService = staffService;
         this.dailyWorkRecordService = dailyWorkRecordService;
         this.clock = clock;
+        this.messages = new UiMessages(messageSource);
     }
 
     /**
@@ -89,7 +97,7 @@ public class StaffPageController {
         model.addAttribute("fromDate", effectiveFrom);
         model.addAttribute("toDate", effectiveTo);
         if (effectiveFrom.isAfter(effectiveTo)) {
-            model.addAttribute("errorMessage", "From date must not be after To date.");
+            model.addAttribute("errorMessage", messages.get("staff.error.dateRange"));
             model.addAttribute("workHistory", List.<DailyWorkRecordHistoryLine>of());
         } else {
             model.addAttribute("workHistory", dailyWorkRecordService.history(id, effectiveFrom, effectiveTo));
@@ -128,15 +136,17 @@ public class StaffPageController {
             Model model,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
+            model.addAttribute("languageSwitchPath", "/staff/new");
             return "staff/form";
         }
         try {
             StaffResponse staff = staffService.create(staffForm);
             redirectAttributes.addFlashAttribute(
-                    "successMessage", "Staff member " + staff.staffCode() + " created successfully.");
+                    "successMessage", messages.get("staff.flash.created", staff.staffCode()));
             return "redirect:/staff";
         } catch (ResponseStatusException exception) {
-            model.addAttribute("errorMessage", safeMessage(exception));
+            model.addAttribute("errorMessage", messages.error(exception));
+            model.addAttribute("languageSwitchPath", "/staff/new");
             return "staff/form";
         }
     }
@@ -188,16 +198,18 @@ public class StaffPageController {
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             model.addAttribute("staff", staffService.findById(id));
+            model.addAttribute("languageSwitchPath", "/staff/" + id + "/edit");
             return "staff/form";
         }
         try {
             StaffResponse staff = staffService.update(id, staffForm);
             redirectAttributes.addFlashAttribute(
-                    "successMessage", "Staff member " + staff.staffCode() + " updated successfully.");
+                    "successMessage", messages.get("staff.flash.updated", staff.staffCode()));
             return "redirect:/staff";
         } catch (ResponseStatusException exception) {
             model.addAttribute("staff", staffService.findById(id));
-            model.addAttribute("errorMessage", safeMessage(exception));
+            model.addAttribute("errorMessage", messages.error(exception));
+            model.addAttribute("languageSwitchPath", "/staff/" + id + "/edit");
             return "staff/form";
         }
     }
@@ -215,9 +227,9 @@ public class StaffPageController {
         try {
             StaffResponse staff = staffService.deactivate(id);
             redirectAttributes.addFlashAttribute(
-                    "successMessage", "Staff member " + staff.staffCode() + " deactivated successfully.");
+                    "successMessage", messages.get("staff.flash.deactivated", staff.staffCode()));
         } catch (ResponseStatusException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
+            redirectAttributes.addFlashAttribute("errorMessage", messages.error(exception));
         }
         return "redirect:/staff";
     }
@@ -235,22 +247,10 @@ public class StaffPageController {
         try {
             StaffResponse staff = staffService.reactivate(id);
             redirectAttributes.addFlashAttribute(
-                    "successMessage", "Staff member " + staff.staffCode() + " reactivated successfully.");
+                    "successMessage", messages.get("staff.flash.reactivated", staff.staffCode()));
         } catch (ResponseStatusException exception) {
-            redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
+            redirectAttributes.addFlashAttribute("errorMessage", messages.error(exception));
         }
         return "redirect:/staff";
-    }
-
-    /**
-     * Selects a browser-safe message from a known service exception.
-     *
-     * @param exception exception raised by a Staff operation
-     * @return browser-safe error message
-     */
-    private String safeMessage(ResponseStatusException exception) {
-        return exception.getReason() == null
-                ? HttpStatus.valueOf(exception.getStatusCode().value()).getReasonPhrase()
-                : exception.getReason();
     }
 }

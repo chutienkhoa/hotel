@@ -1,77 +1,77 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head(${staff == null} ? 'Add Staff' : 'Edit Staff')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${staff == null} ? #{staff.form.title.create} : #{staff.form.title.edit})}"></head>
 <body>
 <div class="app-shell page-staff">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/staff}">Back to Staff</a>
+        <a class="back-link" th:href="@{/staff}" th:text="#{staff.form.back}">Back to Staff</a>
         <div class="page-header"><div>
-            <h1 th:text="${staff == null} ? 'Add Staff' : 'Edit Staff'">Staff form</h1>
+            <h1 th:text="${staff == null} ? #{staff.form.title.create} : #{staff.form.title.edit}">Staff form</h1>
         </div></div>
 
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <form class="form-card" data-confirm-message="Save this Staff member?" data-confirm-severity="NORMAL"
-              th:attr="data-confirm-title=${staff == null} ? 'Add Staff' : 'Update Staff',data-confirm-label=${staff == null} ? 'Create Staff' : 'Update Staff'"
+        <form class="form-card" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-message=#{staff.form.confirm.message},data-confirm-title=${staff == null} ? #{staff.form.title.create} : #{staff.form.submit.edit},data-confirm-label=${staff == null} ? #{staff.form.submit.create} : #{staff.form.submit.edit}"
               method="post"
               th:action="${staff == null} ? @{/staff} : @{/staff/{id}(id=${staff.id})}"
               th:object="${staffForm}">
-            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}" th:text="#{staff.form.errors}">
                 Please correct the highlighted fields.
             </p>
 
             <div class="form-field" th:if="${staff != null}">
-                <label for="staffCodeDisplay">Staff Code</label>
+                <label for="staffCodeDisplay" th:text="#{staff.field.code}">Staff Code</label>
                 <input disabled id="staffCodeDisplay" th:value="${staff.staffCode}" type="text" />
             </div>
 
             <div class="form-grid">
                 <div class="form-field">
-                    <label for="firstName">First Name *</label>
+                    <label for="firstName"><span th:text="#{staff.field.firstName}">First Name</span> *</label>
                     <input id="firstName" maxlength="100" required th:field="*{firstName}" type="text" />
                     <p class="field-error" th:errors="*{firstName}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="lastName">Last Name *</label>
+                    <label for="lastName"><span th:text="#{staff.field.lastName}">Last Name</span> *</label>
                     <input id="lastName" maxlength="100" required th:field="*{lastName}" type="text" />
                     <p class="field-error" th:errors="*{lastName}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="phone">Phone</label>
+                    <label for="phone" th:text="#{staff.field.phone}">Phone</label>
                     <input id="phone" maxlength="100" th:field="*{phone}" type="text" />
                     <p class="field-error" th:errors="*{phone}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="email">Email</label>
+                    <label for="email" th:text="#{staff.field.email}">Email</label>
                     <input id="email" maxlength="255" th:field="*{email}" type="text" />
                     <p class="field-error" th:errors="*{email}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="position">Position</label>
-                    <input id="position" maxlength="100" placeholder="e.g. Receptionist, Housekeeping"
+                    <label for="position" th:text="#{staff.field.position}">Position</label>
+                    <input id="position" maxlength="100" th:placeholder="#{staff.field.position.placeholder}"
                            th:field="*{position}" type="text" />
                     <p class="field-error" th:errors="*{position}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="startDate">Start Date *</label>
+                    <label for="startDate"><span th:text="#{staff.field.startDate}">Start Date</span> *</label>
                     <input class="js-date-picker" id="startDate" required th:field="*{startDate}" type="text" />
                     <p class="field-error" th:errors="*{startDate}"></p>
                 </div>
             </div>
 
             <div class="form-field">
-                <label for="notes">Notes <span aria-hidden="true">(optional)</span></label>
+                <label for="notes" th:text="#{staff.field.notes.optional}">Notes (optional)</label>
                 <textarea id="notes" maxlength="1000" rows="4" th:field="*{notes}"></textarea>
                 <p class="field-error" th:errors="*{notes}"></p>
             </div>
 
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
             <div class="form-actions">
-                <a class="button button-secondary" th:href="@{/staff}">Cancel</a>
-                <button class="button button-primary" th:text="${staff == null} ? 'Create Staff' : 'Update Staff'" type="submit">
+                <a class="button button-secondary" th:href="@{/staff}" th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="${staff == null} ? #{staff.form.submit.create} : #{staff.form.submit.edit}" type="submit">
                     Save Staff
                 </button>
             </div>

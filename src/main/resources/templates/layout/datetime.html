@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
 <!-- Renders an Instant in the hotel display timezone as dd/MM/yyyy HH:mm (24-hour, no seconds). -->
 <span th:fragment="dateTime(value)"

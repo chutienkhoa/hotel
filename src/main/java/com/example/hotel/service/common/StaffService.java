@@ -5,6 +5,7 @@ import com.example.hotel.dto.common.request.StaffSearchCriteria;
 import com.example.hotel.dto.common.request.StaffUpdateRequest;
 import com.example.hotel.dto.common.response.StaffResponse;
 import com.example.hotel.entity.common.Staff;
+import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.mapper.common.StaffMapper;
 import com.example.hotel.repository.common.StaffRepository;
 import com.example.hotel.security.CurrentUser;
@@ -161,7 +162,11 @@ public class StaffService {
         try {
             operation.accept(staff);
         } catch (IllegalStateException exception) {
-            throw conflict(exception.getMessage());
+            throw cascadeToLinkedAccount
+                    ? new LocalizedResponseStatusException(
+                            HttpStatus.CONFLICT, "staff.error.cannotDeactivate", exception.getMessage())
+                    : new LocalizedResponseStatusException(
+                            HttpStatus.CONFLICT, "staff.error.cannotReactivate", exception.getMessage());
         }
         UUID actorId = currentUser().id();
         staff.audit(actorId);
@@ -244,7 +249,8 @@ public class StaffService {
         try {
             return staffRepository.save(staff);
         } catch (DataIntegrityViolationException exception) {
-            throw conflict("Staff Code already exists");
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT, "staff.error.codeExists", "Staff Code already exists");
         }
     }
 
@@ -299,7 +305,8 @@ public class StaffService {
      * @return not-found response exception
      */
     private ResponseStatusException notFound(String resourceName) {
-        return new ResponseStatusException(HttpStatus.NOT_FOUND, resourceName + " not found");
+        return new LocalizedResponseStatusException(
+                HttpStatus.NOT_FOUND, "staff.error.notFound", resourceName + " not found");
     }
 
     /**

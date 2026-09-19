@@ -339,7 +339,7 @@ class StaffPageControllerTest {
                 .andExpect(content().string(containsString("STF-000001")))
                 .andExpect(content().string(containsString("Staff Information")))
                 .andExpect(content().string(containsString("Work History")))
-                .andExpect(content().string(containsString("ACTIVE")));
+                .andExpect(content().string(containsString(">Active<")));
     }
 
     /** Confirms MANAGER can view Staff Detail. */
@@ -371,7 +371,7 @@ class StaffPageControllerTest {
 
         mockMvc.perform(get("/staff/{id}", inactiveId).with(user("admin").authorities(manageStaffAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("INACTIVE")))
+                .andExpect(content().string(containsString(">Inactive<")))
                 .andExpect(content().string(containsString("9h00")));
     }
 

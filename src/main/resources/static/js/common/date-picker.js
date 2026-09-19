@@ -9,16 +9,16 @@
         footer.className = "date-picker__footer";
         clearButton.className = "date-picker__clear";
         clearButton.type = "button";
-        clearButton.textContent = "Clear";
-        clearButton.setAttribute("aria-label", "Clear date");
+        clearButton.textContent = window.PmsI18n.t("js.datePicker.clear", "Clear");
+        clearButton.setAttribute("aria-label", window.PmsI18n.t("js.datePicker.clear.aria", "Clear date"));
         clearButton.addEventListener("click", () => {
             instance.clear(true);
             instance.close();
         });
         todayButton.className = "date-picker__today";
         todayButton.type = "button";
-        todayButton.textContent = "Today";
-        todayButton.setAttribute("aria-label", "Select today");
+        todayButton.textContent = window.PmsI18n.t("js.datePicker.today", "Today");
+        todayButton.setAttribute("aria-label", window.PmsI18n.t("js.datePicker.today.aria", "Select today"));
         todayButton.addEventListener("click", () => {
             instance.setDate(new Date(), true);
             instance.close();

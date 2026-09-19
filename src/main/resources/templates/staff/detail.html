@@ -1,79 +1,79 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Staff detail')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{staff.detail.title})}"></head>
 <body>
 <div class="app-shell page-staff">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/staff}">Back to Staff</a>
+        <a class="back-link" th:href="@{/staff}" th:text="#{staff.form.back}">Back to Staff</a>
         <div class="page-header">
             <div>
                 <h1 th:text="${staff.firstName + ' ' + staff.lastName}">Nguyen Van A</h1>
-                <p th:text="${staff.position} ?: 'Staff'">Receptionist</p>
+                <p th:text="${staff.position} ?: #{navigation.staff}">Receptionist</p>
             </div>
-            <a class="button button-primary" th:href="@{/staff/{id}/edit(id=${staff.id})}">Edit Staff</a>
+            <a class="button button-primary" th:href="@{/staff/{id}/edit(id=${staff.id})}" th:text="#{staff.detail.edit}">Edit Staff</a>
         </div>
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
         <section aria-labelledby="staff-information-heading" class="card">
-            <h2 id="staff-information-heading">Staff Information</h2>
+            <h2 id="staff-information-heading" th:text="#{staff.detail.information}">Staff Information</h2>
             <dl class="detail-list">
-                <dt>Staff Code</dt>
+                <dt th:text="#{staff.field.code}">Staff Code</dt>
                 <dd th:text="${staff.staffCode}">STF-000001</dd>
-                <dt>First Name</dt>
+                <dt th:text="#{staff.field.firstName}">First Name</dt>
                 <dd th:text="${staff.firstName}">Van A</dd>
-                <dt>Last Name</dt>
+                <dt th:text="#{staff.field.lastName}">Last Name</dt>
                 <dd th:text="${staff.lastName}">Nguyen</dd>
-                <dt>Phone</dt>
+                <dt th:text="#{staff.field.phone}">Phone</dt>
                 <dd th:text="${staff.phone} ?: '—'">—</dd>
-                <dt>Email</dt>
+                <dt th:text="#{staff.field.email}">Email</dt>
                 <dd th:text="${staff.email} ?: '—'">—</dd>
-                <dt>Position</dt>
+                <dt th:text="#{staff.field.position}">Position</dt>
                 <dd th:text="${staff.position} ?: '—'">Receptionist</dd>
-                <dt>Start Date</dt>
+                <dt th:text="#{staff.field.startDate}">Start Date</dt>
                 <dd><span th:replace="~{layout/datetime :: date(${staff.startDate})}">—</span></dd>
-                <dt>Status</dt>
+                <dt th:text="#{common.field.status}">Status</dt>
                 <dd>
                     <span class="status-badge"
                           th:classappend="${staff.active} ? ' status-badge--available' : ' status-badge--checked_out'"
-                          th:text="${staff.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+                          th:text="#{enum.staffStatus.__${staff.active ? 'ACTIVE' : 'INACTIVE'}__}">ACTIVE</span>
                 </dd>
             </dl>
         </section>
 
         <section aria-labelledby="work-history-heading" class="card">
-            <h2 id="work-history-heading">Work History</h2>
+            <h2 id="work-history-heading" th:text="#{staff.detail.workHistory}">Work History</h2>
             <form class="form-card" method="get" th:action="@{/staff/{id}(id=${staff.id})}">
                 <div class="form-grid">
                     <div class="form-field">
-                        <label for="fromDate">From</label>
+                        <label for="fromDate" th:text="#{common.field.from}">From</label>
                         <input class="js-date-picker" id="fromDate" name="fromDate" th:value="${fromDate}" type="text" />
                     </div>
                     <div class="form-field">
-                        <label for="toDate">To</label>
+                        <label for="toDate" th:text="#{common.field.to}">To</label>
                         <input class="js-date-picker" id="toDate" name="toDate" th:value="${toDate}" type="text" />
                     </div>
                 </div>
                 <div class="action-row">
-                    <button class="button button-primary" type="submit">Filter</button>
+                    <button class="button button-primary" th:text="#{common.action.filter}" type="submit">Filter</button>
                 </div>
             </form>
 
-            <p class="empty-state" th:if="${#lists.isEmpty(workHistory)}">No work records found for this period.</p>
+            <p class="empty-state" th:if="${#lists.isEmpty(workHistory)}" th:text="#{staff.detail.workHistory.empty}">No work records found for this period.</p>
 
             <div class="table-wrap" th:unless="${#lists.isEmpty(workHistory)}">
                 <table>
                     <thead>
                     <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">Work Check-in</th>
-                        <th scope="col">Work Check-out</th>
-                        <th scope="col">Working Time</th>
-                        <th scope="col">Notes</th>
+                        <th scope="col" th:text="#{common.field.date}">Date</th>
+                        <th scope="col" th:text="#{staff.detail.workHistory.checkIn}">Work Check-in</th>
+                        <th scope="col" th:text="#{staff.detail.workHistory.checkOut}">Work Check-out</th>
+                        <th scope="col" th:text="#{staff.detail.workHistory.workingTime}">Working Time</th>
+                        <th scope="col" th:text="#{common.field.notes}">Notes</th>
                     </tr>
                     </thead>
                     <tbody>

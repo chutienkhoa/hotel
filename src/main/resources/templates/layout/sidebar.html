@@ -1,83 +1,84 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
-<nav aria-label="Main navigation" class="sidebar" th:fragment="sidebar">
+<nav aria-label="Main navigation" class="sidebar" th:aria-label="#{navigation.main.label}" th:fragment="sidebar">
     <a class="sidebar-brand" th:href="@{/reservations}">
         <span class="sidebar-brand-icon"><svg th:replace="~{layout/icons :: building}"></svg></span>
         <span class="sidebar-brand-text">
-            <span class="sidebar-brand-name">Hotel Management</span>
-            <span class="sidebar-brand-tagline">System</span>
+            <span class="sidebar-brand-name" th:text="#{common.app.name}">Hotel Management</span>
+            <span class="sidebar-brand-tagline" th:text="#{common.app.tagline}">System</span>
         </span>
     </a>
 
     <a class="sidebar-nav-link nav-dashboard" th:href="@{/dashboard}" th:if="${canViewReport}">
         <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
-        <span>Dashboard</span>
+        <span th:text="#{navigation.dashboard}">Dashboard</span>
     </a>
 
     <div class="nav-section" th:if="${canCheckIn or canCheckOut or canViewBooking or canManageGuest}">
-        <p class="nav-section-label">Operations</p>
+        <p class="nav-section-label" th:text="#{navigation.section.operations}">Operations</p>
         <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
-            <span>Check-in</span>
+            <span th:text="#{navigation.checkIn}">Check-in</span>
         </a>
         <a class="sidebar-nav-link nav-check-out" th:href="@{/check-out}" th:if="${canCheckOut}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
-            <span>Check-out</span>
+            <span th:text="#{navigation.checkOut}">Check-out</span>
         </a>
         <a class="sidebar-nav-link nav-reservations" th:href="@{/reservations}" th:if="${canViewBooking}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
-            <span>Reservations</span>
+            <span th:text="#{navigation.reservations}">Reservations</span>
         </a>
         <a class="sidebar-nav-link nav-guests" th:href="@{/guests}" th:if="${canManageGuest}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span>Guests</span>
+            <span th:text="#{navigation.guests}">Guests</span>
         </a>
     </div>
 
     <div class="nav-section" th:if="${canManageRoom}">
-        <p class="nav-section-label">Hotel</p>
+        <p class="nav-section-label" th:text="#{navigation.section.hotel}">Hotel</p>
         <a class="sidebar-nav-link nav-rooms" th:href="@{/rooms}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: bed}"></svg></span>
-            <span>Rooms</span>
+            <span th:text="#{navigation.rooms}">Rooms</span>
         </a>
     </div>
 
     <div class="nav-section" th:if="${canManageExpense or canManageAdditionalRevenue}">
-        <p class="nav-section-label">Finance</p>
+        <p class="nav-section-label" th:text="#{navigation.section.finance}">Finance</p>
         <a class="sidebar-nav-link nav-expenses" th:href="@{/expenses}" th:if="${canManageExpense}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: minusCircle}"></svg></span>
-            <span>Expenses</span>
+            <span th:text="#{navigation.expenses}">Expenses</span>
         </a>
         <a class="sidebar-nav-link nav-additional-revenues" th:href="@{/additional-revenues}" th:if="${canManageAdditionalRevenue}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: plusCircle}"></svg></span>
-            <span>Additional Revenue</span>
+            <span th:text="#{navigation.additionalRevenue}">Additional Revenue</span>
         </a>
     </div>
 
     <div class="nav-section" th:if="${canManageStaff or canManageAttendance or canManageUser}">
-        <p class="nav-section-label">Administration</p>
+        <p class="nav-section-label" th:text="#{navigation.section.administration}">Administration</p>
         <a class="sidebar-nav-link nav-staff" th:href="@{/staff}" th:if="${canManageStaff or canManageAttendance}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span>Staff</span>
+            <span th:text="#{navigation.staff}">Staff</span>
         </a>
         <a class="sidebar-nav-link nav-users" th:href="@{/users}" th:if="${canManageUser}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span>Users</span>
+            <span th:text="#{navigation.users}">Users</span>
         </a>
         <a class="sidebar-nav-link nav-roles" th:href="@{/roles-permissions}" th:if="${canManageUser}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span>Roles &amp; Permissions</span>
+            <span th:text="#{navigation.rolesPermissions}">Roles &amp; Permissions</span>
         </a>
     </div>
 
     <div class="sidebar-account" th:if="${currentUsername != null}">
         <p class="sidebar-account-name" th:text="${currentUsername}">admin</p>
+        <nav th:replace="~{layout/language :: switcher}"></nav>
         <form method="post" th:action="@{/logout}">
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
             <button class="sidebar-nav-link sidebar-logout" type="submit">
                 <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
-                <span>Logout</span>
+                <span th:text="#{navigation.logout}">Logout</span>
             </button>
         </form>
     </div>

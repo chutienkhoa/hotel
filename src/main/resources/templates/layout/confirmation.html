@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
 <dialog aria-describedby="confirmation-dialog-message"
         aria-labelledby="confirmation-dialog-title"
@@ -7,11 +7,11 @@
         id="confirmation-dialog"
         th:fragment="confirmation">
     <div class="confirmation-dialog__content">
-        <h2 id="confirmation-dialog-title">Confirm action</h2>
-        <p id="confirmation-dialog-message">Are you sure you want to continue?</p>
+        <h2 id="confirmation-dialog-title" th:text="#{common.confirm.title}">Confirm action</h2>
+        <p id="confirmation-dialog-message" th:text="#{common.confirm.message}">Are you sure you want to continue?</p>
         <div class="confirmation-dialog__actions">
-            <button class="button button-secondary" data-confirm-cancel type="button">Cancel</button>
-            <button class="button button-primary confirmation-dialog__confirm" data-confirm-submit type="button">Confirm</button>
+            <button class="button button-secondary" data-confirm-cancel th:text="#{common.action.cancel}" type="button">Cancel</button>
+            <button class="button button-primary confirmation-dialog__confirm" data-confirm-submit th:text="#{common.action.confirm}" type="button">Confirm</button>
         </div>
     </div>
 </dialog>
