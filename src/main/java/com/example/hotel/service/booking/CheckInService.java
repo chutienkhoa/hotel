@@ -1,5 +1,6 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
@@ -87,6 +88,7 @@ public class CheckInService {
         this.clock = clock;
     }
 
+
     /**
      * Searches CONFIRMED Reservations only, reusing the existing Reservation list query
      * infrastructure. Search is local-database only; no external OTA API is contacted.
@@ -98,6 +100,10 @@ public class CheckInService {
     @Transactional(readOnly = true)
     public Page<ReservationSummaryResponse> searchConfirmedReservations(ReservationSearchCriteria criteria, int page) {
         criteria.setStatus(ReservationStatus.CONFIRMED);
+        if (TableSorts.CHECK_IN.key(criteria.getSort(), criteria.getDir()) == null) {
+            criteria.setSort(null);
+            criteria.setDir(null);
+        }
         return reservationQueryService.findPage(criteria, page);
     }
 

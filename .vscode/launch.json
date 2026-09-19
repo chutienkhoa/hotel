@@ -11,6 +11,11 @@
       "preLaunchTask": "Maven: Build",
       "env": {
         "SPRING_PROFILES_ACTIVE": "dev"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Tomcat started on port (\\d+)",
+        "uriFormat": "http://localhost:%s/"
       }
     }
   ]

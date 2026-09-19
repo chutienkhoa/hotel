@@ -64,4 +64,28 @@ class ReservationQueryServiceTest {
         assertEquals(11, result.getTotalElements());
         assertEquals(List.of(summary), result.getContent());
     }
+
+    /** Confirms a valid sort is applied in the database query (before pagination) and invalid input falls back. */
+    @Test
+    void shouldApplyWhitelistedSortToDatabaseQueryAndFallBackWhenInvalid() {
+        ReservationRepository repository = mock(ReservationRepository.class);
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), Pageable.ofSize(10), 0));
+        ReservationQueryService service = new ReservationQueryService(repository, mock(ReservationMapper.class));
+
+        ReservationSearchCriteria sorted = new ReservationSearchCriteria();
+        sorted.setSort("checkOutDate");
+        sorted.setDir("desc");
+        service.findPage(sorted, 0);
+        ReservationSearchCriteria invalid = new ReservationSearchCriteria();
+        invalid.setSort("guest.passwordHash");
+        invalid.setDir("asc");
+        service.findPage(invalid, 0);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository, org.mockito.Mockito.times(2)).findAll(any(Specification.class), captor.capture());
+        assertEquals(Sort.Direction.DESC, captor.getAllValues().get(0).getSort().getOrderFor("checkOutDate").getDirection());
+        assertEquals(Sort.Direction.DESC, captor.getAllValues().get(1).getSort().getOrderFor("checkInDate").getDirection());
+        assertEquals(null, captor.getAllValues().get(1).getSort().getOrderFor("guest.passwordHash"));
+    }
 }

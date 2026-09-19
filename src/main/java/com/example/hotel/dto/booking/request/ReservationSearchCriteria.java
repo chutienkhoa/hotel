@@ -153,4 +153,39 @@ public class ReservationSearchCriteria {
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
+
+    private String sort;
+    private String dir;
+
+    /** Returns the requested public sort key, which is validated against a whitelist before use. */
+    public String getSort() {
+        return sort;
+    }
+
+    /** Sets the requested public sort key. */
+    public void setSort(String sort) {
+        this.sort = sort;
+    }
+
+    /** Returns the requested sort direction, which is validated before use. */
+    public String getDir() {
+        return dir;
+    }
+
+    /** Sets the requested sort direction. */
+    public void setDir(String dir) {
+        this.dir = dir;
+    }
+
+    private String currentRoom;
+
+    /** Returns the optional current-room fragment matched against open Stay room assignments. */
+    public String getCurrentRoom() {
+        return currentRoom;
+    }
+
+    /** Sets the current-room fragment; used by Check-out, never bound from the browser form. */
+    public void setCurrentRoom(String currentRoom) {
+        this.currentRoom = currentRoom;
+    }
 }

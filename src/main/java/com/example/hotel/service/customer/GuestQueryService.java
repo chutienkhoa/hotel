@@ -1,5 +1,6 @@
 package com.example.hotel.service.customer;
 
+import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.response.CountryCatalog;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
@@ -31,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class GuestQueryService {
 
     private static final int GUEST_PAGE_SIZE = 10;
+
 
     private final GuestRepository guestRepository;
     private final GuestMapper guestMapper;
@@ -121,7 +123,7 @@ public class GuestQueryService {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 GUEST_PAGE_SIZE,
-                Sort.by(Sort.Order.asc("guestCode")));
+                TableSorts.GUEST.resolve(criteria.getSort(), criteria.getDir()));
         return guestRepository.findAll(specificationFor(criteria), pageable)
                 .map(guestMapper::toListResponse);
     }

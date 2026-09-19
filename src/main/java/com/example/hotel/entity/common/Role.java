@@ -52,6 +52,17 @@ public class Role extends AuditedEntity {
     }
 
     /**
+     * Replaces this role's permissions with exactly the supplied set. Unchanged associations are
+     * kept, so no duplicate association rows are created.
+     *
+     * @param newPermissions the complete permission set the role holds afterwards
+     */
+    public void replacePermissions(Set<Permission> newPermissions) {
+        permissions.retainAll(newPermissions);
+        permissions.addAll(newPermissions);
+    }
+
+    /**
      * Trả về các permission thuộc role.
      *
      * @return tập permission của role

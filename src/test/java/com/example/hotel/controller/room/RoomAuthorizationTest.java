@@ -143,7 +143,7 @@ class RoomAuthorizationTest {
         mockMvc.perform(get("/rooms").param("floor", "99")
                         .with(user("admin").authorities(manageRoomAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("0</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("0 results")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "No rooms match the current filters.")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("value=\"99\"")))
@@ -387,4 +387,17 @@ class RoomAuthorizationTest {
     @TestConfiguration
     @EnableMethodSecurity
     static class MethodSecurityTestConfiguration {}
+
+    /** Confirms an out-of-range Room page redirects to the last valid page preserving filter and sort. */
+    @Test
+    void shouldRedirectOutOfRangeRoomPagePreservingFilterAndSort() throws Exception {
+        when(roomQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(50)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                        List.of(), org.springframework.data.domain.PageRequest.of(50, 10), 31));
+
+        mockMvc.perform(get("/rooms").param("page", "50").param("floor", "2").param("sort", "roomType").param("dir", "desc")
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/rooms?floor=2&sort=roomType&dir=desc&page=3"));
+    }
 }

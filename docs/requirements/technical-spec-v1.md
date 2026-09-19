@@ -3833,4 +3833,103 @@ Thao tác nhạy cảm ghi `AuditLog` với `entity_type=APP_USER`, `entity_id`=
 `USER_ROLE_CHANGE` (old/new là mã role), `USER_PASSWORD_RESET` (không có dữ liệu mật khẩu).
 Đọc/liệt kê user không ghi audit.
 
+# 58. Roles & Permissions Management
+
+Task 25 cho phép ADMIN cấu hình ma trận permission của ba role built-in. Không có thay đổi
+schema/migration: schema `role`, `permission`, `role_permission` hiện có đã đủ.
+
+## 58.1 Role cố định
+
+V1 chỉ có ba role built-in: `ADMIN`, `MANAGER`, `STAFF`. KHÔNG tạo/xóa/đổi tên role, KHÔNG custom
+role, KHÔNG tạo/xóa/đổi tên permission, KHÔNG role hierarchy hay permission inheritance. Quan hệ
+`AppUser ↔ Role` (N:M) giữ nguyên; User Management (mục 57) vẫn quản lý đúng một role/user.
+
+## 58.2 Ma trận permission có thể chỉnh
+
+`GET|POST /roles-permissions` (một trang ma trận duy nhất, sidebar ADMINISTRATION → Roles &
+Permissions), bảo vệ bằng `PERM_MANAGE_USER` (chỉ ADMIN trong V1, không có permission mới). Các
+permission hiển thị, theo nhóm: Dashboard (`VIEW_REPORT`); Reservations (`VIEW_BOOKING`,
+`MANAGE_BOOKING`, `CHECK_IN`, `CHECK_OUT`, `CHANGE_ROOM`); Guests (`MANAGE_GUEST`); Rooms
+(`MANAGE_ROOM`); Finance (`MANAGE_PAYMENT`, `MANAGE_EXPENSE`, `MANAGE_ADDITIONAL_REVENUE`);
+Administration (`MANAGE_STAFF`, `MANAGE_ATTENDANCE`, `MANAGE_USER`). Trạng thái được đọc từ
+database, không hard-code. `DELETE_RESERVATION` là permission "dormant" (đã seed, không role nào có,
+không code nào dùng): KHÔNG hiển thị, KHÔNG cấp, KHÔNG xóa khỏi database; việc lưu ma trận không
+bao giờ cấp nó và giữ nguyên mọi permission không hiển thị mà role đang có.
+
+## 58.3 Bất biến MANAGE_USER
+
+`MANAGE_USER` luôn BẬT và KHÓA cho ADMIN, luôn TẮT và KHÓA cho MANAGER và STAFF. Được enforce ở
+service (không chỉ HTML): request thiếu `MANAGE_USER` của ADMIN vẫn giữ nguyên; request cấp
+`MANAGE_USER` cho MANAGER/STAFF bị từ chối. ADMIN có thể tự sửa các permission cấu hình được của
+role ADMIN (không bị khôi phục âm thầm); chỉ `MANAGE_USER` có bất biến đặc biệt.
+
+## 58.4 Lưu, khóa và audit
+
+Lưu trong một transaction: validate toàn bộ submission (đủ đúng ba role, permission thuộc catalogue
+hiển thị) trước khi thay đổi; khóa dòng ba role (`SELECT … FOR UPDATE`,
+`RoleRepository.lockBuiltInRoleIds`) rồi mới đọc và cập nhật để tuần tự hóa các lần lưu đồng thời;
+chỉ cập nhật role có permission thực sự thay đổi. Mỗi role thay đổi ghi một `AuditLog`:
+`action=ROLE_PERMISSION_CHANGE`, `entity_type=ROLE`, `entity_id`=Role.id, `old_value`/`new_value` là
+danh sách mã permission sắp xếp, ngăn cách bằng dấu phẩy; không audit role không đổi; không có Audit
+Log UI.
+
+## 58.5 Hiệu lực ngay lập tức
+
+Thay đổi permission có hiệu lực từ request xác thực kế tiếp cho cả session MVC lẫn JWT nhờ cơ chế
+dựng lại authorities từ database (mục 57.5); không cần đăng nhập lại, không cache, không blacklist,
+không buộc đăng xuất.
+
+# 59. Data Table Standardization (Task 26)
+
+## 59.1 Phạm vi
+
+Chuẩn hóa hành vi bảng dữ liệu CHỨC NĂNG cho bảy màn hình chính: Reservations, Guests, Rooms,
+Check-in Existing, Check-out, Expenses, Additional Revenue. KHÔNG áp dụng cho Staff, Users, các
+danh mục (Expense/Additional Revenue Categories), Daily Work Record, Staff Detail, Roles &
+Permissions, bảng nhúng (Dashboard, Reservation Detail, Folio, Check-in Review). Thiết kế giao diện
+(sticky header, responsive, visual) thuộc Task 33; Task 26 ưu tiên đúng chức năng hơn hình thức.
+
+## 59.2 Phân trang
+
+Phân trang phía server (Spring `Page`), tham số `page` bắt đầu từ 0 trong URL (UI hiển thị từ 1).
+Kích thước cố định: Reservations/Guests/Rooms/Check-in/Check-out = 10; Expenses/Additional
+Revenue = 20; không có điều khiển chọn page size. Lọc và sắp xếp luôn được thực hiện ở database
+TRƯỚC khi phân trang. `page` âm hoặc không phải số được đưa về 0. Nếu `page` vượt quá trang cuối
+trong khi kết quả KHÔNG rỗng, server chuyển hướng (302) tới trang cuối hợp lệ, giữ nguyên bộ lọc và
+sắp xếp; kết quả thật sự rỗng không chuyển hướng và hiển thị empty state. Tóm tắt kết quả:
+"Showing a–b of n" (hoặc "0 results") từ dữ liệu Page đã có, không thêm truy vấn.
+
+## 59.3 Sắp xếp
+
+Tham số `sort=<khóa logic>&dir=asc|desc`. Giá trị từ trình duyệt KHÔNG BAO GIỜ được chuyển thẳng
+vào Spring Data/JPA: mỗi màn hình có whitelist (`TableSorts`) ánh xạ khóa công khai sang thuộc tính
+an toàn; `sort`/`dir` không hợp lệ quay về thứ tự mặc định của màn hình. Khóa cho phép:
+Reservations (`reservationNumber`, `checkInDate`, `checkOutDate`, `status`); Guests (`guestCode`,
+`firstName`, `lastName`); Rooms (`roomNumber`, `roomType` theo mã loại phòng, `floor`, `status`);
+Check-in Existing (`reservationNumber`, `checkInDate`); Check-out (`reservationNumber`,
+`checkOutDate`); Expenses và Additional Revenue (`date`, `amount`, `status`). Thứ tự mặc định giữ
+nguyên: Reservations/Check-in/Check-out theo ngày check-in giảm dần rồi số reservation; Guests theo
+mã guest tăng dần; Rooms theo số phòng tăng dần; Expenses/Additional Revenue theo ngày giảm dần rồi
+id giảm dần. Khi sắp xếp theo người dùng luôn có thứ tự phụ xác định (deterministic).
+
+## 59.4 Trạng thái URL
+
+Bộ lọc, `sort`, `dir`, `page` được giữ trong URL và mã hóa an toàn: đổi trang giữ bộ lọc và sắp xếp;
+đổi sắp xếp giữ bộ lọc và đặt lại `page`=0; gửi bộ lọc giữ sắp xếp hiện tại (trường ẩn) và đặt lại
+`page`=0; "Reset/Clear" quay về route gốc (sắp xếp và trang mặc định). Tiêu đề cột sắp xếp được là
+liên kết (ASC → DESC → ASC), không dùng JavaScript.
+
+## 59.5 Check-out: phòng hiện tại
+
+Bộ lọc Room của Check-out là phòng HIỆN TẠI của Stay, không phải `ReservationRoom` đặt ban đầu: là
+predicate `EXISTS` ở database trên `stay_room_assignment` đang mở (`assigned_to IS NULL`), so khớp
+số phòng không phân biệt hoa/thường theo dạng chứa. Vì lọc trước khi phân trang nên `totalElements`
+và số trang chính xác, đúng sau Room Change và với Stay nhiều phòng. Không cần migration/index mới.
+
+## 59.6 Khoảng ngày
+
+Expenses và Additional Revenue: nếu cả `fromDate` và `toDate` có giá trị thì phải `from <= to`; nếu
+không, hiển thị thông báo thân thiện ("From Date must not be after To Date."), giữ nguyên giá trị đã
+nhập và không thực hiện tìm kiếm (hành vi này đã có từ trước; Task 26 xác nhận và bổ sung kiểm thử).
+
 **End of Specification v1.0**

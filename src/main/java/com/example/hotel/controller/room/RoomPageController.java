@@ -1,5 +1,7 @@
 package com.example.hotel.controller.room;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.room.request.RoomCreateRequest;
 import com.example.hotel.dto.room.request.RoomSearchCriteria;
 import com.example.hotel.dto.room.request.RoomUpdateRequest;
@@ -27,7 +29,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /** Serves CSRF-protected Thymeleaf pages for authorized Room Management. */
 @Controller
@@ -64,17 +65,24 @@ public class RoomPageController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
     public String list(
             @ModelAttribute("searchCriteria") RoomSearchCriteria searchCriteria,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model,
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         searchCriteria.normalize();
         model.addAttribute("roomTypes", roomTypeQueryService.findAll());
         model.addAttribute("roomStatuses", RoomStatus.values());
-        Page<RoomResponse> roomPage = roomQueryService.findPage(searchCriteria, page == null ? 0 : page);
+        int requestedPage = PaginationSupport.parsePage(page);
+        Page<RoomResponse> roomPage = roomQueryService.findPage(searchCriteria, requestedPage);
+        String sortKey = TableSorts.ROOM.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir = TableSorts.ROOM.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        String redirect = PaginationSupport.redirectWhenOutOfRange(
+                roomPage, requestedPage, "/rooms", filters(searchCriteria), sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("roomPage", roomPage);
-        model.addAttribute("filterQueryString", filterQueryString(searchCriteria));
-        addPaginationAttributes(model, roomPage);
+        PaginationSupport.populate(model, roomPage, "/rooms", filters(searchCriteria), sortKey, sortDir);
         return "room/list";
     }
 
@@ -338,7 +346,7 @@ public class RoomPageController {
      * @return the encoded {@code name=value&...} filter query string, or an empty string when
      *     no filter is active
      */
-    private String filterQueryString(RoomSearchCriteria searchCriteria) {
+    private Map<String, String> filters(RoomSearchCriteria searchCriteria) {
         Map<String, String> filters = new LinkedHashMap<>();
         if (searchCriteria.getRoomNumber() != null) {
             filters.put("roomNumber", searchCriteria.getRoomNumber());
@@ -352,30 +360,7 @@ public class RoomPageController {
         if (searchCriteria.getStatus() != null) {
             filters.put("status", searchCriteria.getStatus().name());
         }
-        if (filters.isEmpty()) {
-            return "";
-        }
-        UriComponentsBuilder builder = UriComponentsBuilder.newInstance();
-        filters.forEach(builder::queryParam);
-        return builder.build().encode().getQuery();
-    }
-
-    /**
-     * Adds presentation-only page-window bounds for the Room list paginator.
-     *
-     * @param model MVC model used by the Room list view
-     * @param roomPage current server-side page metadata
-     */
-    private void addPaginationAttributes(Model model, Page<?> roomPage) {
-        int totalPages = roomPage.getTotalPages();
-        if (totalPages == 0) {
-            return;
-        }
-        int lastPage = totalPages - 1;
-        int startPage = Math.max(0, Math.min(roomPage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
+        return filters;
     }
 
     /**

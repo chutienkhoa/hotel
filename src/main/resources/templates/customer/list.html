@@ -19,6 +19,7 @@
 
         <section class="form-card" aria-label="Filter guests">
             <form method="get" th:action="@{/guests}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
                 <div class="form-grid guest-form-grid">
                     <div class="form-field">
                         <label for="guestCode">Guest Code</label>
@@ -62,34 +63,8 @@
 
         <section class="guest-results">
             <div class="results-toolbar">
-                <p>
-                    <span th:text="${guestPage.totalElements}">0</span>
-                    <span th:text="${guestPage.totalElements == 1 ? 'result' : 'results'}">results</span>
-                </p>
-                <nav aria-label="Guest pages" class="pagination guest-pagination"
-                     th:if="${guestPage.totalPages > 1}">
-                    <a class="pagination__segment" th:if="${!guestPage.first}"
-                       th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (guestPage.number - 1)}">
-                        Previous
-                    </a>
-                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
-                        <span aria-current="page" class="pagination__segment pagination__segment--current"
-                              th:if="${pageNumber == guestPage.number}"
-                              th:text="${pageNumber + 1}">1</span>
-                        <a class="pagination__segment" th:unless="${pageNumber == guestPage.number}"
-                           th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}"
-                           th:text="${pageNumber + 1}">2</a>
-                    </th:block>
-                    <span class="pagination__segment pagination__segment--ellipsis"
-                          th:if="${paginationEndPage + 1 < guestPage.totalPages - 1}">...</span>
-                    <a class="pagination__segment" th:if="${paginationEndPage < guestPage.totalPages - 1}"
-                       th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (guestPage.totalPages - 1)}"
-                       th:text="${guestPage.totalPages}">2</a>
-                    <a class="pagination__segment" th:if="${!guestPage.last}"
-                       th:href="${'/guests?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (guestPage.number + 1)}">
-                        Next
-                    </a>
-                </nav>
+                <p><span th:replace="~{layout/table :: resultSummary(${guestPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${guestPage}, 'Guest pages', 'pagination guest-pagination')}"></nav>
             </div>
 
             <p class="empty-state" th:if="${guestPage.empty}">No guests match the current filters.</p>
@@ -98,9 +73,9 @@
                 <table>
                     <thead>
                     <tr>
-                        <th scope="col">Guest Code</th>
-                        <th scope="col">First Name</th>
-                        <th scope="col">Last Name</th>
+                        <th th:replace="~{layout/table :: sortHeader('Guest Code', 'guestCode')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('First Name', 'firstName')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('Last Name', 'lastName')}"></th>
                         <th scope="col">Email</th>
                         <th scope="col">Nationality</th>
                     </tr>

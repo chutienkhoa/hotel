@@ -18,6 +18,7 @@
 
         <section class="form-card" aria-label="Search confirmed reservations">
             <form method="get" th:action="@{/check-in/existing}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="reservationNumber">Reservation Number</label>
@@ -43,28 +44,8 @@
 
         <section class="expense-results">
             <div class="results-toolbar" th:if="${reservationPage != null}">
-                <p>
-                    <span th:text="${reservationPage.totalElements}">0</span>
-                    <span th:text="${reservationPage.totalElements == 1 ? 'result' : 'results'}">results</span>
-                </p>
-                <nav aria-label="Reservation pages" class="pagination" th:if="${reservationPage.totalPages > 1}">
-                    <a class="pagination__segment" th:if="${!reservationPage.first}"
-                       th:href="@{/check-in/existing(reservationNumber=${searchCriteria.reservationNumber},guest=${searchCriteria.guest},otaBookingReference=${searchCriteria.otaBookingReference},page=${reservationPage.number - 1})}">
-                        Previous
-                    </a>
-                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
-                        <span aria-current="page" class="pagination__segment pagination__segment--current"
-                              th:if="${pageNumber == reservationPage.number}"
-                              th:text="${pageNumber + 1}">1</span>
-                        <a class="pagination__segment" th:unless="${pageNumber == reservationPage.number}"
-                           th:href="@{/check-in/existing(reservationNumber=${searchCriteria.reservationNumber},guest=${searchCriteria.guest},otaBookingReference=${searchCriteria.otaBookingReference},page=${pageNumber})}"
-                           th:text="${pageNumber + 1}">2</a>
-                    </th:block>
-                    <a class="pagination__segment" th:if="${!reservationPage.last}"
-                       th:href="@{/check-in/existing(reservationNumber=${searchCriteria.reservationNumber},guest=${searchCriteria.guest},otaBookingReference=${searchCriteria.otaBookingReference},page=${reservationPage.number + 1})}">
-                        Next
-                    </a>
-                </nav>
+                <p><span th:replace="~{layout/table :: resultSummary(${reservationPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${reservationPage}, 'Reservation pages', 'pagination')}"></nav>
             </div>
 
             <p class="empty-state" th:if="${reservationPage != null and reservationPage.empty}">
@@ -75,12 +56,12 @@
                 <table>
                     <thead>
                     <tr>
-                        <th scope="col">Reservation</th>
+                        <th th:replace="~{layout/table :: sortHeader('Reservation', 'reservationNumber')}"></th>
                         <th scope="col">Guest</th>
                         <th scope="col">Room</th>
                         <th scope="col">Source</th>
                         <th scope="col">OTA Booking</th>
-                        <th scope="col">Check-in</th>
+                        <th th:replace="~{layout/table :: sortHeader('Check-in', 'checkInDate')}"></th>
                         <th scope="col">Check-out</th>
                         <th scope="col">Total</th>
                         <th scope="col"></th>

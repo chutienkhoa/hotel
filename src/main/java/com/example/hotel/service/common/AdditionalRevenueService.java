@@ -1,5 +1,6 @@
 package com.example.hotel.service.common;
 
+import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.common.request.AdditionalRevenueCreateRequest;
 import com.example.hotel.dto.common.request.AdditionalRevenueSearchCriteria;
 import com.example.hotel.dto.common.request.AdditionalRevenueUpdateRequest;
@@ -39,6 +40,7 @@ public class AdditionalRevenueService {
 
     private static final int ADDITIONAL_REVENUE_PAGE_SIZE = 20;
 
+
     private final AdditionalRevenueRepository revenueRepository;
     private final AdditionalRevenueCategoryRepository categoryRepository;
     private final AdditionalRevenueMapper revenueMapper;
@@ -68,7 +70,7 @@ public class AdditionalRevenueService {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 ADDITIONAL_REVENUE_PAGE_SIZE,
-                Sort.by(Sort.Order.desc("revenueDate"), Sort.Order.desc("id")));
+                TableSorts.ADDITIONAL_REVENUE.resolve(criteria.getSort(), criteria.getDir()));
         return revenueRepository.findAll(specificationFor(criteria), pageable).map(revenueMapper::toResponse);
     }
 

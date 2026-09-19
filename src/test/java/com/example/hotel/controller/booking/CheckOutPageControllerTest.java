@@ -232,4 +232,19 @@ class CheckOutPageControllerTest {
     @TestConfiguration
     @EnableMethodSecurity
     static class MethodSecurityTestConfiguration {}
+
+    /** Confirms an out-of-range Check-out page redirects to the last valid page preserving the room filter and sort. */
+    @Test
+    void shouldRedirectOutOfRangeCheckOutPagePreservingFilterAndSort() throws Exception {
+        org.mockito.Mockito.when(checkOutQueryService.search(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(7)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                        List.of(), org.springframework.data.domain.PageRequest.of(7, 10), 12));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/check-out")
+                        .param("page", "7").param("room", "305").param("sort", "checkOutDate").param("dir", "asc")
+                        .with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors
+                                .user("staff").authorities(checkOutAuthority())))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/check-out?room=305&sort=checkOutDate&dir=asc&page=1"));
+    }
 }

@@ -23,6 +23,7 @@
 
         <section class="form-card" aria-label="Filter expenses">
             <form method="get" th:action="@{/expenses}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="fromDate">From Date</label>
@@ -68,34 +69,8 @@
 
         <section class="expense-results">
             <div class="results-toolbar" th:if="${expensePage != null}">
-                <p>
-                    <span th:text="${expensePage.totalElements}">0</span>
-                    <span th:text="${expensePage.totalElements == 1 ? 'result' : 'results'}">results</span>
-                </p>
-                <nav aria-label="Expense pages" class="pagination expense-pagination"
-                     th:if="${expensePage.totalPages > 1}">
-                    <a class="pagination__segment" th:if="${!expensePage.first}"
-                       th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (expensePage.number - 1)}">
-                        Previous
-                    </a>
-                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
-                        <span aria-current="page" class="pagination__segment pagination__segment--current"
-                              th:if="${pageNumber == expensePage.number}"
-                              th:text="${pageNumber + 1}">1</span>
-                        <a class="pagination__segment" th:unless="${pageNumber == expensePage.number}"
-                           th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}"
-                           th:text="${pageNumber + 1}">2</a>
-                    </th:block>
-                    <span class="pagination__segment pagination__segment--ellipsis"
-                          th:if="${paginationEndPage + 1 < expensePage.totalPages - 1}">...</span>
-                    <a class="pagination__segment" th:if="${paginationEndPage < expensePage.totalPages - 1}"
-                       th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (expensePage.totalPages - 1)}"
-                       th:text="${expensePage.totalPages}">2</a>
-                    <a class="pagination__segment" th:if="${!expensePage.last}"
-                       th:href="${'/expenses?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (expensePage.number + 1)}">
-                        Next
-                    </a>
-                </nav>
+                <p><span th:replace="~{layout/table :: resultSummary(${expensePage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${expensePage}, 'Expense pages', 'pagination expense-pagination')}"></nav>
             </div>
 
             <div th:if="${expensePage != null and expensePage.empty and errorMessage == null}">
@@ -110,11 +85,11 @@
                 <table>
                     <thead>
                     <tr>
-                        <th scope="col">Date</th>
+                        <th th:replace="~{layout/table :: sortHeader('Date', 'date')}"></th>
                         <th scope="col">Category</th>
-                        <th scope="col">Amount</th>
+                        <th th:replace="~{layout/table :: sortHeader('Amount', 'amount')}"></th>
                         <th scope="col">Payment method</th>
-                        <th scope="col">Status</th>
+                        <th th:replace="~{layout/table :: sortHeader('Status', 'status')}"></th>
                     </tr>
                     </thead>
                     <tbody>

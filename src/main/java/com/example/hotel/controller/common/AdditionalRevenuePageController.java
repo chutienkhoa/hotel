@@ -1,5 +1,7 @@
 package com.example.hotel.controller.common;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.common.request.AdditionalRevenueCreateRequest;
 import com.example.hotel.dto.common.request.AdditionalRevenueSearchCriteria;
 import com.example.hotel.dto.common.request.AdditionalRevenueUpdateRequest;
@@ -38,21 +40,33 @@ public class AdditionalRevenuePageController {
     @GetMapping("/additional-revenues")
     public String list(
             @ModelAttribute("searchCriteria") AdditionalRevenueSearchCriteria searchCriteria,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model) {
         model.addAttribute("categories", additionalRevenueService.findAllCategories());
         model.addAttribute("statuses", com.example.hotel.entity.common.AdditionalRevenueStatus.values());
-        model.addAttribute("filterQueryString", filterQueryString(searchCriteria));
         model.addAttribute("filtersActive", searchCriteria.isAnyFilterActive());
+        String sortKey = TableSorts.ADDITIONAL_REVENUE.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir =
+                TableSorts.ADDITIONAL_REVENUE.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
         if (searchCriteria.isDateRangeInvalid()) {
             model.addAttribute("errorMessage", "From Date must not be after To Date.");
-            model.addAttribute("revenuePage", Page.empty());
+            Page<AdditionalRevenueResponse> emptyPage = Page.empty();
+            model.addAttribute("revenuePage", emptyPage);
+            PaginationSupport.populate(
+                    model, emptyPage, "/additional-revenues", filters(searchCriteria), sortKey, sortDir);
             return "additional-revenue/list";
         }
+        int requestedPage = PaginationSupport.parsePage(page);
         Page<AdditionalRevenueResponse> revenuePage =
-                additionalRevenueService.findPage(searchCriteria, page == null ? 0 : page);
+                additionalRevenueService.findPage(searchCriteria, requestedPage);
+        String redirect = PaginationSupport.redirectWhenOutOfRange(
+                revenuePage, requestedPage, "/additional-revenues", filters(searchCriteria), sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("revenuePage", revenuePage);
-        addPaginationAttributes(model, revenuePage);
+        PaginationSupport.populate(
+                model, revenuePage, "/additional-revenues", filters(searchCriteria), sortKey, sortDir);
         return "additional-revenue/list";
     }
 
@@ -168,7 +182,7 @@ public class AdditionalRevenuePageController {
                 : exception.getReason();
     }
 
-    private String filterQueryString(AdditionalRevenueSearchCriteria searchCriteria) {
+    private Map<String, String> filters(AdditionalRevenueSearchCriteria searchCriteria) {
         Map<String, String> filters = new LinkedHashMap<>();
         if (searchCriteria.getFromDate() != null) {
             filters.put("fromDate", searchCriteria.getFromDate().toString());
@@ -182,22 +196,6 @@ public class AdditionalRevenuePageController {
         if (searchCriteria.getStatus() != null) {
             filters.put("status", searchCriteria.getStatus().name());
         }
-        if (filters.isEmpty()) {
-            return "";
-        }
-        org.springframework.web.util.UriComponentsBuilder builder = org.springframework.web.util.UriComponentsBuilder.newInstance();
-        filters.forEach(builder::queryParam);
-        return builder.build().encode().getQuery();
-    }
-
-    private void addPaginationAttributes(Model model, Page<AdditionalRevenueResponse> revenuePage) {
-        if (revenuePage.getTotalPages() == 0) {
-            return;
-        }
-        int lastPage = revenuePage.getTotalPages() - 1;
-        int startPage = Math.max(0, Math.min(revenuePage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
+        return filters;
     }
 }

@@ -19,6 +19,7 @@
 
         <section class="form-card" aria-label="Filter rooms">
             <form method="get" th:action="@{/rooms}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="roomNumber">Room Number</label>
@@ -62,34 +63,8 @@
 
         <section class="room-results">
             <div class="results-toolbar">
-                <p>
-                    <span th:text="${roomPage.totalElements}">0</span>
-                    <span th:text="${roomPage.totalElements == 1 ? 'result' : 'results'}">results</span>
-                </p>
-                <nav aria-label="Room pages" class="pagination room-pagination"
-                     th:if="${roomPage.totalPages > 1}">
-                    <a class="pagination__segment" th:if="${!roomPage.first}"
-                       th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (roomPage.number - 1)}">
-                        Previous
-                    </a>
-                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
-                        <span aria-current="page" class="pagination__segment pagination__segment--current"
-                              th:if="${pageNumber == roomPage.number}"
-                              th:text="${pageNumber + 1}">1</span>
-                        <a class="pagination__segment" th:unless="${pageNumber == roomPage.number}"
-                           th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}"
-                           th:text="${pageNumber + 1}">2</a>
-                    </th:block>
-                    <span class="pagination__segment pagination__segment--ellipsis"
-                          th:if="${paginationEndPage + 1 < roomPage.totalPages - 1}">...</span>
-                    <a class="pagination__segment" th:if="${paginationEndPage < roomPage.totalPages - 1}"
-                       th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (roomPage.totalPages - 1)}"
-                       th:text="${roomPage.totalPages}">2</a>
-                    <a class="pagination__segment" th:if="${!roomPage.last}"
-                       th:href="${'/rooms?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (roomPage.number + 1)}">
-                        Next
-                    </a>
-                </nav>
+                <p><span th:replace="~{layout/table :: resultSummary(${roomPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${roomPage}, 'Room pages', 'pagination room-pagination')}"></nav>
             </div>
 
             <p class="empty-state" th:if="${roomPage.empty}">No rooms match the current filters.</p>
@@ -98,10 +73,10 @@
                 <table>
                     <thead>
                     <tr>
-                        <th scope="col">Room Number</th>
-                        <th scope="col">RoomType</th>
-                        <th scope="col">Floor</th>
-                        <th scope="col">Status</th>
+                        <th th:replace="~{layout/table :: sortHeader('Room Number', 'roomNumber')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('RoomType', 'roomType')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('Floor', 'floor')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('Status', 'status')}"></th>
                         <th scope="col">Active</th>
                     </tr>
                     </thead>

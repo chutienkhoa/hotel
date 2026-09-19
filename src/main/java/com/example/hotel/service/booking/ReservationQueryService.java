@@ -1,16 +1,20 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.entity.booking.Reservation;
+import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ReservationRepository;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,7 +24,6 @@ import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ReservationQueryService {
 
     private static final int RESERVATION_PAGE_SIZE = 10;
+
 
     private final ReservationRepository reservationRepository;
     private final ReservationMapper reservationMapper;
@@ -77,7 +81,7 @@ public class ReservationQueryService {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 RESERVATION_PAGE_SIZE,
-                Sort.by(Sort.Order.desc("checkInDate"), Sort.Order.asc("reservationNumber")));
+                TableSorts.RESERVATION.resolve(criteria.getSort(), criteria.getDir()));
         Page<Reservation> reservationPage = reservationRepository.findAll(specificationFor(criteria), pageable);
         Map<UUID, String> roomNumbersByReservationId = roomNumbersByReservationId(reservationPage.getContent());
         return reservationPage.map(reservation -> reservationMapper.toSummaryResponse(
@@ -129,6 +133,17 @@ public class ReservationQueryService {
                         criteriaBuilder.lower(roomJoin.get("room").get("roomNumber")),
                         "%" + criteria.getRoom().toLowerCase(Locale.ROOT) + "%"));
                 query.distinct(true);
+            }
+            if (criteria.getCurrentRoom() != null) {
+                Subquery<Integer> openAssignment = query.subquery(Integer.class);
+                Root<StayRoomAssignment> assignment = openAssignment.from(StayRoomAssignment.class);
+                openAssignment.select(criteriaBuilder.literal(1)).where(
+                        criteriaBuilder.equal(assignment.get("stay").get("reservation"), root),
+                        criteriaBuilder.isNull(assignment.get("assignedTo")),
+                        criteriaBuilder.like(
+                                criteriaBuilder.lower(assignment.get("room").get("roomNumber")),
+                                "%" + criteria.getCurrentRoom().toLowerCase(Locale.ROOT) + "%"));
+                predicates.add(criteriaBuilder.exists(openAssignment));
             }
             if (criteria.getSource() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("source"), criteria.getSource()));

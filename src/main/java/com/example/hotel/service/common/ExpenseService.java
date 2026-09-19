@@ -1,5 +1,6 @@
 package com.example.hotel.service.common;
 
+import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.common.request.ExpenseCreateRequest;
 import com.example.hotel.dto.common.request.ExpenseUpdateRequest;
 import com.example.hotel.dto.common.response.ExpenseCategoryResponse;
@@ -37,6 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class ExpenseService {
 
     private static final int EXPENSE_PAGE_SIZE = 20;
+
 
     private final ExpenseRepository expenseRepository;
     private final ExpenseCategoryRepository expenseCategoryRepository;
@@ -82,7 +84,7 @@ public class ExpenseService {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 EXPENSE_PAGE_SIZE,
-                Sort.by(Sort.Order.desc("expenseDate"), Sort.Order.desc("id")));
+                TableSorts.EXPENSE.resolve(criteria.getSort(), criteria.getDir()));
         return expenseRepository.findAll(specificationFor(criteria), pageable).map(expenseMapper::toResponse);
     }
 

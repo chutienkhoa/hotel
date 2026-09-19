@@ -1,5 +1,7 @@
 package com.example.hotel.controller.customer;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.customer.request.GuestCreateRequest;
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.request.GuestUpdateRequest;
@@ -37,7 +39,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /** Serves CSRF-protected Thymeleaf pages for authorized guest management. */
 @Controller
@@ -74,16 +75,23 @@ public class GuestPageController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
     public String list(
             @ModelAttribute("searchCriteria") GuestSearchCriteria searchCriteria,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model,
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         searchCriteria.normalize();
-        Page<?> guestPage = guestQueryService.findPage(searchCriteria, page == null ? 0 : page);
+        int requestedPage = PaginationSupport.parsePage(page);
+        Page<?> guestPage = guestQueryService.findPage(searchCriteria, requestedPage);
+        String sortKey = TableSorts.GUEST.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir = TableSorts.GUEST.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        String redirect = PaginationSupport.redirectWhenOutOfRange(
+                guestPage, requestedPage, "/guests", filters(searchCriteria), sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("guestPage", guestPage);
         model.addAttribute("countries", CountryCatalog.countries());
-        model.addAttribute("filterQueryString", filterQueryString(searchCriteria));
-        addPaginationAttributes(model, guestPage);
+        PaginationSupport.populate(model, guestPage, "/guests", filters(searchCriteria), sortKey, sortDir);
         return "customer/list";
     }
 
@@ -375,19 +383,14 @@ public class GuestPageController {
      * @return the encoded {@code name=value&...} filter query string, or an empty string when
      *     no filter is active
      */
-    private String filterQueryString(GuestSearchCriteria searchCriteria) {
+    private Map<String, String> filters(GuestSearchCriteria searchCriteria) {
         Map<String, String> filters = new LinkedHashMap<>();
         putIfPresent(filters, "guestCode", searchCriteria.getGuestCode());
         putIfPresent(filters, "firstName", searchCriteria.getFirstName());
         putIfPresent(filters, "lastName", searchCriteria.getLastName());
         putIfPresent(filters, "email", searchCriteria.getEmail());
         putIfPresent(filters, "nationality", searchCriteria.getNationality());
-        if (filters.isEmpty()) {
-            return "";
-        }
-        UriComponentsBuilder builder = UriComponentsBuilder.newInstance();
-        filters.forEach(builder::queryParam);
-        return builder.build().encode().getQuery();
+        return filters;
     }
 
     /**
@@ -401,24 +404,6 @@ public class GuestPageController {
         if (value != null) {
             filters.put(name, value);
         }
-    }
-
-    /**
-     * Adds presentation-only page-window bounds for the Guest list paginator.
-     *
-     * @param model MVC model used by the Guest list view
-     * @param guestPage current server-side page metadata
-     */
-    private void addPaginationAttributes(Model model, Page<?> guestPage) {
-        int totalPages = guestPage.getTotalPages();
-        if (totalPages == 0) {
-            return;
-        }
-        int lastPage = totalPages - 1;
-        int startPage = Math.max(0, Math.min(guestPage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
     }
 
     /**

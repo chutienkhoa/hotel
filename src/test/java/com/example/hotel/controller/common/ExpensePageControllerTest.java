@@ -356,4 +356,32 @@ class ExpensePageControllerTest {
     @TestConfiguration
     @EnableMethodSecurity
     static class MethodSecurityTestConfiguration {}
+
+    /** Confirms an out-of-range Expense page redirects to the last valid page preserving filter and sort. */
+    @Test
+    void shouldRedirectOutOfRangeExpensePagePreservingFilterAndSort() throws Exception {
+        when(expenseService.findAllCategories()).thenReturn(List.of(category()));
+        when(expenseService.findPage(any(), org.mockito.ArgumentMatchers.eq(9)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(9, 20), 41));
+
+        mockMvc.perform(get("/expenses").param("page", "9").param("status", "DRAFT")
+                        .param("sort", "amount").param("dir", "desc")
+                        .with(user("admin").authorities(manageExpense())))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/expenses?status=DRAFT&sort=amount&dir=desc&page=2"));
+    }
+
+    /** Confirms an invalid date range shows the friendly error, keeps the entered dates, and runs no search. */
+    @Test
+    void shouldRejectFromDateAfterToDateWithoutSearchingAndKeepFilters() throws Exception {
+        when(expenseService.findAllCategories()).thenReturn(List.of(category()));
+
+        mockMvc.perform(get("/expenses").param("fromDate", "2026-09-30").param("toDate", "2026-09-01")
+                        .with(user("admin").authorities(manageExpense())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("From Date must not be after To Date.")))
+                .andExpect(content().string(containsString("value=\"2026-09-30\"")));
+
+        org.mockito.Mockito.verify(expenseService, org.mockito.Mockito.never()).findPage(any(), org.mockito.ArgumentMatchers.anyInt());
+    }
 }

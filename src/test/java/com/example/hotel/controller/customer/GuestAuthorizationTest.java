@@ -791,7 +791,7 @@ class GuestAuthorizationTest {
         mockMvc.perform(get("/guests").param("nationality", "Japan")
                         .with(user("admin").authorities(manageGuestAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("0</span>")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("0 results")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "No guests match the current filters.")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
@@ -948,4 +948,38 @@ class GuestAuthorizationTest {
     @TestConfiguration
     @EnableMethodSecurity
     static class MethodSecurityTestConfiguration {}
+
+    /** Confirms an out-of-range Guest page redirects to the last valid page preserving filter and sort. */
+    @Test
+    void shouldRedirectOutOfRangeGuestPagePreservingFilterAndSort() throws Exception {
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(999)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(999, 10), 25));
+
+        mockMvc.perform(get("/guests").param("page", "999").param("nationality", "Viet Nam")
+                        .param("sort", "lastName").param("dir", "asc")
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/guests?nationality=Viet+Nam&sort=lastName&dir=asc&page=2"));
+    }
+
+    /** Confirms Guest sort headers are links that keep filters and reset the page. */
+    @Test
+    void shouldRenderGuestSortLinksKeepingFiltersWithoutPage() throws Exception {
+        GuestListResponse guest = new GuestListResponse(
+                GUEST_ID, "G000001", "Khoa", "Chu", "khoa@example.com",
+                new com.example.hotel.dto.customer.response.GuestNationalityDisplay("Japan", "\uD83C\uDDEF\uD83C\uDDF5"));
+        when(guestQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(1)))
+                .thenReturn(new PageImpl<>(List.of(guest), PageRequest.of(1, 10), 25));
+
+        mockMvc.perform(get("/guests").param("page", "1").param("nationality", "Japan")
+                        .param("sort", "guestCode").param("dir", "desc")
+                        .with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/guests?nationality=Japan&amp;sort=firstName&amp;dir=asc\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/guests?nationality=Japan&amp;sort=guestCode&amp;dir=asc\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "href=\"/guests?nationality=Japan&amp;sort=guestCode&amp;dir=desc&amp;page=2\"")));
+    }
 }

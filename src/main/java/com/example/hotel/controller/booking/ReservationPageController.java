@@ -1,5 +1,7 @@
 package com.example.hotel.controller.booking;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
@@ -20,7 +22,9 @@ import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -92,7 +96,7 @@ public class ReservationPageController {
     public String list(
             @ModelAttribute("searchCriteria") ReservationSearchCriteria searchCriteria,
             BindingResult bindingResult,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model,
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
@@ -103,18 +107,27 @@ public class ReservationPageController {
         model.addAttribute("reservationStatuses", ReservationStatus.values());
         model.addAttribute("bookingSources", BookingSource.values());
 
+        String sortKey = TableSorts.RESERVATION.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir =
+                TableSorts.RESERVATION.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
         String validationMessage = validateSearchCriteria(searchCriteria, bindingResult);
         if (validationMessage != null) {
             model.addAttribute("errorMessage", validationMessage);
             Page<?> reservationPage = Page.empty();
             model.addAttribute("reservationPage", reservationPage);
-            addPaginationAttributes(model, reservationPage);
+            PaginationSupport.populate(model, reservationPage, "/reservations", filters(searchCriteria), sortKey, sortDir);
             return "reservation/list";
         }
 
-        Page<?> reservationPage = reservationQueryService.findPage(searchCriteria, page == null ? 0 : page);
+        int requestedPage = PaginationSupport.parsePage(page);
+        Page<?> reservationPage = reservationQueryService.findPage(searchCriteria, requestedPage);
+        String redirect = PaginationSupport.redirectWhenOutOfRange(
+                reservationPage, requestedPage, "/reservations", filters(searchCriteria), sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("reservationPage", reservationPage);
-        addPaginationAttributes(model, reservationPage);
+        PaginationSupport.populate(model, reservationPage, "/reservations", filters(searchCriteria), sortKey, sortDir);
         return "reservation/list";
     }
 
@@ -422,21 +435,30 @@ public class ReservationPageController {
     }
 
     /**
-     * Adds presentation-only page-window bounds for the Reservation list paginator.
+     * Collects the populated Reservation list filters for pagination and sort links.
      *
-     * @param model MVC model used by the Reservation list view
-     * @param reservationPage current server-side page metadata
+     * @param criteria normalized Reservation list filters
+     * @return populated filters keyed by request parameter name
      */
-    private void addPaginationAttributes(Model model, Page<?> reservationPage) {
-        int totalPages = reservationPage.getTotalPages();
-        if (totalPages == 0) {
-            return;
+    private Map<String, String> filters(ReservationSearchCriteria criteria) {
+        Map<String, String> filters = new LinkedHashMap<>();
+        putIfPresent(filters, "reservationNumber", criteria.getReservationNumber());
+        putIfPresent(filters, "guest", criteria.getGuest());
+        putIfPresent(filters, "room", criteria.getRoom());
+        putIfPresent(filters, "source", criteria.getSource() == null ? null : criteria.getSource().name());
+        putIfPresent(filters, "otaBookingReference", criteria.getOtaBookingReference());
+        putIfPresent(filters, "status", criteria.getStatus() == null ? null : criteria.getStatus().name());
+        putIfPresent(filters, "checkInFrom", criteria.getCheckInFrom() == null ? null : criteria.getCheckInFrom().toString());
+        putIfPresent(filters, "checkInTo", criteria.getCheckInTo() == null ? null : criteria.getCheckInTo().toString());
+        putIfPresent(filters, "checkOutFrom", criteria.getCheckOutFrom() == null ? null : criteria.getCheckOutFrom().toString());
+        putIfPresent(filters, "checkOutTo", criteria.getCheckOutTo() == null ? null : criteria.getCheckOutTo().toString());
+        return filters;
+    }
+
+    private void putIfPresent(Map<String, String> filters, String name, String value) {
+        if (value != null) {
+            filters.put(name, value);
         }
-        int lastPage = totalPages - 1;
-        int startPage = Math.max(0, Math.min(reservationPage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
     }
 
     /**

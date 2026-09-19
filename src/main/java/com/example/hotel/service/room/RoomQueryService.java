@@ -1,5 +1,6 @@
 package com.example.hotel.service.room;
 
+import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.room.request.RoomSearchCriteria;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class RoomQueryService {
 
     private static final int ROOM_PAGE_SIZE = 10;
+
 
     private final RoomRepository roomRepository;
     private final RoomMapper roomMapper;
@@ -84,7 +86,7 @@ public class RoomQueryService {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
                 ROOM_PAGE_SIZE,
-                Sort.by(Sort.Order.asc("roomNumber")));
+                TableSorts.ROOM.resolve(criteria.getSort(), criteria.getDir()));
         return roomRepository.findAll(specificationFor(criteria), pageable).map(roomMapper::toResponse);
     }
 

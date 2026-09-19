@@ -239,4 +239,27 @@ class RoomQueryServiceTest {
                 List.of(floorPredicate, statusPredicate),
                 List.of(predicatesCaptor.getValue()));
     }
+
+    /** Confirms Room sort keys map to safe properties (room type by code) and invalid input falls back. */
+    @Test
+    void shouldApplyWhitelistedRoomSortAndFallBackWhenInvalid() {
+        RoomRepository repository = mock(RoomRepository.class);
+        when(repository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), Pageable.ofSize(10), 0));
+        RoomQueryService service = new RoomQueryService(repository, mock(RoomMapper.class));
+        RoomSearchCriteria sorted = new RoomSearchCriteria();
+        sorted.setSort("roomType");
+        sorted.setDir("desc");
+        service.findPage(sorted, 0);
+        RoomSearchCriteria invalid = new RoomSearchCriteria();
+        invalid.setSort("roomType.password");
+        invalid.setDir("desc");
+        service.findPage(invalid, 0);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(repository, org.mockito.Mockito.times(2)).findAll(any(Specification.class), captor.capture());
+        assertEquals(Sort.Direction.DESC, captor.getAllValues().get(0).getSort().getOrderFor("roomType.code").getDirection());
+        assertEquals(Sort.Direction.ASC, captor.getAllValues().get(1).getSort().getOrderFor("roomNumber").getDirection());
+        assertEquals(10, captor.getAllValues().get(0).getPageSize());
+    }
 }

@@ -1,10 +1,14 @@
 package com.example.hotel.controller.booking;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.response.CheckOutListItemResponse;
 import com.example.hotel.dto.booking.response.CheckOutReviewResponse;
 import com.example.hotel.service.booking.CheckOutQueryService;
 import com.example.hotel.service.booking.ReservationService;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -57,15 +61,32 @@ public class CheckOutPageController {
     @PreAuthorize("hasAuthority('PERM_CHECK_OUT')")
     public String search(
             @ModelAttribute("searchCriteria") ReservationSearchCriteria searchCriteria,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model) {
         searchCriteria.normalizeReservationNumber();
         searchCriteria.normalizeGuest();
         searchCriteria.normalizeRoom();
-        Page<CheckOutListItemResponse> reservationPage =
-                checkOutQueryService.search(searchCriteria, page == null ? 0 : page);
+        int requestedPage = PaginationSupport.parsePage(page);
+        Page<CheckOutListItemResponse> reservationPage = checkOutQueryService.search(searchCriteria, requestedPage);
+        String sortKey = TableSorts.CHECK_OUT.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir = TableSorts.CHECK_OUT.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        Map<String, String> filters = new LinkedHashMap<>();
+        if (searchCriteria.getReservationNumber() != null) {
+            filters.put("reservationNumber", searchCriteria.getReservationNumber());
+        }
+        if (searchCriteria.getGuest() != null) {
+            filters.put("guest", searchCriteria.getGuest());
+        }
+        if (searchCriteria.getRoom() != null) {
+            filters.put("room", searchCriteria.getRoom());
+        }
+        String redirect =
+                PaginationSupport.redirectWhenOutOfRange(reservationPage, requestedPage, "/check-out", filters, sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("reservationPage", reservationPage);
-        addPaginationAttributes(model, reservationPage);
+        PaginationSupport.populate(model, reservationPage, "/check-out", filters, sortKey, sortDir);
         return "check-out/search";
     }
 
@@ -107,24 +128,6 @@ public class CheckOutPageController {
             redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
             return "redirect:/check-out/" + id;
         }
-    }
-
-    /**
-     * Adds presentation-only page-window bounds for the Check-out search paginator.
-     *
-     * @param model MVC model used by the search view
-     * @param reservationPage current server-side page metadata
-     */
-    private void addPaginationAttributes(Model model, Page<?> reservationPage) {
-        int totalPages = reservationPage.getTotalPages();
-        if (totalPages == 0) {
-            return;
-        }
-        int lastPage = totalPages - 1;
-        int startPage = Math.max(0, Math.min(reservationPage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
     }
 
     /**

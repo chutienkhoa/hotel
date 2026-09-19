@@ -1,5 +1,7 @@
 package com.example.hotel.controller.booking;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
@@ -16,6 +18,8 @@ import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -85,14 +89,26 @@ public class CheckInPageController {
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
     public String existingSearch(
             @ModelAttribute("searchCriteria") ReservationSearchCriteria searchCriteria,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model) {
         searchCriteria.normalizeReservationNumber();
         searchCriteria.normalizeGuest();
         searchCriteria.normalizeOtaBookingReference();
-        Page<?> reservationPage = checkInService.searchConfirmedReservations(searchCriteria, page == null ? 0 : page);
+        int requestedPage = PaginationSupport.parsePage(page);
+        Page<?> reservationPage = checkInService.searchConfirmedReservations(searchCriteria, requestedPage);
+        String sortKey = TableSorts.CHECK_IN.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir = TableSorts.CHECK_IN.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        Map<String, String> filters = new LinkedHashMap<>();
+        putIfPresent(filters, "reservationNumber", searchCriteria.getReservationNumber());
+        putIfPresent(filters, "guest", searchCriteria.getGuest());
+        putIfPresent(filters, "otaBookingReference", searchCriteria.getOtaBookingReference());
+        String redirect = PaginationSupport.redirectWhenOutOfRange(
+                reservationPage, requestedPage, "/check-in/existing", filters, sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("reservationPage", reservationPage);
-        addPaginationAttributes(model, reservationPage);
+        PaginationSupport.populate(model, reservationPage, "/check-in/existing", filters, sortKey, sortDir);
         return "check-in/existing";
     }
 
@@ -314,22 +330,10 @@ public class CheckInPageController {
         return new WalkInRequest(null, null, null, null, List.of(new RoomRequest(null, null)));
     }
 
-    /**
-     * Adds presentation-only page-window bounds for the Existing Reservation search paginator.
-     *
-     * @param model MVC model used by the search view
-     * @param reservationPage current server-side page metadata
-     */
-    private void addPaginationAttributes(Model model, Page<?> reservationPage) {
-        int totalPages = reservationPage.getTotalPages();
-        if (totalPages == 0) {
-            return;
+    private void putIfPresent(Map<String, String> filters, String name, String value) {
+        if (value != null) {
+            filters.put(name, value);
         }
-        int lastPage = totalPages - 1;
-        int startPage = Math.max(0, Math.min(reservationPage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
     }
 
     /**

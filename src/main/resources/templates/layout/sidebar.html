@@ -65,6 +65,10 @@
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
             <span>Users</span>
         </a>
+        <a class="sidebar-nav-link nav-roles" th:href="@{/roles-permissions}" th:if="${canManageUser}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
+            <span>Roles &amp; Permissions</span>
+        </a>
     </div>
 
     <div class="sidebar-account" th:if="${currentUsername != null}">

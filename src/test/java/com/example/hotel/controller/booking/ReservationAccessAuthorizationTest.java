@@ -561,6 +561,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-users\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-roles\"")))
                 .andExpect(content().string(containsString(">Operations<")))
                 .andExpect(content().string(containsString(">Hotel<")))
                 .andExpect(content().string(containsString(">Finance<")))
@@ -580,6 +581,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
                 .andExpect(content().string(not(containsString("nav-users"))))
+                .andExpect(content().string(not(containsString("nav-roles"))))
                 .andReturn().getResponse().getContentAsString();
 
         assertFakeNavigationAbsent(body);
@@ -1197,4 +1199,72 @@ class ReservationAccessAuthorizationTest {
     @TestConfiguration
     @EnableMethodSecurity
     static class MethodSecurityTestConfiguration {}
+
+    /** Confirms a page past the last page redirects to the last valid page, preserving filters and sort. */
+    @Test
+    void shouldRedirectOutOfRangeReservationPageToLastPagePreservingFilterAndSort() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(999)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(999, 10), 25));
+
+        mockMvc.perform(get("/reservations").param("page", "999").param("guest", "Ann Lee")
+                        .param("status", "CONFIRMED").param("sort", "checkInDate").param("dir", "asc")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/reservations?guest=Ann+Lee&status=CONFIRMED&sort=checkInDate&dir=asc&page=2"));
+    }
+
+    /** Confirms a genuinely empty result set never redirects, even when a page number was requested. */
+    @Test
+    void shouldNotRedirectWhenReservationResultIsTrulyEmpty() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(5)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(5, 10), 0));
+
+        mockMvc.perform(get("/reservations").param("page", "5")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("No reservations match the current filters.")));
+    }
+
+    /** Confirms sort links keep filters and drop the page, page links keep filters and sort, and the form keeps the sort. */
+    @Test
+    void shouldPreserveFiltersAndSortAcrossSortAndPageLinks() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(1)))
+                .thenReturn(new PageImpl<>(
+                        List.of(new ReservationSummaryResponse(
+                                RESERVATION_ID, "R20260911-000001", "Nguyen Van A", "101", "CONFIRMED",
+                                com.example.hotel.entity.booking.BookingSource.DIRECT, null,
+                                LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.TEN, "VND")),
+                        PageRequest.of(1, 10), 25));
+
+        String body = mockMvc.perform(get("/reservations").param("page", "1").param("guest", "Ann")
+                        .param("status", "CONFIRMED").param("sort", "checkInDate").param("dir", "asc")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(
+                        "href=\"/reservations?guest=Ann&amp;status=CONFIRMED&amp;sort=reservationNumber&amp;dir=asc\"")))
+                .andExpect(content().string(containsString(
+                        "href=\"/reservations?guest=Ann&amp;status=CONFIRMED&amp;sort=checkInDate&amp;dir=desc\"")))
+                .andExpect(content().string(containsString(
+                        "href=\"/reservations?guest=Ann&amp;status=CONFIRMED&amp;sort=checkInDate&amp;dir=asc&amp;page=0\"")))
+                .andExpect(content().string(containsString("aria-sort=\"ascending\"")))
+                .andExpect(content().string(containsString("name=\"sort\" value=\"checkInDate\"")))
+                .andExpect(content().string(containsString("Showing 11\u201311 of 25")))
+                .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("sort=reservationNumber&amp;dir=asc&amp;page"));
+    }
+
+    /** Confirms an unknown sort key, unknown direction and non-numeric page fall back safely to defaults. */
+    @Test
+    void shouldFallBackSafelyForInvalidSortDirectionAndMalformedPage() throws Exception {
+        when(reservationQueryService.findPage(any(), eq(0)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        mockMvc.perform(get("/reservations").param("page", "abc").param("sort", "password_hash; DROP").param("dir", "sideways")
+                        .with(user("viewer").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("aria-sort=\"ascending\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("aria-sort=\"descending\""))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("name=\"sort\""))));
+    }
 }

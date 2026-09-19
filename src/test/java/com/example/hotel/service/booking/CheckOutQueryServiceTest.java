@@ -167,61 +167,63 @@ class CheckOutQueryServiceTest {
     }
 
     /**
-     * Confirms Room search matches the Stay's CURRENT open StayRoomAssignment room, not the
-     * original ReservationRoom — after a Room Change, searching the replacement room (305) must
-     * find the stay, and searching the released original room (201) must not.
+     * Confirms the Room filter is handed to the shared database query as a CURRENT-room predicate
+     * (with the original booked-room filter cleared), so it filters and counts before pagination
+     * and no Java post-page filtering remains. Room Change and multi-room semantics are verified
+     * against real PostgreSQL in {@code ReservationCurrentRoomSearchIntegrationTest}.
      */
     @Test
-    void shouldMatchCurrentRoomAfterRoomChangeNotOriginalRoom() {
+    void shouldDelegateCurrentRoomFilterToDatabaseBeforePagination() {
         ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
         StayQueryService stayQueryService = mock(StayQueryService.class);
         StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
         StayBalanceService stayBalanceService = mock(StayBalanceService.class);
-        when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(0)))
-                .thenReturn(new PageImpl<>(List.of(summary()), PageRequest.of(0, 10), 1));
+        List<String> seenAtQueryTime = new java.util.ArrayList<>();
+        when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(1))).thenAnswer(invocation -> {
+            ReservationSearchCriteria seen = invocation.getArgument(0);
+            seenAtQueryTime.add(seen.getCurrentRoom() + "|" + seen.getRoom() + "|" + seen.getStatus());
+            return new PageImpl<>(List.of(summary()), PageRequest.of(1, 10), 21);
+        });
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
         when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
         when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(List.of(currentRoom("305")));
         when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
-        CheckOutQueryService service =
-                service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService);
+        ReservationSearchCriteria criteria = new ReservationSearchCriteria();
+        criteria.setRoom("305");
 
-        ReservationSearchCriteria matchingCurrentRoom = new ReservationSearchCriteria();
-        matchingCurrentRoom.setRoom("305");
-        List<CheckOutListItemResponse> matched = service.search(matchingCurrentRoom, 0).getContent();
-        assertEquals(1, matched.size());
-        assertEquals("305", matched.get(0).currentRoomNumbers());
+        org.springframework.data.domain.Page<CheckOutListItemResponse> result =
+                service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService)
+                        .search(criteria, 1);
 
-        ReservationSearchCriteria searchingReleasedOriginalRoom = new ReservationSearchCriteria();
-        searchingReleasedOriginalRoom.setRoom("201");
-        List<CheckOutListItemResponse> notMatched = service.search(searchingReleasedOriginalRoom, 0).getContent();
-        assertTrue(notMatched.isEmpty(), "the released original room must no longer find the stay");
+        assertEquals(List.of("305|null|CHECKED_IN"), seenAtQueryTime);
+        assertEquals(21, result.getTotalElements(), "the total must come from the database count, not the page");
+        assertEquals(3, result.getTotalPages());
+        assertEquals(1, result.getContent().size());
+        assertEquals(1, result.getNumber());
     }
 
-    /** Confirms a multi-room stay's current-room search matches on any of its current rooms. */
+    /** Confirms only Check-out sort keys are honoured; other Reservation sort keys fall back to the default. */
     @Test
-    void shouldMatchMultiRoomStayByAnyCurrentRoom() {
+    void shouldRestrictSortToCheckOutKeys() {
         ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
-        StayQueryService stayQueryService = mock(StayQueryService.class);
-        StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
-        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
         when(reservationQueryService.findPage(any(), org.mockito.ArgumentMatchers.eq(0)))
-                .thenReturn(new PageImpl<>(List.of(summary()), PageRequest.of(0, 10), 1));
-        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
-        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
-        when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID))
-                .thenReturn(List.of(currentRoom("305"), currentRoom("202")));
-        when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
-        ReservationSearchCriteria criteria = new ReservationSearchCriteria();
-        criteria.setRoom("202");
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        CheckOutQueryService service = service(
+                reservationQueryService, mock(StayQueryService.class), mock(StayRoomAssignmentQueryService.class),
+                mock(StayBalanceService.class));
 
-        List<CheckOutListItemResponse> matched =
-                service(reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService)
-                        .search(criteria, 0)
-                        .getContent();
+        ReservationSearchCriteria allowed = new ReservationSearchCriteria();
+        allowed.setSort("checkOutDate");
+        allowed.setDir("desc");
+        service.search(allowed, 0);
+        assertEquals("checkOutDate", allowed.getSort());
 
-        assertEquals(1, matched.size());
-        assertEquals("305, 202", matched.get(0).currentRoomNumbers());
+        ReservationSearchCriteria foreign = new ReservationSearchCriteria();
+        foreign.setSort("status");
+        foreign.setDir("asc");
+        service.search(foreign, 0);
+        assertEquals(null, foreign.getSort());
+        assertEquals(null, foreign.getDir());
     }
 
     /** Confirms the caller's Room filter value is preserved after search, so a re-rendered form keeps it. */

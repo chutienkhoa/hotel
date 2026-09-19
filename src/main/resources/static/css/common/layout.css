@@ -242,7 +242,8 @@ p {
 .app-shell.page-expenses .nav-expenses,
 .app-shell.page-additional-revenues .nav-additional-revenues,
 .app-shell.page-staff .nav-staff,
-.app-shell.page-users .nav-users {
+.app-shell.page-users .nav-users,
+.app-shell.page-roles .nav-roles {
   background: var(--color-primary);
   color: #fff;
 }
@@ -256,7 +257,8 @@ p {
 .app-shell.page-expenses .nav-expenses .sidebar-nav-icon,
 .app-shell.page-additional-revenues .nav-additional-revenues .sidebar-nav-icon,
 .app-shell.page-staff .nav-staff .sidebar-nav-icon,
-.app-shell.page-users .nav-users .sidebar-nav-icon {
+.app-shell.page-users .nav-users .sidebar-nav-icon,
+.app-shell.page-roles .nav-roles .sidebar-nav-icon {
   color: #fff;
 }
 .app-shell.page-dashboard .nav-dashboard:hover,
@@ -269,7 +271,8 @@ p {
 .app-shell.page-expenses .nav-expenses:hover,
 .app-shell.page-additional-revenues .nav-additional-revenues:hover,
 .app-shell.page-staff .nav-staff:hover,
-.app-shell.page-users .nav-users:hover {
+.app-shell.page-users .nav-users:hover,
+.app-shell.page-roles .nav-roles:hover {
   background: var(--color-primary);
   color: #fff;
 }
@@ -713,6 +716,55 @@ th {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+table.roles-matrix {
+  min-width: 50rem;
+  table-layout: fixed;
+  width: 100%;
+}
+.roles-matrix .roles-matrix-permission {
+  width: 30%;
+}
+.roles-matrix .roles-matrix-role {
+  width: 10%;
+}
+.roles-matrix .roles-matrix-spacer {
+  width: auto;
+}
+.roles-matrix .roles-matrix-locked {
+  color: var(--color-muted);
+  display: inline-block;
+  font-size: 0.8125rem;
+  height: 1.25rem;
+  line-height: 1.25rem;
+  position: relative;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.roles-matrix .roles-matrix-locked > span {
+  left: 100%;
+  margin-left: var(--space-1);
+  position: absolute;
+  top: 0;
+}
+.roles-matrix th,
+.roles-matrix td {
+  padding: var(--space-2) var(--space-4);
+}
+.roles-matrix th.roles-matrix-cell,
+.roles-matrix td.roles-matrix-cell {
+  text-align: center;
+}
+.roles-matrix input[type="checkbox"] {
+  border: 0;
+  box-sizing: border-box;
+  display: inline-block;
+  height: 1.25rem;
+  margin: 0;
+  min-height: 0;
+  padding: 0;
+  vertical-align: middle;
+  width: 1.25rem;
+}
 tbody tr {
   transition: background-color 150ms ease;
 }
@@ -999,6 +1051,14 @@ legend {
 }
 .results-toolbar > p {
   margin-bottom: 0;
+}
+.table-sort-link {
+  color: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.table-sort-link:hover {
+  text-decoration: underline;
 }
 .pagination {
   display: inline-flex;

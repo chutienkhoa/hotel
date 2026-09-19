@@ -20,6 +20,7 @@
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
         <section class="form-card" aria-label="Filter additional revenue">
             <form method="get" th:action="@{/additional-revenues}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
                 <div class="form-grid">
                     <div class="form-field"><label for="fromDate">From Date</label>
                         <input class="js-date-picker" id="fromDate" name="fromDate" type="text"
@@ -40,19 +41,13 @@
             </form>
         </section>
         <section class="expense-results">
-            <div class="results-toolbar" th:if="${revenuePage != null}"><p><span th:text="${revenuePage.totalElements}">0</span> <span th:text="${revenuePage.totalElements == 1 ? 'result' : 'results'}">results</span></p>
-                <nav aria-label="Additional Revenue pages" class="pagination expense-pagination" th:if="${revenuePage.totalPages > 1}">
-                    <a class="pagination__segment" th:if="${!revenuePage.first}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (revenuePage.number - 1)}">Previous</a>
-                    <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}"><span aria-current="page" class="pagination__segment pagination__segment--current" th:if="${pageNumber == revenuePage.number}" th:text="${pageNumber + 1}">1</span><a class="pagination__segment" th:unless="${pageNumber == revenuePage.number}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + pageNumber}" th:text="${pageNumber + 1}">2</a></th:block>
-                    <span class="pagination__segment pagination__segment--ellipsis" th:if="${paginationEndPage + 1 < revenuePage.totalPages - 1}">...</span>
-                    <a class="pagination__segment" th:if="${paginationEndPage < revenuePage.totalPages - 1}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (revenuePage.totalPages - 1)}" th:text="${revenuePage.totalPages}">2</a>
-                    <a class="pagination__segment" th:if="${!revenuePage.last}" th:href="${'/additional-revenues?' + (#strings.isEmpty(filterQueryString) ? '' : filterQueryString + '&') + 'page=' + (revenuePage.number + 1)}">Next</a>
-                </nav>
+            <div class="results-toolbar" th:if="${revenuePage != null}"><p><span th:replace="~{layout/table :: resultSummary(${revenuePage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${revenuePage}, 'Additional Revenue pages', 'pagination expense-pagination')}"></nav>
             </div>
             <div th:if="${revenuePage != null and revenuePage.empty and errorMessage == null}"><p class="empty-state" th:if="${filtersActive}">No additional revenue matches the selected filters. <a th:href="@{/additional-revenues}">Clear filters</a></p><p class="empty-state" th:unless="${filtersActive}">No additional revenue has been recorded.</p></div>
         <div class="table-wrap" th:if="${revenuePage != null and not revenuePage.empty}">
             <table>
-                <thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th><th>Payment method</th><th>Status</th></tr></thead>
+                <thead><tr><th th:replace="~{layout/table :: sortHeader('Date', 'date')}"></th><th>Category</th><th>Description</th><th th:replace="~{layout/table :: sortHeader('Amount', 'amount')}"></th><th>Payment method</th><th th:replace="~{layout/table :: sortHeader('Status', 'status')}"></th></tr></thead>
                 <tbody>
                 <tr th:each="revenue : ${revenuePage.content}">
                     <td><span th:replace="~{layout/datetime :: date(${revenue.revenueDate})}">—</span></td>

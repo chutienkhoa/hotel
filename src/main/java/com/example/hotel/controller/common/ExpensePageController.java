@@ -1,5 +1,7 @@
 package com.example.hotel.controller.common;
 
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.common.request.ExpenseCreateRequest;
 import com.example.hotel.dto.common.request.ExpenseSearchCriteria;
 import com.example.hotel.dto.common.request.ExpenseUpdateRequest;
@@ -29,7 +31,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /** Serves CSRF-protected Thymeleaf pages for authorized Expense v1 operations. */
 @Controller
@@ -59,24 +60,33 @@ public class ExpensePageController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_EXPENSE')")
     public String list(
             @ModelAttribute("searchCriteria") ExpenseSearchCriteria searchCriteria,
-            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) String page,
             Model model,
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("categories", expenseService.findAllCategories());
         model.addAttribute("statuses", ExpenseStatus.values());
-        model.addAttribute("filterQueryString", filterQueryString(searchCriteria));
         model.addAttribute("filtersActive", searchCriteria.isAnyFilterActive());
+        String sortKey = TableSorts.EXPENSE.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir = TableSorts.EXPENSE.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
 
         if (searchCriteria.isDateRangeInvalid()) {
             model.addAttribute("errorMessage", "From Date must not be after To Date.");
-            model.addAttribute("expensePage", Page.empty());
+            Page<ExpenseResponse> emptyPage = Page.empty();
+            model.addAttribute("expensePage", emptyPage);
+            PaginationSupport.populate(model, emptyPage, "/expenses", filters(searchCriteria), sortKey, sortDir);
             return "expense/list";
         }
 
-        Page<ExpenseResponse> expensePage = expenseService.findPage(searchCriteria, page == null ? 0 : page);
+        int requestedPage = PaginationSupport.parsePage(page);
+        Page<ExpenseResponse> expensePage = expenseService.findPage(searchCriteria, requestedPage);
+        String redirect = PaginationSupport.redirectWhenOutOfRange(
+                expensePage, requestedPage, "/expenses", filters(searchCriteria), sortKey, sortDir);
+        if (redirect != null) {
+            return redirect;
+        }
         model.addAttribute("expensePage", expensePage);
-        addPaginationAttributes(model, expensePage);
+        PaginationSupport.populate(model, expensePage, "/expenses", filters(searchCriteria), sortKey, sortDir);
         return "expense/list";
     }
 
@@ -333,7 +343,7 @@ public class ExpensePageController {
      * @param searchCriteria optional Expense list filters
      * @return the encoded filter query string, or an empty string when no filter is populated
      */
-    private String filterQueryString(ExpenseSearchCriteria searchCriteria) {
+    private Map<String, String> filters(ExpenseSearchCriteria searchCriteria) {
         Map<String, String> filters = new LinkedHashMap<>();
         if (searchCriteria.getFromDate() != null) {
             filters.put("fromDate", searchCriteria.getFromDate().toString());
@@ -347,30 +357,7 @@ public class ExpensePageController {
         if (searchCriteria.getStatus() != null) {
             filters.put("status", searchCriteria.getStatus().name());
         }
-        if (filters.isEmpty()) {
-            return "";
-        }
-        UriComponentsBuilder builder = UriComponentsBuilder.newInstance();
-        filters.forEach(builder::queryParam);
-        return builder.build().encode().getQuery();
-    }
-
-    /**
-     * Adds the bounded pagination window used to render a compact Expense page-number list.
-     *
-     * @param model model used to render the page
-     * @param expensePage the loaded Expense page
-     */
-    private void addPaginationAttributes(Model model, Page<ExpenseResponse> expensePage) {
-        int totalPages = expensePage.getTotalPages();
-        if (totalPages == 0) {
-            return;
-        }
-        int lastPage = totalPages - 1;
-        int startPage = Math.max(0, Math.min(expensePage.getNumber() - 1, lastPage - 2));
-        int endPage = Math.min(lastPage, startPage + 2);
-        model.addAttribute("paginationStartPage", startPage);
-        model.addAttribute("paginationEndPage", endPage);
+        return filters;
     }
 
     /**
