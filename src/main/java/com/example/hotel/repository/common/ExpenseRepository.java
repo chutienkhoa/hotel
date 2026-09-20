@@ -54,4 +54,21 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID>, JpaSpec
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT e FROM Expense e WHERE e.id = :id")
     Optional<Expense> findByIdForUpdate(@Param("id") UUID id);
+
+    /**
+     * Sums Expenses with a status and an expense date inside a half-open date range.
+     *
+     * @param status the recognized status ({@code POSTED})
+     * @param startInclusive first date (inclusive)
+     * @param endExclusive end date (exclusive)
+     * @return the sum, or {@code null} when no row matches
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT SUM(e.amount) FROM Expense e "
+                    + "WHERE e.status = :status AND e.expenseDate >= :startInclusive AND e.expenseDate < :endExclusive")
+    java.math.BigDecimal sumAmountByStatusWithin(
+            @org.springframework.data.repository.query.Param("status")
+                    com.example.hotel.entity.common.ExpenseStatus status,
+            @org.springframework.data.repository.query.Param("startInclusive") java.time.LocalDate startInclusive,
+            @org.springframework.data.repository.query.Param("endExclusive") java.time.LocalDate endExclusive);
 }

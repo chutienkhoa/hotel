@@ -4093,4 +4093,37 @@ hiển thị đã dịch. Task 29 thiết lập result model đầu tiên. Task 
 
 Hai gap này sẽ được audit riêng trước Task 30; Task 28 không thiết kế hay tạo thay đổi schema.
 
+## 61.6 Monthly Financial Report — quyết định Task 29
+
+`GET /reports/monthly-financial?month=yyyy-MM` (`PERM_VIEW_REPORT`); không có `month` thì dùng
+`YearMonth.now(clock)` với `Clock` của khách sạn; `month` không hợp lệ hiển thị thông báo thân thiện, không
+lỗi 500. Kỳ báo cáo `[month.atDay(1), month.plusMonths(1).atDay(1))` dùng `LocalDate` (không chuyển đổi Instant).
+Thẻ Financial Report ở trang Overview liên kết tới báo cáo này; Occupancy Report vẫn "Sắp có".
+
+- **Trạng thái đủ điều kiện cho Room Revenue**: chỉ Reservation `CHECKED_IN` và `CHECKED_OUT`. `DRAFT`,
+  `CONFIRMED`, `CANCELLED`, `NO_SHOW` bị loại. Doanh thu của `CONFIRMED` là doanh thu tương lai/on-the-books,
+  KHÔNG phải doanh thu tài chính đã ghi nhận của PMS; Booked Revenue không thuộc Task 29.
+- **Room Revenue**: với mỗi `ReservationRoom` có khoảng đặt giao với tháng (`checkInDate < nextMonthStart` và
+  `checkOutDate > monthStart`) và Reservation ở trạng thái đủ điều kiện, `overlapStart = max(checkInDate,
+  monthStart)`, `overlapEnd = min(checkOutDate, nextMonthStart)`, doanh thu tháng = `nightlyRate ×
+  DAYS(overlapStart, overlapEnd)`. Không dùng `Charge.chargedAt` hay `Payment`.
+- **Toàn vẹn snapshot**: `nightlyRate × số đêm đặt` phải bằng `totalAmount`. Nếu lệch, báo cáo thất bại một cách
+  xác định (`ReportDataIntegrityException`, người dùng thấy thông báo dịch được và HTTP 500; chi tiết chỉ ghi
+  log) — KHÔNG sửa dữ liệu, KHÔNG phân bổ tỉ lệ `totalAmount`, KHÔNG làm tròn tự đặt, KHÔNG bỏ qua dòng.
+- **Room Revenue không phải VND**: không quy đổi, không dùng exchange rate của Payment; loại khỏi
+  `roomRevenue`, `totalRevenue`, `netProfit`; kết quả có `nonVndWarning` gồm số Reservation phân biệt, số dòng
+  `ReservationRoom`, và danh sách mã tiền tệ đã sắp xếp/phân biệt (`null` nếu không có).
+- **Additional Revenue**: `SUM(amount)` với `status = RECORDED` và `revenueDate` trong kỳ. **Expense**:
+  `SUM(amount)` với `status = POSTED` và `expenseDate` trong kỳ. Không có dòng → 0.
+- **Công thức**: `totalRevenue = roomRevenue + additionalRevenue`; `netProfit = totalRevenue − expense`;
+  `profitMargin = netProfit / totalRevenue × 100` khi `totalRevenue > 0`, làm tròn 2 chữ số thập phân
+  `HALF_UP` (chỉ cho tỷ lệ phần trăm; số tiền không bị làm tròn); `totalRevenue = 0` → `null` (hiển thị N/A).
+- **Giới hạn V1 — charge không phải ROOM**: các `Charge` không phải ROOM (breakfast, laundry, minibar, service,
+  extra bed, other) KHÔNG nằm trong tổng của Task 29. Đây là giới hạn báo cáo đã biết, không phải khẳng định
+  các sự kiện đó không phải doanh thu: staff có thể ghi bán hàng phụ qua Charge trong Folio và độc lập qua
+  `AdditionalRevenue`, mô hình hiện tại không có định danh sự kiện kinh tế chung hay khử trùng tự động, nên gộp
+  cả hai có thể đếm trùng doanh thu do nhập tay trùng. Task 29 không thay đổi schema/liên kết.
+- **Kết quả**: `MonthlyFinancialReport` / `NonVndRoomRevenueWarning` là record bất biến, không chứa chuỗi hiển thị
+  hay locale; PDF/Excel (Task 31–32) dùng lại đúng kết quả này. Văn bản UI dùng `report.financial.*`.
+
 **End of Specification v1.0**

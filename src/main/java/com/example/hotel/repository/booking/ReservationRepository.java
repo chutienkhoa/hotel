@@ -170,4 +170,26 @@ public interface ReservationRepository
             @Param("in") LocalDate in,
             @Param("out") LocalDate out,
             @Param("statuses") Collection<ReservationStatus> statuses);
+
+    /**
+     * Finds the ReservationRoom pricing snapshots whose booked interval overlaps a month and whose
+     * Reservation is in one of the given statuses, as a narrow projection (no entity graph).
+     *
+     * @param monthStart inclusive first day of the month
+     * @param nextMonthStart exclusive first day of the next month
+     * @param statuses eligible Reservation statuses
+     * @return overlapping snapshot rows
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.booking.ReservationRoomRevenueRow("
+                    + "rr.id, rr.reservation.id, rr.checkInDate, rr.checkOutDate, rr.nightlyRate, "
+                    + "rr.totalAmount, rr.reservation.currency) "
+                    + "FROM ReservationRoom rr "
+                    + "WHERE rr.checkInDate < :nextMonthStart AND rr.checkOutDate > :monthStart "
+                    + "AND rr.reservation.status IN :statuses "
+                    + "ORDER BY rr.checkInDate, rr.id")
+    List<ReservationRoomRevenueRow> findRoomRevenueRows(
+            @Param("monthStart") LocalDate monthStart,
+            @Param("nextMonthStart") LocalDate nextMonthStart,
+            @Param("statuses") Collection<ReservationStatus> statuses);
 }

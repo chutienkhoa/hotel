@@ -61,18 +61,21 @@ class ReportPageControllerTest {
         mockMvc.perform(get("/reports")).andExpect(status().is4xxClientError());
     }
 
-    /** Confirms both report cards exist, are informational, and link to no unimplemented report route. */
+    /** Confirms the Financial card now links to its report and the Occupancy card stays informational. */
     @Test
-    void shouldShowInformationalCardsWithoutDeadLinks() throws Exception {
+    void shouldLinkFinancialCardAndKeepOccupancyComingSoon() throws Exception {
         String body = mockMvc.perform(get("/reports").cookie(new Cookie("pms-lang", "en")).with(reportViewer()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"report-financial\"")))
                 .andExpect(content().string(containsString("id=\"report-occupancy\"")))
+                .andExpect(content().string(containsString("href=\"/reports/monthly-financial\"")))
                 .andReturn().getResponse().getContentAsString();
 
-        org.junit.jupiter.api.Assertions.assertFalse(body.contains("/reports/"), "no links to child report routes yet");
-        org.junit.jupiter.api.Assertions.assertFalse(body.contains("monthly-financial"));
+        String occupancyCard = body.substring(body.indexOf("id=\"report-occupancy\""));
+        org.junit.jupiter.api.Assertions.assertTrue(occupancyCard.contains("Coming soon"));
+        org.junit.jupiter.api.Assertions.assertFalse(occupancyCard.contains("<a "), "occupancy card has no link");
         org.junit.jupiter.api.Assertions.assertFalse(body.contains("monthly-occupancy"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, body.split("monthly-financial", -1).length - 1);
     }
 
     /** Confirms the English rendering. */
