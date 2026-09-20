@@ -3,8 +3,9 @@ package com.example.hotel.config;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -16,7 +17,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Verifies the dev seeder does not duplicate an already seeded marked demo dataset. */
+/**
+ * Verifies the dev seeder does not duplicate an already seeded marked demo dataset: on an up-to-date demo
+ * database it only reads (including the occupancy/inventory consistency slice) and issues no write.
+ */
 @ExtendWith(MockitoExtension.class)
 class DemoDataSeederTest {
 
@@ -48,6 +52,8 @@ class DemoDataSeederTest {
                 eq("SELECT COUNT(*) FROM staff WHERE id = ?"), eq(Integer.class), any());
         verify(jdbcTemplate).queryForObject(
                 eq("SELECT COUNT(*) FROM daily_work_record WHERE id = ?"), eq(Integer.class), any());
-        verifyNoMoreInteractions(jdbcTemplate);
+        verify(jdbcTemplate, atLeastOnce()).queryForList(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
+        verify(jdbcTemplate, never()).update(anyString());
     }
 }

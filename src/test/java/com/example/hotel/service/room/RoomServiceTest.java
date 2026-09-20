@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,6 +22,9 @@ import com.example.hotel.mapper.room.RoomMapper;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.repository.room.RoomTypeRepository;
 import com.example.hotel.security.CurrentUser;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -39,6 +44,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** Verifies Room Management owns technical IDs, initial state, mutable fields, and audit users. */
 class RoomServiceTest {
+
+    private static final Instant NOW = Instant.parse("2026-09-10T08:00:00Z");
+    private static final Clock CLOCK = Clock.fixed(NOW, ZoneId.of("Asia/Ho_Chi_Minh"));
 
     /** Clears the authentication established by an individual Room Management test. */
     @AfterEach
@@ -80,7 +88,7 @@ class RoomServiceTest {
         UUID updaterId = UUID.randomUUID();
         Room room = Room.create(roomId, "101", originalRoomType, "1");
         room.audit(creatorId);
-        when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
+        when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
         when(roomTypeRepository.findById(updatedRoomType.getId())).thenReturn(Optional.of(updatedRoomType));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
         setCurrentUser(updaterId);
@@ -96,6 +104,86 @@ class RoomServiceTest {
         assertTrue(updated.active());
         assertEquals(creatorId, room.getCreatedBy());
         assertEquals(updaterId, room.getUpdatedBy());
+    }
+
+    /** Confirms creation opens the initial inventory period with the hotel clock Instant and the creator. */
+    @Test
+    void shouldInitializeInventoryHistoryWhenCreatingRoom() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        RoomInventoryHistoryService history = mock(RoomInventoryHistoryService.class);
+        RoomType roomType = roomType();
+        UUID creatorId = UUID.randomUUID();
+        setCurrentUser(creatorId);
+        when(roomTypeRepository.findById(roomType.getId())).thenReturn(Optional.of(roomType));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        roomService(roomRepository, roomTypeRepository, history).create(createRequest(roomType.getId()));
+
+        ArgumentCaptor<Room> saved = ArgumentCaptor.forClass(Room.class);
+        verify(history).initialize(saved.capture(), org.mockito.ArgumentMatchers.eq(NOW),
+                org.mockito.ArgumentMatchers.eq(creatorId));
+        assertEquals(roomType, saved.getValue().getRoomType());
+    }
+
+    /** Confirms a Room profile update takes the Room write lock and never reads the Room unlocked. */
+    @Test
+    void shouldLockRoomBeforeUpdatingProfileAndSyncHistory() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        RoomInventoryHistoryService history = mock(RoomInventoryHistoryService.class);
+        RoomType roomType = roomType();
+        UUID roomId = UUID.randomUUID();
+        UUID updaterId = UUID.randomUUID();
+        Room room = Room.create(roomId, "101", roomType, "1");
+        when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
+        when(roomTypeRepository.findById(roomType.getId())).thenReturn(Optional.of(roomType));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        setCurrentUser(updaterId);
+
+        roomService(roomRepository, roomTypeRepository, history)
+                .update(roomId, new RoomUpdateRequest("102", roomType.getId(), "2"));
+
+        verify(roomRepository).lockAllByIdIn(List.of(roomId));
+        verify(roomRepository, never()).findById(any());
+        verify(history).sync(room, NOW, updaterId);
+    }
+
+    /** Confirms a status transition synchronises inventory history with the hotel clock Instant. */
+    @Test
+    void shouldSyncInventoryHistoryAfterStatusTransition() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        RoomInventoryHistoryService history = mock(RoomInventoryHistoryService.class);
+        UUID roomId = UUID.randomUUID();
+        UUID updaterId = UUID.randomUUID();
+        Room room = roomWithStatus(roomId, roomType(), RoomStatus.AVAILABLE);
+        when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        setCurrentUser(updaterId);
+
+        roomService(roomRepository, roomTypeRepository, history).markOutOfOrder(roomId);
+
+        assertEquals(RoomStatus.OUT_OF_ORDER, room.getStatus());
+        verify(history).sync(room, NOW, updaterId);
+    }
+
+    /** Confirms a history failure propagates, so the surrounding transaction rolls the Room change back. */
+    @Test
+    void shouldPropagateInventoryHistoryFailureFromTransition() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        RoomInventoryHistoryService history = mock(RoomInventoryHistoryService.class);
+        UUID roomId = UUID.randomUUID();
+        Room room = roomWithStatus(roomId, roomType(), RoomStatus.AVAILABLE);
+        when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new IllegalStateException("no open period")).when(history).sync(any(), any(), any());
+        setCurrentUser(UUID.randomUUID());
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> roomService(roomRepository, roomTypeRepository, history).markOutOfOrder(roomId));
     }
 
     /** Confirms client write contracts do not expose server-controlled Room fields. */
@@ -339,7 +427,22 @@ class RoomServiceTest {
      * @return the configured service
      */
     private RoomService roomService(RoomRepository roomRepository, RoomTypeRepository roomTypeRepository) {
-        return new RoomService(roomRepository, roomTypeRepository, new RoomMapper());
+        return roomService(roomRepository, roomTypeRepository, mock(RoomInventoryHistoryService.class));
+    }
+
+    /**
+     * Creates a Room Management service with an explicit inventory-history collaborator and the fixed hotel clock.
+     *
+     * @param roomRepository repository used to manage rooms
+     * @param roomTypeRepository repository used to resolve RoomTypes
+     * @param inventoryHistory inventory-history collaborator, usually a mock
+     * @return the configured service
+     */
+    private RoomService roomService(
+            RoomRepository roomRepository,
+            RoomTypeRepository roomTypeRepository,
+            RoomInventoryHistoryService inventoryHistory) {
+        return new RoomService(roomRepository, roomTypeRepository, new RoomMapper(), inventoryHistory, CLOCK);
     }
 
     /**

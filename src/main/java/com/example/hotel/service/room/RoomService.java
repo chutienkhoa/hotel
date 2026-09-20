@@ -10,6 +10,8 @@ import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.repository.room.RoomTypeRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -27,6 +29,8 @@ public class RoomService {
     private final RoomRepository roomRepository;
     private final RoomTypeRepository roomTypeRepository;
     private final RoomMapper roomMapper;
+    private final RoomInventoryHistoryService inventoryHistory;
+    private final Clock clock;
 
     /**
      * Creates the service with the persistence and mapping collaborators used by Room Management.
@@ -34,12 +38,20 @@ public class RoomService {
      * @param roomRepository repository used to manage rooms
      * @param roomTypeRepository repository used to resolve required RoomTypes
      * @param roomMapper mapper used to create client-safe responses
+     * @param inventoryHistory service keeping RoomType and sellability history consistent with the Room
+     * @param clock authoritative hotel business clock used for inventory history Instants
      */
     public RoomService(
-            RoomRepository roomRepository, RoomTypeRepository roomTypeRepository, RoomMapper roomMapper) {
+            RoomRepository roomRepository,
+            RoomTypeRepository roomTypeRepository,
+            RoomMapper roomMapper,
+            RoomInventoryHistoryService inventoryHistory,
+            Clock clock) {
         this.roomRepository = roomRepository;
         this.roomTypeRepository = roomTypeRepository;
         this.roomMapper = roomMapper;
+        this.inventoryHistory = inventoryHistory;
+        this.clock = clock;
     }
 
     /**
@@ -77,12 +89,16 @@ public class RoomService {
                 request.roomNumber(),
                 findRoomType(request.roomTypeId()),
                 request.floor());
-        room.audit(currentUser().id());
-        return roomMapper.toResponse(roomRepository.save(room));
+        UUID userId = currentUser().id();
+        room.audit(userId);
+        Room saved = roomRepository.save(room);
+        inventoryHistory.initialize(saved, Instant.now(clock), userId);
+        return roomMapper.toResponse(saved);
     }
 
     /**
-     * Updates only the approved mutable profile fields of an existing room.
+     * Updates only the approved mutable profile fields of an existing room under the Room write lock.
+     * A RoomType change also closes the open inventory period and opens a new one in the same transaction.
      *
      * @param id room identifier
      * @param request client-supplied mutable room-profile data
@@ -91,10 +107,13 @@ public class RoomService {
      */
     @Transactional
     public RoomResponse update(UUID id, RoomUpdateRequest request) {
-        Room room = findRoom(id);
+        Room room = lockRoom(id);
         room.updateProfile(request.roomNumber(), findRoomType(request.roomTypeId()), request.floor());
-        room.audit(currentUser().id());
-        return roomMapper.toResponse(roomRepository.save(room));
+        UUID userId = currentUser().id();
+        room.audit(userId);
+        Room saved = roomRepository.save(room);
+        inventoryHistory.sync(saved, Instant.now(clock), userId);
+        return roomMapper.toResponse(saved);
     }
 
     /**
@@ -164,7 +183,8 @@ public class RoomService {
     }
 
     /**
-     * Applies one explicit Room operation while holding the same pessimistic Room lock used by check-in.
+     * Applies one explicit Room operation while holding the same pessimistic Room lock used by check-in,
+     * then aligns inventory history so only sellability-changing operations create a period.
      *
      * @param id room identifier
      * @param operation exactly one approved Room domain operation
@@ -178,8 +198,11 @@ public class RoomService {
         } catch (IllegalStateException exception) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage(), exception);
         }
-        room.audit(currentUser().id());
-        return roomMapper.toResponse(roomRepository.save(room));
+        UUID userId = currentUser().id();
+        room.audit(userId);
+        Room saved = roomRepository.save(room);
+        inventoryHistory.sync(saved, Instant.now(clock), userId);
+        return roomMapper.toResponse(saved);
     }
 
     /**

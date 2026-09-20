@@ -4091,7 +4091,8 @@ hiển thị đã dịch. Task 29 thiết lập result model đầu tiên. Task 
 - **Gap B — Historical RoomType snapshot**: báo cáo lịch sử không được thay đổi khi một Room sau này bị sửa sang
   RoomType khác; `ReservationRoom`/`StayRoomAssignment` hiện không lưu snapshot room type.
 
-Hai gap này sẽ được audit riêng trước Task 30; Task 28 không thiết kế hay tạo thay đổi schema.
+Hai gap này sẽ được audit riêng trước Task 30; Task 28 không thiết kế hay tạo thay đổi schema. Task 30A giải quyết
+chúng bằng `RoomInventoryPeriod` (mục 61.7).
 
 ## 61.6 Monthly Financial Report — quyết định Task 29
 
@@ -4125,5 +4126,52 @@ Thẻ Financial Report ở trang Overview liên kết tới báo cáo này; Occu
   cả hai có thể đếm trùng doanh thu do nhập tay trùng. Task 29 không thay đổi schema/liên kết.
 - **Kết quả**: `MonthlyFinancialReport` / `NonVndRoomRevenueWarning` là record bất biến, không chứa chuỗi hiển thị
   hay locale; PDF/Excel (Task 31–32) dùng lại đúng kết quả này. Văn bản UI dùng `report.financial.*`.
+
+## 61.7 Reporting Inventory Foundation — quyết định Task 30A
+
+Để giải quyết Gap A và Gap B (mục 61.5), hệ thống lưu lịch sử tồn kho hiệu lực theo thời gian của từng Room
+trong `room_inventory_period` (entity `RoomInventoryPeriod`). Task 30A CHỈ xây nền tảng dữ liệu; Monthly
+Occupancy Report thuộc Task 30B.
+
+- **Nội dung một period**: `room`, `roomType` (RoomType hiệu lực), `unavailableReason` (null = sellable;
+  `MAINTENANCE` hoặc `OUT_OF_ORDER` = không sellable), `origin` (`BOOTSTRAP` | `RECORDED`), `effectiveFrom`,
+  `effectiveTo` (null = period đang mở). Không có cột `sellable`; sellable suy ra từ `unavailableReason`.
+- **Sellable inventory**: `AVAILABLE`, `OCCUPIED`, `DIRTY`, `CLEANING` thuộc tồn kho bán được; `MAINTENANCE` và
+  `OUT_OF_ORDER` bị loại khỏi Sellable Room Nights.
+- **Lưu Instant thật**: `effectiveFrom/effectiveTo` là `TIMESTAMPTZ`, ghi đúng thời điểm chuyển đổi theo `Clock`
+  của khách sạn; KHÔNG cắt về `LocalDate` khi lưu.
+- **Quy tắc quy đêm (end-of-date)**: một period phủ đêm `d` khi
+  `localDate(effectiveFrom) <= d < localDate(effectiveTo)` theo `Asia/Ho_Chi_Minh`; period đang mở dùng điểm cuối
+  (exclusive) do báo cáo cung cấp. Trạng thái/loại phòng CUỐI CÙNG của một ngày lịch sở hữu đêm đó (OUT_OF_ORDER
+  từ 10/09 15:00 → đêm 10/09 không sellable; trở lại AVAILABLE 15/09 10:00 → đêm 15/09 sellable; đổi
+  DOUBLE→FAMILY 10/10 15:00 → đêm 10/10 thuộc FAMILY; Room tạo 16/09 15:00 → đêm 16/09 sellable). Quy tắc này
+  cùng công thức với `StayRoomAssignment`, nên đêm occupied luôn nằm trong đêm sellable.
+- **Chia period**: một period là khoảng tối đa mà `roomType` và `unavailableReason` không đổi. Chỉ chia khi một
+  trong hai giá trị đổi: tạo Room (mở period đầu, `RECORDED`), chuyển `AVAILABLE↔MAINTENANCE`,
+  `AVAILABLE↔OUT_OF_ORDER`, và đổi RoomType (giữ nguyên `unavailableReason`). Chuyển trạng thái trong tồn kho
+  sellable (`OCCUPIED`, `DIRTY`, `CLEANING`, room change release…), sửa số phòng/tầng KHÔNG tạo period. Đóng
+  period cũ và mở period mới dùng đúng MỘT Instant, cùng transaction với thay đổi Room; lỗi lịch sử làm rollback
+  thay đổi Room và ngược lại. Update Room lấy khóa ghi Room như các chuyển trạng thái.
+- **Bất biến**: đúng một period mở cho mỗi Room; `effectiveTo` null hoặc `> effectiveFrom`; không trùng
+  `(room_id, effective_from)`; `unavailableReason`/`origin` thuộc tập cho phép. Period đã đóng không bao giờ bị
+  sửa qua ứng dụng; thay đổi duy nhất là đóng period đang mở. Không dùng exclusion constraint/`btree_gist`;
+  chồng lấn/liên tục được kiểm tra thêm ở service và kiểm tra toàn vẹn của báo cáo (Task 30B). Room thiếu
+  period mở khiến thao tác thất bại rõ ràng, không tự sửa.
+- **Bootstrap khi cài đặt**: migration tạo một period mở `BOOTSTRAP` cho mỗi Room hiện có, dùng RoomType hiện tại
+  và `unavailableReason` suy từ trạng thái hiện tại (`MAINTENANCE`/`OUT_OF_ORDER`, còn lại null), với
+  `effectiveFrom` = thời điểm cài đặt (không dùng `Room.createdAt`, không lùi ngày). Bootstrap chỉ khẳng định
+  trạng thái tồn kho TẠI thời điểm cài đặt, không nói gì về quá khứ. Cột audit user để null vì là bản ghi hệ thống.
+  Database mới (không có Room khi migrate) không có dòng `BOOTSTRAP`; Room tạo sau đó là `RECORDED`.
+- **Ranh giới lịch sử (full calendar month)**: `historyStart` = ngày (giờ khách sạn) của `effectiveFrom` `BOOTSTRAP`
+  sớm nhất. `firstFullySupportedMonth` = tháng của `historyStart` nếu đó là ngày 1, ngược lại là tháng kế tiếp
+  (20/09 → tháng 10; 01/09 → tháng 9). Không có dòng `BOOTSTRAP` thì không tạo ranh giới giả; Task 30B xác định
+  hỗ trợ từ lịch sử `RECORDED` thực tế.
+- **`Room.active`** chưa nằm trong mô hình (chưa có nghiệp vụ deactivate/reactivate); sẽ cần lịch sử riêng khi có.
+- **Dữ liệu demo (chỉ profile `dev`)**: `DemoDataSeeder` bổ sung `StayRoomAssignment` cho Stay demo CHECKED_IN
+  (mở) / CHECKED_OUT (đóng tại `actualCheckOutAt`, lineage = `original_reservation_room_id`) và lịch sử tồn kho
+  `RECORDED` tổng hợp phủ cửa sổ demo, tách biệt với `BOOTSTRAP` production. Có bước backfill idempotent cho DB
+  demo đã tồn tại, chỉ chạm Room/Stay mang dấu demo. Không dùng dữ liệu demo làm bằng chứng lịch sử thật.
+- **Không backfill production trước V22**: migration KHÔNG suy diễn hay tạo `StayRoomAssignment` lịch sử. Nếu
+  dữ liệu production cũ cần dựng lại, đó là một thao tác riêng, được duyệt riêng.
 
 **End of Specification v1.0**

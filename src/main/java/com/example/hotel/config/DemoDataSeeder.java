@@ -31,6 +31,7 @@ public class DemoDataSeeder {
     private static final String PREFIX = "DEMO-";
     private static final long RANDOM_SEED = 20260913L;
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final String DEMO_RESERVATION_NOTES = "Synthetic development demonstration reservation";
     private static final int[] MONTHLY_RESERVATION_COUNTS = {12, 12, 11, 5, 5, 5, 5, 5, 5, 12, 12, 11};
     private static final List<String> ROOM_TYPE_CODES =
             List.of("SINGLE", "DOUBLE", "TWIN", "TRIPLE", "FAMILY");
@@ -98,6 +99,8 @@ public class DemoDataSeeder {
             List<UUID> existingStaffIds =
                     insertStaff(jdbcTemplate, existingAuditUserId, existingToday, timestamp(dashboardClock.instant()));
             insertDailyWorkRecords(jdbcTemplate, existingStaffIds, existingAuditUserId, existingToday);
+            seedOccupancyAndInventoryHistory(
+                    jdbcTemplate, existingAuditUserId, existingToday, timestamp(dashboardClock.instant()));
             return;
         }
 
@@ -116,6 +119,136 @@ public class DemoDataSeeder {
         insertAdditionalRevenues(jdbcTemplate, auditUserId, today);
         List<UUID> staffIds = insertStaff(jdbcTemplate, auditUserId, today, nowTimestamp);
         insertDailyWorkRecords(jdbcTemplate, staffIds, auditUserId, today);
+        seedOccupancyAndInventoryHistory(jdbcTemplate, auditUserId, today, nowTimestamp);
+    }
+
+    /**
+     * Idempotently gives the demo data the actual-occupancy and inventory history that seeded stays and
+     * rooms would have if they had gone through the production flows. This is DEV-ONLY synthetic data:
+     * the seeder is only registered under the {@code dev} profile and every statement here is limited
+     * to demo-marked reservations and rooms, so real rows are never touched.
+     *
+     * @param jdbcTemplate JDBC access used to insert demo rows
+     * @param auditUserId demo marker user recorded as creator/updater
+     * @param today current hotel business date
+     * @param now timestamp recorded for the audit columns
+     */
+    private void seedOccupancyAndInventoryHistory(
+            JdbcTemplate jdbcTemplate, UUID auditUserId, LocalDate today, Timestamp now) {
+        seedStayRoomAssignments(jdbcTemplate, auditUserId);
+        seedRoomInventoryHistory(jdbcTemplate, auditUserId, today, now);
+    }
+
+    /**
+     * Inserts the StayRoomAssignment that {@code ReservationService.checkIn()} (and check-out) would have
+     * written for every demo CHECKED_IN or CHECKED_OUT Stay lacking one: an open row for CHECKED_IN, a row
+     * closed at the Stay's actual check-out for CHECKED_OUT. The lineage anchor is the exact
+     * ReservationRoom. A CHECKED_IN row is skipped if its Room already has an open assignment, and a
+     * CHECKED_OUT row is skipped if its interval would be empty, so constraints are never weakened.
+     */
+    private void seedStayRoomAssignments(JdbcTemplate jdbcTemplate, UUID auditUserId) {
+        List<Map<String, Object>> stays = jdbcTemplate.queryForList(
+                "SELECT s.id AS stay_id, s.status AS status, s.actual_check_in_at AS checked_in_at, "
+                        + "s.actual_check_out_at AS checked_out_at, s.created_at AS created_at, "
+                        + "s.updated_at AS updated_at, rr.id AS reservation_room_id, rr.room_id AS room_id "
+                        + "FROM stay s "
+                        + "INNER JOIN reservation r ON r.id = s.reservation_id "
+                        + "INNER JOIN reservation_room rr ON rr.reservation_id = r.id "
+                        + "WHERE r.notes = ? AND s.status IN ('CHECKED_IN', 'CHECKED_OUT') "
+                        + "AND NOT EXISTS (SELECT 1 FROM stay_room_assignment a "
+                        + "WHERE a.stay_id = s.id AND a.original_reservation_room_id = rr.id) "
+                        + "ORDER BY s.actual_check_in_at, rr.id",
+                DEMO_RESERVATION_NOTES);
+        for (Map<String, Object> stay : stays) {
+            UUID roomId = (UUID) stay.get("room_id");
+            Timestamp checkedInAt = (Timestamp) stay.get("checked_in_at");
+            Timestamp checkedOutAt = null;
+            if ("CHECKED_OUT".equals(stay.get("status"))) {
+                checkedOutAt = (Timestamp) stay.get("checked_out_at");
+                if (checkedOutAt == null || !checkedOutAt.after(checkedInAt)) {
+                    continue;
+                }
+            } else {
+                Integer openOnRoom = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM stay_room_assignment WHERE room_id = ? AND assigned_to IS NULL",
+                        Integer.class, roomId);
+                if (openOnRoom != null && openOnRoom > 0) {
+                    continue;
+                }
+            }
+            UUID reservationRoomId = (UUID) stay.get("reservation_room_id");
+            jdbcTemplate.update(
+                    "INSERT INTO stay_room_assignment (id, stay_id, room_id, original_reservation_room_id, "
+                            + "assigned_from, assigned_to, reason, notes, created_at, created_by, updated_at, "
+                            + "updated_by) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)",
+                    deterministicId(PREFIX + "ASSIGNMENT-" + reservationRoomId), stay.get("stay_id"), roomId,
+                    reservationRoomId, checkedInAt, checkedOutAt, stay.get("created_at"), auditUserId,
+                    stay.get("updated_at"), auditUserId);
+        }
+    }
+
+    /**
+     * Gives every demo Room synthetic, internally consistent RECORDED inventory history covering the demo
+     * window (from January 1st of the current year). A Room currently MAINTENANCE or OUT_OF_ORDER becomes
+     * non-sellable only after its latest seeded occupied night, so no occupied night falls in a
+     * non-sellable period. A Room that only carries the untouched migration BOOTSTRAP baseline has that
+     * baseline replaced; a Room with any other history (for example real transitions made in a dev
+     * session) is left alone. Idempotent per Room.
+     */
+    private void seedRoomInventoryHistory(
+            JdbcTemplate jdbcTemplate, UUID auditUserId, LocalDate today, Timestamp now) {
+        Instant historyStart = LocalDate.of(today.getYear(), 1, 1).atStartOfDay(BUSINESS_ZONE).toInstant();
+        List<Map<String, Object>> rooms = jdbcTemplate.queryForList(
+                "SELECT id, room_type_id, status FROM room WHERE room_number LIKE ? ORDER BY room_number",
+                PREFIX + "%");
+        for (Map<String, Object> room : rooms) {
+            UUID roomId = (UUID) room.get("id");
+            UUID roomTypeId = (UUID) room.get("room_type_id");
+            List<Map<String, Object>> existing = jdbcTemplate.queryForList(
+                    "SELECT id, origin, effective_to FROM room_inventory_period WHERE room_id = ?", roomId);
+            if (existing.size() > 1) {
+                continue;
+            }
+            if (existing.size() == 1) {
+                Map<String, Object> only = existing.get(0);
+                boolean untouchedBaseline = "BOOTSTRAP".equals(only.get("origin")) && only.get("effective_to") == null;
+                if (!untouchedBaseline) {
+                    continue;
+                }
+                jdbcTemplate.update("DELETE FROM room_inventory_period WHERE id = ? AND origin = 'BOOTSTRAP'",
+                        only.get("id"));
+            }
+            String status = String.valueOf(room.get("status"));
+            String reason = "MAINTENANCE".equals(status) || "OUT_OF_ORDER".equals(status) ? status : null;
+            if (reason == null) {
+                insertInventoryPeriod(jdbcTemplate, roomId, roomTypeId, 1, null, historyStart, null, auditUserId, now);
+                continue;
+            }
+            Instant unavailableFrom = today.minusDays(3).atTime(12, 0).atZone(BUSINESS_ZONE).toInstant();
+            Timestamp latestEnd = jdbcTemplate.queryForObject(
+                    "SELECT MAX(assigned_to) FROM stay_room_assignment WHERE room_id = ?", Timestamp.class, roomId);
+            if (latestEnd != null && latestEnd.toInstant().isAfter(unavailableFrom)) {
+                unavailableFrom = latestEnd.toInstant();
+            }
+            if (!unavailableFrom.isAfter(historyStart)) {
+                unavailableFrom = historyStart.plusSeconds(86_400);
+            }
+            insertInventoryPeriod(
+                    jdbcTemplate, roomId, roomTypeId, 1, null, historyStart, unavailableFrom, auditUserId, now);
+            insertInventoryPeriod(
+                    jdbcTemplate, roomId, roomTypeId, 2, reason, unavailableFrom, null, auditUserId, now);
+        }
+    }
+
+    private void insertInventoryPeriod(
+            JdbcTemplate jdbcTemplate, UUID roomId, UUID roomTypeId, int sequence, String reason,
+            Instant effectiveFrom, Instant effectiveTo, UUID auditUserId, Timestamp now) {
+        jdbcTemplate.update(
+                "INSERT INTO room_inventory_period (id, room_id, room_type_id, unavailable_reason, origin, "
+                        + "effective_from, effective_to, created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, ?, ?, 'RECORDED', ?, ?, ?, ?, ?, ?)",
+                deterministicId(PREFIX + "INVENTORY-" + roomId + "-" + sequence), roomId, roomTypeId, reason,
+                timestamp(effectiveFrom), timestamp(effectiveTo), now, auditUserId, now, auditUserId);
     }
 
     /**
@@ -304,7 +437,7 @@ public class DemoDataSeeder {
                         source, "DIRECT".equals(source) ? null : PREFIX + "OTA-" + reservationIndex, status,
                         reservedAtTimestamp,
                         checkInDate, checkInDate.plusDays(nights), totalAmount,
-                        "Synthetic development demonstration reservation", reservedAtTimestamp, auditUserId,
+                        DEMO_RESERVATION_NOTES, reservedAtTimestamp, auditUserId,
                         updatedAt, auditUserId);
                 UUID reservationRoomId = insertReservationRoom(
                         jdbcTemplate, reservationId, roomId, auditUserId, checkInDate, nights, reservedAtTimestamp,
