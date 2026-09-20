@@ -233,6 +233,7 @@ p {
   color: #fff;
 }
 .app-shell.page-dashboard .nav-dashboard,
+.app-shell.page-reports .nav-reports,
 .app-shell.page-check-in .nav-check-in,
 .app-shell.page-check-out .nav-check-out,
 .app-shell.page-reservations .nav-reservations,
@@ -248,6 +249,7 @@ p {
   color: #fff;
 }
 .app-shell.page-dashboard .nav-dashboard .sidebar-nav-icon,
+.app-shell.page-reports .nav-reports .sidebar-nav-icon,
 .app-shell.page-check-in .nav-check-in .sidebar-nav-icon,
 .app-shell.page-check-out .nav-check-out .sidebar-nav-icon,
 .app-shell.page-reservations .nav-reservations .sidebar-nav-icon,
@@ -262,6 +264,7 @@ p {
   color: #fff;
 }
 .app-shell.page-dashboard .nav-dashboard:hover,
+.app-shell.page-reports .nav-reports:hover,
 .app-shell.page-check-in .nav-check-in:hover,
 .app-shell.page-check-out .nav-check-out:hover,
 .app-shell.page-reservations .nav-reservations:hover,

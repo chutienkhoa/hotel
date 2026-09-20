@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{report.overview.title})}"></head>
+<body>
+<!-- page-reports keeps the Reports sidebar item active; later report pages reuse this class. -->
+<div class="app-shell page-reports">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{report.overview.title}">Reports</h1>
+                <p th:text="#{report.overview.description}">Reports for hotel management.</p>
+            </div>
+        </div>
+
+        <section aria-labelledby="report-list-heading" class="card-grid">
+            <h2 class="visually-hidden" id="report-list-heading" th:text="#{report.overview.list}">Available reports</h2>
+
+            <article class="card" id="report-financial">
+                <h3 th:text="#{report.financial.title}">Monthly Financial Report</h3>
+                <p th:text="#{report.financial.description}">Revenue, expenses and profitability for a selected month.</p>
+                <p><span class="status-badge" th:text="#{report.status.comingSoon}">Coming soon</span></p>
+            </article>
+
+            <article class="card" id="report-occupancy">
+                <h3 th:text="#{report.occupancy.title}">Monthly Occupancy Report</h3>
+                <p th:text="#{report.occupancy.description}">Room-night occupancy and hotel utilization for a selected month.</p>
+                <p><span class="status-badge" th:text="#{report.status.comingSoon}">Coming soon</span></p>
+            </article>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

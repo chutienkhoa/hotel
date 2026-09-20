@@ -309,6 +309,21 @@ class StaffPageControllerTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-users\"")));
     }
 
+    /** Confirms the Reports sidebar item appears only with VIEW_REPORT and never for a user without it. */
+    @Test
+    void shouldShowReportsSidebarItemOnlyWithViewReport() throws Exception {
+        when(staffService.search(any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/staff").with(user("manager").authorities(manageStaffAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("nav-reports"))));
+
+        mockMvc.perform(get("/staff").with(user("admin").authorities(
+                        new SimpleGrantedAuthority("PERM_MANAGE_STAFF"), new SimpleGrantedAuthority("PERM_VIEW_REPORT"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-reports\"")));
+    }
+
     /** Builds a representative active Staff response. */
     private StaffResponse activeStaff() {
         return new StaffResponse(

@@ -4007,4 +4007,90 @@ Payment = Thanh toán; Expense = Chi phí; Additional Revenue = Doanh thu bổ s
 CẦN XÁC NHẬN theo ngữ cảnh nghiệp vụ trước khi dịch: **Folio**, **Stay**, Working Time / Work Check-in,
 Room Change, OTA.
 
+# 61. Reports — Overview và quy ước báo cáo (Task 28)
+
+## 61.1 Phạm vi các task
+
+```text
+Task 28 : Reports Overview (điểm vào khu vực báo cáo) — CHỈ điều hướng, không tính toán
+Task 29 : Monthly Financial Report
+Task 30 : Monthly Occupancy Report
+          (trước khi hoàn tất Task 30 phải audit/giải quyết Backend Gap A và B, mục 61.5)
+Task 31 : PDF export
+Task 32 : Excel export
+```
+
+`GET /reports` (`PERM_VIEW_REPORT`, cùng quy ước với Dashboard; không có permission mới; ADMIN/MANAGER có,
+STAFF không) hiển thị trang Overview với hai thẻ thông tin "Monthly Financial Report" và "Monthly Occupancy
+Report" ở trạng thái "Sắp có" (không có liên kết tới route chưa tồn tại). Sidebar có mục **Reports** (hiển thị
+khi `canViewReport`, đặt sau Dashboard). Trang báo cáo dùng class `page-reports` trên `app-shell` để mục
+Reports luôn ở trạng thái active; các route con sau này (`/reports/...`) dùng lại class này. Task 28 KHÔNG có
+truy vấn, service tính toán, DTO số liệu, bộ chọn tháng, biểu đồ hay export. Văn bản giao diện dùng message key
+`report.*` / `navigation.reports` (EN/VI).
+
+## 61.2 Quy ước Monthly Financial Report (áp dụng cho Task 29–32)
+
+- **Tiền tệ báo cáo/base: VND.**
+- **Room Revenue**: dựa trên pricing snapshot đã đặt của `ReservationRoom`, ghi nhận theo từng ĐÊM PHÒNG đã
+  đặt theo lịch. Một đêm thuộc về `LocalDate` mà đêm đó BẮT ĐẦU. Ví dụ check-in 30/09, check-out 03/10 → các
+  đêm 30/09, 01/10, 02/10: tháng 9 nhận 1 đêm, tháng 10 nhận 2 đêm. Đây là doanh thu booked/economic theo mô
+  hình V1 hiện tại và KHÔNG tự thay đổi khi thực tế khác đi (check-out sớm, sự kiện vận hành trễ, đổi phòng)
+  trừ khi domain điều chỉnh pricing đã đặt một cách tường minh.
+- **Room Revenue không phải VND**: KHÔNG được âm thầm quy đổi bằng exchange rate của Payment (đó là thông tin
+  thanh toán, không phải FX snapshot ghi nhận doanh thu). Cho tới khi có hỗ trợ FX ghi nhận doanh thu, doanh thu
+  phòng không phải VND phải được gắn cờ/loại trừ tường minh khỏi tổng VND (cách hiển thị cảnh báo do Task 29 quyết
+  định).
+- **Additional Revenue**: ghi nhận khi `status = RECORDED`, theo `revenueDate`; `VOIDED` bị loại.
+- **Expense**: ghi nhận khi `status = POSTED`, theo `expenseDate`; `APPROVED` chưa `POSTED` bị loại.
+- **Payment** là thông tin thanh toán/cash-flow; `Payment.amount` và `Payment.appliedAmount` KHÔNG là nguồn
+  doanh thu ghi nhận.
+- **Room vs các charge khác**: Room Revenue là giá phòng đã đặt / charge kinh tế loại ROOM; các loại charge khác
+  KHÔNG được âm thầm đưa vào Room Revenue. Trước khi hiện thực tổng Task 29 phải kiểm tra không trùng lặp giữa
+  charge không phải ROOM và `AdditionalRevenue`.
+- **Total Revenue** = Room Revenue + Additional Revenue. **Net Profit** = Total Revenue − Recognized Expense.
+- **Profit Margin** = Net Profit / Total Revenue × 100 khi Total Revenue > 0; khi Total Revenue = 0 hiển thị
+  N/A (không báo cáo 0% gây hiểu nhầm).
+
+## 61.3 Quy ước Monthly Occupancy Report (Task 30)
+
+- Dùng occupancy THỰC TẾ vật lý; nguồn lịch sử có thẩm quyền: `StayRoomAssignment`.
+- Một đêm thuộc `LocalDate` mà đêm đó bắt đầu (check-in 30/09 14:00, check-out 03/10 11:00 → 30/09, 01/10, 02/10:
+  tháng 9 = 1, tháng 10 = 2).
+- Lưu trú cùng ngày (check-in và check-out cùng `LocalDate`) đóng góp 0 occupied room night.
+- Đổi phòng KHÔNG làm tăng occupied room nights ở cấp khách sạn: một lineage stay/reservation chiếm một phòng
+  khách sạn trong một đêm chỉ tính một occupied room night, kể cả khi assignment đổi trong cùng ngày. Việc gán
+  phòng lịch sử vẫn có thể dùng sau này cho room-type performance nhưng không được đếm trùng occupancy.
+- **Available Room Nights**: định nghĩa mong muốn là số đêm phòng CÓ THỂ BÁN theo lịch sử. `Room.status` và
+  `Room.active` chỉ là trạng thái HIỆN TẠI, không đủ để dựng lại tồn kho bán được trong quá khứ; không được coi
+  trạng thái hiện tại là availability lịch sử.
+- **Room Type Performance** không được chỉ dựa vào `Room.roomType` hiện tại (có thể sửa được).
+
+## 61.4 Kiến trúc dịch vụ báo cáo (dự kiến, chưa hiện thực)
+
+```text
+domain / repositories
+        ↓
+reporting calculation service
+        ↓
+locale-free immutable report result
+   ├──────────┬──────────┐
+   ↓          ↓          ↓
+  Web        PDF       Excel
+   ↓          ↓          ↓
+presentation-layer localization
+```
+
+PDF/Excel dùng cùng result/model với báo cáo web, không tự tính lại số liệu. Dữ liệu tính toán không chứa chuỗi
+hiển thị đã dịch. Task 29 thiết lập result model đầu tiên. Task 28 không chọn thư viện PDF/Excel.
+
+## 61.5 Backend Gap (ghi nhận, chưa giải quyết)
+
+- **Gap A — Historical room sellability/availability**: cần biết các khoảng thời gian như Room 101
+  `OUT_OF_ORDER` từ 10/09 → 15/09 ngay cả sau khi phòng đã trở lại available. Mô hình hiện tại chỉ giữ trạng
+  thái hiện tại.
+- **Gap B — Historical RoomType snapshot**: báo cáo lịch sử không được thay đổi khi một Room sau này bị sửa sang
+  RoomType khác; `ReservationRoom`/`StayRoomAssignment` hiện không lưu snapshot room type.
+
+Hai gap này sẽ được audit riêng trước Task 30; Task 28 không thiết kế hay tạo thay đổi schema.
+
 **End of Specification v1.0**

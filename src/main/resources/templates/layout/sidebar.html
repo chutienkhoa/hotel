@@ -15,6 +15,11 @@
         <span th:text="#{navigation.dashboard}">Dashboard</span>
     </a>
 
+    <a class="sidebar-nav-link nav-reports" th:href="@{/reports}" th:if="${canViewReport}">
+        <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
+        <span th:text="#{navigation.reports}">Reports</span>
+    </a>
+
     <div class="nav-section" th:if="${canCheckIn or canCheckOut or canViewBooking or canManageGuest}">
         <p class="nav-section-label" th:text="#{navigation.section.operations}">Operations</p>
         <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">

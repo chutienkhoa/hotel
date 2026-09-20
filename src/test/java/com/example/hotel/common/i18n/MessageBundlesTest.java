@@ -73,7 +73,7 @@ class MessageBundlesTest {
     /** Confirms keys follow the approved semantic families and never look like English sentences. */
     @Test
     void shouldUseApprovedKeyFamilies() throws Exception {
-        Set<String> families = Set.of("common", "navigation", "table", "auth", "dashboard", "reservation", "guest",
+        Set<String> families = Set.of("common", "navigation", "table", "auth", "dashboard", "report", "reservation", "guest",
                 "room", "checkin", "checkout", "payment", "expense", "revenue", "staff", "user", "role", "validation",
                 "error", "enum", "js");
         for (String key : load("/messages.properties").keySet()) {
