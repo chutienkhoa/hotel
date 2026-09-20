@@ -15,6 +15,8 @@
             </div>
         </div>
 
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
         <section aria-labelledby="report-list-heading" class="card-grid">
             <h2 class="visually-hidden" id="report-list-heading" th:text="#{report.overview.list}">Available reports</h2>
 
@@ -28,6 +30,18 @@
                 <h3 th:text="#{report.occupancy.title}">Monthly Occupancy Report</h3>
                 <p th:text="#{report.occupancy.description}">Room-night occupancy and hotel utilization for a selected month.</p>
                 <p><a class="button button-primary" th:href="@{/reports/monthly-occupancy}" th:text="#{report.occupancy.open}">View report</a></p>
+            </article>
+
+            <article class="card" id="report-performance">
+                <h3 th:text="#{report.performance.title}">Monthly Hotel Performance Report</h3>
+                <p th:text="#{report.performance.description}">One-page A4 summary for a selected month.</p>
+                <form method="get" th:action="@{/reports/monthly-performance.pdf}">
+                    <div class="form-field">
+                        <label for="performance-month" th:text="#{report.performance.month.label}">Month</label>
+                        <input id="performance-month" name="month" required th:value="${selectedMonth}" type="month" />
+                    </div>
+                    <p><button class="button button-primary" th:text="#{report.performance.download}" type="submit">Download PDF</button></p>
+                </form>
             </article>
         </section>
     </main>

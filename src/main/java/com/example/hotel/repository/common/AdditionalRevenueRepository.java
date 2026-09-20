@@ -46,4 +46,26 @@ public interface AdditionalRevenueRepository
                     com.example.hotel.entity.common.AdditionalRevenueStatus status,
             @org.springframework.data.repository.query.Param("startInclusive") java.time.LocalDate startInclusive,
             @org.springframework.data.repository.query.Param("endExclusive") java.time.LocalDate endExclusive);
+
+    /**
+     * Sums the amounts of one status per category within {@code [startInclusive, endExclusive)}, ordered by
+     * total descending then category code ascending.
+     *
+     * @param status status to include, RECORDED for recognized revenue
+     * @param startInclusive first revenue date included
+     * @param endExclusive first revenue date excluded
+     * @return one row per category with revenue in the period
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT new com.example.hotel.repository.common.AdditionalRevenueCategoryTotalRow("
+                    + "c.id, c.code, c.name, SUM(r.amount)) "
+                    + "FROM AdditionalRevenue r JOIN r.category c "
+                    + "WHERE r.status = :status AND r.revenueDate >= :startInclusive AND r.revenueDate < :endExclusive "
+                    + "GROUP BY c.id, c.code, c.name "
+                    + "ORDER BY SUM(r.amount) DESC, c.code ASC")
+    java.util.List<AdditionalRevenueCategoryTotalRow> sumAmountByCategoryWithin(
+            @org.springframework.data.repository.query.Param("status")
+                    com.example.hotel.entity.common.AdditionalRevenueStatus status,
+            @org.springframework.data.repository.query.Param("startInclusive") java.time.LocalDate startInclusive,
+            @org.springframework.data.repository.query.Param("endExclusive") java.time.LocalDate endExclusive);
 }

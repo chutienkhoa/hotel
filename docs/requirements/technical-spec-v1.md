@@ -4213,4 +4213,50 @@ nhất và luôn active.
 - **Kết quả**: `MonthlyOccupancyReport` / `RoomTypeOccupancy` là record bất biến, không chứa chuỗi hiển thị hay
   locale. Văn bản UI dùng khóa `report.occupancy.*`. Không có migration mới (dùng V28).
 
+## 61.9 Monthly Hotel Performance PDF — quyết định Task 31
+
+`GET /reports/monthly-performance.pdf?month=yyyy-MM` (`PERM_VIEW_REPORT`, không có permission mới) trả về báo
+cáo PDF MỘT trang A4. Nguồn tham chiếu hình ảnh (visual source-of-truth):
+`docs/report-templates/monthly_hotel_performance_report_mockup_v3.pdf`; nguồn nghiệp vụ vẫn là Task 29/30 (V3 chỉ
+quyết định bố cục; các giá trị/đơn vị trong V3, ví dụ JPY, chỉ là minh họa).
+
+- **Tháng**: `month` mặc định `YearMonth.now(clock)` (Asia/Ho_Chi_Minh). Từ chối (KHÔNG tạo PDF một phần): tháng
+  sai định dạng, tháng tương lai, tháng trước `firstFullySupportedMonth` của occupancy (mục 61.7/61.8). Khi bị từ
+  chối, người dùng được chuyển về `/reports` kèm thông báo đã dịch (flash); lỗi toàn vẹn dữ liệu chỉ ghi log. Hợp
+  đồng của trang web Task 29 và Task 30 không đổi.
+- **Dataset dùng chung** `MonthlyHotelPerformanceReport` (không chứa chuỗi dịch, tọa độ hay cắt bớt dữ liệu; Task
+  32 Excel dùng lại): gồm nguyên vẹn `MonthlyFinancialReport` và `MonthlyOccupancyReport` (không tính lại), ngày
+  tạo theo `Clock` khách sạn, so sánh tháng trước, xu hướng doanh thu, nguồn đặt phòng và Additional Revenue theo
+  category. Renderer PDF chỉ trình bày, không truy vấn và không tính công thức nghiệp vụ.
+- **KPI**: Total Revenue / Total Expenses / Net Profit lấy trực tiếp từ Task 29 (VND); Occupancy lấy từ Task 30
+  (đêm phòng thực tế đã hoàn tất / đêm phòng sellable). Tháng hiện tại: tài chính theo Task 29 giữ nguyên, occupancy
+  theo Task 30 (các đêm đã hoàn tất, PDF hiển thị "Data through" khi có cắt ngày) và có ngày tạo báo cáo.
+- **So sánh với tháng trước**: Revenue/Expenses/Net Profit = `(current − previous) / abs(previous) × 100` (tính
+  scale 4, hiển thị 1 chữ số thập phân HALF_UP), N/A khi `previous = 0`. Occupancy = chênh lệch điểm phần trăm
+  `current − previous` (hiển thị `+5.2 pp`), N/A khi một trong hai rate không có. Tháng trước KHÔNG bắt buộc có lịch
+  sử occupancy: nếu thiếu thì chỉ so sánh occupancy là N/A, PDF vẫn được tạo.
+- **Revenue Trend**: sáu tháng dương lịch kết thúc ở tháng đã chọn (theo thứ tự thời gian), một chuỗi Total Revenue
+  = Room Revenue + Additional Revenue theo đúng Task 29 cho từng tháng.
+- **Reservation Source**: định nghĩa Dashboard đã duyệt: `Reservation.checkInDate` trong tháng, MỌI trạng thái, nhóm
+  theo `BookingSource` (DIRECT, AGODA, BOOKING_COM, AIRBNB, điền 0), phần trăm theo tổng (0 khi tổng = 0).
+- **Occupancy Summary**: tỷ lệ occupancy, số đêm phòng đã bán (occupied), số đêm phòng khả dụng (sellable) từ Task 30
+  và tổng số Reservation của tập Reservation Source. Không có biểu đồ theo ngày.
+- **Room Type Performance**: Room Type / Sold / Available / Occupancy trực tiếp từ Task 30 (RoomType lịch sử);
+  không có doanh thu theo RoomType. **Financial Summary**: Room Revenue, Additional Revenue, Total Revenue,
+  Operating Expenses, Net Operating Profit từ Task 29 (không có Profit Margin).
+- **Top Additional Revenue**: Additional Revenue `RECORDED` theo `revenueDate` trong tháng, nhóm theo category,
+  sắp xếp `totalAmount` giảm dần rồi `category.code` tăng dần, phần trăm theo Additional Revenue của tháng. PDF
+  hiển thị 4 category đầu + "Others" (tổng phần còn lại) chỉ khi có hơn 4 category; dataset giữ đầy đủ.
+- **Non-VND**: cảnh báo của Task 29 (doanh thu phòng không phải VND bị loại, không quy đổi) được in thành ghi chú
+  ngắn trong PDF; PDF vẫn được tạo.
+- **Ngôn ngữ**: PDF theo locale giao diện PMS hiện tại (Task 27), không có tham số ngôn ngữ riêng; nhãn dịch nằm ở
+  tầng render, dataset không chứa chuỗi dịch. Ngày định dạng `dd/MM/yyyy`, số nhóm bằng dấu phẩy, tiền `VND 1,284,000`.
+- **Một trang A4 (bắt buộc)**: hình học cố định theo V3; sức chứa Room Type là 5 hàng (nhiều hơn thì 4 hàng đầu
+  + "Others" gộp tổng, tỷ lệ tính từ tổng); văn bản dài bị cắt bằng dấu "…" theo độ rộng thực của font, ghi chú cảnh
+  báo tối đa 2 dòng; không bao giờ sinh trang thứ hai.
+- **Font**: Noto Sans Regular/Bold (SIL OFL 1.1, hỗ trợ tiếng Việt) đóng gói tại `src/main/resources/fonts/` cùng
+  `OFL.txt`; không dùng font hệ điều hành. Thư viện: Apache PDFBox 3.0.8, tạo PDF trong bộ nhớ.
+- **Phản hồi**: `Content-Type: application/pdf`, `Content-Disposition: attachment; filename="hotel-performance-yyyy-MM.pdf"`,
+  `Cache-Control: no-store`; không ghi file tạm. Lối vào tải xuống: thẻ nhỏ trên trang Reports Overview.
+
 **End of Specification v1.0**

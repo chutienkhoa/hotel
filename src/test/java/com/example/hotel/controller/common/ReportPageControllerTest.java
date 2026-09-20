@@ -11,10 +11,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.hotel.config.I18nConfig;
 import com.example.hotel.security.JwtService;
 import jakarta.servlet.http.Cookie;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -104,8 +108,36 @@ class ReportPageControllerTest {
                 .andExpect(content().string(not(containsString("Coming soon"))));
     }
 
-    /** Enables method-security interception for this MVC authorization test slice. */
+    /** Confirms the overview offers the PDF download form for the current hotel month, in both languages. */
+    @Test
+    void shouldOfferHotelPerformancePdfDownload() throws Exception {
+        mockMvc.perform(get("/reports").cookie(new Cookie("pms-lang", "en")).with(reportViewer()))
+                .andExpect(content().string(containsString("id=\"report-performance\"")))
+                .andExpect(content().string(containsString("action=\"/reports/monthly-performance.pdf\"")))
+                .andExpect(content().string(containsString("type=\"month\"")))
+                .andExpect(content().string(containsString("value=\"2026-09\"")))
+                .andExpect(content().string(containsString("Download PDF")));
+        mockMvc.perform(get("/reports").cookie(new Cookie("pms-lang", "vi")).with(reportViewer()))
+                .andExpect(content().string(containsString("Tải PDF")));
+    }
+
+    /** Confirms a flash error from a rejected export is shown on the overview. */
+    @Test
+    void shouldShowFlashErrorFromRejectedExport() throws Exception {
+        mockMvc.perform(get("/reports").flashAttr("errorMessage", "Export rejected").with(reportViewer()))
+                .andExpect(content().string(containsString("message message-error")))
+                .andExpect(content().string(containsString("Export rejected")));
+    }
+
+    /** Enables method-security interception and supplies the fixed hotel Clock (18/09/2026). */
     @TestConfiguration
     @EnableMethodSecurity
-    static class MethodSecurityTestConfiguration {}
+    static class MethodSecurityTestConfiguration {
+        @Bean
+        Clock clock() {
+            return Clock.fixed(
+                    LocalDate.of(2026, 9, 18).atTime(10, 0).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
+                    ZoneId.of("Asia/Ho_Chi_Minh"));
+        }
+    }
 }
