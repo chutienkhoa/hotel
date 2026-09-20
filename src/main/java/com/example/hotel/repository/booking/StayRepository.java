@@ -2,8 +2,10 @@ package com.example.hotel.repository.booking;
 
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import java.time.Instant;
 import java.time.LocalDate;
 import jakarta.persistence.LockModeType;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -61,4 +63,23 @@ public interface StayRepository extends JpaRepository<Stay, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Stay s WHERE s.id = :id")
     Optional<Stay> findByIdForUpdate(@Param("id") UUID id);
+
+    /**
+     * Finds the booked rooms of Stays overlapping {@code [start, end)} that have no StayRoomAssignment at
+     * all for that lineage, which means the actual occupancy history is incomplete.
+     *
+     * @param start inclusive start Instant of the report period
+     * @param end exclusive end Instant of the report period
+     * @return ReservationRoom identifiers lacking assignment coverage, in identifier order
+     */
+    @Query(
+            "SELECT rr.id FROM Stay s, ReservationRoom rr "
+                    + "WHERE rr.reservation = s.reservation "
+                    + "AND s.actualCheckInAt < :end "
+                    + "AND (s.actualCheckOutAt IS NULL OR s.actualCheckOutAt > :start) "
+                    + "AND NOT EXISTS (SELECT 1 FROM StayRoomAssignment a "
+                    + "WHERE a.stay = s AND a.originalReservationRoom = rr) "
+                    + "ORDER BY rr.id")
+    List<UUID> findReservationRoomIdsWithoutAssignmentOverlapping(
+            @Param("start") Instant start, @Param("end") Instant end);
 }

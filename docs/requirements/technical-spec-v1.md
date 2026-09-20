@@ -4174,4 +4174,43 @@ Occupancy Report thuộc Task 30B.
 - **Không backfill production trước V22**: migration KHÔNG suy diễn hay tạo `StayRoomAssignment` lịch sử. Nếu
   dữ liệu production cũ cần dựng lại, đó là một thao tác riêng, được duyệt riêng.
 
+## 61.8 Monthly Occupancy Report — quyết định Task 30B
+
+`GET /reports/monthly-occupancy?month=yyyy-MM` (`PERM_VIEW_REPORT`, không có permission mới); không có `month` thì
+dùng `YearMonth.now(clock)` với `Clock` khách sạn (`Asia/Ho_Chi_Minh`); `month` sai định dạng hiển thị thông báo
+thân thiện. Thẻ Occupancy ở trang Overview liên kết tới báo cáo này; mục Reports trên sidebar vẫn là một mục duy
+nhất và luôn active.
+
+- **Kỳ báo cáo**: tháng đã hoàn tất dùng `[monthStart, nextMonthStart)`. Tháng hiện tại chỉ tính các đêm ĐÃ HOÀN
+  TẤT: `reportEnd` = ngày khách sạn hôm nay (exclusive), ví dụ hôm nay 20/09 → các đêm 01/09..19/09, không gồm
+  đêm nay; ngày đầu tháng hiện tại có 0 đêm hoàn tất và cho kết quả 0/0 (tỷ lệ N/A) với `reportedThrough` rỗng.
+  Tháng tương lai bị TỪ CHỐI (không trả về 0 gây hiểu nhầm).
+- **Hỗ trợ lịch sử**: nếu có dòng `BOOTSTRAP` thì tháng trước `firstFullySupportedMonth` (mục 61.7) bị từ chối
+  bằng thông báo "lịch sử chưa có"; không tính tháng dở dang. Không có dòng `BOOTSTRAP` thì không tạo ranh giới
+  giả; thay vào đó mọi Room góp đêm cho báo cáo phải có `RoomInventoryPeriod` phủ đêm đó, nếu không là lỗi toàn
+  vẹn dữ liệu (không đoán theo trạng thái hiện tại).
+- **Occupied Room Nights**: nguồn duy nhất là `StayRoomAssignment` (không dùng ReservationRoom, trạng thái
+  Reservation, `Room.status`, `Room.roomType` hiện tại). Mỗi assignment đóng góp các đêm `d` với
+  `localDate(assignedFrom) <= d < localDate(assignedTo)` (Asia/Ho_Chi_Minh), cắt theo `[reportStart, reportEnd)`;
+  assignment đang mở kết thúc tại `reportEnd` (không đếm đêm tương lai). Lineage là
+  `original_reservation_room_id`; một occupied room-night là `(lineage, hotelNight)`. Đổi phòng nằm trong cùng
+  một lineage nên không làm tăng số đêm; đặt nhiều phòng có nhiều lineage nên mỗi phòng góp một đêm (không gộp
+  theo Stay + ngày).
+- **Available Room Nights** (nhãn UI đã duyệt) nghĩa là SELLABLE room nights: các đêm có `RoomInventoryPeriod`
+  phủ với `unavailableReason` null (mục 61.7, quy tắc end-of-date). `AVAILABLE`/`OCCUPIED`/`DIRTY`/`CLEANING`
+  thuộc mẫu số; `MAINTENANCE`/`OUT_OF_ORDER` bị loại. Không phải "phòng có `Room.status = AVAILABLE` hiện tại".
+- **RoomType lịch sử**: loại phòng của cả đêm sellable lẫn đêm occupied lấy từ `RoomInventoryPeriod` phủ
+  `(phòng vật lý, đêm)`, không phải `Room.roomType` hiện tại, nên báo cáo cũ không đổi khi Room sau này bị sửa loại.
+- **Room Type Performance (V1)**: mỗi RoomType xuất hiện trong kỳ có `occupiedRoomNights`, `sellableRoomNights`,
+  `occupancyRate`; sắp xếp theo `RoomType.code`. KHÔNG có doanh thu theo RoomType, nguồn đặt phòng hay biểu đồ.
+- **Công thức**: `occupancyRate = occupied / sellable × 100`, 2 chữ số thập phân `HALF_UP`, `null` (hiển thị N/A)
+  khi `sellable = 0`. Tỷ lệ toàn khách sạn tính từ TỔNG số đêm, không lấy trung bình tỷ lệ theo RoomType.
+- **Lỗi toàn vẹn (báo cáo thất bại, không sửa, không khử trùng lặp, UI chỉ hiện thông báo chung, chi tiết ghi
+  log)**: trùng `(lineage, đêm)`; một phòng bị chiếm hai lần trong một đêm; assignment có `assignedTo` không sau
+  `assignedFrom`; booked room của một Stay trong kỳ không có assignment nào; đêm occupied không có period tồn
+  kho phủ hoặc rơi vào period không sellable; hai period của một Room chồng lấn hoặc hở nhau; chuỗi period của
+  một Room kết thúc đóng trước cuối kỳ.
+- **Kết quả**: `MonthlyOccupancyReport` / `RoomTypeOccupancy` là record bất biến, không chứa chuỗi hiển thị hay
+  locale. Văn bản UI dùng khóa `report.occupancy.*`. Không có migration mới (dùng V28).
+
 **End of Specification v1.0**

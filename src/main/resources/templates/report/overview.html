@@ -27,7 +27,7 @@
             <article class="card" id="report-occupancy">
                 <h3 th:text="#{report.occupancy.title}">Monthly Occupancy Report</h3>
                 <p th:text="#{report.occupancy.description}">Room-night occupancy and hotel utilization for a selected month.</p>
-                <p><span class="status-badge" th:text="#{report.status.comingSoon}">Coming soon</span></p>
+                <p><a class="button button-primary" th:href="@{/reports/monthly-occupancy}" th:text="#{report.occupancy.open}">View report</a></p>
             </article>
         </section>
     </main>

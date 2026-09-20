@@ -61,21 +61,22 @@ class ReportPageControllerTest {
         mockMvc.perform(get("/reports")).andExpect(status().is4xxClientError());
     }
 
-    /** Confirms the Financial card now links to its report and the Occupancy card stays informational. */
+    /** Confirms both report cards link to their reports and no card is marked "Coming soon". */
     @Test
-    void shouldLinkFinancialCardAndKeepOccupancyComingSoon() throws Exception {
+    void shouldLinkFinancialAndOccupancyCards() throws Exception {
         String body = mockMvc.perform(get("/reports").cookie(new Cookie("pms-lang", "en")).with(reportViewer()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"report-financial\"")))
                 .andExpect(content().string(containsString("id=\"report-occupancy\"")))
                 .andExpect(content().string(containsString("href=\"/reports/monthly-financial\"")))
+                .andExpect(content().string(containsString("href=\"/reports/monthly-occupancy\"")))
                 .andReturn().getResponse().getContentAsString();
 
         String occupancyCard = body.substring(body.indexOf("id=\"report-occupancy\""));
-        org.junit.jupiter.api.Assertions.assertTrue(occupancyCard.contains("Coming soon"));
-        org.junit.jupiter.api.Assertions.assertFalse(occupancyCard.contains("<a "), "occupancy card has no link");
-        org.junit.jupiter.api.Assertions.assertFalse(body.contains("monthly-occupancy"));
+        org.junit.jupiter.api.Assertions.assertTrue(occupancyCard.contains("View report"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("Coming soon"));
         org.junit.jupiter.api.Assertions.assertEquals(1, body.split("monthly-financial", -1).length - 1);
+        org.junit.jupiter.api.Assertions.assertEquals(1, body.split("monthly-occupancy", -1).length - 1);
     }
 
     /** Confirms the English rendering. */
@@ -87,7 +88,7 @@ class ReportPageControllerTest {
                 .andExpect(content().string(containsString("Revenue, expenses and profitability for a selected month.")))
                 .andExpect(content().string(containsString("Monthly Occupancy Report")))
                 .andExpect(content().string(containsString("Room-night occupancy and hotel utilization for a selected month.")))
-                .andExpect(content().string(containsString("Coming soon")))
+                .andExpect(content().string(not(containsString("Coming soon"))))
                 .andExpect(content().string(containsString("<title>Reports | Hotel Management</title>")));
     }
 
@@ -98,7 +99,7 @@ class ReportPageControllerTest {
                 .andExpect(content().string(containsString("<html lang=\"vi\"")))
                 .andExpect(content().string(containsString("Báo cáo tài chính tháng")))
                 .andExpect(content().string(containsString("Báo cáo công suất phòng tháng")))
-                .andExpect(content().string(containsString("Sắp có")))
+                .andExpect(content().string(not(containsString("Sắp có"))))
                 .andExpect(content().string(containsString("<span>Báo cáo</span>")))
                 .andExpect(content().string(not(containsString("Coming soon"))));
     }

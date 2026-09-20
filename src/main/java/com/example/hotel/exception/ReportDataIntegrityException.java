@@ -23,9 +23,18 @@ public class ReportDataIntegrityException extends RuntimeException {
     }
 
     /**
+     * Creates the exception for an integrity violation that is not tied to one ReservationRoom.
+     *
+     * @param message English detail for logs
+     */
+    public ReportDataIntegrityException(String message) {
+        this(null, message);
+    }
+
+    /**
      * Returns the offending ReservationRoom identifier.
      *
-     * @return the ReservationRoom identifier
+     * @return the ReservationRoom identifier, or {@code null} when the violation is not tied to one
      */
     public UUID getReservationRoomId() {
         return reservationRoomId;

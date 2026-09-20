@@ -29,4 +29,21 @@ public interface RoomInventoryPeriodRepository extends JpaRepository<RoomInvento
      */
     @Query("SELECT MIN(p.effectiveFrom) FROM RoomInventoryPeriod p WHERE p.origin = :origin")
     Instant findEarliestEffectiveFromByOrigin(@Param("origin") RoomInventoryOrigin origin);
+
+    /**
+     * Finds the inventory periods overlapping {@code [start, end)}, as a narrow projection that already
+     * carries the historical RoomType (no lazy loading).
+     *
+     * @param start inclusive start Instant of the report period
+     * @param end exclusive end Instant of the report period
+     * @return overlapping periods ordered by Room then start
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.room.RoomInventoryPeriodRow("
+                    + "p.room.id, p.roomType.id, p.roomType.code, p.roomType.name, p.unavailableReason, "
+                    + "p.effectiveFrom, p.effectiveTo) "
+                    + "FROM RoomInventoryPeriod p "
+                    + "WHERE p.effectiveFrom < :end AND (p.effectiveTo IS NULL OR p.effectiveTo > :start) "
+                    + "ORDER BY p.room.id, p.effectiveFrom")
+    List<RoomInventoryPeriodRow> findRowsOverlapping(@Param("start") Instant start, @Param("end") Instant end);
 }

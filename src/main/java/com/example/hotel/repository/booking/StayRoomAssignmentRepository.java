@@ -1,6 +1,7 @@
 package com.example.hotel.repository.booking;
 
 import com.example.hotel.entity.booking.StayRoomAssignment;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,4 +51,21 @@ public interface StayRoomAssignmentRepository extends JpaRepository<StayRoomAssi
                     + "WHERE a.stay.id = :stayId "
                     + "ORDER BY a.originalReservationRoom.id, a.assignedFrom")
     List<StayRoomAssignment> findByStayIdOrderByLineageAndTime(@Param("stayId") UUID stayId);
+
+    /**
+     * Finds the assignments whose interval overlaps {@code [start, end)}, as a narrow projection. Overlap
+     * here is on Instants; expansion to hotel nights (and clipping) is done by the report.
+     *
+     * @param start inclusive start Instant of the report period
+     * @param end exclusive end Instant of the report period
+     * @return overlapping assignments ordered by start
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.booking.StayRoomAssignmentNightRow("
+                    + "a.originalReservationRoom.id, a.room.id, a.assignedFrom, a.assignedTo) "
+                    + "FROM StayRoomAssignment a "
+                    + "WHERE a.assignedFrom < :end AND (a.assignedTo IS NULL OR a.assignedTo > :start) "
+                    + "ORDER BY a.assignedFrom, a.originalReservationRoom.id")
+    List<StayRoomAssignmentNightRow> findNightRowsOverlapping(
+            @Param("start") Instant start, @Param("end") Instant end);
 }
