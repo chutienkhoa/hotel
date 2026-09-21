@@ -104,6 +104,41 @@ class CheckInServiceTest {
         assertEquals(available.getId(), result.get(0).id());
     }
 
+    /**
+     * Confirms the Walk-in list (today to the requested check-out) offers only check-in-ready Rooms: DIRTY,
+     * CLEANING, MAINTENANCE, OUT_OF_ORDER and OCCUPIED Rooms are not presented, while an AVAILABLE Room with no
+     * conflict remains eligible. This matches the room-status validation enforced by check-in.
+     */
+    @Test
+    void shouldOfferOnlyCheckInReadyRoomsToWalkIn() {
+        Fixture fixture = fixture(Clock.fixed(
+                LocalDate.of(2026, 9, 20).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+        Room ready = activeRoom(RoomStatus.AVAILABLE);
+        when(fixture.roomRepository.findByActiveTrue()).thenReturn(List.of(
+                activeRoom(RoomStatus.DIRTY),
+                activeRoom(RoomStatus.CLEANING),
+                activeRoom(RoomStatus.MAINTENANCE),
+                activeRoom(RoomStatus.OUT_OF_ORDER),
+                activeRoom(RoomStatus.OCCUPIED),
+                ready));
+        when(fixture.reservationRepository.hasOverlap(any(), any(), any(), any())).thenReturn(false);
+
+        List<RoomLookupResponse> result = fixture.service.availableRoomsForWalkIn(LocalDate.of(2026, 9, 22));
+
+        assertEquals(1, result.size());
+        assertEquals(ready.getId(), result.get(0).id());
+        assertEquals("AVAILABLE", result.get(0).status());
+    }
+
+    /** Confirms the existing check-in room-status validation is untouched: a non-AVAILABLE room still cannot be checked in. */
+    @Test
+    void shouldStillRejectCheckInOfNonAvailableRoomInTheLifecycle() {
+        Room dirty = activeRoom(RoomStatus.DIRTY);
+
+        assertTrue(!dirty.isReadyForCheckIn());
+        assertThrows(IllegalStateException.class, dirty::occupy);
+    }
+
     /** Confirms OTA Booking Not Entered rejects DIRECT as a source. */
     @Test
     void shouldRejectDirectSourceForOtaEntry() {
@@ -234,12 +269,8 @@ class CheckInServiceTest {
 
     /** Creates an active mocked Room with the supplied status. */
     private Room activeRoom(RoomStatus status) {
-        Room room = mock(Room.class);
-        when(room.getId()).thenReturn(UUID.randomUUID());
-        when(room.getRoomNumber()).thenReturn("101");
-        when(room.isActive()).thenReturn(true);
-        when(room.getStatus()).thenReturn(status);
-        when(room.getRoomType()).thenReturn(mock(RoomType.class));
+        Room room = Room.create(UUID.randomUUID(), "101", mock(RoomType.class), "1");
+        org.springframework.test.util.ReflectionTestUtils.setField(room, "status", status);
         return room;
     }
 
@@ -262,6 +293,7 @@ class CheckInServiceTest {
                 reservationQueryService,
                 reservationService,
                 roomRepository,
+                new com.example.hotel.service.room.RoomAvailabilityService(roomRepository, reservationRepository),
                 guestRepository,
                 guestMapper,
                 guestDocumentService,

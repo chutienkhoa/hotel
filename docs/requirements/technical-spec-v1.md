@@ -449,6 +449,18 @@ Operational status và booking availability là hai khái niệm khác nhau.
 
 `Room.status == AVAILABLE` không tự nó xác định Room available cho requested booking period.
 
+Trạng thái hiện tại `OCCUPIED`, `DIRTY`, `CLEANING` mô tả Room ở thời điểm hiện tại, KHÔNG phải trong một kỳ
+lưu trú tương lai, nên KHÔNG loại một Room khỏi việc đặt phòng cho kỳ không giao nhau (Room đang `OCCUPIED` hôm
+nay vẫn đặt được cho 10/10–12/10 nếu không có Reservation `CONFIRMED`/`CHECKED_IN` giao ngày). Danh sách Room của
+form đặt phòng và `/api/rooms/lookup` là bookable inventory: Room `active` không ở `MAINTENANCE`/`OUT_OF_ORDER`
+(hiện chưa có dữ liệu thời hạn cho hai trạng thái này nên chúng tiếp tục bị loại), độc lập với trạng thái vận hành
+khác; `/api/rooms/lookup` nhận tùy chọn `checkInDate`+`checkOutDate` để loại thêm Room có Reservation giao ngày.
+Confirm (`ReservationService.confirm`) vẫn khóa Room và từ chối overlap, không xét `Room.status`.
+
+Ngược lại, READINESS cho check-in NGAY (Walk-in, check-in) là khái niệm riêng: Room phải `active` và `AVAILABLE`
+(trạng thái check-in-ready duy nhất của V1); `DIRTY`, `CLEANING`, `MAINTENANCE`, `OUT_OF_ORDER`, `OCCUPIED` không
+được đưa ra cho Walk-in. Việc validate check-in không thay đổi.
+
 Booking availability phải xét ít nhất:
 
 ```text
@@ -1985,7 +1997,8 @@ checkOutDate  = Staff chọn
 Staff chọn Guest hiện có hoặc tạo Guest mới (theo rule Guest hiện có), chọn checkout date,
 chọn (các) room còn trống cho TOÀN BỘ khoảng ngày yêu cầu — danh sách room phải date-range
 aware, KHÔNG chỉ lọc theo `Room.status` hiện tại (tái sử dụng overlap semantics của
-`ReservationRepository.hasOverlap`, cộng với loại trừ room đang `OUT_OF_ORDER`). Danh sách
+`ReservationRepository.hasOverlap`, và chỉ gồm Room check-in-ready: `active` + `AVAILABLE`, nên loại `DIRTY`/
+`CLEANING`/`MAINTENANCE`/`OUT_OF_ORDER`/`OCCUPIED` mà check-in sẽ từ chối). Danh sách
 này chỉ phục vụ UX; validation cuối cùng tại bước confirm mới có tính authoritative (lock
 room bằng pessimistic lock hiện có, re-check overlap).
 

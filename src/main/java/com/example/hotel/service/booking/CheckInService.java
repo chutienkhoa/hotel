@@ -19,11 +19,11 @@ import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
-import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.mapper.customer.GuestMapper;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
+import com.example.hotel.service.room.RoomAvailabilityService;
 import com.example.hotel.service.customer.GuestDocumentService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -52,6 +52,7 @@ public class CheckInService {
     private final ReservationQueryService reservationQueryService;
     private final ReservationService reservationService;
     private final RoomRepository roomRepository;
+    private final RoomAvailabilityService roomAvailability;
     private final GuestRepository guestRepository;
     private final GuestMapper guestMapper;
     private final GuestDocumentService guestDocumentService;
@@ -63,7 +64,8 @@ public class CheckInService {
      * @param reservationRepository repository used to load Reservations for Review
      * @param reservationQueryService service used to reuse existing Reservation search/filtering
      * @param reservationService service holding the authoritative create/confirm/checkIn lifecycle
-     * @param roomRepository repository used for date-range-aware Walk-in room availability
+     * @param roomRepository repository used to resolve Rooms for the Walk-in preview
+     * @param roomAvailability service that lists Rooms ready for an immediate check-in
      * @param guestRepository repository used to resolve the selected Guest for Review/Walk-in
      * @param guestMapper mapper used to compute the Guest display name
      * @param guestDocumentService service used to read passport availability
@@ -74,6 +76,7 @@ public class CheckInService {
             ReservationQueryService reservationQueryService,
             ReservationService reservationService,
             RoomRepository roomRepository,
+            RoomAvailabilityService roomAvailability,
             GuestRepository guestRepository,
             GuestMapper guestMapper,
             GuestDocumentService guestDocumentService,
@@ -82,6 +85,7 @@ public class CheckInService {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.roomRepository = roomRepository;
+        this.roomAvailability = roomAvailability;
         this.guestRepository = guestRepository;
         this.guestMapper = guestMapper;
         this.guestDocumentService = guestDocumentService;
@@ -160,26 +164,18 @@ public class CheckInService {
     }
 
     /**
-     * Lists active Rooms available for the entire requested date range, reusing the existing
-     * overlap semantics from {@link ReservationRepository#hasOverlap}. This list is UI guidance
-     * only; the final Walk-in confirmation independently re-locks and re-validates.
+     * Lists Rooms that can be checked in immediately for the entire requested date range: active AVAILABLE
+     * Rooms with no overlapping CONFIRMED/CHECKED_IN Reservation. DIRTY, CLEANING, MAINTENANCE, OUT_OF_ORDER and
+     * OCCUPIED Rooms are not offered, so the Walk-in list matches what check-in will accept. This list is UI
+     * guidance only; the final Walk-in confirmation independently re-locks and re-validates.
      *
      * @param checkInDate inclusive requested check-in date
      * @param checkOutDate exclusive requested check-out date
-     * @return active Rooms with no overlapping CONFIRMED/CHECKED_IN Reservation for the range
+     * @return check-in-ready Rooms for the range
      */
     @Transactional(readOnly = true)
     public List<RoomLookupResponse> availableRoomsForRange(LocalDate checkInDate, LocalDate checkOutDate) {
-        return roomRepository.findByActiveTrue().stream()
-                .filter(room -> room.getStatus() != RoomStatus.OUT_OF_ORDER)
-                .filter(room -> !reservationRepository.hasOverlap(
-                        room.getId(),
-                        checkInDate,
-                        checkOutDate,
-                        List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN)))
-                .map(room -> new RoomLookupResponse(
-                        room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive()))
-                .toList();
+        return roomAvailability.checkInReadyRoomsForPeriod(checkInDate, checkOutDate);
     }
 
     /**

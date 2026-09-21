@@ -128,6 +128,28 @@ public class Room extends AuditedEntity {
      *
      * @throws IllegalStateException nếu phòng không hoạt động hoặc không sẵn sàng
      */
+    /**
+     * Tells whether the Room belongs to bookable inventory: it is active and not currently
+     * MAINTENANCE or OUT_OF_ORDER. OCCUPIED, DIRTY and CLEANING describe the Room now, not during a
+     * requested future stay, so they do not remove it from bookable inventory. Booking availability
+     * for a period additionally requires no overlapping Reservation.
+     *
+     * @return {@code true} when the Room may be offered for a booking period
+     */
+    public boolean isBookableInventory() {
+        return active && status != RoomStatus.MAINTENANCE && status != RoomStatus.OUT_OF_ORDER;
+    }
+
+    /**
+     * Tells whether the Room can be occupied right now. In V1 the only check-in-ready state is an
+     * active AVAILABLE Room; this mirrors the validation enforced by check-in.
+     *
+     * @return {@code true} when an immediate check-in can use the Room
+     */
+    public boolean isReadyForCheckIn() {
+        return active && status == RoomStatus.AVAILABLE;
+    }
+
     public void occupy() {
         if (!active || status != RoomStatus.AVAILABLE) {
             throw new IllegalStateException("Room is not available");

@@ -55,28 +55,37 @@ class RoomQueryServiceTest {
         assertEquals(List.of(summary), result.getContent());
     }
 
-    /** Confirms reservation-create lookup exposes only active AVAILABLE rooms. */
+    /**
+     * Confirms the reservation-create lookup is independent of current operational status: OCCUPIED, DIRTY,
+     * CLEANING and AVAILABLE rooms are all offered (a future stay may still be bookable), while inactive,
+     * MAINTENANCE and OUT_OF_ORDER rooms are not. Rooms are ordered by room number.
+     */
     @Test
-    void shouldExposeOnlyActiveAvailableRoomsForReservationCreation() {
+    void shouldOfferBookableInventoryRegardlessOfOperationalStatusForReservationCreation() {
         RoomRepository repository = mock(RoomRepository.class);
-        Room available = room(UUID.randomUUID(), "101", RoomStatus.AVAILABLE, true);
-        when(repository.findByActiveTrueAndStatus(RoomStatus.AVAILABLE)).thenReturn(List.of(available));
+        when(repository.findByActiveTrue()).thenReturn(List.of(
+                room(UUID.randomUUID(), "105", RoomStatus.OUT_OF_ORDER, true),
+                room(UUID.randomUUID(), "104", RoomStatus.CLEANING, true),
+                room(UUID.randomUUID(), "103", RoomStatus.DIRTY, true),
+                room(UUID.randomUUID(), "102", RoomStatus.OCCUPIED, true),
+                room(UUID.randomUUID(), "101", RoomStatus.AVAILABLE, true),
+                room(UUID.randomUUID(), "106", RoomStatus.MAINTENANCE, true),
+                room(UUID.randomUUID(), "107", RoomStatus.AVAILABLE, false)));
 
         var result = new RoomQueryService(repository, mock(RoomMapper.class)).findAllForReservationCreation();
 
-        assertEquals(List.of("101"), result.stream().map(room -> room.roomNumber()).toList());
-        verify(repository).findByActiveTrueAndStatus(RoomStatus.AVAILABLE);
+        assertEquals(List.of("101", "102", "103", "104"), result.stream().map(room -> room.roomNumber()).toList());
     }
 
-    /** Confirms draft editing retains assigned non-AVAILABLE rooms beside normal eligible choices. */
+    /** Confirms draft editing retains an assigned room (even one no longer bookable) beside the bookable choices. */
     @Test
     void shouldRetainAssignedRoomForReservationEditing() {
         RoomRepository repository = mock(RoomRepository.class);
         UUID availableId = UUID.randomUUID();
         UUID assignedId = UUID.randomUUID();
         Room available = room(availableId, "101", RoomStatus.AVAILABLE, true);
-        Room assigned = room(assignedId, "102", RoomStatus.OCCUPIED, true);
-        when(repository.findByActiveTrueAndStatus(RoomStatus.AVAILABLE)).thenReturn(List.of(available));
+        Room assigned = room(assignedId, "102", RoomStatus.OUT_OF_ORDER, true);
+        when(repository.findByActiveTrue()).thenReturn(List.of(available, assigned));
         when(repository.findAllById(List.of(assignedId))).thenReturn(List.of(assigned));
 
         var result = new RoomQueryService(repository, mock(RoomMapper.class))
@@ -86,11 +95,9 @@ class RoomQueryServiceTest {
     }
 
     private Room room(UUID id, String number, RoomStatus status, boolean active) {
-        Room room = mock(Room.class);
-        when(room.getId()).thenReturn(id);
-        when(room.getRoomNumber()).thenReturn(number);
-        when(room.getStatus()).thenReturn(status);
-        when(room.isActive()).thenReturn(active);
+        Room room = Room.create(id, number, null, "1");
+        org.springframework.test.util.ReflectionTestUtils.setField(room, "status", status);
+        org.springframework.test.util.ReflectionTestUtils.setField(room, "active", active);
         return room;
     }
 

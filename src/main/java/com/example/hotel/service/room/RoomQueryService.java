@@ -47,31 +47,34 @@ public class RoomQueryService {
     }
 
     /**
-     * Retrieves the room fields required by the reservation form without changing room state.
+     * Retrieves the Rooms a reservation form may offer: bookable inventory, independent of the Room's current
+     * operational status. Overlap with existing Reservations is validated per requested period (see
+     * {@link RoomAvailabilityService}) and enforced when the Reservation is confirmed.
      *
-     * @return the room lookup entries
+     * @return the room lookup entries ordered by room number
      */
     @Transactional(readOnly = true)
     public List<RoomLookupResponse> findAllForReservationCreation() {
-        return roomRepository.findByActiveTrueAndStatus(RoomStatus.AVAILABLE).stream()
-                .map(room -> new RoomLookupResponse(
-                        room.getId(),
-                        room.getRoomNumber(),
-                        room.getStatus().name(),
-                        room.isActive()))
-                .toList();
+        return bookableRooms().map(this::toLookup).toList();
     }
 
-    /** Retrieves active AVAILABLE Rooms plus the assignments retained by a draft edit form. */
+    /** Retrieves bookable Rooms plus the assignments retained by a draft edit form. */
     @Transactional(readOnly = true)
     public List<RoomLookupResponse> findAllForReservationEditing(Collection<UUID> assignedRoomIds) {
         var roomsById = new LinkedHashMap<UUID, Room>();
-        roomRepository.findByActiveTrueAndStatus(RoomStatus.AVAILABLE)
-                .forEach(room -> roomsById.put(room.getId(), room));
+        bookableRooms().forEach(room -> roomsById.put(room.getId(), room));
         roomRepository.findAllById(assignedRoomIds).forEach(room -> roomsById.put(room.getId(), room));
-        return roomsById.values().stream()
-                .map(room -> new RoomLookupResponse(room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive()))
-                .toList();
+        return roomsById.values().stream().map(this::toLookup).toList();
+    }
+
+    private java.util.stream.Stream<Room> bookableRooms() {
+        return roomRepository.findByActiveTrue().stream()
+                .filter(Room::isBookableInventory)
+                .sorted(java.util.Comparator.comparing(Room::getRoomNumber));
+    }
+
+    private RoomLookupResponse toLookup(Room room) {
+        return new RoomLookupResponse(room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive());
     }
 
     /**

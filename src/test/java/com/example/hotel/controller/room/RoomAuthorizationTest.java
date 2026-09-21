@@ -56,6 +56,9 @@ class RoomAuthorizationTest {
     private RoomQueryService roomQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.room.RoomAvailabilityService roomAvailability;
+
+    @MockitoBean
     private RoomTypeQueryService roomTypeQueryService;
 
     @MockitoBean
@@ -178,6 +181,29 @@ class RoomAuthorizationTest {
                 new org.springframework.mock.web.MockHttpServletRequest());
 
         assertFalse((Boolean) model.getAttribute("canManageRoom"));
+    }
+
+    /**
+     * Confirms the lookup with both dates is answered by the period-based booking availability, and that a
+     * partial or reversed date range is rejected.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldAnswerDatedRoomLookupFromBookingAvailability() throws Exception {
+        when(roomAvailability.bookableRoomsForPeriod(java.time.LocalDate.of(2026, 10, 10), java.time.LocalDate.of(2026, 10, 12)))
+                .thenReturn(List.of(new RoomLookupResponse(ROOM_ID, "101", "OCCUPIED", true)));
+
+        mockMvc.perform(get("/api/rooms/lookup").param("checkInDate", "2026-10-10").param("checkOutDate", "2026-10-12")
+                        .with(user("reservation-manager").authorities(manageBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("\"roomNumber\":\"101\"")));
+        mockMvc.perform(get("/api/rooms/lookup").param("checkInDate", "2026-10-10")
+                        .with(user("reservation-manager").authorities(manageBookingAuthority())))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/rooms/lookup").param("checkInDate", "2026-10-12").param("checkOutDate", "2026-10-12")
+                        .with(user("reservation-manager").authorities(manageBookingAuthority())))
+                .andExpect(status().isBadRequest());
     }
 
     /**
