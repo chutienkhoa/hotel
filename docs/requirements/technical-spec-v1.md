@@ -4259,4 +4259,54 @@ quyết định bố cục; các giá trị/đơn vị trong V3, ví dụ JPY, c
 - **Phản hồi**: `Content-Type: application/pdf`, `Content-Disposition: attachment; filename="hotel-performance-yyyy-MM.pdf"`,
   `Cache-Control: no-store`; không ghi file tạm. Lối vào tải xuống: thẻ nhỏ trên trang Reports Overview.
 
+## 61.10 Monthly Hotel Performance Excel — quyết định Task 32
+
+`GET /reports/monthly-performance.xlsx?month=yyyy-MM` (`PERM_VIEW_REPORT`, không có permission mới) trả về workbook
+Excel tạo trong bộ nhớ. Template runtime và nguồn bố cục duy nhất (KHÔNG có bản sao thứ hai trong `docs/`):
+`src/main/resources/report-templates/hotel_monthly_report_excel_mockup_final.xlsx`; workbook được nạp bằng Apache
+POI (`poi-ooxml` 5.5.1) và chỉ điền giá trị, giữ nguyên viền, màu, font, độ rộng cột, chiều cao dòng, merge và chart.
+
+- **Tháng**: cùng hợp đồng như PDF (mục 61.9): mặc định `YearMonth.now(clock)` (Asia/Ho_Chi_Minh); từ chối tháng sai
+  định dạng, tháng tương lai, tháng trước `firstFullySupportedMonth` của occupancy và lỗi toàn vẹn dữ liệu bằng
+  chuyển hướng về `/reports` kèm thông báo đã dịch; không tạo workbook một phần.
+- **Năm sheet, tên cố định bằng tiếng Anh** (mọi locale): `Monthly Summary`, `Reservations`, `Payments`, `Expenses`,
+  `Occupancy` (chart tham chiếu `'Monthly Summary'`). Nhãn và nội dung BÊN TRONG sheet theo locale giao diện PMS hiện
+  tại (không có tham số ngôn ngữ riêng); tiêu đề và tên series của chart cũng được dịch, tham chiếu giữ nguyên.
+- **Dataset**: `MonthlyHotelPerformanceExcelData` = `MonthlyHotelPerformanceReport` dùng chung (không đổi) + dòng chi
+  tiết Reservation/Payment/Expense. `RevenueTrendPoint` mang thêm Room Revenue (Task 29) để chart Excel có hai series
+  Total Revenue và Room Revenue; PDF vẫn chỉ vẽ một series Total Revenue.
+- **Monthly Summary** (không chèn dòng): KPI A5:H5, Financial Summary, Reservation Source, Room Type (5 dòng cố định:
+  nhiều hơn 5 loại thì 4 dòng đầu + "Others" gộp tổng, tỷ lệ tính từ tổng), Additional Revenue Top 4 + Others (không
+  có "Others" giả khi ≤ 4 category), bảng xu hướng sáu tháng A25:C30. Dòng không dùng được xóa giá trị. `A3` ghi chú
+  "Data through" chỉ cho tháng hiện tại (đêm đã hoàn tất theo Task 30); `A6` ghi chú cảnh báo doanh thu phòng không phải
+  VND của Task 29 khi có; nếu không có thì để trống.
+- **Reservations**: Reservation có `checkInDate` trong tháng, MỌI trạng thái (cùng tập với Reservation Source; số dòng
+  bằng số Reservations ở Summary), MỘT dòng cho mỗi Reservation (không theo ReservationRoom). Cột: Reservation No.,
+  Source, External Booking Ref (`otaBookingReference`, trống với DIRECT), Guest, Check-in, Check-out, Room Type (các
+  RoomType phân biệt của phòng đã đặt, theo thứ tự code, nối bằng ", ", qua RoomType hiện tại của Room như analytics
+  booked-room; không có snapshot lịch sử), Booking Amount và Currency của Reservation (không quy đổi), Status. Sắp xếp
+  `checkInDate` rồi `reservationNumber`.
+- **Payments** (dòng tiền thu, KHÔNG phải doanh thu Task 29): `status IN (PAID, REFUNDED)`, mỏ neo `paidAt` trong
+  `[đầu tháng, đầu tháng sau)` theo Instant của Asia/Ho_Chi_Minh; không gồm `PENDING`/`FAILED`. Cột: Date (ngày giờ),
+  Reservation No., Guest (qua Stay → Reservation → Guest), Method, Reference, Amount (số tiền gốc, không quy đổi,
+  không dùng `appliedAmount`), Currency (cột mới, duy nhất thay đổi cấu trúc template, ngay sau Amount), Status. Sắp xếp
+  `paidAt` rồi `id`. **Hạn chế V1 đã biết**: Payment `REFUNDED` vẫn là CHÍNH dòng đó, neo theo `paidAt`, hiển thị
+  trạng thái Refunded; KHÔNG có dòng âm giả, không bịa `refundedAt` và không chuyển sang tháng hoàn tiền. Hoàn tiền xảy
+  ra ở tháng sau KHÔNG xuất hiện như một sự kiện dòng tiền riêng vì domain chưa có lịch sử sự kiện hoàn tiền.
+- **Expenses**: dùng tập Task 29: `POSTED` và `expenseDate` trong tháng; cột Date, Category, Description, Amount (VND),
+  Status, Created By (username người tạo); sắp xếp `expenseDate` rồi `id`.
+- **Occupancy**: theo từng RoomType (không theo ngày), lấy ĐẦY ĐỦ `roomTypePerformance` của Task 30 (RoomType lịch sử,
+  đêm occupied/sellable, không gấp 5 dòng), theo thứ tự code; cột Notes để trống (không có ghi chú "Highest occupancy").
+- **Ngày/giờ**: ô ngày/ngày giờ thật của Excel với định dạng `dd/MM/yyyy` và `dd/MM/yyyy HH:mm` (quyết định sản phẩm,
+  ghi đè `yyyy-mm-dd` trong mock); Instant chuyển theo Asia/Ho_Chi_Minh. Tháng báo cáo (H5) giữ định dạng tháng của
+  template. Nhãn enum (nguồn, trạng thái Reservation, phương thức/trạng thái Payment, trạng thái Expense) dùng nhãn đã dịch.
+- **Chống formula injection**: mọi văn bản do người dùng/nghiệp vụ nhập được ghi dưới dạng ô chuỗi (không bao giờ là công
+  thức); giá trị bắt đầu bằng `=`, `+`, `-`, `@`, tab hoặc xuống dòng dùng style quote-prefix để giữ nguyên chữ hiển thị.
+  Không có công thức ô, liên kết ngoài hay macro trong output.
+- **Làm sạch metadata**: thông tin cá nhân của template (đường dẫn tuyệt đối Windows, tên người sửa cuối) được thay bằng
+  giá trị ứng dụng chung khi sinh file; template gốc không bị sửa.
+- **Phản hồi**: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+  `Content-Disposition: attachment; filename="hotel-performance-yyyy-MM.xlsx"`, `Cache-Control: no-store`; không ghi
+  file tạm. Lối vào tải xuống: nút "Download Excel" cạnh "Download PDF" trên thẻ Reports Overview (cùng ô chọn tháng).
+
 **End of Specification v1.0**

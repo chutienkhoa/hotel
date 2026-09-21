@@ -111,9 +111,26 @@ class MonthlyHotelPerformanceReportServiceTest {
         assertEquals(SEPTEMBER, report.revenueTrend().get(5).month());
         assertEquals(new BigDecimal("6000"), report.revenueTrend().get(5).totalRevenue());
         assertEquals(new BigDecimal("1000"), report.revenueTrend().get(0).totalRevenue());
+        assertEquals(new BigDecimal("6000"), report.revenueTrend().get(5).roomRevenue());
+        assertEquals(new BigDecimal("1000"), report.revenueTrend().get(0).roomRevenue());
         for (int back = 0; back < 6; back++) {
             verify(financialService, times(1)).report(SEPTEMBER.minusMonths(back));
         }
+    }
+
+    /** Confirms each trend point carries the Task 29 Room Revenue next to Total Revenue (Room plus Additional). */
+    @Test
+    void shouldCarryRoomRevenueAlongsideTotalRevenueInTheTrend() {
+        financials.put(SEPTEMBER, financial(SEPTEMBER, "1180000", "104000", "0"));
+        financials.put(SEPTEMBER.minusMonths(3), financial(SEPTEMBER.minusMonths(3), "500", "70", "0"));
+
+        MonthlyHotelPerformanceReport report = service().build(SEPTEMBER);
+
+        assertEquals(new BigDecimal("1284000"), report.revenueTrend().get(5).totalRevenue());
+        assertEquals(new BigDecimal("1180000"), report.revenueTrend().get(5).roomRevenue());
+        assertEquals(new BigDecimal("570"), report.revenueTrend().get(2).totalRevenue());
+        assertEquals(new BigDecimal("500"), report.revenueTrend().get(2).roomRevenue());
+        assertEquals(SEPTEMBER.minusMonths(3), report.revenueTrend().get(2).month());
     }
 
     /** Confirms all four sources are present in enum order, zero-filled, with 2-decimal percentages. */

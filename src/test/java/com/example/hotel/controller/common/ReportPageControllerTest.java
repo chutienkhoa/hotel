@@ -116,9 +116,12 @@ class ReportPageControllerTest {
                 .andExpect(content().string(containsString("action=\"/reports/monthly-performance.pdf\"")))
                 .andExpect(content().string(containsString("type=\"month\"")))
                 .andExpect(content().string(containsString("value=\"2026-09\"")))
-                .andExpect(content().string(containsString("Download PDF")));
+                .andExpect(content().string(containsString("Download PDF")))
+                .andExpect(content().string(containsString("formaction=\"/reports/monthly-performance.xlsx\"")))
+                .andExpect(content().string(containsString("Download Excel")));
         mockMvc.perform(get("/reports").cookie(new Cookie("pms-lang", "vi")).with(reportViewer()))
-                .andExpect(content().string(containsString("Tải PDF")));
+                .andExpect(content().string(containsString("Tải PDF")))
+                .andExpect(content().string(containsString("Tải Excel")));
     }
 
     /** Confirms a flash error from a rejected export is shown on the overview. */

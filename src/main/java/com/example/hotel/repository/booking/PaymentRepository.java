@@ -48,4 +48,25 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
                     + "AND p.status = :status")
     BigDecimal sumAppliedAmountByStayIdAndStatus(
             @Param("stayId") UUID stayId, @Param("status") PaymentStatus status);
+
+    /**
+     * Finds the Payments of the given statuses paid in {@code [start, endExclusive)}, reaching the Reservation
+     * number and Guest through the owning Stay, ordered by payment time then id.
+     *
+     * @param statuses statuses to include
+     * @param start first Instant included
+     * @param endExclusive first Instant excluded
+     * @return one row per Payment
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.booking.PaymentExportRow("
+                    + "p.paidAt, res.reservationNumber, g.firstName, g.lastName, p.method, p.reference, "
+                    + "p.amount, p.currency, p.status) "
+                    + "FROM Payment p JOIN p.stay s JOIN s.reservation res JOIN res.guest g "
+                    + "WHERE p.status IN :statuses AND p.paidAt >= :start AND p.paidAt < :endExclusive "
+                    + "ORDER BY p.paidAt, p.id")
+    List<PaymentExportRow> findExportRowsPaidWithin(
+            @Param("statuses") java.util.Collection<PaymentStatus> statuses,
+            @Param("start") java.time.Instant start,
+            @Param("endExclusive") java.time.Instant endExclusive);
 }

@@ -86,7 +86,7 @@ class MonthlyHotelPerformancePdfRendererTest {
             NonVndRoomRevenueWarning warning, MonthlyOccupancyReport occupancy, List<AdditionalRevenueCategoryShare> categories) {
         List<RevenueTrendPoint> trend = new ArrayList<>();
         for (int back = 5; back >= 0; back--) {
-            trend.add(new RevenueTrendPoint(SEPTEMBER.minusMonths(back), n(String.valueOf(1_000_000 + (5 - back) * 100_000))));
+            trend.add(new RevenueTrendPoint(SEPTEMBER.minusMonths(back), n(String.valueOf(1_000_000 + (5 - back) * 100_000)), n("900000")));
         }
         List<ReservationSourceShare> sources = List.of(
                 new ReservationSourceShare(BookingSource.DIRECT, 60, n("21.00")),
@@ -253,7 +253,7 @@ class MonthlyHotelPerformancePdfRendererTest {
                 BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, null, null);
         List<RevenueTrendPoint> trend = new ArrayList<>();
         for (int back = 5; back >= 0; back--) {
-            trend.add(new RevenueTrendPoint(SEPTEMBER.minusMonths(back), BigDecimal.ZERO));
+            trend.add(new RevenueTrendPoint(SEPTEMBER.minusMonths(back), BigDecimal.ZERO, BigDecimal.ZERO));
         }
         List<ReservationSourceShare> sources = new ArrayList<>();
         for (BookingSource source : BookingSource.values()) {

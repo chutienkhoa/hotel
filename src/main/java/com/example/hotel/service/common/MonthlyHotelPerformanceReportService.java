@@ -90,7 +90,7 @@ public class MonthlyHotelPerformanceReportService {
             MonthlyFinancialReport source = back == 0
                     ? financial
                     : back == 1 ? previousFinancial : financialService.report(trendMonth);
-            trend.add(new RevenueTrendPoint(trendMonth, source.totalRevenue()));
+            trend.add(new RevenueTrendPoint(trendMonth, source.totalRevenue(), source.roomRevenue()));
         }
 
         LocalDate monthStart = month.atDay(1);

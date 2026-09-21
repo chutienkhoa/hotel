@@ -40,7 +40,10 @@
                         <label for="performance-month" th:text="#{report.performance.month.label}">Month</label>
                         <input id="performance-month" name="month" required th:value="${selectedMonth}" type="month" />
                     </div>
-                    <p><button class="button button-primary" th:text="#{report.performance.download}" type="submit">Download PDF</button></p>
+                    <p>
+                        <button class="button button-primary" th:text="#{report.performance.download}" type="submit">Download PDF</button>
+                        <button class="button button-secondary" th:formaction="@{/reports/monthly-performance.xlsx}" th:text="#{report.excel.download}" type="submit">Download Excel</button>
+                    </p>
                 </form>
             </article>
         </section>

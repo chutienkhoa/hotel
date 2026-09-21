@@ -192,4 +192,40 @@ public interface ReservationRepository
             @Param("monthStart") LocalDate monthStart,
             @Param("nextMonthStart") LocalDate nextMonthStart,
             @Param("statuses") Collection<ReservationStatus> statuses);
+
+    /**
+     * Finds the Reservations whose check-in date lies in {@code [start, endExclusive)}, every status, as a
+     * narrow projection ordered by check-in date then reservation number.
+     *
+     * @param start first check-in date included
+     * @param endExclusive first check-in date excluded
+     * @return one row per Reservation
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.booking.ReservationExportRow("
+                    + "r.id, r.reservationNumber, r.source, r.otaBookingReference, g.firstName, g.lastName, "
+                    + "r.checkInDate, r.checkOutDate, r.totalAmount, r.currency, r.status) "
+                    + "FROM Reservation r JOIN r.guest g "
+                    + "WHERE r.checkInDate >= :start AND r.checkInDate < :endExclusive "
+                    + "ORDER BY r.checkInDate, r.reservationNumber")
+    List<ReservationExportRow> findExportRowsByCheckInWithin(
+            @Param("start") LocalDate start, @Param("endExclusive") LocalDate endExclusive);
+
+    /**
+     * Finds the distinct RoomTypes booked by every Reservation whose check-in date lies in
+     * {@code [start, endExclusive)}, in one query (no per-Reservation lookups), ordered by RoomType code.
+     * The RoomType is resolved through the booked Room, as the existing booked-room analytics do.
+     *
+     * @param start first check-in date included
+     * @param endExclusive first check-in date excluded
+     * @return one row per (Reservation, RoomType)
+     */
+    @Query(
+            "SELECT DISTINCT new com.example.hotel.repository.booking.ReservationRoomTypeRow("
+                    + "rr.reservation.id, rt.code, rt.name) "
+                    + "FROM ReservationRoom rr JOIN rr.room room JOIN room.roomType rt "
+                    + "WHERE rr.reservation.checkInDate >= :start AND rr.reservation.checkInDate < :endExclusive "
+                    + "ORDER BY rt.code")
+    List<ReservationRoomTypeRow> findBookedRoomTypesByCheckInWithin(
+            @Param("start") LocalDate start, @Param("endExclusive") LocalDate endExclusive);
 }

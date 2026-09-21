@@ -71,4 +71,24 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID>, JpaSpec
                     com.example.hotel.entity.common.ExpenseStatus status,
             @org.springframework.data.repository.query.Param("startInclusive") java.time.LocalDate startInclusive,
             @org.springframework.data.repository.query.Param("endExclusive") java.time.LocalDate endExclusive);
+
+    /**
+     * Finds the Expenses of one status dated in {@code [startInclusive, endExclusive)} with the category name
+     * and creating user's username resolved in the same query, ordered by date then id.
+     *
+     * @param status status to include, POSTED for recognized Expense
+     * @param startInclusive first expense date included
+     * @param endExclusive first expense date excluded
+     * @return one row per Expense
+     */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT new com.example.hotel.repository.common.ExpenseExportRow("
+                    + "e.expenseDate, c.name, e.description, e.amount, e.status, u.username) "
+                    + "FROM Expense e JOIN e.category c LEFT JOIN AppUser u ON u.id = e.createdBy "
+                    + "WHERE e.status = :status AND e.expenseDate >= :startInclusive AND e.expenseDate < :endExclusive "
+                    + "ORDER BY e.expenseDate, e.id")
+    java.util.List<ExpenseExportRow> findExportRowsByStatusWithin(
+            @org.springframework.data.repository.query.Param("status") com.example.hotel.entity.common.ExpenseStatus status,
+            @org.springframework.data.repository.query.Param("startInclusive") java.time.LocalDate startInclusive,
+            @org.springframework.data.repository.query.Param("endExclusive") java.time.LocalDate endExclusive);
 }
