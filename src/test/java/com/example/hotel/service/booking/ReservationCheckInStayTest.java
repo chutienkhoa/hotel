@@ -72,6 +72,8 @@ class ReservationCheckInStayTest {
         when(room.isActive()).thenReturn(true);
         when(room.getStatus()).thenReturn(RoomStatus.AVAILABLE);
         when(room.getRoomNumber()).thenReturn("101");
+        com.example.hotel.entity.room.RoomType roomType = capacityTwo();
+        when(room.getRoomType()).thenReturn(roomType);
         when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
         when(stayRepository.save(any(Stay.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -137,8 +139,8 @@ class ReservationCheckInStayTest {
         UUID userId = UUID.randomUUID();
         UUID reservationId = UUID.randomUUID();
 
-        Room roomA = Room.create(UUID.randomUUID(), "201", null, "2");
-        Room roomB = Room.create(UUID.randomUUID(), "202", null, "2");
+        Room roomA = Room.create(UUID.randomUUID(), "201", capacityTwo(), "2");
+        Room roomB = Room.create(UUID.randomUUID(), "202", capacityTwo(), "2");
         Reservation reservation = new Reservation(
                 reservationId, "R20260911-000002", null, LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 13), "JPY", null);
         ReservationRoom reservationRoomA = new ReservationRoom(
@@ -259,5 +261,11 @@ class ReservationCheckInStayTest {
         CurrentUser user = new CurrentUser(userId, "check-in-user");
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(user, null));
+    }
+
+    private static com.example.hotel.entity.room.RoomType capacityTwo() {
+        com.example.hotel.entity.room.RoomType type = org.mockito.Mockito.mock(com.example.hotel.entity.room.RoomType.class);
+        org.mockito.Mockito.when(type.getCapacity()).thenReturn(2);
+        return type;
     }
 }

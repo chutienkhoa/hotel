@@ -4527,4 +4527,29 @@ Ngoài Guest chính (bắt buộc, vẫn nằm ở `reservation.guest_id`), Rese
 - **Truy vấn**: Accompanying Guests được nạp bằng MỘT truy vấn (fetch join Guest) cho Detail, form sửa và Check-in Review — không truy vấn theo từng Guest.
 - **Chưa thay đổi**: kiểm tra capacity (Task C, chưa triển khai), Front Desk (vẫn chỉ Guest chính), Dashboard/báo cáo/PDF/Excel, audit (vẫn là entry mức thao tác CREATE/UPDATE, không audit theo trường).
 
+## 66.2 Adult Capacity (P1 Task C)
+
+`RoomType.capacity` là **sức chứa NGƯỜI LỚN** và là bất biến của Reservation:
+
+```text
+adultCount <= SUM(RoomType.capacity của mọi phòng đang được gán cho Reservation)
+```
+
+- **Một quy tắc dùng chung**: `AdultCapacityRules` (thuần, không phụ thuộc MVC/HTTP/template/văn bản localized) trả về kết quả có cấu trúc `VALID`,
+  `INSUFFICIENT_ADULT_CAPACITY` hoặc `CAPACITY_NOT_CONFIGURED` (cùng `adultCount`, tổng sức chứa, tên RoomType chưa cấu hình). Confirm, Arrival Readiness, Check-in và Pre-check-in Room Reassignment đều
+  gọi đúng quy tắc này, không tự cài lại công thức.
+- **Trẻ em không chiếm sức chứa người lớn** trong V1 (không có child capacity, tuổi, infant, giường phụ). `partySize` và số Accompanying Guest profile KHÔNG tham gia phép tính.
+- **Cộng dồn theo Reservation, không gán người vào phòng**: sức chứa là tổng của tất cả phòng (ví dụ 3 người lớn hợp lệ với DOUBLE(2) + SINGLE(1)); không kiểm tra theo từng phòng và không có gán người-phòng.
+  Sức chứa lấy từ RoomType hiện tại của Room; không lưu snapshot sức chứa trên `ReservationRoom` và không lưu tổng sức chứa.
+- **`capacity = null` = sức chứa chưa biết / lỗi cấu hình RoomType**: KHÔNG được hiểu là 0, không giới hạn hay bỏ qua phòng đó; nếu bất kỳ phòng nào có RoomType chưa cấu hình sức chứa thì kiểm tra không thể thành công
+  (`CAPACITY_NOT_CONFIGURED`) và chặn tiến trình vòng đời. Cột `capacity` vẫn nullable (không thêm migration).
+- **DRAFT được phép tạm vượt sức chứa**: Create và Draft edit không chặn (không cảnh báo capacity trong UI Draft).
+- **Confirm chặn cứng**: sau khi khóa phòng và kiểm tra overlap, capacity được kiểm tra trên đúng tập phòng đã khóa; lỗi (409) không làm thay đổi Reservation và không tự thêm/đổi phòng, sửa số người hay giá.
+- **Arrival Readiness**: capacity không hợp lệ là BLOCKER (`INSUFFICIENT_ADULT_CAPACITY`, `CAPACITY_NOT_CONFIGURED`), hiển thị localized trên Check-in Review; Front Desk dùng readiness dùng chung nên đưa reservation vào Needs Attention
+  mà không có logic capacity riêng. Các blocker/cảnh báo khác giữ nguyên.
+- **Check-in chặn cứng và đánh giá lại độc lập**: backend kiểm tra lại sức chứa HIỆN TẠI (không tin rằng đã confirm nghĩa là hợp lệ) sau các kiểm tra trạng thái phòng hiện có và trước mọi thay đổi (không tạo Stay/ROOM charge khi lỗi).
+- **Pre-check-in Room Reassignment**: kiểm tra tập phòng KẾT QUẢ (phòng hiện tại với phòng bị thay được đổi thành phòng đích) trong cùng thao tác có khóa; sai thì từ chối, không thay đổi gì. Danh sách phòng thay thế cũng lọc theo cùng quy tắc.
+- **Chưa thay đổi / hoãn**: hành vi capacity của Stay Room Change (sau check-in) là quyết định còn hoãn và KHÔNG thay đổi trong Task C; thao tác "Update Guest Composition" cho Reservation đã confirm vẫn chưa được triển khai;
+  Occupancy trong báo cáo vẫn là room-night occupancy, không đổi.
+
 **End of Specification v1.0**

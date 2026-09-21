@@ -341,7 +341,8 @@ class CheckInServiceTest {
 
     /** Creates an active mocked Room with the supplied status. */
     private Room activeRoom(RoomStatus status) {
-        Room room = Room.create(UUID.randomUUID(), "101", mock(RoomType.class), "1");
+        RoomType type = mock(RoomType.class, invocation -> "getCapacity".equals(invocation.getMethod().getName()) ? Integer.valueOf(2) : null);
+        Room room = Room.create(UUID.randomUUID(), "101", type, "1");
         org.springframework.test.util.ReflectionTestUtils.setField(room, "status", status);
         return room;
     }

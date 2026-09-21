@@ -114,6 +114,29 @@ class FrontDeskQueryServiceTest {
         assertEquals(ArrivalIssueCode.ROOM_DIRTY, rows.get(1).rooms().get(0).issue());
     }
 
+    /** Confirms insufficient adult capacity puts an arrival in Needs Attention through the shared readiness (no own rule). */
+    @Test
+    void shouldFlagInsufficientAdultCapacityAsNeedsAttentionThroughReadiness() {
+        Reservation reservation = reservation("R-1", TODAY);
+        ReflectionTestUtils.setField(reservation, "adultCount", 3);
+        line(reservation, room("101", RoomStatus.AVAILABLE));
+
+        FrontDeskArrivalRow row = arrivals().get(0);
+
+        assertTrue(row.needsAttention());
+        assertFalse(row.overdue());
+        assertEquals(ArrivalIssueCode.INSUFFICIENT_ADULT_CAPACITY, row.readiness().blockers().get(0).code());
+        assertEquals(
+                com.example.hotel.service.booking.ArrivalReadinessRules.evaluate(
+                        ReservationStatus.CONFIRMED, TODAY, TODAY, false, 3,
+                        List.of(roomOf(reservation)), true).issues(),
+                row.readiness().issues());
+    }
+
+    private static Room roomOf(Reservation reservation) {
+        return reservation.getRooms().get(0).getRoom();
+    }
+
     /** Confirms a multi-room reservation is ONE row listing every room, with the issue on the affected room only. */
     @Test
     void shouldShowMultiRoomReservationAsOneRowWithPerRoomIssues() {
@@ -356,6 +379,7 @@ class FrontDeskQueryServiceTest {
     private Room room(String number, RoomStatus status) {
         RoomType type = mock(RoomType.class);
         when(type.getName()).thenReturn("Double");
+        when(type.getCapacity()).thenReturn(2);
         Room room = Room.create(UUID.randomUUID(), number, type, "1");
         ReflectionTestUtils.setField(room, "status", status);
         return room;

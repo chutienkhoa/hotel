@@ -17,7 +17,11 @@ public class RoomReassignmentException extends RuntimeException {
         /** The replacement Room is the current Room or already assigned to the Reservation. */
         ROOM_ALREADY_ASSIGNED,
         /** The replacement Room is not active AVAILABLE and free for the booked dates. */
-        ROOM_UNAVAILABLE
+        ROOM_UNAVAILABLE,
+        /** The Reservation's adults would exceed the adult capacity of the resulting room set. */
+        INSUFFICIENT_ADULT_CAPACITY,
+        /** A room of the resulting set has a RoomType without configured capacity. */
+        CAPACITY_NOT_CONFIGURED
     }
 
     private final Reason reason;

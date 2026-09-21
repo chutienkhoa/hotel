@@ -139,6 +139,7 @@ public class CheckInService {
                 today,
                 reservation.getStatus() == ReservationStatus.CONFIRMED
                         && stayRepository.existsByReservationId(reservation.getId()),
+                reservation.getAdultCount(),
                 reservation.getRooms().stream().map(ReservationRoom::getRoom).toList(),
                 passportAvailable);
         boolean eligible = readiness.blockers().isEmpty();

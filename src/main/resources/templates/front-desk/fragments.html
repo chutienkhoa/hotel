@@ -54,7 +54,7 @@
                           th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'"
                           th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
                     <div th:each="issue : ${row.readiness.blockers()}">
-                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.roomNumber})}">Room 101 needs cleaning</span>
+                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.messageArgument(0)},${issue.messageArgument(1)})}">Room 101 needs cleaning</span>
                     </div>
                 </td>
                 <td>

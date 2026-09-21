@@ -20,6 +20,10 @@ public enum ArrivalIssueCode {
     ROOM_MAINTENANCE,
     /** BLOCKER: the assigned Room is OUT_OF_ORDER. */
     ROOM_OUT_OF_ORDER,
+    /** BLOCKER: the adult count exceeds the summed adult capacity of the assigned rooms. */
+    INSUFFICIENT_ADULT_CAPACITY,
+    /** BLOCKER: an assigned Room's RoomType has no configured capacity, so capacity cannot be established. */
+    CAPACITY_NOT_CONFIGURED,
     /** WARNING: the check-in date has passed (existing late check-in rule); no automatic NO_SHOW. */
     ARRIVAL_OVERDUE,
     /** WARNING: the Guest has no passport image (optional in V1). */

@@ -94,6 +94,7 @@ public final class ArrivalReadinessRules {
      * @param checkInDate planned check-in date
      * @param today hotel current date
      * @param stayExists whether a Stay already exists
+     * @param adultCount the Reservation's adult count, checked against the assigned rooms by {@link AdultCapacityRules}
      * @param rooms assigned Rooms
      * @param passportAvailable whether the Guest has a passport image
      * @return the derived readiness
@@ -103,6 +104,7 @@ public final class ArrivalReadinessRules {
             LocalDate checkInDate,
             LocalDate today,
             boolean stayExists,
+            int adultCount,
             List<Room> rooms,
             boolean passportAvailable) {
         CheckInTiming timing = classify(today, checkInDate);
@@ -122,6 +124,16 @@ public final class ArrivalReadinessRules {
                     info.add(new ArrivalReadinessIssue(
                             ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, room.getRoomNumber(), room.getId()));
                 }
+            }
+            AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(adultCount, rooms);
+            switch (capacity.outcome()) {
+                case INSUFFICIENT_ADULT_CAPACITY -> blockers.add(new ArrivalReadinessIssue(
+                        ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.INSUFFICIENT_ADULT_CAPACITY, null, null,
+                        capacity.adultCount(), capacity.totalAdultCapacity(), null));
+                case CAPACITY_NOT_CONFIGURED -> blockers.add(new ArrivalReadinessIssue(
+                        ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.CAPACITY_NOT_CONFIGURED, null, null, null, null,
+                        String.join(", ", capacity.unconfiguredRoomTypes())));
+                case VALID -> { }
             }
             if (timing == CheckInTiming.LATE) {
                 warnings.add(new ArrivalReadinessIssue(

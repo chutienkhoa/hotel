@@ -62,7 +62,7 @@
                     <li th:each="issue : ${review.readiness.issues}"
                         th:classappend="${' readiness-issue--' + #strings.toLowerCase(issue.severity.name())}">
                         <strong th:text="#{'checkin.readiness.severity.' + ${issue.severity.name()}}">Blocker</strong>
-                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.roomNumber})}">Room 101 needs cleaning</span>
+                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.messageArgument(0)},${issue.messageArgument(1)})}">Room 101 needs cleaning</span>
                         <a class="button button-secondary reassign-room-link"
                            th:href="@{/check-in/reservations/{id}/rooms/{roomId}/reassign(id=${review.reservationId},roomId=${issue.roomId})}"
                            th:if="${issue.roomBlocker() and review.status == 'CONFIRMED'}"

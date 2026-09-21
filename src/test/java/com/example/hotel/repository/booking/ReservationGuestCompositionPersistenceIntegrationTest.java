@@ -91,9 +91,11 @@ class ReservationGuestCompositionPersistenceIntegrationTest {
         service.updateDraft(created.id(), request(in, 4, 0));
         assertEquals(counts(4, 0), row(created.id()));
 
+        // Capacity is enforced at Confirm: bring the adults within the room's capacity (2), then confirm.
+        service.updateDraft(created.id(), request(in, 2, 1));
         service.confirm(created.id());
         assertThrows(ResponseStatusException.class, () -> service.updateDraft(created.id(), request(in, 1, 0)));
-        assertEquals(counts(4, 0), row(created.id()));
+        assertEquals(counts(2, 1), row(created.id()));
     }
 
     /** Confirms invalid counts are rejected and leave nothing behind. */

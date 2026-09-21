@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /** Represents a read-only classification that may be assigned to one or more rooms. */
+@org.hibernate.annotations.BatchSize(size = 25)
 @Entity
 @Table(name = "room_type")
 public class RoomType extends AuditedEntity {

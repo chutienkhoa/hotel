@@ -227,6 +227,8 @@ class ReservationCheckInRoomChargeTest {
         when(firstRoom.isActive()).thenReturn(true);
         when(firstRoom.getStatus()).thenReturn(RoomStatus.AVAILABLE);
         when(firstRoom.getRoomNumber()).thenReturn("101");
+        com.example.hotel.entity.room.RoomType firstRoomType = capacityTwo();
+        when(firstRoom.getRoomType()).thenReturn(firstRoomType);
         reservation.addRoom(new ReservationRoom(reservation, firstRoom, checkIn, checkOut, firstNightlyRate));
 
         Room secondRoom = mock(Room.class);
@@ -235,6 +237,8 @@ class ReservationCheckInRoomChargeTest {
         when(secondRoom.isActive()).thenReturn(true);
         when(secondRoom.getStatus()).thenReturn(RoomStatus.AVAILABLE);
         when(secondRoom.getRoomNumber()).thenReturn("202");
+        com.example.hotel.entity.room.RoomType secondRoomType = capacityTwo();
+        when(secondRoom.getRoomType()).thenReturn(secondRoomType);
         reservation.addRoom(new ReservationRoom(reservation, secondRoom, checkIn, checkOut, secondNightlyRate));
 
         reservation.calculateTotal();
@@ -291,4 +295,10 @@ class ReservationCheckInRoomChargeTest {
             ChargeRepository chargeRepository,
             StayRepository stayRepository,
             List<Room> rooms) {}
+
+    private static com.example.hotel.entity.room.RoomType capacityTwo() {
+        com.example.hotel.entity.room.RoomType type = org.mockito.Mockito.mock(com.example.hotel.entity.room.RoomType.class);
+        org.mockito.Mockito.when(type.getCapacity()).thenReturn(2);
+        return type;
+    }
 }

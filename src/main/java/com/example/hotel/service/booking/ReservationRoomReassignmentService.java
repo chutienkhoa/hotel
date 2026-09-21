@@ -86,6 +86,7 @@ public class ReservationRoomReassignmentService {
                 .filter(room -> !assigned.contains(room.getId()))
                 .filter(room -> roomAvailability.isCheckInReadyForPeriod(
                         room, line.getCheckInDate(), line.getCheckOutDate()))
+                .filter(room -> capacityAllowsReplacement(reservation, currentRoomId, room))
                 .sorted(Comparator.comparing(Room::getRoomNumber))
                 .map(room -> new RoomReassignmentCandidateResponse(
                         room.getId(),
@@ -137,6 +138,7 @@ public class ReservationRoomReassignmentService {
         if (!roomAvailability.isCheckInReadyForPeriod(target, line.getCheckInDate(), line.getCheckOutDate())) {
             throw new RoomReassignmentException(Reason.ROOM_UNAVAILABLE, "Room is no longer available");
         }
+        requireCapacityOfResultingRooms(reservation, currentRoomId, target);
         Room previous = reservation.reassignRoom(currentRoomId, target);
         line.audit(user.id());
         reservation.audit(user.id());
@@ -146,6 +148,31 @@ public class ReservationRoomReassignmentService {
                 reservation.getId(),
                 "Room " + previous.getRoomNumber(),
                 "Room " + target.getRoomNumber()));
+    }
+
+    private boolean capacityAllowsReplacement(Reservation reservation, UUID currentRoomId, Room candidate) {
+        List<Room> finalRooms = reservation.getRooms().stream()
+                .map(line -> line.getRoom().getId().equals(currentRoomId) ? candidate : line.getRoom())
+                .toList();
+        return AdultCapacityRules.evaluate(reservation.getAdultCount(), finalRooms).valid();
+    }
+
+    /**
+     * Validates the FINAL room set (current rooms with the replaced one swapped for the target) against the shared
+     * adult-capacity rule, before anything is changed.
+     */
+    private void requireCapacityOfResultingRooms(Reservation reservation, UUID currentRoomId, Room target) {
+        List<Room> finalRooms = reservation.getRooms().stream()
+                .map(line -> line.getRoom().getId().equals(currentRoomId) ? target : line.getRoom())
+                .toList();
+        AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(reservation.getAdultCount(), finalRooms);
+        switch (capacity.outcome()) {
+            case INSUFFICIENT_ADULT_CAPACITY -> throw new RoomReassignmentException(
+                    Reason.INSUFFICIENT_ADULT_CAPACITY, "The resulting rooms cannot host the adults");
+            case CAPACITY_NOT_CONFIGURED -> throw new RoomReassignmentException(
+                    Reason.CAPACITY_NOT_CONFIGURED, "Room capacity is not configured");
+            case VALID -> { }
+        }
     }
 
     private ReservationRoom requireReassignable(Reservation reservation, UUID currentRoomId) {

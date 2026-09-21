@@ -311,9 +311,77 @@ class ReservationRoomReassignmentServiceTest {
         when(reservations.hasOverlap(any(), any(), any(), any())).thenReturn(false);
     }
 
+    /** Confirms a replacement that keeps enough total adult capacity succeeds. */
+    @Test
+    void shouldAllowReplacementThatPreservesCapacity() {
+        ReflectionTestUtils.setField(reservation, "adultCount", 4);
+
+        service.reassign(reservation.getId(), oldRoom.getId(), target.getId());
+
+        assertSame(target, reservation.findRoomLine(target.getId()).getRoom());
+    }
+
+    /** Confirms a replacement that lowers the summed capacity below the adults is rejected and changes nothing. */
+    @Test
+    void shouldRejectReplacementThatReducesCapacityBelowAdults() {
+        ReflectionTestUtils.setField(reservation, "adultCount", 4);
+        setCapacity(target, 1);
+
+        RoomReassignmentException exception = assertThrows(RoomReassignmentException.class,
+                () -> service.reassign(reservation.getId(), oldRoom.getId(), target.getId()));
+
+        assertEquals(Reason.INSUFFICIENT_ADULT_CAPACITY, exception.getReason());
+        assertUnchanged();
+        assertEquals(0, new BigDecimal("1000000").compareTo(reservation.findRoomLine(oldRoom.getId()).getNightlyRate()));
+        assertEquals(0, new BigDecimal("3000000").compareTo(reservation.findRoomLine(oldRoom.getId()).getTotalAmount()));
+    }
+
+    /** Confirms a replacement whose RoomType capacity is null is rejected and changes nothing. */
+    @Test
+    void shouldRejectReplacementWithUnconfiguredCapacity() {
+        setCapacity(target, null);
+
+        RoomReassignmentException exception = assertThrows(RoomReassignmentException.class,
+                () -> service.reassign(reservation.getId(), oldRoom.getId(), target.getId()));
+
+        assertEquals(Reason.CAPACITY_NOT_CONFIGURED, exception.getReason());
+        assertUnchanged();
+    }
+
+    /** Confirms capacity is judged on the FINAL room set, not the replaced room alone (other rooms still count). */
+    @Test
+    void shouldJudgeTheFinalRoomSetNotTheReplacementAlone() {
+        ReflectionTestUtils.setField(reservation, "adultCount", 3);
+        setCapacity(target, 1);
+        setCapacity(otherRoom, 2);
+
+        service.reassign(reservation.getId(), oldRoom.getId(), target.getId());
+
+        assertSame(target, reservation.findRoomLine(target.getId()).getRoom());
+    }
+
+    /** Confirms candidates that would break capacity are not offered (same rule as execution). */
+    @Test
+    void shouldNotOfferCandidatesThatBreakCapacity() {
+        ReflectionTestUtils.setField(reservation, "adultCount", 4);
+        Room small = room("204", RoomStatus.AVAILABLE, true);
+        setCapacity(small, 1);
+        when(rooms.findActiveWithRoomType()).thenReturn(List.of(oldRoom, otherRoom, target, small));
+
+        List<String> offered = service.form(reservation.getId(), oldRoom.getId()).candidates().stream()
+                .map(RoomReassignmentCandidateResponse::roomNumber).toList();
+
+        assertEquals(List.of("203"), offered);
+    }
+
+    private static void setCapacity(Room room, Integer capacity) {
+        when(room.getRoomType().getCapacity()).thenReturn(capacity);
+    }
+
     private Room room(String number, RoomStatus status, boolean active) {
         RoomType type = mock(RoomType.class);
         when(type.getName()).thenReturn("Single");
+        when(type.getCapacity()).thenReturn(2);
         Room room = Room.create(UUID.randomUUID(), number, type, "1");
         ReflectionTestUtils.setField(room, "status", status);
         ReflectionTestUtils.setField(room, "active", active);

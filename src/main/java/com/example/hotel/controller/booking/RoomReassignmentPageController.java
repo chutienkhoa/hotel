@@ -87,7 +87,9 @@ public class RoomReassignmentPageController {
         } catch (RoomReassignmentException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", failure(exception));
             boolean formStillValid = exception.getReason() == RoomReassignmentException.Reason.ROOM_UNAVAILABLE
-                    || exception.getReason() == RoomReassignmentException.Reason.ROOM_ALREADY_ASSIGNED;
+                    || exception.getReason() == RoomReassignmentException.Reason.ROOM_ALREADY_ASSIGNED
+                    || exception.getReason() == RoomReassignmentException.Reason.INSUFFICIENT_ADULT_CAPACITY
+                    || exception.getReason() == RoomReassignmentException.Reason.CAPACITY_NOT_CONFIGURED;
             return formStillValid
                     ? "redirect:/check-in/reservations/" + reservationId + "/rooms/" + roomId + "/reassign"
                     : reviewRedirect(reservationId);

@@ -282,6 +282,8 @@ public class ReservationService {
                 throw conflict("Room is already booked for these dates");
             }
         }
+        // Capacity is checked on the locked, final room set (same rule as readiness, check-in and reassignment).
+        requireAdultCapacity(reservation, lockedRooms);
         reservation.confirm();
         reservation.audit(user.id());
         audit(user, "CONFIRM", reservation, "DRAFT", "CONFIRMED");
@@ -362,6 +364,8 @@ public class ReservationService {
                 throw conflict("Room is not available for check-in");
             }
         }
+        // Defense in depth: capacity is re-evaluated now (not trusted from confirmation) and before any mutation.
+        requireAdultCapacity(reservation, lockedRooms);
         for (Room room : lockedRooms) {
             room.occupy();
             room.audit(user.id());
@@ -375,6 +379,21 @@ public class ReservationService {
         createRoomCharges(stay, reservation, user);
         audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
         return response(reservation);
+    }
+
+    /**
+     * Rejects the operation unless the shared {@link AdultCapacityRules} accepts the adults against the given rooms.
+     * Nothing has been mutated when this is called.
+     */
+    private void requireAdultCapacity(Reservation reservation, List<Room> assignedRooms) {
+        AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(reservation.getAdultCount(), assignedRooms);
+        switch (capacity.outcome()) {
+            case INSUFFICIENT_ADULT_CAPACITY -> throw conflict("Reservation has " + capacity.adultCount()
+                    + " adults but the assigned rooms support only " + capacity.totalAdultCapacity() + " adults");
+            case CAPACITY_NOT_CONFIGURED -> throw conflict("Room capacity is not configured for room type "
+                    + String.join(", ", capacity.unconfiguredRoomTypes()));
+            case VALID -> { }
+        }
     }
 
     /**

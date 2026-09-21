@@ -15,6 +15,7 @@ import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
+import com.example.hotel.entity.room.RoomType;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
@@ -56,7 +57,7 @@ class ArrivalReadinessCheckInConsistencyTest {
     void shouldAgreeForEveryRoomStateAndActiveFlag() {
         for (RoomStatus status : RoomStatus.values()) {
             for (boolean active : new boolean[] {true, false}) {
-                assertAgreement(TODAY, true, status, active, false, status + " active=" + active);
+                assertAgreement(TODAY, true, status, active, false, 1, 2, status + " active=" + active);
             }
         }
     }
@@ -64,20 +65,32 @@ class ArrivalReadinessCheckInConsistencyTest {
     /** Confirms early, normal and late arrivals agree (late is a warning only and check-in allows it). */
     @Test
     void shouldAgreeForEarlyNormalAndLateArrival() {
-        assertAgreement(TODAY.plusDays(1), true, RoomStatus.AVAILABLE, true, false, "early");
-        assertAgreement(TODAY, true, RoomStatus.AVAILABLE, true, false, "normal");
-        assertAgreement(TODAY.minusDays(3), true, RoomStatus.AVAILABLE, true, false, "late");
+        assertAgreement(TODAY.plusDays(1), true, RoomStatus.AVAILABLE, true, false, 1, 2, "early");
+        assertAgreement(TODAY, true, RoomStatus.AVAILABLE, true, false, 1, 2, "normal");
+        assertAgreement(TODAY.minusDays(3), true, RoomStatus.AVAILABLE, true, false, 1, 2, "late");
     }
 
     /** Confirms a non-CONFIRMED reservation and an existing Stay agree. */
     @Test
     void shouldAgreeForNonConfirmedReservationAndExistingStay() {
-        assertAgreement(TODAY, false, RoomStatus.AVAILABLE, true, false, "draft");
-        assertAgreement(TODAY, true, RoomStatus.AVAILABLE, true, true, "stay exists");
+        assertAgreement(TODAY, false, RoomStatus.AVAILABLE, true, false, 1, 2, "draft");
+        assertAgreement(TODAY, true, RoomStatus.AVAILABLE, true, true, 1, 2, "stay exists");
+    }
+
+    /** Confirms adult capacity (sufficient, exact, insufficient, not configured) agrees between readiness and check-in. */
+    @Test
+    void shouldAgreeForAdultCapacityCases() {
+        for (int adults : new int[] {1, 2, 3}) {
+            for (Integer capacity : new Integer[] {1, 2, 3, null}) {
+                assertAgreement(TODAY, true, RoomStatus.AVAILABLE, true, false, adults, capacity,
+                        "adults=" + adults + " capacity=" + capacity);
+            }
+        }
     }
 
     private void assertAgreement(
-            LocalDate checkIn, boolean confirmed, RoomStatus status, boolean active, boolean stayExists, String label) {
+            LocalDate checkIn, boolean confirmed, RoomStatus status, boolean active, boolean stayExists, int adults,
+            Integer capacity, String label) {
         UUID reservationId = UUID.randomUUID();
         UUID roomId = UUID.randomUUID();
         Room room = mock(Room.class);
@@ -85,8 +98,12 @@ class ArrivalReadinessCheckInConsistencyTest {
         when(room.isActive()).thenReturn(active);
         when(room.getStatus()).thenReturn(status);
         when(room.getRoomNumber()).thenReturn("101");
+        RoomType roomType = mock(RoomType.class);
+        when(roomType.getCapacity()).thenReturn(capacity);
+        when(room.getRoomType()).thenReturn(roomType);
         Reservation reservation = new Reservation(
-                reservationId, "R1", null, checkIn, checkIn.plusDays(2), "VND", null);
+                reservationId, "R1", null, checkIn, checkIn.plusDays(2), adults, 0,
+                com.example.hotel.entity.booking.BookingSource.DIRECT, null, "VND", null);
         reservation.addRoom(new ReservationRoom(
                 reservation, room, checkIn, checkIn.plusDays(2), new BigDecimal("1000000")));
         reservation.calculateTotal();
@@ -111,7 +128,7 @@ class ArrivalReadinessCheckInConsistencyTest {
                 Clock.fixed(TODAY.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
         ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(
-                reservation.getStatus(), checkIn, TODAY, stayExists, List.of(room), true);
+                reservation.getStatus(), checkIn, TODAY, stayExists, reservation.getAdultCount(), List.of(room), true);
 
         if (readiness.state() == ArrivalReadinessState.READY) {
             assertDoesNotThrow(() -> service.checkIn(reservationId), label + ": readiness READY but check-in rejected");

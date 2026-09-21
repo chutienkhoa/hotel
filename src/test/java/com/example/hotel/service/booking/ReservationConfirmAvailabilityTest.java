@@ -67,7 +67,7 @@ class ReservationConfirmAvailabilityTest {
     }
 
     private Room roomWithStatus(RoomStatus status) {
-        Room room = Room.create(UUID.randomUUID(), "101", null, "1");
+        Room room = Room.create(UUID.randomUUID(), "101", capacityTwo(), "1");
         ReflectionTestUtils.setField(room, "status", status);
         return room;
     }
@@ -115,5 +115,11 @@ class ReservationConfirmAvailabilityTest {
         assertEquals(ReservationStatus.DRAFT, reservation.getStatus());
         verify(rooms).lockAllByIdIn(List.of(room.getId()));
         verify(reservations, org.mockito.Mockito.never()).save(any());
+    }
+
+    private static com.example.hotel.entity.room.RoomType capacityTwo() {
+        com.example.hotel.entity.room.RoomType type = org.mockito.Mockito.mock(com.example.hotel.entity.room.RoomType.class);
+        org.mockito.Mockito.when(type.getCapacity()).thenReturn(2);
+        return type;
     }
 }

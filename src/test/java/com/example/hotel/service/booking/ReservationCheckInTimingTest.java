@@ -155,6 +155,8 @@ class ReservationCheckInTimingTest {
         when(room.isActive()).thenReturn(true);
         when(room.getStatus()).thenReturn(RoomStatus.AVAILABLE);
         when(room.getRoomNumber()).thenReturn("101");
+        com.example.hotel.entity.room.RoomType roomType = capacityTwo();
+        when(room.getRoomType()).thenReturn(roomType);
 
         Reservation reservation = new Reservation(
                 reservationId,
@@ -199,4 +201,10 @@ class ReservationCheckInTimingTest {
             StayRepository stayRepository,
             ChargeRepository chargeRepository,
             RoomRepository roomRepository) {}
+
+    private static com.example.hotel.entity.room.RoomType capacityTwo() {
+        com.example.hotel.entity.room.RoomType type = org.mockito.Mockito.mock(com.example.hotel.entity.room.RoomType.class);
+        org.mockito.Mockito.when(type.getCapacity()).thenReturn(2);
+        return type;
+    }
 }

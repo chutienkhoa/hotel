@@ -159,6 +159,20 @@ class FrontDeskPageControllerTest {
                 .andExpect(content().string(containsString("href=\"/reservations/" + RES + "\"")));
     }
 
+    /** Confirms a capacity blocker from the shared readiness is rendered as Needs Attention text on Front Desk. */
+    @Test
+    void shouldRenderCapacityBlockerThroughReadiness() throws Exception {
+        ArrivalReadiness capacity = new ArrivalReadiness(ArrivalReadinessState.NEEDS_ATTENTION, CheckInTiming.NORMAL, List.of(
+                new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.INSUFFICIENT_ADULT_CAPACITY,
+                        null, null, 3, 2, null)));
+        when(queryService.arrivals()).thenReturn(List.of(new FrontDeskArrivalRow(RES, "R-2000", "Ann", "G-1",
+                BookingSource.DIRECT, null, TODAY, false, true, capacity,
+                List.of(new FrontDeskRoomResponse(ROOM, "101", "Double", null)), false)));
+
+        mockMvc.perform(get("/front-desk").with(perm("PERM_CHECK_IN")))
+                .andExpect(content().string(containsString("has 3 adults but the assigned rooms support only 2 adults")));
+    }
+
     /** Confirms a ready multi-room arrival is one row with both rooms, and a blocked room shows its issue. */
     @Test
     void shouldRenderArrivalRowsWithRoomsAndIssues() throws Exception {

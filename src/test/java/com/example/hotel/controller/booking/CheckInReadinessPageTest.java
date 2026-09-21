@@ -109,6 +109,25 @@ class CheckInReadinessPageTest {
                 .andExpect(content().string(not(containsString("/reassign"))));
     }
 
+    /** Confirms the adult-capacity blockers render in English and Vietnamese with their arguments. */
+    @Test
+    void shouldRenderCapacityBlockersInEnglishAndVietnamese() throws Exception {
+        when(checkInService.review(RESERVATION_ID)).thenReturn(build(false, new ArrivalReadiness(
+                ArrivalReadinessState.NEEDS_ATTENTION, CheckInTiming.NORMAL, List.of(
+                        new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.INSUFFICIENT_ADULT_CAPACITY,
+                                null, null, 3, 2, null),
+                        new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.CAPACITY_NOT_CONFIGURED,
+                                null, null, null, null, "Suite")))));
+
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(checkIn()))
+                .andExpect(content().string(containsString("Insufficient room capacity: the reservation has 3 adults but the assigned rooms support only 2 adults.")))
+                .andExpect(content().string(containsString("Room capacity is not configured for room type Suite.")))
+                .andExpect(content().string(not(containsString("Confirm Check-in</button>"))));
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(checkIn()).cookie(new Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("Sức chứa phòng không đủ: đặt phòng có 3 người lớn nhưng các phòng được gán chỉ chứa tối đa 2 người lớn.")))
+                .andExpect(content().string(containsString("Chưa cấu hình sức chứa cho loại phòng Suite.")));
+    }
+
     /** Confirms a READY review offers the confirm action. */
     @Test
     void shouldOfferConfirmWhenReady() throws Exception {

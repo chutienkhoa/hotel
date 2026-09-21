@@ -122,7 +122,7 @@ public class FrontDeskQueryService {
             }
             List<Room> rooms = roomsByReservation.getOrDefault(reservation.getId(), List.of());
             ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(
-                    reservation.getStatus(), reservation.getCheckInDate(), today, false, rooms, true);
+                    reservation.getStatus(), reservation.getCheckInDate(), today, false, reservation.getAdultCount(), rooms, true);
             rows.add(toArrivalRow(reservation, rooms, readiness));
         }
         rows.sort(Comparator.comparingInt(FrontDeskQueryService::arrivalRank)
