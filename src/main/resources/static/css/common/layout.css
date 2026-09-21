@@ -240,6 +240,7 @@ p {
 .app-shell.page-reservation-create .nav-reservations,
 .app-shell.page-guests .nav-guests,
 .app-shell.page-rooms .nav-rooms,
+.app-shell.page-front-desk .nav-front-desk,
 .app-shell.page-housekeeping .nav-housekeeping,
 .app-shell.page-expenses .nav-expenses,
 .app-shell.page-additional-revenues .nav-additional-revenues,
@@ -257,6 +258,7 @@ p {
 .app-shell.page-reservation-create .nav-reservations .sidebar-nav-icon,
 .app-shell.page-guests .nav-guests .sidebar-nav-icon,
 .app-shell.page-rooms .nav-rooms .sidebar-nav-icon,
+.app-shell.page-front-desk .nav-front-desk .sidebar-nav-icon,
 .app-shell.page-housekeeping .nav-housekeeping .sidebar-nav-icon,
 .app-shell.page-expenses .nav-expenses .sidebar-nav-icon,
 .app-shell.page-additional-revenues .nav-additional-revenues .sidebar-nav-icon,
@@ -273,6 +275,7 @@ p {
 .app-shell.page-reservation-create .nav-reservations:hover,
 .app-shell.page-guests .nav-guests:hover,
 .app-shell.page-rooms .nav-rooms:hover,
+.app-shell.page-front-desk .nav-front-desk:hover,
 .app-shell.page-housekeeping .nav-housekeeping:hover,
 .app-shell.page-expenses .nav-expenses:hover,
 .app-shell.page-additional-revenues .nav-additional-revenues:hover,
@@ -2019,4 +2022,24 @@ span.flatpickr-weekday {
 }
 .readiness-issue--info strong {
   color: var(--color-muted);
+}
+
+.front-desk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.front-desk-group {
+  margin-top: var(--space-5);
+}
+.front-desk-secondary {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.8125rem;
+}
+.front-desk-room-issue {
+  color: var(--color-danger);
+  display: block;
+  font-size: 0.8125rem;
 }

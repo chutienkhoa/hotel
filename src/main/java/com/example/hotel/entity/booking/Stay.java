@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /** Đại diện cho lần lưu trú thực tế được tạo khi khách check-in. */
@@ -41,12 +42,13 @@ public class Stay extends AuditedEntity {
      * Tạo stay mới cho reservation tại thời điểm check-in.
      *
      * @param reservation reservation đã check-in
+     * @param actualCheckInAt thời điểm check-in thực tế, lấy từ Clock chính thức của khách sạn; không được null
      */
-    public Stay(Reservation reservation) {
+    public Stay(Reservation reservation, Instant actualCheckInAt) {
         id = UUID.randomUUID();
         this.reservation = reservation;
         status = StayStatus.CHECKED_IN;
-        actualCheckInAt = Instant.now();
+        this.actualCheckInAt = Objects.requireNonNull(actualCheckInAt, "actualCheckInAt");
         actualCheckOutAt = null;
     }
 

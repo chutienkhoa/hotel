@@ -22,6 +22,10 @@
 
     <div class="nav-section" th:if="${canCheckIn or canCheckOut or canViewBooking or canManageGuest}">
         <p class="nav-section-label" th:text="#{navigation.section.operations}">Operations</p>
+        <a class="sidebar-nav-link nav-front-desk" th:href="@{/front-desk}" th:if="${canCheckIn or canCheckOut}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
+            <span th:text="#{navigation.frontDesk}">Front Desk</span>
+        </a>
         <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
             <span th:text="#{navigation.checkIn}">Check-in</span>

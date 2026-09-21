@@ -9,7 +9,6 @@ import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.entity.booking.ReservationStatus;
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -29,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class CheckOutQueryService {
 
     private static final String READY = "READY";
-    private static final String PAYMENT_REQUIRED = "PAYMENT_REQUIRED";
 
     private final ReservationQueryService reservationQueryService;
     private final StayQueryService stayQueryService;
@@ -149,6 +147,6 @@ public class CheckOutQueryService {
      */
     private String readiness(UUID stayId) {
         StayBalance balance = stayBalanceService.calculate(stayId);
-        return balance.outstanding().compareTo(BigDecimal.ZERO) == 0 ? READY : PAYMENT_REQUIRED;
+        return DepartureReadinessRules.readiness(balance.outstanding()).name();
     }
 }

@@ -4437,4 +4437,50 @@ Room Change (mục 8.3): chưa có khách nào ở phòng cũ.
   chọn phòng thay thế, xác nhận, quay lại Review nơi Arrival Readiness được TÍNH LẠI (không lưu). Housekeeping và Front Desk
   chưa được liên kết/triển khai.
 
+## 65. Front Desk Workspace (V1)
+
+Front Desk (`GET /front-desk`) là workspace vận hành chỉ đọc: nó GHÉP thông tin Reservation, Stay, Room, Arrival Readiness
+(mục 63) và số dư Stay (mục 24) thành worklist và liên kết tới các thao tác ĐÃ CÓ. Đây là lớp điều phối vận hành, KHÔNG phải
+miền nghiệp vụ mới: không có trạng thái, bảng, cột hay permission mới, không có role FRONT_DESK, và không thực hiện
+Check-in, Check-out, Housekeeping, Thanh toán, Room Change hay Room Reassignment (chỉ liên kết).
+
+- **Ba view**: Arrivals, Departures, In-house (`?view=arrivals|departures|in-house`). Mỗi request chỉ nạp view được chọn
+  và được phép. View mặc định: Arrivals nếu có `CHECK_IN`, ngược lại Departures.
+- **Dòng dữ liệu**: Arrivals = một Reservation; Departures và In-house = một Stay. Không có dòng theo phòng: Reservation/Stay
+  nhiều phòng hiển thị tất cả phòng trong một dòng (check-in ở mức reservation, check-out ở mức Stay).
+- **Ngày giờ**: dùng Clock của khách sạn (Asia/Ho_Chi_Minh). `actualCheckInAt` hiển thị theo múi giờ khách sạn. Không có
+  thay đổi trạng thái tự động theo ngày (không tự động NO_SHOW, không tự động check-out).
+- **Arrivals**: `Reservation.status = CONFIRMED`, chưa có Stay, `checkInDate <= hôm nay`. Hôm nay = Today Arrival;
+  `checkInDate < hôm nay` = Overdue Arrival (vẫn có thể check-in, theo quy tắc muộn hiện có). Không gồm arrival tương lai,
+  `DRAFT`, `CANCELLED`, `NO_SHOW`, `CHECKED_IN`, `CHECKED_OUT` (sau check-in, Stay thuộc In-house).
+- **Arrival Needs Attention** (dẫn xuất, không lưu): Overdue Arrival HOẶC Arrival Readiness có BLOCKER (dùng
+  `ArrivalReadinessRules`, không quy tắc riêng). Thiếu passport chỉ là WARNING và không được đánh giá trên Front Desk
+  (vẫn có trên Check-in Review). Thứ tự: needs-attention quá hạn, needs-attention khác, rồi Ready; hòa thì theo
+  `checkInDate`, số reservation. Hành động: mở Check-in Review (nút "Check in" khi Ready, "Review" khi cần xử lý; Reassign
+  Room nằm trong Check-in Review); liên kết `/housekeeping` chỉ khi có blocker `ROOM_DIRTY`/`ROOM_CLEANING` và user có
+  `MANAGE_HOUSEKEEPING`.
+- **Departures**: Stay `CHECKED_IN` của Reservation `CHECKED_IN` có `checkOutDate <= hôm nay` (hôm nay = Today Departure,
+  trước hôm nay = Overdue Departure). Không gồm departure tương lai. Phòng hiển thị là các `StayRoomAssignment` ĐANG MỞ
+  (`assignedTo IS NULL`), không phải `ReservationRoom` và không phải assignment lịch sử.
+- **Departure readiness / Needs Attention**: dùng chung `DepartureReadinessRules` (Outstanding = tổng Charge - tổng Payment
+  `PAID` `appliedAmount`; bằng 0 -> `READY`, khác 0 -> `PAYMENT_REQUIRED`) với Check-out. Needs Attention khi
+  `checkOutDate < hôm nay` HOẶC `PAYMENT_REQUIRED`. Đây là readiness tài chính vận hành, không đảm bảo check-out không thể
+  thất bại: `ReservationService.checkOut` vẫn là nguồn quyết định (ví dụ kiểm tra trạng thái phòng).
+- **Hiển thị tiền**: số tiền Outstanding chỉ có và chỉ hiển thị khi user có `MANAGE_PAYMENT`; user chỉ có `CHECK_OUT` chỉ thấy
+  nhãn READY/PAYMENT_REQUIRED.
+- **In-house**: mọi Stay `CHECKED_IN` của Reservation `CHECKED_IN`; phòng hiện tại từ assignment đang mở; gồm
+  `actualCheckInAt`, `checkOutDate` dự kiến. Không đọc số dư.
+- **Danh tính khách**: họ tên đầy đủ (nếu có) và Guest Code; thiếu tên thì chỉ hiển thị Guest Code. Không đổi quy ước hiển thị
+  khách ở các màn hình khác.
+- **Quyền**: truy cập cần `CHECK_IN` HOẶC `CHECK_OUT` (không có cả hai -> 403). Arrivals cần `CHECK_IN`; Departures và
+  In-house cần `CHECK_OUT`; yêu cầu một view không được phép bị từ chối (403) và không nạp dữ liệu. Sidebar hiển thị mục Front
+  Desk khi có `CHECK_IN` hoặc `CHECK_OUT`. Mỗi liên kết giữ permission gốc: Check-in Review/Reassign (`CHECK_IN`), Check-out
+  Review (`CHECK_OUT`), Folio (`MANAGE_PAYMENT`), Housekeeping (`MANAGE_HOUSEKEEPING`), Reservation Detail (`VIEW_BOOKING`),
+  Room Change (`CHANGE_ROOM`). Front Desk không cấp thêm quyền; backend của route đích vẫn là nguồn quyết định.
+- **Truy vấn**: read model dùng số truy vấn cố định, không truy vấn theo dòng và không gọi `CheckInService.review` hay
+  `StayBalanceService` theo dòng: Arrivals 3 (reservation + guest; phòng + RoomType; Stay đã tồn tại), Departures 4 (Stay +
+  reservation + guest; assignment mở + Room + RoomType; tổng Charge theo Stay; tổng Payment PAID theo Stay), In-house 2.
+- **Giới hạn đã biết**: danh sách ứng viên của Room Change trong Stay (đã biết) chưa được sửa; không có view arrival tương lai;
+  Dashboard chưa tích hợp Front Desk.
+
 **End of Specification v1.0**

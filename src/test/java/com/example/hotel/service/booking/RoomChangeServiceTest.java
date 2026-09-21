@@ -411,7 +411,7 @@ class RoomChangeServiceTest {
         reservation.confirm();
         reservation.checkIn();
 
-        Stay stay = new Stay(reservation);
+        Stay stay = new Stay(reservation, java.time.Instant.parse("2026-09-21T03:00:00Z"));
         stay.audit(userId);
 
         StayRoomAssignment openAssignment201 =

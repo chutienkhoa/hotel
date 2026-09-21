@@ -76,6 +76,20 @@ class ReservationCheckInTimingTest {
         verify(fixture.stayRepository).save(any(Stay.class));
     }
 
+    /** Confirms the Stay's actualCheckInAt comes from the injected hotel Clock, exactly. */
+    @Test
+    void shouldCreateStayWithActualCheckInAtFromTheInjectedClock() {
+        Clock clock = clockOn(SCHEDULED_CHECK_IN);
+        Fixture fixture = fixture(clock);
+
+        fixture.service.checkIn(fixture.reservationId);
+
+        org.mockito.ArgumentCaptor<Stay> captor = org.mockito.ArgumentCaptor.forClass(Stay.class);
+        verify(fixture.stayRepository).save(captor.capture());
+        assertEquals(clock.instant(), captor.getValue().getActualCheckInAt());
+        assertEquals(SCHEDULED_CHECK_IN.atTime(10, 0).atZone(ZONE).toInstant(), captor.getValue().getActualCheckInAt());
+    }
+
     /**
      * Confirms check-in succeeds after the scheduled date (late) and the ROOM Charge is still
      * derived exclusively from the original ReservationRoom snapshot: unchanged dates, nights,

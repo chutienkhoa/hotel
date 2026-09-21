@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -69,4 +70,17 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             @Param("statuses") java.util.Collection<PaymentStatus> statuses,
             @Param("start") java.time.Instant start,
             @Param("endExclusive") java.time.Instant endExclusive);
+
+    /**
+     * Sums the applied amount of Payments with one status per Stay for many Stays in one grouped query. Stays
+     * without matching Payments are absent.
+     *
+     * @param stayIds Stay identifiers
+     * @param status Payment status included in the sums
+     * @return one row per Stay that has matching Payments
+     */
+    @Query("SELECT new com.example.hotel.repository.booking.StayAmountRow(p.stay.id, SUM(p.appliedAmount)) "
+            + "FROM Payment p WHERE p.stay.id IN :stayIds AND p.status = :status GROUP BY p.stay.id")
+    List<StayAmountRow> sumAppliedAmountByStayIdInAndStatus(
+            @Param("stayIds") Collection<UUID> stayIds, @Param("status") PaymentStatus status);
 }

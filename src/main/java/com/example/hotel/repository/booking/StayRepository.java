@@ -1,5 +1,6 @@
 package com.example.hotel.repository.booking;
 
+import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
 import java.time.Instant;
@@ -7,6 +8,7 @@ import java.time.LocalDate;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -82,4 +84,44 @@ public interface StayRepository extends JpaRepository<Stay, UUID> {
                     + "ORDER BY rr.id")
     List<UUID> findReservationRoomIdsWithoutAssignmentOverlapping(
             @Param("start") Instant start, @Param("end") Instant end);
+
+    /**
+     * Loads the Stays of a given status whose Reservation has a given status, with the Reservation and its Guest,
+     * in one query, ordered by planned check-out date then Reservation number.
+     *
+     * @param stayStatus Stay status
+     * @param reservationStatus Reservation status
+     * @return matching Stays with Reservation and Guest initialized
+     */
+    @Query("SELECT s FROM Stay s JOIN FETCH s.reservation r JOIN FETCH r.guest "
+            + "WHERE s.status = :stayStatus AND r.status = :reservationStatus "
+            + "ORDER BY r.checkOutDate, r.reservationNumber")
+    List<Stay> findWithReservationAndGuest(
+            @Param("stayStatus") StayStatus stayStatus,
+            @Param("reservationStatus") ReservationStatus reservationStatus);
+
+    /**
+     * Like {@link #findWithReservationAndGuest} but only Stays whose planned check-out date is on or before a date.
+     *
+     * @param stayStatus Stay status
+     * @param reservationStatus Reservation status
+     * @param checkOutOnOrBefore latest planned check-out date included
+     * @return matching Stays with Reservation and Guest initialized
+     */
+    @Query("SELECT s FROM Stay s JOIN FETCH s.reservation r JOIN FETCH r.guest "
+            + "WHERE s.status = :stayStatus AND r.status = :reservationStatus AND r.checkOutDate <= :checkOutOnOrBefore "
+            + "ORDER BY r.checkOutDate, r.reservationNumber")
+    List<Stay> findWithReservationAndGuestDueBy(
+            @Param("stayStatus") StayStatus stayStatus,
+            @Param("reservationStatus") ReservationStatus reservationStatus,
+            @Param("checkOutOnOrBefore") LocalDate checkOutOnOrBefore);
+
+    /**
+     * Finds which of the given Reservations already have a Stay, in one query.
+     *
+     * @param reservationIds Reservation identifiers
+     * @return identifiers of Reservations that have a Stay
+     */
+    @Query("SELECT s.reservation.id FROM Stay s WHERE s.reservation.id IN :reservationIds")
+    List<UUID> findReservationIdsWithStay(@Param("reservationIds") Collection<UUID> reservationIds);
 }

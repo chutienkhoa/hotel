@@ -4,6 +4,7 @@ import com.example.hotel.entity.booking.StayRoomAssignment;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -68,4 +69,15 @@ public interface StayRoomAssignmentRepository extends JpaRepository<StayRoomAssi
                     + "ORDER BY a.assignedFrom, a.originalReservationRoom.id")
     List<StayRoomAssignmentNightRow> findNightRowsOverlapping(
             @Param("start") Instant start, @Param("end") Instant end);
+
+    /**
+     * Loads the OPEN (current) assignments of many Stays with their Room and RoomType in one query, ordered by room
+     * number. Closed historical assignments are never returned.
+     *
+     * @param stayIds Stay identifiers
+     * @return open assignments with Room and RoomType initialized
+     */
+    @Query("SELECT a FROM StayRoomAssignment a JOIN FETCH a.room room JOIN FETCH room.roomType "
+            + "WHERE a.stay.id IN :stayIds AND a.assignedTo IS NULL ORDER BY room.roomNumber")
+    List<StayRoomAssignment> findOpenByStayIdInWithRoom(@Param("stayIds") Collection<UUID> stayIds);
 }

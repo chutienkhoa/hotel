@@ -460,7 +460,7 @@ class ReservationCheckOutServiceTest {
         reservation.confirm();
         reservation.checkIn();
         reservation.audit(creatorId);
-        Stay stay = new Stay(reservation);
+        Stay stay = new Stay(reservation, java.time.Instant.parse("2026-09-21T03:00:00Z"));
         stay.audit(creatorId);
         List<UUID> roomIds = rooms.stream().map(Room::getId).sorted().toList();
         List<StayRoomAssignment> openAssignments = new ArrayList<>();

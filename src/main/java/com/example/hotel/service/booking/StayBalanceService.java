@@ -43,7 +43,7 @@ public class StayBalanceService {
         BigDecimal totalPaidPayments = zeroIfNull(
                 paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID));
         return new StayBalance(
-                totalCharges, totalPaidPayments, totalCharges.subtract(totalPaidPayments));
+                totalCharges, totalPaidPayments, DepartureReadinessRules.outstanding(totalCharges, totalPaidPayments));
     }
 
     /**

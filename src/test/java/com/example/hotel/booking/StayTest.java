@@ -22,17 +22,26 @@ class StayTest {
     /** Confirms a new Stay starts checked in with only the backend check-in timestamp recorded. */
     @Test
     void shouldCreateCheckedInStayWithCheckInTimestampOnly() {
-        Stay stay = new Stay(reservation());
+        Stay stay = new Stay(reservation(), java.time.Instant.parse("2026-09-21T03:00:00Z"));
 
         assertEquals(StayStatus.CHECKED_IN, stay.getStatus());
         assertNotNull(stay.getActualCheckInAt());
         assertNull(stay.getActualCheckOutAt());
     }
 
+    /** Confirms the supplied Instant is recorded exactly, and a missing one is rejected. */
+    @Test
+    void shouldRecordTheSuppliedCheckInInstantExactly() {
+        Instant checkedInAt = Instant.parse("2026-09-21T03:00:00Z");
+
+        assertEquals(checkedInAt, new Stay(reservation(), checkedInAt).getActualCheckInAt());
+        org.junit.jupiter.api.Assertions.assertThrows(NullPointerException.class, () -> new Stay(reservation(), null));
+    }
+
     /** Confirms the explicit domain operation transitions a checked-in Stay to checked out. */
     @Test
     void shouldCheckOutCheckedInStayThroughExplicitDomainMethod() {
-        Stay stay = new Stay(reservation());
+        Stay stay = new Stay(reservation(), java.time.Instant.parse("2026-09-21T03:00:00Z"));
 
         stay.checkOut(Instant.now());
 
@@ -46,7 +55,7 @@ class StayTest {
      */
     @Test
     void shouldRecordExactlyTheSuppliedCheckOutInstant() {
-        Stay stay = new Stay(reservation());
+        Stay stay = new Stay(reservation(), java.time.Instant.parse("2026-09-21T03:00:00Z"));
         Instant suppliedInstant = Instant.parse("2026-09-18T03:00:00Z");
 
         stay.checkOut(suppliedInstant);
@@ -57,7 +66,7 @@ class StayTest {
     /** Confirms a terminal checked-out Stay cannot transition again. */
     @Test
     void shouldRejectInvalidStayTransition() {
-        Stay stay = new Stay(reservation());
+        Stay stay = new Stay(reservation(), java.time.Instant.parse("2026-09-21T03:00:00Z"));
         stay.checkOut(Instant.now());
 
         assertThrows(IllegalStateException.class, () -> stay.checkOut(Instant.now()));

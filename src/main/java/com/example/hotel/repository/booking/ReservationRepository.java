@@ -258,4 +258,29 @@ public interface ReservationRepository
                     + "GROUP BY rr.room.id")
     List<RoomNextArrivalRow> findNextArrivalsFrom(
             @Param("from") LocalDate from, @Param("statuses") Collection<ReservationStatus> statuses);
+
+    /**
+     * Loads Reservations of a status whose check-in date is on or before a date, with the Guest, in one query,
+     * ordered by check-in date then Reservation number.
+     *
+     * @param status Reservation status
+     * @param checkInOnOrBefore latest check-in date included
+     * @return matching Reservations with Guest initialized
+     */
+    @Query("SELECT r FROM Reservation r JOIN FETCH r.guest "
+            + "WHERE r.status = :status AND r.checkInDate <= :checkInOnOrBefore "
+            + "ORDER BY r.checkInDate, r.reservationNumber")
+    List<Reservation> findByStatusAndCheckInOnOrBefore(
+            @Param("status") ReservationStatus status, @Param("checkInOnOrBefore") LocalDate checkInOnOrBefore);
+
+    /**
+     * Loads the booked Rooms (with RoomType initialized) of many Reservations in one query, as
+     * {@code [reservationId, Room]} pairs ordered by room number.
+     *
+     * @param reservationIds Reservation identifiers
+     * @return reservation identifier and Room pairs
+     */
+    @Query("SELECT rr.reservation.id, room FROM ReservationRoom rr JOIN rr.room room JOIN FETCH room.roomType "
+            + "WHERE rr.reservation.id IN :reservationIds ORDER BY room.roomNumber")
+    List<Object[]> findBookedRoomsByReservationIdIn(@Param("reservationIds") Collection<UUID> reservationIds);
 }

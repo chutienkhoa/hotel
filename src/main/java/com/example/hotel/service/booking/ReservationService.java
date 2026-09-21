@@ -325,7 +325,7 @@ public class ReservationService {
         }
         reservation.checkIn();
         reservation.audit(user.id());
-        Stay stay = new Stay(reservation);
+        Stay stay = new Stay(reservation, Instant.now(clock));
         stay.audit(user.id());
         stays.save(stay);
         seedRoomAssignments(stay, reservation, user);
