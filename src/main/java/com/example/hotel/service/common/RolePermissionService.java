@@ -52,7 +52,8 @@ public class RolePermissionService {
                 new Entry("MANAGE_BOOKING", "Manage Booking"),
                 new Entry("CHECK_IN", "Check In"),
                 new Entry("CHECK_OUT", "Check Out"),
-                new Entry("CHANGE_ROOM", "Change Room")));
+                new Entry("CHANGE_ROOM", "Change Room"),
+                new Entry("EXTEND_STAY", "Extend Stay")));
         GROUPS.put("Guests", List.of(new Entry("MANAGE_GUEST", "Manage Guest")));
         GROUPS.put("Rooms", List.of(new Entry("MANAGE_ROOM", "Manage Room")));
         GROUPS.put("Housekeeping", List.of(new Entry("MANAGE_HOUSEKEEPING", "Manage Housekeeping")));

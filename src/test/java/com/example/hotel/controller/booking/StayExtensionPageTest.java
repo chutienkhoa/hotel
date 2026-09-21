@@ -54,7 +54,7 @@ class StayExtensionPageTest {
     private JwtService jwtService;
 
     private static RequestPostProcessor manager() {
-        return user("manager").authorities(new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"));
+        return user("staff").authorities(new SimpleGrantedAuthority("PERM_EXTEND_STAY"));
     }
 
     private StayExtensionFormResponse context(BigDecimal outstanding) {
@@ -63,7 +63,7 @@ class StayExtensionPageTest {
                 List.of(new StayExtensionFormResponse.Line("201", "Single", new BigDecimal("1000000"))), outstanding);
     }
 
-    /** Confirms a MANAGE_BOOKING user (ADMIN/MANAGER) reaches the form and sees the read-only context. */
+    /** Confirms an EXTEND_STAY user (ADMIN, MANAGER or STAFF) reaches the form and sees the read-only context. */
     @Test
     void shouldShowTheFormToManageBooking() throws Exception {
         when(service.form(ID, false)).thenReturn(context(null));
@@ -77,10 +77,10 @@ class StayExtensionPageTest {
                 .andExpect(content().string(not(containsString("outstanding balance"))));
     }
 
-    /** Confirms STAFF (no MANAGE_BOOKING) and VIEW_BOOKING-only users are forbidden on every route. */
+    /** Confirms every user without EXTEND_STAY (including MANAGE_BOOKING alone, CHECK_OUT and CHANGE_ROOM) is forbidden on every route. */
     @Test
     void shouldForbidUsersWithoutManageBooking() throws Exception {
-        for (String authority : List.of("PERM_CHECK_IN", "PERM_VIEW_BOOKING", "PERM_MANAGE_PAYMENT")) {
+        for (String authority : List.of("PERM_CHECK_IN", "PERM_CHECK_OUT", "PERM_VIEW_BOOKING", "PERM_MANAGE_PAYMENT", "PERM_MANAGE_BOOKING", "PERM_CHANGE_ROOM")) {
             RequestPostProcessor other = user("u").authorities(new SimpleGrantedAuthority(authority));
             mockMvc.perform(get("/reservations/{id}/stay-extension", ID).with(other)).andExpect(status().isForbidden());
             mockMvc.perform(post("/reservations/{id}/stay-extension", ID).with(other).with(csrf())
@@ -100,7 +100,7 @@ class StayExtensionPageTest {
         when(service.form(ID, true)).thenReturn(context(new BigDecimal("2000000")));
 
         mockMvc.perform(get("/reservations/{id}/stay-extension", ID).with(user("m").authorities(
-                        new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"), new SimpleGrantedAuthority("PERM_MANAGE_PAYMENT"))))
+                        new SimpleGrantedAuthority("PERM_EXTEND_STAY"), new SimpleGrantedAuthority("PERM_MANAGE_PAYMENT"))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"extension-outstanding\"")));
     }

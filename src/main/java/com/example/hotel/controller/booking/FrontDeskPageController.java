@@ -52,7 +52,7 @@ public class FrontDeskPageController {
         model.addAttribute("canArrivals", canArrivals);
         model.addAttribute("canStays", canStays);
         model.addAttribute("canChangeRoom", has(authentication, "PERM_CHANGE_ROOM"));
-        model.addAttribute("canExtendStay", has(authentication, "PERM_MANAGE_BOOKING"));
+        model.addAttribute("canExtendStay", has(authentication, "PERM_EXTEND_STAY"));
         model.addAttribute("hotelToday", queryService.hotelToday());
         switch (selected) {
             case ARRIVALS -> {

@@ -139,16 +139,19 @@ class ReservationDetailLifecycleTest {
                 .andExpect(content().string(not(containsString("Change Room"))));
     }
 
-    /** Confirms Extend Stay shows only for CHECKED_IN with MANAGE_BOOKING and never for other states or users. */
+    /** Confirms Extend Stay shows only for CHECKED_IN with EXTEND_STAY (MANAGE_BOOKING alone is not enough) and never for other states. */
     @Test
     void shouldShowExtendStayOnlyForCheckedInWithManageBooking() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
-        var manager = user("m").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"), new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"));
+        var manager = user("m").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"), new SimpleGrantedAuthority("PERM_EXTEND_STAY"));
+        var bookingOnly = user("b").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"), new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"));
         var viewer = user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager))
                 .andExpect(content().string(containsString("id=\"extend-stay\"")));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer))
+                .andExpect(content().string(not(containsString("id=\"extend-stay\""))));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(bookingOnly))
                 .andExpect(content().string(not(containsString("id=\"extend-stay\""))));
         for (String status : List.of("DRAFT", "CONFIRMED", "CANCELLED", "NO_SHOW", "CHECKED_OUT")) {
             when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation(status));

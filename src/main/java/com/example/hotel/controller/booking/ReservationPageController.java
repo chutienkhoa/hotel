@@ -443,6 +443,7 @@ public class ReservationPageController {
         model.addAttribute("canCheckIn", hasAuthority(authentication, "PERM_CHECK_IN"));
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
         model.addAttribute("canChangeRoom", hasAuthority(authentication, "PERM_CHANGE_ROOM"));
+        model.addAttribute("canExtendStay", hasAuthority(authentication, "PERM_EXTEND_STAY"));
         model.addAttribute("canManagePayment", hasAuthority(authentication, "PERM_MANAGE_PAYMENT"));
         model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
     }

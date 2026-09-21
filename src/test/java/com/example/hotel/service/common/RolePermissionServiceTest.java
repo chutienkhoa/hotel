@@ -42,7 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 class RolePermissionServiceTest {
 
     private static final List<String> EXPOSED = List.of(
-            "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
+            "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY",
             "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
             "MANAGE_STAFF", "MANAGE_ATTENDANCE", "MANAGE_USER");
 
@@ -65,13 +65,13 @@ class RolePermissionServiceTest {
             catalogue.put(code, permission(code));
         }
         catalogue.put("DELETE_RESERVATION", permission("DELETE_RESERVATION"));
-        admin = role("ADMIN", "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
+        admin = role("ADMIN", "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY",
                 "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
                 "MANAGE_STAFF", "MANAGE_ATTENDANCE", "MANAGE_USER");
-        manager = role("MANAGER", "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
+        manager = role("MANAGER", "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY",
                 "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
                 "MANAGE_STAFF", "MANAGE_ATTENDANCE");
-        staff = role("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT");
+        staff = role("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT");
         when(roles.findByCodeIn(any())).thenReturn(List.of(admin, manager, staff));
         when(permissions.findByCodeIn(any())).thenAnswer(invocation -> {
             List<Permission> found = new ArrayList<>();
@@ -98,7 +98,10 @@ class RolePermissionServiceTest {
         assertEquals(List.of("ADMIN", "MANAGER", "STAFF"), matrix.roles());
         Map<String, RolePermissionMatrixResponse.Item> items = new LinkedHashMap<>();
         matrix.groups().forEach(group -> group.items().forEach(item -> items.put(item.code(), item)));
-        assertEquals(15, items.size());
+        assertEquals(16, items.size());
+        assertTrue(items.get("EXTEND_STAY").granted().get("ADMIN") && items.get("EXTEND_STAY").granted().get("MANAGER")
+                && items.get("EXTEND_STAY").granted().get("STAFF"), "EXTEND_STAY is a default of all built-in roles");
+        assertFalse(items.get("MANAGE_BOOKING").granted().get("STAFF"), "STAFF never gets MANAGE_BOOKING");
         assertFalse(items.containsKey("DELETE_RESERVATION"));
         assertTrue(items.get("VIEW_REPORT").granted().get("MANAGER"));
         assertFalse(items.get("VIEW_REPORT").granted().get("STAFF"));
@@ -128,7 +131,7 @@ class RolePermissionServiceTest {
         RolePermissionUpdateRequest request = request(
                 grants("ADMIN", EXPOSED),
                 grants("MANAGER", without(EXPOSED, "MANAGE_USER", "MANAGE_EXPENSE")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT", "MANAGE_GUEST"));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT", "MANAGE_GUEST"));
 
         service.update(request);
 
@@ -141,7 +144,7 @@ class RolePermissionServiceTest {
     @Test
     void shouldNotAuditUnchangedRoles() {
         service.update(request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
 
         verify(audits, never()).save(any());
         verify(roles, never()).saveAndFlush(any());
@@ -152,7 +155,7 @@ class RolePermissionServiceTest {
     void shouldAlwaysRetainManageUserOnAdmin() {
         service.update(request(grants("ADMIN", without(EXPOSED, "MANAGE_USER", "VIEW_REPORT")),
                 grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
 
         assertTrue(codes(admin).contains("MANAGE_USER"));
         assertFalse(codes(admin).contains("VIEW_REPORT"));
@@ -178,7 +181,7 @@ class RolePermissionServiceTest {
         manager.getPermissions().add(catalogue.get("MANAGE_USER"));
 
         service.update(request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
 
         assertFalse(codes(manager).contains("MANAGE_USER"));
     }
@@ -212,12 +215,12 @@ class RolePermissionServiceTest {
     @Test
     void shouldNeverGrantDormantPermissionAndPreserveNonExposedOnes() {
         service.update(request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER", "VIEW_REPORT")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
         assertFalse(codes(manager).contains("DELETE_RESERVATION"));
 
         staff.getPermissions().add(catalogue.get("DELETE_RESERVATION"));
         service.update(request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER", "VIEW_REPORT")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT", "MANAGE_ROOM")));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT", "MANAGE_ROOM")));
         assertTrue(codes(staff).contains("DELETE_RESERVATION"));
         assertTrue(codes(staff).contains("MANAGE_ROOM"));
     }
@@ -227,7 +230,7 @@ class RolePermissionServiceTest {
     void shouldAllowAdminToRemoveOwnConfigurablePermission() {
         service.update(request(grants("ADMIN", without(EXPOSED, "VIEW_REPORT")),
                 grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
 
         assertFalse(codes(admin).contains("VIEW_REPORT"));
         assertTrue(codes(admin).contains("MANAGE_USER"));
@@ -237,7 +240,7 @@ class RolePermissionServiceTest {
     @Test
     void shouldAuditChangedRoleWithDeterministicSortedValues() {
         service.update(request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "MANAGE_ROOM", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "MANAGE_ROOM", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(audits).save(captor.capture());
@@ -246,15 +249,15 @@ class RolePermissionServiceTest {
         assertEquals("ROLE", field(log, "entityType"));
         assertEquals(field(staff, "id"), field(log, "entityId"));
         assertEquals(actorId, field(log, "userId"));
-        assertEquals("CHANGE_ROOM,CHECK_IN,CHECK_OUT,MANAGE_PAYMENT,VIEW_BOOKING", field(log, "oldValue"));
-        assertEquals("CHANGE_ROOM,CHECK_IN,CHECK_OUT,MANAGE_PAYMENT,MANAGE_ROOM,VIEW_BOOKING", field(log, "newValue"));
+        assertEquals("CHANGE_ROOM,CHECK_IN,CHECK_OUT,EXTEND_STAY,MANAGE_PAYMENT,VIEW_BOOKING", field(log, "oldValue"));
+        assertEquals("CHANGE_ROOM,CHECK_IN,CHECK_OUT,EXTEND_STAY,MANAGE_PAYMENT,MANAGE_ROOM,VIEW_BOOKING", field(log, "newValue"));
     }
 
     /** Confirms the built-in role rows are locked before roles are loaded or changed. */
     @Test
     void shouldLockRolesBeforeLoadingAndChanging() {
         service.update(request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "MANAGE_ROOM", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT")));
+                grants("STAFF", "MANAGE_ROOM", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT")));
 
         InOrder order = inOrder(roles);
         order.verify(roles).lockBuiltInRoleIds();
@@ -285,7 +288,7 @@ class RolePermissionServiceTest {
 
     private RolePermissionUpdateRequest validRequest() {
         return request(grants("ADMIN", EXPOSED), grants("MANAGER", without(EXPOSED, "MANAGE_USER")),
-                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT"));
+                grants("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY", "MANAGE_PAYMENT"));
     }
 
     @SafeVarargs

@@ -108,9 +108,9 @@ public class CheckOutPageController {
     public String review(@PathVariable UUID id, Model model, org.springframework.security.core.Authentication authentication) {
         CheckOutReviewResponse review = checkOutQueryService.review(id);
         model.addAttribute("review", review);
-        // The existing Stay Extension permission; never granted implicitly by the template.
+        // EXTEND_STAY is the only gate of Stay Extension; never granted implicitly by the template.
         model.addAttribute("canExtendStay", authentication.getAuthorities().stream()
-                .anyMatch(authority -> "PERM_MANAGE_BOOKING".equals(authority.getAuthority())));
+                .anyMatch(authority -> "PERM_EXTEND_STAY".equals(authority.getAuthority())));
         return "check-out/review";
     }
 

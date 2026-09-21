@@ -36,7 +36,7 @@ public class StayExtensionController {
      * @return the Reservation response
      */
     @PostMapping("/{id}/stay-extension")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    @PreAuthorize("hasAuthority('PERM_EXTEND_STAY')")
     Response extend(@PathVariable UUID id, @Valid @RequestBody StayExtensionRequest request) {
         return service.extend(id, request);
     }

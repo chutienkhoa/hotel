@@ -221,6 +221,24 @@ class FrontDeskPageControllerTest {
                 .andExpect(content().string(containsString("Nhận phòng")));
     }
 
+    /** Confirms the Extend Stay link follows EXTEND_STAY only (STAFF-style user sees it; MANAGE_BOOKING alone does not). */
+    @Test
+    void shouldShowExtendStayOnlyWithTheExtendStayPermission() throws Exception {
+        mockMvc.perform(get("/front-desk").param("view", "in-house").with(perm("PERM_CHECK_OUT", "PERM_EXTEND_STAY")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/stay-extension")));
+        mockMvc.perform(get("/front-desk").param("view", "in-house").with(perm("PERM_CHECK_OUT", "PERM_MANAGE_BOOKING")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("/stay-extension"))));
+        mockMvc.perform(get("/front-desk").param("view", "departures").with(perm("PERM_CHECK_OUT", "PERM_EXTEND_STAY")))
+                .andExpect(content().string(containsString("/stay-extension")));
+        mockMvc.perform(get("/front-desk").param("view", "departures").with(perm("PERM_CHECK_OUT", "PERM_MANAGE_BOOKING")))
+                .andExpect(content().string(not(containsString("/stay-extension"))));
+        // never on Arrivals: those reservations have no stay to extend
+        mockMvc.perform(get("/front-desk").param("view", "arrivals").with(perm("PERM_CHECK_IN", "PERM_EXTEND_STAY")))
+                .andExpect(content().string(not(containsString("/stay-extension"))));
+    }
+
     private static FrontDeskStayRow stayRow(List<FrontDeskRoomResponse> rooms, boolean overdue, boolean owing, BigDecimal amount) {
         return new FrontDeskStayRow(RES, "R-9", "Nguyen Van B", "G-1", rooms, Instant.parse("2026-09-20T07:35:00Z"),
                 TODAY.minusDays(overdue ? 1 : 0), overdue, overdue ? 1 : 0, owing, overdue || owing, amount, "VND");

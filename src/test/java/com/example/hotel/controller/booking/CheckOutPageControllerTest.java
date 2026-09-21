@@ -104,12 +104,23 @@ class CheckOutPageControllerTest {
         when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(overdueReview(2));
 
         mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("manager").authorities(
-                        new SimpleGrantedAuthority("PERM_CHECK_OUT"), new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"))))
+                        new SimpleGrantedAuthority("PERM_CHECK_OUT"), new SimpleGrantedAuthority("PERM_EXTEND_STAY"))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"overdue-departure\"")))
                 .andExpect(content().string(containsString("2 days overdue")))
                 .andExpect(content().string(containsString("id=\"overdue-extend-stay\"")))
                 .andExpect(content().string(not(containsString("Confirm check-out"))));
+    }
+
+    /** Confirms MANAGE_BOOKING alone (without EXTEND_STAY) does not show the extend action. */
+    @Test
+    void shouldNotShowTheExtendActionForManageBookingAlone() throws Exception {
+        when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(overdueReview(1));
+
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("m").authorities(
+                        new SimpleGrantedAuthority("PERM_CHECK_OUT"), new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"))))
+                .andExpect(content().string(containsString("id=\"overdue-ask-manager\"")))
+                .andExpect(content().string(not(containsString("id=\"overdue-extend-stay\""))));
     }
 
     /** Confirms a user without the extension permission sees the blocked state and the ask-a-manager hint, not the action. */

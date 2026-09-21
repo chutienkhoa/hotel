@@ -65,7 +65,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(34, flyway.info().applied().length);
+        assertEquals(35, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -85,6 +85,7 @@ class MigrationIntegrationTest {
                         "VIEW_BOOKING",
                         "CHECK_OUT",
                         "CHANGE_ROOM",
+                        "EXTEND_STAY",
                         "MANAGE_STAFF",
                         "MANAGE_ATTENDANCE",
                         "CHECK_IN",
@@ -104,11 +105,12 @@ class MigrationIntegrationTest {
                         "CHECK_IN",
                         "CHECK_OUT",
                         "CHANGE_ROOM",
+                        "EXTEND_STAY",
                         "MANAGE_STAFF",
                         "MANAGE_ATTENDANCE"));
         assertPermissionCodes(
                 "STAFF",
-                Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT", "CHANGE_ROOM"));
+                Set.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT", "CHANGE_ROOM", "EXTEND_STAY"));
         assertRolePermissionRelationshipCount("ADMIN", "VIEW_REPORT", 1);
         assertRolePermissionRelationshipCount("MANAGER", "VIEW_REPORT", 1);
         assertRolePermissionRelationshipCount("STAFF", "VIEW_REPORT", 0);
@@ -129,6 +131,10 @@ class MigrationIntegrationTest {
         assertRolePermissionRelationshipCount("ADMIN", "CHANGE_ROOM", 1);
         assertRolePermissionRelationshipCount("MANAGER", "CHANGE_ROOM", 1);
         assertRolePermissionRelationshipCount("STAFF", "CHANGE_ROOM", 1);
+        assertRolePermissionRelationshipCount("ADMIN", "EXTEND_STAY", 1);
+        assertRolePermissionRelationshipCount("MANAGER", "EXTEND_STAY", 1);
+        assertRolePermissionRelationshipCount("STAFF", "EXTEND_STAY", 1);
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM permission WHERE code = 'EXTEND_STAY'", Integer.class));
         assertRolePermissionRelationshipCount("STAFF", "MANAGE_BOOKING", 0);
         assertRolePermissionRelationshipCount("ADMIN", "MANAGE_STAFF", 1);
         assertRolePermissionRelationshipCount("MANAGER", "MANAGE_STAFF", 1);

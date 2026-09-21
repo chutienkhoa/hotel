@@ -2302,6 +2302,7 @@ CHECK_OUT
 DELETE_RESERVATION
 CHANGE_ROOM
 MANAGE_HOUSEKEEPING
+EXTEND_STAY
 ```
 
 Permission mapping đã thống nhất:
@@ -2318,7 +2319,8 @@ ADMIN
  ├── VIEW_REPORT
  ├── VIEW_BOOKING
  ├── CHECK_OUT
- └── CHANGE_ROOM
+ ├── CHANGE_ROOM
+ └── EXTEND_STAY
 ```
 
 ```text
@@ -2332,7 +2334,8 @@ MANAGER
  ├── MANAGE_GUEST
  ├── CHECK_IN
  ├── CHECK_OUT
- └── CHANGE_ROOM
+ ├── CHANGE_ROOM
+ └── EXTEND_STAY
 ```
 
 ```text
@@ -2341,7 +2344,8 @@ STAFF
  ├── CHECK_IN
  ├── CHECK_OUT
  ├── MANAGE_PAYMENT
- └── CHANGE_ROOM
+ ├── CHANGE_ROOM
+ └── EXTEND_STAY
 ```
 
 STAFF mặc định KHÔNG có `MANAGE_HOUSEKEEPING` (repository/spec không chứng minh STAFF là người dọn phòng); ADMIN có thể
@@ -3887,7 +3891,7 @@ role, KHÔNG tạo/xóa/đổi tên permission, KHÔNG role hierarchy hay permis
 `GET|POST /roles-permissions` (một trang ma trận duy nhất, sidebar ADMINISTRATION → Roles &
 Permissions), bảo vệ bằng `PERM_MANAGE_USER` (chỉ ADMIN trong V1, không có permission mới). Các
 permission hiển thị, theo nhóm: Dashboard (`VIEW_REPORT`); Reservations (`VIEW_BOOKING`,
-`MANAGE_BOOKING`, `CHECK_IN`, `CHECK_OUT`, `CHANGE_ROOM`); Guests (`MANAGE_GUEST`); Rooms
+`MANAGE_BOOKING`, `CHECK_IN`, `CHECK_OUT`, `CHANGE_ROOM`, `EXTEND_STAY`); Guests (`MANAGE_GUEST`); Rooms
 (`MANAGE_ROOM`); Housekeeping (`MANAGE_HOUSEKEEPING`); Finance (`MANAGE_PAYMENT`, `MANAGE_EXPENSE`, `MANAGE_ADDITIONAL_REVENUE`);
 Administration (`MANAGE_STAFF`, `MANAGE_ATTENDANCE`, `MANAGE_USER`). Trạng thái được đọc từ
 database, không hard-code. `DELETE_RESERVATION` là permission "dormant" (đã seed, không role nào có,
@@ -4624,8 +4628,8 @@ Một Stay `CHECKED_IN` có thể được gia hạn (dời ngày trả phòng d
   Không backfill; Reservation cũ có 0 bản ghi gia hạn; không sửa dòng `ReservationRoom` nào.
 - **Báo cáo**: Monthly Financial Report cộng thêm doanh thu gia hạn như nguồn thứ hai (cùng trạng thái đủ điều kiện CHECKED_IN/CHECKED_OUT, cùng công thức chồng lấn tháng theo `[from_date, to_date)`, cùng kiểm tra toàn vẹn `amount = rate × số đêm`, tiền tệ theo `Reservation.currency`,
   ngoài VND vào cảnh báo non-VND); tính theo lineage gốc. Phần `ReservationRoom` giữ nguyên. Occupancy và Room Type Performance vẫn dựa trên `StayRoomAssignment` thực tế. PDF/Excel dùng lại kết quả báo cáo nên tổng/KPI tài chính đã gồm doanh thu gia hạn; bố cục workbook đã duyệt (kể cả sheet Reservations, cột "Booking Amount" vẫn là tổng đặt phòng gốc) KHÔNG đổi.
-- **Quyền**: `MANAGE_BOOKING` (ADMIN, MANAGER; STAFF không có); không cần `MANAGE_PAYMENT` vì Charge ROOM do server tính (tương tự Charge ROOM tự động lúc check-in). Số dư chỉ hiển thị trên form cho user có `MANAGE_PAYMENT`.
-- **Giao diện**: Reservation Detail của Reservation `CHECKED_IN` có action "Extend Stay" (cần `MANAGE_BOOKING`) và hiển thị Original Booking Total / Extension Amount / Current Accommodation Total và lịch sử gia hạn khi đã có gia hạn; Front Desk In-house/Departures có liên kết
+- **Quyền**: `EXTEND_STAY` (đã thay `MANAGE_BOOKING` ở mục 72; mặc định ADMIN, MANAGER, STAFF); không cần `MANAGE_PAYMENT` vì Charge ROOM do server tính (tương tự Charge ROOM tự động lúc check-in). Số dư chỉ hiển thị trên form cho user có `MANAGE_PAYMENT`.
+- **Giao diện**: Reservation Detail của Reservation `CHECKED_IN` có action "Extend Stay" (cần `EXTEND_STAY`) và hiển thị Original Booking Total / Extension Amount / Current Accommodation Total và lịch sử gia hạn khi đã có gia hạn; Front Desk In-house/Departures có liên kết
   tới cùng form. Form chỉ nhận ngày trả phòng mới (kèm ngày hiện tại ẩn để chống yêu cầu cũ); không chọn phòng, không sửa giá/số tiền. Văn bản dùng i18n EN/VI (`stayextension.*`).
 - **Audit**: một `AuditLog` `EXTEND_STAY` (entity RESERVATION) khi thành công: ngày trả phòng cũ → mới, số đêm, extension id, từng phòng hiện tại với giá × số đêm = thành tiền, và tổng tiền gia hạn. Thất bại không ghi audit thành công.
 - **Hoãn/Không thuộc V1**: giá gia hạn do nhân viên nhập, giá động, gia hạn miễn phí, rút ngắn lưu trú, hoàn tiền check-out sớm, gia hạn/trả phòng từng phòng, trả phòng một phần, mô hình DB `RoomAllocation` và exclusion constraint.
@@ -4681,7 +4685,15 @@ Các khái niệm tài chính tách biệt; V1 chỉ thêm liên kết và kiể
 - **Không có**: tự động gia hạn, tính tiền tự động, `ChargeType` mới, scheduler/night audit, miễn phí đêm quá hạn, phí trả phòng muộn theo giờ, giờ trả phòng cấu hình, phí phạt, thông báo tự động, tự chuyển phòng. Đêm quá hạn chỉ được tính tiền qua Stay Extension.
 - **Không đổi**: bảo vệ tồn kho của assignment đang mở (đêm hiện tại khi quá hạn), Room Change (từ chối khi hôm nay ≥ ngày trả phòng dự kiến; sau khi gia hạn quá hôm nay thì cho phép), trạng thái phòng (OCCUPIED cho đến khi check-out hợp lệ rồi DIRTY), ghi nhận doanh thu theo hợp đồng/gia hạn, Occupancy và Room Type Performance theo assignment thực tế
   (occupancy có thể tạm đi trước doanh thu ghi nhận trong lúc chưa gia hạn; chênh lệch này được chấp nhận và bị chặn bởi việc bắt buộc gia hạn trước check-out).
-- **Giao diện**: Front Desk giữ thứ tự (quá hạn trước), badge "Overdue Departure" và thêm "Overdue N day(s)"; Check-out Review có mục quá hạn nổi bật (ngày dự kiến, hôm nay, số ngày, giải thích chặn check-out, nút Extend Stay khi có quyền Stay Extension hiện tại `MANAGE_BOOKING`, ngược lại thông báo nhờ quản lý/nhân viên có quyền) và không có nút xác nhận check-out.
-  Không thêm/cấp quyền mới (STAFF vẫn không có `MANAGE_BOOKING`).
+- **Giao diện**: Front Desk giữ thứ tự (quá hạn trước), badge "Overdue Departure" và thêm "Overdue N day(s)"; Check-out Review có mục quá hạn nổi bật (ngày dự kiến, hôm nay, số ngày, giải thích chặn check-out, nút Extend Stay khi có quyền `EXTEND_STAY`, ngược lại thông báo nhờ quản lý/nhân viên có quyền) và không có nút xác nhận check-out.
+  Quyền Stay Extension là `EXTEND_STAY` (mục 72); STAFF không có `MANAGE_BOOKING`.
+
+## 72. Permission EXTEND_STAY (Stay Extension Permission Refinement)
+
+- **`EXTEND_STAY`** = quyền gia hạn một stay `CHECKED_IN` (dời ngày trả phòng dự kiến) qua thao tác Stay Extension hiện có, cho CẢ gia hạn thông thường lẫn xử lý stay quá hạn (mục 71). Đây là quyền vận hành trong stay đang hoạt động, tách biệt với `MANAGE_BOOKING`, `CHECK_OUT` và `CHANGE_ROOM`; không có quyền riêng "chỉ quá hạn".
+- **Cấp mặc định** (migration V35, id `...0117`, idempotent theo mẫu V23): ADMIN, MANAGER và STAFF, cấp tường minh, KHÔNG suy ra từ `MANAGE_BOOKING` và không chạm grant tùy biến khác. STAFF là vai trò vận hành lễ tân (check-in, check-out, thanh toán, đổi phòng, gia hạn) và KHÔNG có `MANAGE_BOOKING`.
+- **Ủy quyền**: Stay Extension được bảo vệ CHỈ bởi `EXTEND_STAY` ở MVC GET/POST `/reservations/{id}/stay-extension` và REST `POST /api/reservations/{id}/stay-extension`. `MANAGE_BOOKING` một mình KHÔNG đủ; không có phân cấp hay "MANAGE_BOOKING hoặc EXTEND_STAY". Ẩn nút chỉ là tiện ích, việc chặn nằm ở server.
+- **Giao diện**: hiển thị "Extend Stay" theo `EXTEND_STAY` ở Reservation Detail (CHECKED_IN), Front Desk (In-house/Departures) và Check-out Review quá hạn; user có `CHECK_OUT` nhưng không có `EXTEND_STAY` thấy thông báo nhờ quản lý/nhân viên có quyền. Quyền hiện trong ma trận Roles & Permissions (nhóm Reservations) để ADMIN cấp/thu hồi.
+- **Không đổi**: mọi kiểm tra nghiệp vụ (trạng thái, ngày mới > hiện tại và >= hôm nay, tồn kho, khóa), giá đêm gốc của `ReservationRoom`, lịch sử, Charge ROOM và audit `EXTEND_STAY` (ghi người thực hiện). Quyền không bỏ qua bất kỳ quy tắc nào và không cho nhập giá.
 
 **End of Specification v1.0**

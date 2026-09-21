@@ -152,7 +152,7 @@ class RolePermissionIntegrationTest {
     }
 
     private List<String> allExposed() {
-        return List.of("VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
+        return List.of("VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "EXTEND_STAY",
                 "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
                 "MANAGE_STAFF", "MANAGE_ATTENDANCE", "MANAGE_USER");
     }
@@ -164,7 +164,7 @@ class RolePermissionIntegrationTest {
     }
 
     private List<String> staffDefaults() {
-        return List.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT", "CHANGE_ROOM");
+        return List.of("VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "MANAGE_PAYMENT", "CHANGE_ROOM", "EXTEND_STAY");
     }
 
     private RolePermissionUpdateRequest request(List<String> admin, List<String> manager, List<String> staff) {

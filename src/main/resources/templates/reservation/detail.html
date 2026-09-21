@@ -32,7 +32,7 @@
                    th:text="#{payment.prepayment.action}">Record Prepayment</a>
                 <a class="button button-secondary" id="extend-stay"
                    th:href="@{/reservations/{id}/stay-extension(id=${reservation.id})}"
-                   th:if="${reservation.status == 'CHECKED_IN' and canManageBooking}"
+                   th:if="${reservation.status == 'CHECKED_IN' and canExtendStay}"
                    th:text="#{reservation.stayExtension.action}">Extend Stay</a>
                 <a class="button button-secondary"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id})}"

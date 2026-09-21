@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * Serves the dedicated "Extend Stay" operation of a CHECKED_IN Reservation. It is owned by {@code MANAGE_BOOKING},
+ * Serves the dedicated "Extend Stay" operation of a CHECKED_IN Reservation. It is owned by {@code EXTEND_STAY},
  * accepts only the expected current check-out date and the new check-out date, and delegates every rule to
  * {@link StayExtensionService}.
  */
@@ -55,7 +55,7 @@ public class StayExtensionPageController {
      * @return the form template, or a redirect to the detail page
      */
     @GetMapping("/reservations/{id}/stay-extension")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    @PreAuthorize("hasAuthority('PERM_EXTEND_STAY')")
     public String form(
             @PathVariable UUID id, Model model, Authentication authentication, RedirectAttributes redirectAttributes) {
         try {
@@ -82,7 +82,7 @@ public class StayExtensionPageController {
      * @return the detail redirect, or the form on a recoverable rejection
      */
     @PostMapping("/reservations/{id}/stay-extension")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    @PreAuthorize("hasAuthority('PERM_EXTEND_STAY')")
     public String extend(
             @PathVariable UUID id,
             @Valid @ModelAttribute("stayExtensionForm") StayExtensionRequest form,
