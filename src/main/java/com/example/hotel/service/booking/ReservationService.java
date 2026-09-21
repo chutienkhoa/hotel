@@ -1,6 +1,7 @@
 package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
+import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ArrivalIssueCode;
 import com.example.hotel.entity.booking.Charge;
@@ -15,6 +16,7 @@ import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
+import com.example.hotel.exception.GuestCompositionUpdateException;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
@@ -288,6 +290,107 @@ public class ReservationService {
         reservation.audit(user.id());
         audit(user, "CONFIRM", reservation, "DRAFT", "CONFIRMED");
         return response(reservation);
+    }
+
+    /**
+     * Updates ONLY the guest composition (adults, children, Accompanying Guests) of a CONFIRMED Reservation that has no
+     * Stay. This is a dedicated operation, not draft editing: the Primary Guest, dates, rooms, rates, source, currency
+     * and notes never change, and after check-in the composition stays frozen.
+     *
+     * <p>Concurrency: the Reservation row is locked ({@code PESSIMISTIC_WRITE}) FIRST, and the state, the Stay check
+     * and the assigned room set are read AFTER the lock. Room Reassignment changes a Reservation's rooms only while
+     * holding the same row lock (it takes Rooms then the Reservation), and check-in updates the Reservation row, so
+     * a concurrent reassignment or check-in is serialized with this update and capacity is judged on the
+     * authoritative, current room set. Locking the Reservation only (no Room locks) keeps the Rooms-then-Reservation
+     * order of the other operations deadlock-free.</p>
+     *
+     * <p>Everything is validated (state, counts, guests, adult capacity via {@link AdultCapacityRules}) before any
+     * mutation, so a rejected update changes nothing and writes no audit entry.</p>
+     *
+     * @param id Reservation identifier
+     * @param request new adults, children and complete Accompanying Guest set
+     * @return the Reservation after the update
+     * @throws GuestCompositionUpdateException if the update is not allowed or invalid
+     */
+    @Transactional
+    public Response updateConfirmedGuestComposition(UUID id, GuestCompositionUpdateRequest request) {
+        CurrentUser user = currentUser();
+        Reservation reservation = reservations.findByIdForUpdate(id).orElseThrow(() -> notFound("Reservation"));
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.RESERVATION_NOT_CONFIRMED,
+                    "Only a confirmed reservation can update its guest composition");
+        }
+        if (stays.existsByReservationId(id)) {
+            throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.STAY_ALREADY_EXISTS,
+                    "A stay already exists, so the guest composition is frozen");
+        }
+        if (request.adultCount() == null || request.adultCount() < 1) {
+            throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.INVALID_ADULT_COUNT,
+                    "adult_count must be at least 1");
+        }
+        if (request.childCount() == null || request.childCount() < 0) {
+            throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.INVALID_CHILD_COUNT,
+                    "child_count must not be negative");
+        }
+        List<Guest> accompanying = resolveAccompanyingGuestsForUpdate(reservation.getGuest(), request);
+        List<Room> assignedRooms = reservations.findBookedRoomsByReservationIdIn(List.of(id)).stream()
+                .map(row -> (Room) row[1])
+                .toList();
+        AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(request.adultCount(), assignedRooms);
+        switch (capacity.outcome()) {
+            case INSUFFICIENT_ADULT_CAPACITY -> throw new GuestCompositionUpdateException(
+                    GuestCompositionUpdateException.Reason.INSUFFICIENT_ADULT_CAPACITY,
+                    "Reservation has " + capacity.adultCount() + " adults but the assigned rooms support only "
+                            + capacity.totalAdultCapacity() + " adults",
+                    capacity.adultCount(), capacity.totalAdultCapacity());
+            case CAPACITY_NOT_CONFIGURED -> throw new GuestCompositionUpdateException(
+                    GuestCompositionUpdateException.Reason.CAPACITY_NOT_CONFIGURED,
+                    "Room capacity is not configured for room type " + String.join(", ", capacity.unconfiguredRoomTypes()),
+                    String.join(", ", capacity.unconfiguredRoomTypes()));
+            case VALID -> { }
+        }
+        String before = describeGuestComposition(reservation);
+        reservation.updateConfirmedGuestComposition(
+                request.adultCount(), request.childCount(), accompanying, user.id());
+        reservation.audit(user.id());
+        audit(user, "UPDATE_GUEST_COMPOSITION", reservation, before, describeGuestComposition(reservation));
+        return response(reservation);
+    }
+
+    private String describeGuestComposition(Reservation reservation) {
+        return "adults=" + reservation.getAdultCount() + ", children=" + reservation.getChildCount()
+                + ", accompanying=" + reservation.getAccompanyingGuests().size();
+    }
+
+    /** Resolves the requested Accompanying Guests for the update, with structured, localizable rejection reasons. */
+    private List<Guest> resolveAccompanyingGuestsForUpdate(Guest primary, GuestCompositionUpdateRequest request) {
+        List<UUID> ids = request.accompanyingGuestIdsOrEmpty();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> unique = new HashSet<>();
+        for (UUID accompanyingId : ids) {
+            if (accompanyingId == null) {
+                throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.GUEST_NOT_FOUND,
+                        "An accompanying guest identifier is required");
+            }
+            if (!unique.add(accompanyingId)) {
+                throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.DUPLICATE_GUEST,
+                        "A guest may be selected as an accompanying guest only once");
+            }
+            if (accompanyingId.equals(primary.getId())) {
+                throw new GuestCompositionUpdateException(
+                        GuestCompositionUpdateException.Reason.PRIMARY_GUEST_AS_ACCOMPANYING,
+                        "The primary guest cannot also be an accompanying guest");
+            }
+        }
+        Map<UUID, Guest> found = guests.findAllById(unique).stream()
+                .collect(Collectors.toMap(Guest::getId, guest -> guest));
+        if (found.size() != unique.size()) {
+            throw new GuestCompositionUpdateException(GuestCompositionUpdateException.Reason.GUEST_NOT_FOUND,
+                    "Guest not found");
+        }
+        return ids.stream().map(found::get).toList();
     }
 
     /**

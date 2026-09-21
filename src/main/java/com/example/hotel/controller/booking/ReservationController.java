@@ -1,6 +1,7 @@
 package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
+import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
@@ -81,6 +82,20 @@ public class ReservationController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
     Response confirm(@PathVariable UUID id) {
         return service.confirm(id);
+    }
+
+    /**
+     * Updates only the guest composition (adults, children, Accompanying Guests) of a CONFIRMED reservation.
+     *
+     * @param id reservation identifier
+     * @param request new adults, children and complete Accompanying Guest set
+     * @return the reservation after the update
+     */
+    @PostMapping("/{id}/guest-composition")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    Response updateGuestComposition(
+            @PathVariable UUID id, @Valid @RequestBody GuestCompositionUpdateRequest request) {
+        return service.updateConfirmedGuestComposition(id, request);
     }
 
     /**

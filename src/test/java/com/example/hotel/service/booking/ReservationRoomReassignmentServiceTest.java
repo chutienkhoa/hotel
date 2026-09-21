@@ -374,6 +374,33 @@ class ReservationRoomReassignmentServiceTest {
         assertEquals(List.of("203"), offered);
     }
 
+    /** Confirms reassignment uses the adult count set by the composition update (4 adults now need the larger rooms). */
+    @Test
+    void shouldUseTheCountSetByTheCompositionUpdate() {
+        setCapacity(target, 1);
+        service.reassign(reservation.getId(), oldRoom.getId(), target.getId());
+        // Undo to a fresh reservation state for the second half: raise adults via the dedicated domain operation.
+        Reservation second = new Reservation(UUID.randomUUID(), "R-2", guest, CHECK_IN, CHECK_OUT, 2, 0,
+                BookingSource.DIRECT, null, "VND", null);
+        Room a = room("301", RoomStatus.AVAILABLE, true);
+        Room b = room("302", RoomStatus.AVAILABLE, true);
+        Room smaller = room("303", RoomStatus.AVAILABLE, true);
+        setCapacity(smaller, 1);
+        second.addRoom(new ReservationRoom(second, a, CHECK_IN, CHECK_OUT, BigDecimal.TEN));
+        second.addRoom(new ReservationRoom(second, b, CHECK_IN, CHECK_OUT, BigDecimal.TEN));
+        second.calculateTotal();
+        second.confirm();
+        second.updateConfirmedGuestComposition(4, 0, List.of(), actor);
+        when(reservations.findByIdForUpdate(second.getId())).thenReturn(Optional.of(second));
+        when(reservations.findById(second.getId())).thenReturn(Optional.of(second));
+        org.mockito.Mockito.doReturn(List.of(a, smaller)).when(rooms).lockAllByIdIn(any());
+
+        RoomReassignmentException exception = assertThrows(RoomReassignmentException.class,
+                () -> service.reassign(second.getId(), a.getId(), smaller.getId()));
+
+        assertEquals(Reason.INSUFFICIENT_ADULT_CAPACITY, exception.getReason());
+    }
+
     private static void setCapacity(Room room, Integer capacity) {
         when(room.getRoomType().getCapacity()).thenReturn(capacity);
     }

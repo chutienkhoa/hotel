@@ -4552,4 +4552,26 @@ adultCount <= SUM(RoomType.capacity của mọi phòng đang được gán cho R
 - **Chưa thay đổi / hoãn**: hành vi capacity của Stay Room Change (sau check-in) là quyết định còn hoãn và KHÔNG thay đổi trong Task C; thao tác "Update Guest Composition" cho Reservation đã confirm vẫn chưa được triển khai;
   Occupancy trong báo cáo vẫn là room-night occupancy, không đổi.
 
+## 66.3 Guest Composition Update for CONFIRMED Reservations (P1 Task D)
+
+Reservation `CONFIRMED` (chưa có Stay) có thể cập nhật Guest Composition qua MỘT thao tác chuyên biệt, KHÔNG phải sửa Reservation tổng quát:
+`ReservationService.updateConfirmedGuestComposition` (MVC `GET|POST /reservations/{id}/guest-composition`, REST `POST /api/reservations/{id}/guest-composition`).
+
+- **Trạng thái cho phép**: chỉ `CONFIRMED` và không tồn tại Stay (kể cả khi dữ liệu bất thường để status vẫn `CONFIRMED`). `DRAFT` tiếp tục dùng Draft Edit (không đổi, vẫn DRAFT-only);
+  `CANCELLED`, `NO_SHOW`, `CHECKED_IN`, `CHECKED_OUT` bị từ chối. Sau check-in, composition bị đóng băng trong V1 và không có thao tác composition ở cấp Stay.
+- **Trường được đổi**: chỉ `adultCount`, `childCount` và tập Accompanying Guests. Guest chính KHÔNG đổi được; ngày, nguồn, OTA reference, tiền tệ, phòng, giá, tổng tiền, ghi chú, số reservation và dữ liệu Stay không đổi
+  (request không có các trường đó).
+- **Bất biến giữ nguyên**: `adultCount >= 1`, `childCount >= 0`; Guest chính không nằm trong Accompanying Guests; không trùng lặp; mọi id phải tồn tại; số Guest profile không cần bằng `partySize` và không suy ra số lượng.
+- **Capacity dùng `AdultCapacityRules`** (không nhân đôi công thức): adult count MỚI được đánh giá trên tập phòng hiện đang gán (nạp bằng một truy vấn); trẻ em và Accompanying Guests không tham gia; `capacity = null` hoặc thiếu RoomType
+  cho kết quả `CAPACITY_NOT_CONFIGURED`. Hệ thống không tự thêm/đổi phòng, giảm số người hay đổi giá; nhân viên xử lý phòng riêng rồi thử lại.
+- **Atomic**: toàn bộ đề xuất được kiểm tra (trạng thái, Stay, số lượng, Guest, capacity) TRƯỚC khi thay đổi bất cứ thứ gì; lỗi thì số lượng, danh sách Accompanying Guests và audit đều không đổi. Tập liên kết được đối chiếu theo Guest
+  (giữ dòng còn lại, chỉ thêm/xóa phần chênh lệch) nên không vi phạm `UNIQUE (reservation_id, guest_id)`.
+- **Khóa/đồng thời**: khóa dòng Reservation (`PESSIMISTIC_WRITE`) TRƯỚC, rồi mới đọc trạng thái, Stay và tập phòng. Room Reassignment chỉ đổi phòng khi giữ cùng khóa dòng Reservation (khóa Room rồi Reservation) và check-in cập nhật dòng
+  Reservation, nên các thao tác được tuần tự hóa và capacity được đánh giá trên tập phòng hiện hành; chỉ khóa Reservation (không khóa Room) để giữ thứ tự khóa không deadlock. Không dùng khóa toàn cục.
+- **Audit**: mỗi lần cập nhật thành công ghi `AuditLog` `UPDATE_GUEST_COMPOSITION` (entity Reservation, người thực hiện, thời điểm, giá trị trước/sau dạng `adults=…, children=…, accompanying=…`); cập nhật thất bại không ghi entry thành công.
+- **Readiness/Check-in/Reassignment**: Arrival Readiness vẫn là dẫn xuất (không lưu READY/NEEDS_ATTENTION) và Check-in, Pre-check-in Room Reassignment tự nhiên đọc `adultCount` mới qua `AdultCapacityRules`; logic của chúng không đổi. Front Desk chỉ phản ánh readiness dẫn xuất.
+- **Quyền**: `MANAGE_BOOKING` (không cần `MANAGE_GUEST` để liên kết Guest hiện có; tạo/sửa Guest vẫn `MANAGE_GUEST`); `VIEW_BOOKING` một mình không đủ.
+- **Giao diện**: trên Reservation Detail, action "Edit Guest Composition" chỉ hiện cho `CONFIRMED` và user có `MANAGE_BOOKING`; form hiển thị Guest chính chỉ đọc và dùng lại picker Accompanying Guests của Draft form. Lỗi capacity/trạng thái được localize (EN/VI).
+- **Không đổi / hoãn**: passport (vẫn cảnh báo dựa trên Guest chính), báo cáo (Occupancy vẫn là room-night), và hành vi capacity của Stay Room Change (sau check-in) vẫn là quyết định hoãn — không triển khai trong Task D.
+
 **End of Specification v1.0**

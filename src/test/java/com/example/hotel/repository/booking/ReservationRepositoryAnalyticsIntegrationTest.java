@@ -3,6 +3,7 @@ package com.example.hotel.repository.booking;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.example.hotel.entity.booking.BookingSource;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -128,8 +129,8 @@ class ReservationRepositoryAnalyticsIntegrationTest {
                 userId,
                 "analytics-" + userId,
                 "not-used-in-test",
-                Instant.now(),
-                Instant.now());
+                timestampNow(),
+                timestampNow());
     }
 
     /** Inserts one guest required by reservation fixture rows. */
@@ -139,9 +140,9 @@ class ReservationRepositoryAnalyticsIntegrationTest {
                         + "VALUES (?, ?, ?, ?, ?, ?)",
                 guestId,
                 "G" + guestId.toString().substring(0, 8),
-                Instant.now(),
+                timestampNow(),
                 userId,
-                Instant.now(),
+                timestampNow(),
                 userId);
     }
 
@@ -153,9 +154,9 @@ class ReservationRepositoryAnalyticsIntegrationTest {
                 roomId,
                 roomNumber,
                 roomTypeId,
-                Instant.now(),
+                timestampNow(),
                 userId,
-                Instant.now(),
+                timestampNow(),
                 userId);
     }
 
@@ -178,12 +179,12 @@ class ReservationRepositoryAnalyticsIntegrationTest {
                 guestId,
                 source.name(),
                 externalBookingId,
-                Instant.now(),
+                timestampNow(),
                 checkInDate,
                 checkInDate.plusDays(1),
-                Instant.now(),
+                timestampNow(),
                 userId,
-                Instant.now(),
+                timestampNow(),
                 userId);
     }
 
@@ -199,9 +200,17 @@ class ReservationRepositoryAnalyticsIntegrationTest {
                 roomId,
                 checkInDate,
                 checkInDate.plusDays(1),
-                Instant.now(),
+                timestampNow(),
                 userId,
-                Instant.now(),
+                timestampNow(),
                 userId);
+    }
+
+    /**
+     * Returns the current time as a {@link Timestamp}. The PostgreSQL driver cannot infer an SQL type for a bound
+     * {@link Instant}, so fixture rows bind a {@code java.sql.Timestamp} instead.
+     */
+    private static Timestamp timestampNow() {
+        return Timestamp.from(Instant.now());
     }
 }

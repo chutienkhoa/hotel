@@ -395,6 +395,16 @@ public class Reservation extends AuditedEntity {
      * rows for retained Guests (so a replaced set never deletes and re-inserts the same pair).
      */
     private void applyAccompanyingGuests(List<Guest> requested, UUID auditUserId) {
+        reconcileAccompanyingGuests(requireValidAccompanyingGuests(requested), auditUserId);
+    }
+
+    /**
+     * Validates a requested Accompanying Guest set WITHOUT changing anything: the Primary Guest may not be in it and no
+     * Guest may appear twice.
+     *
+     * @return the requested Guests keyed by id, in request order
+     */
+    private Map<UUID, Guest> requireValidAccompanyingGuests(List<Guest> requested) {
         List<Guest> wanted = requested == null ? List.of() : requested;
         Map<UUID, Guest> wantedById = new LinkedHashMap<>();
         for (Guest candidate : wanted) {
@@ -405,6 +415,10 @@ public class Reservation extends AuditedEntity {
                 throw new IllegalArgumentException("A guest may be an accompanying guest only once");
             }
         }
+        return wantedById;
+    }
+
+    private void reconcileAccompanyingGuests(Map<UUID, Guest> wantedById, UUID auditUserId) {
         accompanyingGuests.removeIf(link -> !wantedById.containsKey(link.getGuest().getId()));
         Set<UUID> retained = new HashSet<>();
         for (ReservationGuest link : accompanyingGuests) {
@@ -422,18 +436,48 @@ public class Reservation extends AuditedEntity {
     }
 
     /**
+     * Updates ONLY the guest composition (adults, children and Accompanying Guests) of a CONFIRMED Reservation. This
+     * is the dedicated post-confirmation operation; it is not draft editing. The Primary Guest, dates, source, rooms,
+     * rates, currency, notes and every other field are untouched. Everything is validated before anything changes, and
+     * associations are reconciled by Guest identity so retained rows are never deleted and re-inserted. Capacity is
+     * checked by the caller with the shared adult-capacity rule.
+     *
+     * @param adultCount new number of adults, at least 1
+     * @param childCount new number of children, at least 0
+     * @param accompanying the complete new Accompanying Guest set (may be empty)
+     * @param auditUserId user recorded on newly added associations
+     * @throws IllegalStateException if the Reservation is not CONFIRMED
+     * @throws IllegalArgumentException if a count is invalid, the Primary Guest is in the set, or a Guest repeats
+     */
+    public void updateConfirmedGuestComposition(
+            int adultCount, int childCount, List<Guest> accompanying, UUID auditUserId) {
+        if (status != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("Only a confirmed reservation can update its guest composition");
+        }
+        requireValidGuestComposition(adultCount, childCount);
+        Map<UUID, Guest> wanted = requireValidAccompanyingGuests(accompanying);
+        this.adultCount = adultCount;
+        this.childCount = childCount;
+        reconcileAccompanyingGuests(wanted, auditUserId);
+    }
+
+    /**
      * Validates and stores the guest composition. Adults must be at least 1 and children at least 0; nothing is
      * inferred from Guest profiles, rooms or RoomType capacity, and capacity is not checked here.
      */
     private void applyGuestComposition(int adultCount, int childCount) {
+        requireValidGuestComposition(adultCount, childCount);
+        this.adultCount = adultCount;
+        this.childCount = childCount;
+    }
+
+    private static void requireValidGuestComposition(int adultCount, int childCount) {
         if (adultCount < 1) {
             throw new IllegalArgumentException("adultCount must be at least 1");
         }
         if (childCount < 0) {
             throw new IllegalArgumentException("childCount must not be negative");
         }
-        this.adultCount = adultCount;
-        this.childCount = childCount;
     }
 
     /**

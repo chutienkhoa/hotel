@@ -239,6 +239,38 @@ class ReservationCapacityLifecycleTest {
         assertEquals("Room is not available for check-in", exception.getReason());
     }
 
+    /** Confirms check-in consumes the composition set by the dedicated update and still enforces the shared rule. */
+    @Test
+    void shouldLetCheckInUseTheCountSetByTheCompositionUpdate() {
+        Reservation reservation = confirmed(2, 0, room("101", 2), room("102", 1));
+        arrangeCheckIn(reservation);
+        List<Object[]> rows = reservation.getRooms().stream()
+                .map(line -> new Object[] {reservation.getId(), line.getRoom()}).toList();
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findBookedRoomsByReservationIdIn(List.of(reservation.getId()))).thenReturn(rows);
+
+        service.updateConfirmedGuestComposition(reservation.getId(),
+                new com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest(3, 0, List.of()));
+        assertEquals(3, reservation.getAdultCount());
+        service.checkIn(reservation.getId());
+
+        assertEquals(ReservationStatus.CHECKED_IN, reservation.getStatus());
+        verify(stays).save(any(Stay.class));
+    }
+
+    /** Confirms once check-in has happened the dedicated update is refused (composition frozen). */
+    @Test
+    void shouldFreezeCompositionAfterCheckIn() {
+        Reservation reservation = confirmed(2, 0, room("101", 2));
+        arrangeCheckIn(reservation);
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        service.checkIn(reservation.getId());
+
+        assertThrows(com.example.hotel.exception.GuestCompositionUpdateException.class, () -> service.updateConfirmedGuestComposition(
+                reservation.getId(), new com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest(1, 0, List.of())));
+        assertEquals(2, reservation.getAdultCount());
+    }
+
     // ------------------------------------------------------------- helpers
 
     private void assertConfirms(Reservation reservation) {
