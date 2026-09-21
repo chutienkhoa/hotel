@@ -50,7 +50,7 @@ class ReservationConfirmAvailabilityTest {
     private final ReservationService service = new ReservationService(
             reservations, mock(GuestRepository.class), rooms, mock(StayRepository.class),
             mock(StayRoomAssignmentRepository.class), mock(ChargeRepository.class), mock(AuditLogRepository.class),
-            new ReservationMapper(), mock(ReservationNumberGenerator.class), mock(StayBalanceService.class), roomAvailability,
+            new ReservationMapper(), mock(ReservationNumberGenerator.class), mock(StayBalanceService.class), roomAvailability, mock(com.example.hotel.service.booking.PrepaymentService.class),
             Clock.systemDefaultZone());
 
     /** Clears the authentication established by the test. */
@@ -78,6 +78,8 @@ class ReservationConfirmAvailabilityTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(new CurrentUser(UUID.randomUUID(), "booking-manager"), null));
         when(reservations.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findRoomIdsByReservationId(reservation.getId())).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(rooms.lockAllByIdIn(List.of(room.getId()))).thenReturn(List.of(room));
         when(roomAvailability.conflictedRoomIds(
                         List.of(room.getId()), LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 12)))

@@ -65,7 +65,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(33, flyway.info().applied().length);
+        assertEquals(34, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -507,8 +507,9 @@ class MigrationIntegrationTest {
     /** Verifies the Payment v1 migration creates the mandatory Stay relationship and nullable paid time. */
     @Test
     void paymentSchemaMatchesV1Rules() {
+        // V34: stay_id is nullable (a prepayment has no Stay until check-in); reservation_id is the required owner.
         Boolean stayIdIsRequired = jdbcTemplate.queryForObject(
-                "SELECT is_nullable = 'NO' "
+                "SELECT is_nullable = 'YES' "
                         + "FROM information_schema.columns "
                         + "WHERE table_name = 'payment' AND column_name = 'stay_id'",
                 Boolean.class);

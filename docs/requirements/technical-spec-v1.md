@@ -4652,4 +4652,23 @@ Các khái niệm tài chính tách biệt; V1 chỉ thêm liên kết và kiể
 - **Khóa**: mọi ghi vào folio đi qua khóa Stay (`findByIdForUpdate`/`findByReservationIdForUpdate`, cùng hàng): Charge và Payment (tạo mới, mark-paid, refund) khóa Stay TRƯỚC rồi kiểm tra lại `CHECKED_IN`; check-out, Stay Extension, Room Change cũng khóa Stay trước rồi mới khóa Room. Không đảo thứ tự khóa; không khóa toàn cục.
 - **Không đổi/Hoãn**: Deposit/Prepayment (không phải doanh thu khi nhận, KHÔNG dùng AdditionalRevenue để biểu diễn; hoãn), sửa/đảo Charge, refund sau check-out, Payment âm, sổ cái, doanh thu đa tiền tệ, sửa lại doanh thu khi trả phòng sớm.
 
+## 70. Deposit / Prepayment (P1, V1)
+
+- **Thuật ngữ**: V1 chỉ có "Prepayment / Advance Payment" (Thanh toán trước) = tiền ĐÃ nhận cho một Reservation TRƯỚC khi check-in. KHÔNG có Security Deposit, card hold, thanh toán trước ở trạng thái chờ, lịch trả góp, phí hủy/no-show hay tịch thu (forfeiture).
+- **Sở hữu**: mọi `Payment` thuộc vĩnh viễn đúng một Reservation (`payment.reservation_id` NOT NULL; V34 backfill từ `stay.reservation_id`). Trước check-in `stay_id` = NULL; khi check-in CHÍNH dòng đó nhận `stay_id` (không sao chép, không tạo Payment mới, không đổi amount/currency/appliedAmount/method/paidAt/reference).
+  FK ghép `(stay_id, reservation_id)` → `stay(id, reservation_id)` bảo đảm Stay thuộc đúng Reservation; CHECK: Payment không có Stay chỉ có thể `PAID` hoặc `REFUNDED`. Không dùng trigger.
+- **Ghi nhận** (`PrepaymentService.record`): chỉ Reservation `CONFIRMED` chưa có Stay; khóa dòng Reservation trước khi kiểm tra; ghi thẳng `PAID` (không có PENDING/FAILED trước check-in); dùng chung xác thực và quy đổi tiền tệ của `PaymentService` (appliedAmount theo `Reservation.currency`, tỷ giá 1 USD = rate VND);
+  giữ nguyên `PaymentMethod` (không thêm phương thức "PREPAYMENT"; OTA vẫn bắt buộc reference). Nhiều khoản thanh toán trước được phép. Trần: Σ appliedAmount của các dòng PAID chưa gắn Stay + khoản mới ≤ `Reservation.totalAmount` (REFUNDED không tính; không có số dư có).
+  Chống trùng ứng dụng (không có UNIQUE DB toàn cục): cùng Reservation + cùng method + reference (đã trim, không rỗng) với Payment chưa FAILED/REFUNDED bị từ chối; reference rỗng không kích hoạt.
+- **Hoàn tiền**: hoàn TOÀN BỘ một khoản trước check-in (khóa Reservation, kiểm tra lại dưới khóa: dòng thuộc Reservation, chưa có Stay, PAID, Reservation vẫn CONFIRMED); dùng lại vòng đời `PAID → REFUNDED` (cần lý do); Reservation vẫn CONFIRMED; audit `REFUND_PAYMENT`. Không hoàn một phần.
+- **Hủy / No-show**: bị TỪ CHỐI khi còn khoản thanh toán trước đang hiệu lực (PAID, chưa gắn Stay); nhân viên phải hoàn tiền trước. Không tự hoàn tiền, không tịch thu, không tạo doanh thu/phí/AdditionalRevenue.
+- **Check-in**: tự động áp dụng các khoản thanh toán trước PAID bằng cách gắn CÙNG các dòng vào Stay mới (một truy vấn có khóa), audit `APPLY_PREPAYMENT` (số lượng, tổng); công thức folio giữ nguyên: Outstanding = Σ Charges − Σ Payments PAID. Thanh toán đủ trước → outstanding 0, check-out không đổi;
+  gia hạn và Charge dịch vụ sau đó cộng vào outstanding như bình thường.
+- **Doanh thu**: Payment/prepayment KHÔNG tạo doanh thu và không tạo Charge hay AdditionalRevenue; báo cáo tài chính không đổi.
+- **Khóa vòng đời trước check-in**: thứ tự Rooms (sắp theo id) → hàng Reservation, cùng thứ tự với Room Reassignment. Check-in và Confirm khóa phòng rồi khóa Reservation và chỉ đọc trạng thái Reservation SAU khóa; Cancel, No-show, ghi nhận và hoàn thanh toán trước chỉ khóa Reservation. Stay vẫn là ranh giới tuần tự hóa của folio sau check-in (Stay → Rooms).
+  Nhờ đó Check-in/Cancel/No-show/prepayment/refund được tuần tự hóa (trước đây Check-in và Cancel/No-show không khóa Reservation).
+- **Quyền**: `MANAGE_PAYMENT` để xem/ghi nhận/hoàn thanh toán trước; Check-in (`CHECK_IN`) tự áp dụng các khoản đã ghi nhận, không cần `MANAGE_PAYMENT`. Reference chỉ là mã tham chiếu nhân viên nhìn thấy; KHÔNG lưu số thẻ, CVV hay thông tin đăng nhập ngân hàng.
+- **Giao diện/Excel**: Reservation Detail (CONFIRMED, `MANAGE_PAYMENT`) có mục Prepayments (tổng đã nhận/đang hiệu lực/đã hoàn, lịch sử, Record/Refund); Check-in Review hiển thị tóm tắt chỉ đọc; sau check-in các dòng xuất hiện trong Folio thông thường. Sheet Payments của Excel lấy dữ liệu theo `Payment → Reservation` nên có cả thanh toán trước check-in (không đổi bố cục).
+- **Hoãn**: Security Deposit, hoàn một phần, phí hủy/no-show, forfeiture, cổng thanh toán, card hold, số dư có/overpayment.
+
 **End of Specification v1.0**

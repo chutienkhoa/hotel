@@ -22,8 +22,14 @@ public class Payment extends AuditedEntity {
     @Id
     private UUID id;
 
+    /** The Reservation this Payment belongs to, permanently. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "stay_id", nullable = false)
+    @JoinColumn(name = "reservation_id", nullable = false, updatable = false)
+    private Reservation reservation;
+
+    /** The Stay, or {@code null} for a prepayment received before check-in. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "stay_id")
     private Stay stay;
 
     @Column(nullable = false, precision = 19, scale = 6)
@@ -88,6 +94,7 @@ public class Payment extends AuditedEntity {
         Payment payment = new Payment();
         payment.id = UUID.randomUUID();
         payment.stay = stay;
+        payment.reservation = stay.getReservation();
         payment.amount = amount;
         payment.currency = currency;
         payment.exchangeRate = exchangeRate;
@@ -97,6 +104,69 @@ public class Payment extends AuditedEntity {
         payment.paidAt = null;
         payment.reference = reference;
         return payment;
+    }
+
+    /**
+     * Creates a prepayment: money already received toward a CONFIRMED Reservation before check-in. It is PAID
+     * immediately and has no Stay until check-in attaches it.
+     *
+     * @param reservation owning Reservation
+     * @param amount amount received in {@code currency}
+     * @param currency currency actually received
+     * @param exchangeRate "1 USD = rate VND" for a cross-currency payment, otherwise {@code null}
+     * @param appliedAmount amount credited in the Reservation currency
+     * @param method payment method
+     * @param reference operator-visible reference, already normalized
+     * @param paidAt authoritative payment time
+     * @return the new PAID prepayment
+     */
+    public static Payment createPrepayment(
+            Reservation reservation,
+            BigDecimal amount,
+            PaymentCurrency currency,
+            BigDecimal exchangeRate,
+            BigDecimal appliedAmount,
+            PaymentMethod method,
+            String reference,
+            Instant paidAt) {
+        Payment payment = new Payment();
+        payment.id = UUID.randomUUID();
+        payment.reservation = reservation;
+        payment.stay = null;
+        payment.amount = amount;
+        payment.currency = currency;
+        payment.exchangeRate = exchangeRate;
+        payment.appliedAmount = appliedAmount;
+        payment.method = method;
+        payment.status = PaymentStatus.PAID;
+        payment.paidAt = paidAt;
+        payment.reference = reference;
+        return payment;
+    }
+
+    /**
+     * Attaches this prepayment to the Stay created by check-in. The SAME row is reused; no financial field changes.
+     *
+     * @param newStay the Stay of this Payment's own Reservation
+     * @throws IllegalStateException if already attached, not PAID, or the Stay belongs to another Reservation
+     */
+    public void attachToStay(Stay newStay) {
+        if (stay != null || status != PaymentStatus.PAID) {
+            throw new IllegalStateException("Only an active prepayment can be applied to a Stay");
+        }
+        if (!newStay.getReservation().getId().equals(reservation.getId())) {
+            throw new IllegalStateException("A Payment can only be applied to a Stay of its own Reservation");
+        }
+        stay = newStay;
+    }
+
+    /**
+     * Returns the owning Reservation.
+     *
+     * @return the Reservation
+     */
+    public Reservation getReservation() {
+        return reservation;
     }
 
     /**

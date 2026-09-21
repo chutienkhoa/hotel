@@ -163,7 +163,7 @@ public class PaymentService {
         if (payment.getStatus() != PaymentStatus.PENDING) {
             throw conflict("Invalid payment state transition");
         }
-        Stay stay = findStayForUpdate(payment.getStay().getId());
+        Stay stay = findStayForUpdate(payment.getStay() == null ? null : payment.getStay().getId());
         requireCheckedIn(stay);
         BigDecimal totalCharges = zeroIfNull(chargeRepository.sumAmountByStayId(stay.getId()));
         BigDecimal totalPaidApplied = zeroIfNull(
@@ -185,7 +185,7 @@ public class PaymentService {
     @Transactional
     public PaymentResponse markFailed(UUID paymentId) {
         Payment payment = findPaymentForUpdate(paymentId);
-        requireCheckedIn(findStayForUpdate(payment.getStay().getId()));
+        requireCheckedIn(findStayForUpdate(payment.getStay() == null ? null : payment.getStay().getId()));
         transitionToFailed(payment);
         return paymentMapper.toResponse(paymentRepository.save(payment));
     }
@@ -209,7 +209,7 @@ public class PaymentService {
         }
         String trimmedReason = reason.trim();
         Payment payment = findPaymentForUpdate(paymentId);
-        Stay stay = findStayForUpdate(payment.getStay().getId());
+        Stay stay = findStayForUpdate(payment.getStay() == null ? null : payment.getStay().getId());
         requireCheckedIn(stay);
         try {
             payment.refund(trimmedReason);
@@ -247,7 +247,7 @@ public class PaymentService {
      *
      * @param request Payment request to validate
      */
-    private void validateCreationRequest(PaymentCreateRequest request) {
+    void validateCreationRequest(PaymentCreateRequest request) {
         if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("amount must be greater than zero");
         }
@@ -271,8 +271,19 @@ public class PaymentService {
      * @throws ResponseStatusException if the Reservation's currency is not a supported Payment currency
      */
     private PaymentCurrency resolveReservationCurrency(Stay stay) {
+        return resolveReservationCurrency(stay.getReservation());
+    }
+
+    /**
+     * Resolves a Reservation's currency as a {@link PaymentCurrency}.
+     *
+     * @param reservation owning Reservation
+     * @return the Reservation's currency
+     * @throws ResponseStatusException if the currency is not a supported Payment currency
+     */
+    PaymentCurrency resolveReservationCurrency(com.example.hotel.entity.booking.Reservation reservation) {
         try {
-            return PaymentCurrency.valueOf(stay.getReservation().getCurrency());
+            return PaymentCurrency.valueOf(reservation.getCurrency());
         } catch (IllegalArgumentException exception) {
             throw conflict("Reservation currency is not supported for Payment");
         }
@@ -295,7 +306,7 @@ public class PaymentService {
      *     for a same-currency Payment and a positive value for a cross-currency Payment
      * @return the calculated applied amount, in {@code reservationCurrency}
      */
-    private BigDecimal calculateAppliedAmount(
+    BigDecimal calculateAppliedAmount(
             BigDecimal amount,
             PaymentCurrency paymentCurrency,
             PaymentCurrency reservationCurrency,
@@ -337,6 +348,9 @@ public class PaymentService {
      * @return locked Stay
      */
     private Stay findStayForUpdate(UUID stayId) {
+        if (stayId == null) {
+            throw conflict("A prepayment belongs to its reservation until check-in; use the prepayment operations");
+        }
         return stayRepository
                 .findByIdForUpdate(stayId)
                 .orElseThrow(() -> notFound("Stay"));

@@ -54,7 +54,7 @@ class ReservationGuestCompositionServiceTest {
     private final ReservationService service = new ReservationService(
             reservations, guests, rooms, mock(StayRepository.class), mock(StayRoomAssignmentRepository.class),
             mock(ChargeRepository.class), mock(AuditLogRepository.class), new ReservationMapper(), numbers,
-            mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), Clock.fixed(IN.atTime(10, 0).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
+            mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class), Clock.fixed(IN.atTime(10, 0).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
                     ZoneId.of("Asia/Ho_Chi_Minh")));
 
     private Guest guest;
@@ -108,6 +108,8 @@ class ReservationGuestCompositionServiceTest {
         Reservation draft = new Reservation(UUID.randomUUID(), "R-1", guest, IN, OUT, 2, 0,
                 BookingSource.BOOKING_COM, "BK-1", "VND", "keep");
         when(reservations.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(reservations.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(reservations.findRoomIdsByReservationId(draft.getId())).thenAnswer(invocation -> Optional.of(draft).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
 
         service.updateDraft(draft.getId(), new CreateRequest(guest.getId(), IN, OUT, 3, 1, BookingSource.BOOKING_COM,
                 "BK-1", "VND", "keep", List.of(new RoomRequest(doubleRoom.getId(), BigDecimal.TEN)), List.of()));
@@ -125,6 +127,8 @@ class ReservationGuestCompositionServiceTest {
         Reservation draft = new Reservation(UUID.randomUUID(), "R-1", guest, IN, OUT, 2, 1,
                 BookingSource.DIRECT, null, "VND", null);
         when(reservations.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(reservations.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(reservations.findRoomIdsByReservationId(draft.getId())).thenAnswer(invocation -> Optional.of(draft).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
 
         assertThrows(ResponseStatusException.class, () -> service.updateDraft(draft.getId(), request(0, 1)));
 
@@ -139,6 +143,8 @@ class ReservationGuestCompositionServiceTest {
                 BookingSource.DIRECT, null, "VND", null);
         reservation.confirm();
         when(reservations.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findRoomIdsByReservationId(reservation.getId())).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
 
         ResponseStatusException exception =
                 assertThrows(ResponseStatusException.class, () -> service.updateDraft(reservation.getId(), request(4, 2)));

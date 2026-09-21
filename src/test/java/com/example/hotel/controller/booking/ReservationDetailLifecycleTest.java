@@ -77,6 +77,9 @@ class ReservationDetailLifecycleTest {
     private com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.PrepaymentService prepaymentService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms a DRAFT reservation still shows the booked-room presentation. */
@@ -171,6 +174,27 @@ class ReservationDetailLifecycleTest {
                 .andExpect(content().string(containsString("Extension Amount")))
                 .andExpect(content().string(containsString("Current Accommodation Total")))
                 .andExpect(content().string(containsString("id=\"stay-extensions\"")));
+    }
+
+    /** Confirms the Prepayments section and Record action show only for CONFIRMED with MANAGE_PAYMENT. */
+    @Test
+    void shouldShowPrepaymentsOnlyForConfirmedWithManagePayment() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+        when(prepaymentService.summary(RESERVATION_ID)).thenReturn(new com.example.hotel.dto.booking.response.PrepaymentSummaryResponse(
+                "VND", new BigDecimal("4000000"), new BigDecimal("1000000"), BigDecimal.ZERO, new BigDecimal("1000000"),
+                new BigDecimal("3000000"), List.of()));
+        var payer = user("p").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"), new SimpleGrantedAuthority("PERM_MANAGE_PAYMENT"));
+        var viewer = user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(payer))
+                .andExpect(content().string(containsString("id=\"prepayments\"")))
+                .andExpect(content().string(containsString("id=\"record-prepayment\"")));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer))
+                .andExpect(content().string(not(containsString("id=\"prepayments\""))))
+                .andExpect(content().string(not(containsString("id=\"record-prepayment\""))));
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(payer))
+                .andExpect(content().string(not(containsString("id=\"prepayments\""))));
     }
 
     /** Confirms CHECKED_OUT hides Current rooms and the empty Available actions card, but keeps Room History. */

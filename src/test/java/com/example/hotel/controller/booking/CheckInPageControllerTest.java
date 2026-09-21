@@ -51,6 +51,9 @@ class CheckInPageControllerTest {
     private RoomQueryService roomQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.PrepaymentService prepaymentService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms ADMIN, MANAGER, and STAFF can all access the Check-in landing page. */

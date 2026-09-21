@@ -95,6 +95,9 @@ class ReservationGuestCompositionUpdatePageTest {
     private com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.PrepaymentService prepaymentService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the detail action appears only for a CONFIRMED reservation and a booking manager. */

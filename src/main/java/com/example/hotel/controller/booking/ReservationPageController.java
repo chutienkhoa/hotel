@@ -58,6 +58,7 @@ public class ReservationPageController {
     private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
     private final StayExtensionService stayExtensionService;
     private final com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
+    private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -72,6 +73,7 @@ public class ReservationPageController {
      * @param stayRoomAssignmentQueryService service used to supply current rooms and Room History
      * @param stayExtensionService service used to supply the extension history and derived accommodation totals
      * @param folioReconciliationService read-only financial integrity diagnostic
+     * @param prepaymentService prepayment summary of a CONFIRMED Reservation (MANAGE_PAYMENT only)
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
@@ -82,7 +84,8 @@ public class ReservationPageController {
             StayBalanceService stayBalanceService,
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
             StayExtensionService stayExtensionService,
-            com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService) {
+            com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService,
+            com.example.hotel.service.booking.PrepaymentService prepaymentService) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
@@ -92,6 +95,7 @@ public class ReservationPageController {
         this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
         this.stayExtensionService = stayExtensionService;
         this.folioReconciliationService = folioReconciliationService;
+        this.prepaymentService = prepaymentService;
     }
 
     /**
@@ -162,6 +166,9 @@ public class ReservationPageController {
         // Financial integrity is a diagnostic for users who may already see the folio (MANAGE_PAYMENT).
         boolean canSeeIntegrity = hasStay && hasAuthority(authentication, "PERM_MANAGE_PAYMENT");
         model.addAttribute("financialIntegrity", canSeeIntegrity ? integrityFor(id) : null);
+        model.addAttribute("prepaymentSummary",
+                "CONFIRMED".equals(reservation.status()) && hasAuthority(authentication, "PERM_MANAGE_PAYMENT")
+                        ? prepaymentService.summary(id) : null);
         return "reservation/detail";
     }
 

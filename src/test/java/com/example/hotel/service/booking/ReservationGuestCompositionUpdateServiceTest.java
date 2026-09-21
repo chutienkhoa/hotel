@@ -67,7 +67,7 @@ class ReservationGuestCompositionUpdateServiceTest {
     private final ReservationService service = new ReservationService(
             reservations, guests, mock(RoomRepository.class), stays, mock(StayRoomAssignmentRepository.class),
             mock(ChargeRepository.class), audits, new ReservationMapper(), mock(ReservationNumberGenerator.class),
-            mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), Clock.fixed(IN.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+            mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class), Clock.fixed(IN.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
     private final Guest primary = guest("G-1");
     private final Guest second = guest("G-2");

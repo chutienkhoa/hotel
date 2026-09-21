@@ -260,4 +260,14 @@ public interface ReservationRepository
     @Query("SELECT rr.reservation.id, room FROM ReservationRoom rr JOIN rr.room room JOIN FETCH room.roomType "
             + "WHERE rr.reservation.id IN :reservationIds ORDER BY room.roomNumber")
     List<Object[]> findBookedRoomsByReservationIdIn(@Param("reservationIds") Collection<UUID> reservationIds);
+
+    /**
+     * Reads the room identifiers of a Reservation without loading the Reservation entity, so lifecycle operations can
+     * lock the rooms first and load the authoritative Reservation state afterwards (Rooms then Reservation).
+     *
+     * @param reservationId Reservation identifier
+     * @return the identifiers of its booked rooms
+     */
+    @Query("SELECT rr.room.id FROM ReservationRoom rr WHERE rr.reservation.id = :reservationId")
+    List<UUID> findRoomIdsByReservationId(@Param("reservationId") UUID reservationId);
 }

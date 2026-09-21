@@ -61,6 +61,7 @@ public class ReservationService {
     private final ReservationNumberGenerator reservationNumberGenerator;
     private final StayBalanceService stayBalanceService;
     private final RoomAvailabilityService roomAvailability;
+    private final PrepaymentService prepayments;
     private final Clock clock;
 
     /**
@@ -78,6 +79,7 @@ public class ReservationService {
      * @param reservationNumberGenerator generator tạo reservation number hằng ngày
      * @param stayBalanceService service tính số dư của Stay khi check-out
      * @param roomAvailability shared lifecycle-aware booking-availability primitive used by Confirm
+     * @param prepayments prepayment service (cancel/no-show guard and check-in application)
      * @param clock authoritative hotel business clock used for Check-in date rules
      */
     ReservationService(
@@ -92,6 +94,7 @@ public class ReservationService {
             ReservationNumberGenerator reservationNumberGenerator,
             StayBalanceService stayBalanceService,
             RoomAvailabilityService roomAvailability,
+            PrepaymentService prepayments,
             Clock clock) {
         this.reservations = reservations;
         this.guests = guests;
@@ -104,6 +107,7 @@ public class ReservationService {
         this.reservationNumberGenerator = reservationNumberGenerator;
         this.stayBalanceService = stayBalanceService;
         this.roomAvailability = roomAvailability;
+        this.prepayments = prepayments;
         this.clock = clock;
     }
 
@@ -267,18 +271,14 @@ public class ReservationService {
      */
     @Transactional
     public Response confirm(UUID id) {
-        Reservation reservation = load(id);
         CurrentUser user = currentUser();
+        // Lifecycle lock order: Rooms (sorted) first, then the Reservation row, then state is read fresh.
+        LockedReservation locked = lockRoomsThenReservation(id);
+        Reservation reservation = locked.reservation();
+        List<Room> lockedRooms = locked.rooms();
+        List<UUID> roomIds = lockedRooms.stream().map(Room::getId).sorted().toList();
         if (reservation.getStatus() != ReservationStatus.DRAFT) {
             throw conflict("Invalid reservation state transition");
-        }
-        List<UUID> roomIds = reservation.getRooms().stream()
-                .map(reservationRoom -> reservationRoom.getRoom().getId())
-                .sorted()
-                .toList();
-        List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
-        if (lockedRooms.size() != roomIds.size()) {
-            throw notFound("Room");
         }
         // Lifecycle-aware inventory check under the room locks taken above (CONFIRMED via ReservationRoom, CHECKED_IN
         // via the actual StayRoomAssignments), in one bounded query for all of the reservation's rooms.
@@ -404,9 +404,13 @@ public class ReservationService {
      */
     @Transactional
     public Response cancel(UUID id) {
-        Reservation reservation = load(id);
         CurrentUser user = currentUser();
+        Reservation reservation = loadForUpdate(id);
         ReservationStatus previousStatus = reservation.getStatus();
+        if (previousStatus == ReservationStatus.CONFIRMED) {
+            prepayments.requireNoActivePrepayments(id, "payment.prepayment.error.blocksCancel",
+                    "This reservation has active prepayments. Refund them before cancellation.");
+        }
         try {
             reservation.cancel();
         } catch (IllegalStateException exception) {
@@ -425,9 +429,13 @@ public class ReservationService {
      */
     @Transactional
     public Response noShow(UUID id) {
-        Reservation reservation = load(id);
         CurrentUser user = currentUser();
+        Reservation reservation = loadForUpdate(id);
         ReservationStatus previousStatus = reservation.getStatus();
+        if (previousStatus == ReservationStatus.CONFIRMED) {
+            prepayments.requireNoActivePrepayments(id, "payment.prepayment.error.blocksNoShow",
+                    "This reservation has active prepayments. Refund them before marking no-show.");
+        }
         try {
             reservation.noShow();
         } catch (IllegalStateException exception) {
@@ -446,8 +454,12 @@ public class ReservationService {
      */
     @Transactional
     public Response checkIn(UUID id) {
-        Reservation reservation = load(id);
         CurrentUser user = currentUser();
+        // Lifecycle lock order: Rooms (sorted) first, then the Reservation row. The Reservation is loaded only AFTER
+        // its lock, so a concurrent cancel/no-show/prepayment/refund is serialized and no stale state is used.
+        LockedReservation locked = lockRoomsThenReservation(id);
+        Reservation reservation = locked.reservation();
+        List<Room> lockedRooms = locked.rooms();
         // The same rule set backs the derived Arrival Readiness, so readiness and check-in cannot disagree.
         List<ArrivalIssueCode> reservationBlockers = ArrivalReadinessRules.reservationBlockers(
                 reservation.getStatus(),
@@ -456,14 +468,6 @@ public class ReservationService {
                 () -> stays.existsByReservationId(id));
         if (!reservationBlockers.isEmpty()) {
             throw checkInConflict(reservationBlockers.get(0));
-        }
-        List<UUID> roomIds = reservation.getRooms().stream()
-                .map(reservationRoom -> reservationRoom.getRoom().getId())
-                .sorted()
-                .toList();
-        List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
-        if (lockedRooms.size() != roomIds.size()) {
-            throw notFound("Room");
         }
         for (Room room : lockedRooms) {
             if (ArrivalReadinessRules.roomBlocker(room).isPresent()) {
@@ -478,11 +482,14 @@ public class ReservationService {
         }
         reservation.checkIn();
         reservation.audit(user.id());
-        Stay stay = new Stay(reservation, Instant.now(clock));
-        stay.audit(user.id());
-        stays.save(stay);
+        Stay newStay = new Stay(reservation, Instant.now(clock));
+        newStay.audit(user.id());
+        // Use the managed instance returned by save: prepayments (managed Payment rows) are attached to it.
+        Stay stay = stays.save(newStay);
         seedRoomAssignments(stay, reservation, user);
         createRoomCharges(stay, reservation, user);
+        // The SAME prepayment rows (money received before check-in) join the Stay folio; nothing is copied.
+        prepayments.applyToStay(reservation, stay, user);
         audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
         return response(reservation);
     }
@@ -615,6 +622,36 @@ public class ReservationService {
         }
         audit(user, "CHECK_OUT", reservation, "CHECKED_IN", "CHECKED_OUT");
         return response(reservation);
+    }
+
+    /** The rooms locked first and the Reservation loaded fresh under its row lock. */
+    private record LockedReservation(Reservation reservation, List<Room> rooms) {}
+
+    /**
+     * Applies the pre-check-in lifecycle lock order shared with Room Reassignment: the Reservation's rooms are locked
+     * in sorted-id order, THEN the Reservation row is locked and loaded (first load, so its state is never older than
+     * the lock). The room set read before the locks is compared with the authoritative one afterwards.
+     */
+    private LockedReservation lockRoomsThenReservation(UUID id) {
+        List<UUID> roomIds = reservations.findRoomIdsByReservationId(id).stream().sorted().toList();
+        List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
+        if (lockedRooms.size() != roomIds.size()) {
+            throw notFound("Room");
+        }
+        Reservation reservation = loadForUpdate(id);
+        List<UUID> currentIds = reservation.getRooms().stream()
+                .map(reservationRoom -> reservationRoom.getRoom().getId())
+                .sorted()
+                .toList();
+        if (!currentIds.equals(roomIds)) {
+            throw conflict("Reservation rooms changed concurrently; retry");
+        }
+        return new LockedReservation(reservation, lockedRooms);
+    }
+
+    /** Locks and loads a Reservation row ({@code PESSIMISTIC_WRITE}); its state is read after the lock. */
+    private Reservation loadForUpdate(UUID id) {
+        return reservations.findByIdForUpdate(id).orElseThrow(() -> notFound("Reservation"));
     }
 
     /**

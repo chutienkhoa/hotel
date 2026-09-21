@@ -476,6 +476,8 @@ class ReservationCheckOutServiceTest {
             openAssignments.add(assignment);
         }
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findRoomIdsByReservationId(reservationId)).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stayRepository.findByReservationIdForUpdate(reservationId)).thenReturn(Optional.of(stay));
         when(stayRoomAssignmentRepository.findOpenByStayId(stay.getId())).thenReturn(openAssignments);
         when(roomRepository.lockAllByIdIn(roomIds)).thenReturn(rooms.stream().sorted(
@@ -492,7 +494,7 @@ class ReservationCheckOutServiceTest {
                         auditLogRepository,
                         new ReservationMapper(),
                         reservationNumberGenerator,
-                        stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
+                        stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class),
                         clock),
                 reservationRepository,
                 roomRepository,

@@ -49,6 +49,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @RequestMapping("/check-in")
 public class CheckInPageController {
 
+    private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
     private final CheckInService checkInService;
     private final GuestQueryService guestQueryService;
     private final RoomQueryService roomQueryService;
@@ -59,9 +60,14 @@ public class CheckInPageController {
      * @param checkInService service implementing the Check-in operational flows
      * @param guestQueryService service used to load eligible Guest choices
      * @param roomQueryService service used to load Room choices for OTA Booking Not Entered
+     * @param prepaymentService read-only prepayment summary shown on the Review
      */
     public CheckInPageController(
-            CheckInService checkInService, GuestQueryService guestQueryService, RoomQueryService roomQueryService) {
+            CheckInService checkInService,
+            GuestQueryService guestQueryService,
+            RoomQueryService roomQueryService,
+            com.example.hotel.service.booking.PrepaymentService prepaymentService) {
+        this.prepaymentService = prepaymentService;
         this.checkInService = checkInService;
         this.guestQueryService = guestQueryService;
         this.roomQueryService = roomQueryService;
@@ -127,6 +133,9 @@ public class CheckInPageController {
         CheckInReviewResponse review = checkInService.review(id);
         model.addAttribute("review", review);
         model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
+        // Payment details are shown only to users who already hold MANAGE_PAYMENT; the Review stays read-only.
+        model.addAttribute("prepaymentSummary",
+                hasAuthority(authentication, "PERM_MANAGE_PAYMENT") ? prepaymentService.summary(id) : null);
         return "check-in/review";
     }
 

@@ -252,6 +252,8 @@ class ReservationCheckInRoomChargeTest {
 
         setCurrentUser(userId);
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findRoomIdsByReservationId(reservationId)).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stayRepository.existsByReservationId(reservationId)).thenReturn(false);
         when(roomRepository.lockAllByIdIn(roomIds)).thenReturn(lockedRoomsInIdOrder);
         when(stayRepository.save(any(Stay.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -269,7 +271,7 @@ class ReservationCheckInRoomChargeTest {
                 auditLogRepository,
                 new ReservationMapper(),
                 reservationNumberGenerator,
-                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
+                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class),
                 Clock.systemDefaultZone());
 
         return new Fixture(

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{payment.prepayment.form.title})}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}" th:text="#{payment.prepayment.back}">Back to reservation</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{payment.prepayment.form.title}">Record Prepayment</h1>
+                <p th:text="#{payment.prepayment.form.description}">Money received before check-in.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt th:text="#{payment.prepayment.reservation}">Reservation</dt>
+            <dd th:text="${reservation.reservationNumber}">R1</dd>
+            <dt th:text="#{payment.prepayment.bookingTotal}">Booking total</dt>
+            <dd><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></dd>
+        </dl>
+
+        <form class="form-card" method="post" th:action="@{/reservations/{id}/prepayments(id=${reservation.id})}" th:object="${prepaymentForm}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <div class="form-grid reservation-details-grid">
+                <div class="form-field">
+                    <label for="amount" th:text="#{payment.prepayment.amount} + ' *'">Amount *</label>
+                    <input id="amount" required step="any" th:field="*{amount}" type="number" />
+                    <p class="field-error" th:errors="*{amount}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="currency" th:text="#{payment.prepayment.currency} + ' *'">Currency *</label>
+                    <select id="currency" required th:field="*{currency}">
+                        <option value="" th:text="#{payment.prepayment.selectCurrency}">Select currency</option>
+                        <option th:each="c : ${paymentCurrencies}" th:text="${c}" th:value="${c}">VND</option>
+                    </select>
+                    <p class="field-error" th:errors="*{currency}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="exchangeRate" th:text="#{payment.prepayment.exchangeRate}">Exchange rate (1 USD = ? VND)</label>
+                    <input id="exchangeRate" step="any" th:field="*{exchangeRate}" type="number" />
+                    <p class="field-error" th:errors="*{exchangeRate}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="method" th:text="#{payment.prepayment.method} + ' *'">Method *</label>
+                    <select id="method" required th:field="*{method}">
+                        <option value="" th:text="#{payment.prepayment.selectMethod}">Select method</option>
+                        <option th:each="m : ${paymentMethods}" th:text="${m}" th:value="${m}">CASH</option>
+                    </select>
+                    <p class="field-error" th:errors="*{method}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="reference" th:text="#{payment.prepayment.reference}">Reference</label>
+                    <input id="reference" maxlength="255" th:field="*{reference}" type="text" />
+                    <p class="reservation-info-secondary" th:text="#{payment.prepayment.referenceHint}">Reference hint.</p>
+                    <p class="field-error" th:errors="*{reference}"></p>
+                </div>
+            </div>
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservation.id})}" th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="#{payment.prepayment.submit}" type="submit">Record Prepayment</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

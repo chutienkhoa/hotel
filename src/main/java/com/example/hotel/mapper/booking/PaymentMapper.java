@@ -17,7 +17,7 @@ public class PaymentMapper {
     public PaymentResponse toResponse(Payment payment) {
         return new PaymentResponse(
                 payment.getId(),
-                payment.getStay().getId(),
+                payment.getStay() == null ? null : payment.getStay().getId(),
                 payment.getAmount(),
                 payment.getCurrency().name(),
                 payment.getExchangeRate(),

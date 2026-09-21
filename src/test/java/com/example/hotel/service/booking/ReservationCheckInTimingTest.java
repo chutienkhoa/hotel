@@ -63,7 +63,7 @@ class ReservationCheckInTimingTest {
         assertEquals(true, exception.getReason().toLowerCase().contains("early check-in is not allowed"));
         verifyNoInteractions(fixture.stayRepository);
         verifyNoInteractions(fixture.chargeRepository);
-        verify(fixture.roomRepository, never()).lockAllByIdIn(any());
+        // The rooms are locked first (Rooms then Reservation lifecycle order); the rejection still mutates nothing.
     }
 
     /** Confirms check-in succeeds normally on the scheduled check-in date. */
@@ -172,6 +172,8 @@ class ReservationCheckInTimingTest {
         reservation.confirm();
 
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findRoomIdsByReservationId(reservationId)).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stayRepository.existsByReservationId(reservationId)).thenReturn(false);
         when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
         when(stayRepository.save(any(Stay.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -187,7 +189,7 @@ class ReservationCheckInTimingTest {
                 auditLogRepository,
                 new ReservationMapper(),
                 reservationNumberGenerator,
-                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
+                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class),
                 clock);
 
         return new Fixture(service, reservation, reservationId, stayRepository, chargeRepository, roomRepository);

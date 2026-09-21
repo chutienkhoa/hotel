@@ -115,6 +115,8 @@ class ArrivalReadinessCheckInConsistencyTest {
         StayRepository stays = mock(StayRepository.class);
         ChargeRepository charges = mock(ChargeRepository.class);
         when(reservations.findById(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservations.findByIdForUpdate(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservations.findRoomIdsByReservationId(reservationId)).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stays.existsByReservationId(reservationId)).thenReturn(stayExists);
         when(rooms.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
         when(stays.save(any(Stay.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -124,7 +126,7 @@ class ArrivalReadinessCheckInConsistencyTest {
         ReservationService service = new ReservationService(
                 reservations, mock(GuestRepository.class), rooms, stays, mock(StayRoomAssignmentRepository.class),
                 charges, mock(AuditLogRepository.class), new ReservationMapper(), mock(ReservationNumberGenerator.class),
-                mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class),
+                mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class),
                 Clock.fixed(TODAY.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
         ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(

@@ -67,7 +67,7 @@ class ReservationCapacityLifecycleTest {
             mock(com.example.hotel.service.room.RoomAvailabilityService.class);
     private final ReservationService service = new ReservationService(
             reservations, guests, rooms, stays, mock(StayRoomAssignmentRepository.class), charges, audits,
-            new ReservationMapper(), numbers, mock(StayBalanceService.class), roomAvailability,
+            new ReservationMapper(), numbers, mock(StayBalanceService.class), roomAvailability, mock(com.example.hotel.service.booking.PrepaymentService.class),
             Clock.fixed(IN.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
     private final Guest primary = Guest.create(UUID.randomUUID(), "G-1", "Ann", "Lee", null, null, "Vietnam", null, null);
@@ -101,6 +101,8 @@ class ReservationCapacityLifecycleTest {
         service.create(request);
         Reservation draft = new Reservation(UUID.randomUUID(), "R-1", primary, IN, OUT, 2, 0, BookingSource.DIRECT, null, "VND", null);
         when(reservations.findById(draft.getId())).thenReturn(Optional.of(draft));
+        when(reservations.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
+        when(reservations.findRoomIdsByReservationId(draft.getId())).thenAnswer(invocation -> Optional.of(draft).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         service.updateDraft(draft.getId(), request);
 
         assertEquals(3, draft.getAdultCount());
@@ -282,6 +284,8 @@ class ReservationCapacityLifecycleTest {
 
     private void arrange(Reservation reservation, boolean overlap) {
         when(reservations.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findRoomIdsByReservationId(reservation.getId())).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         List<Room> roomList = reservation.getRooms().stream().map(ReservationRoom::getRoom).toList();
         when(rooms.lockAllByIdIn(any())).thenReturn(roomList);
         when(roomAvailability.conflictedRoomIds(any(), any(), any()))
@@ -290,6 +294,8 @@ class ReservationCapacityLifecycleTest {
 
     private void arrangeCheckIn(Reservation reservation) {
         when(reservations.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(reservations.findRoomIdsByReservationId(reservation.getId())).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stays.existsByReservationId(reservation.getId())).thenReturn(false);
         List<Room> roomList = reservation.getRooms().stream().map(ReservationRoom::getRoom).toList();
         when(rooms.lockAllByIdIn(any())).thenReturn(roomList);

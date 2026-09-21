@@ -67,6 +67,8 @@ class ReservationCheckInStayTest {
 
         setCurrentUser(userId);
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findRoomIdsByReservationId(reservationId)).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stayRepository.existsByReservationId(reservationId)).thenReturn(false);
         when(room.getId()).thenReturn(roomId);
         when(room.isActive()).thenReturn(true);
@@ -155,6 +157,8 @@ class ReservationCheckInStayTest {
         List<UUID> roomIds = List.of(roomA.getId(), roomB.getId()).stream().sorted().toList();
         setCurrentUser(userId);
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findByIdForUpdate(reservationId)).thenReturn(Optional.of(reservation));
+        when(reservationRepository.findRoomIdsByReservationId(reservationId)).thenAnswer(invocation -> Optional.of(reservation).map(r -> r.getRooms().stream().map(rr -> rr.getRoom().getId()).toList()).orElse(java.util.List.of()));
         when(stayRepository.existsByReservationId(reservationId)).thenReturn(false);
         when(roomRepository.lockAllByIdIn(roomIds)).thenReturn(
                 List.of(roomA, roomB).stream().sorted(java.util.Comparator.comparing(Room::getId)).toList());
@@ -248,7 +252,7 @@ class ReservationCheckInStayTest {
                 auditLogRepository,
                 new ReservationMapper(),
                 reservationNumberGenerator,
-                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
+                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class), mock(com.example.hotel.service.booking.PrepaymentService.class),
                 Clock.systemDefaultZone());
     }
 

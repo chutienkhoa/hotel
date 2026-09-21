@@ -217,6 +217,19 @@
                 </div>
             </section>
 
+            <section aria-labelledby="prepayment-summary-heading" class="card reservation-detail-section" id="prepayment-summary"
+                     th:if="${prepaymentSummary != null}">
+                <h2 id="prepayment-summary-heading" th:text="#{payment.prepayment.title}">Prepayments</h2>
+                <dl class="detail-list">
+                    <dt th:text="#{payment.prepayment.bookingTotal}">Booking total</dt>
+                    <dd><span th:replace="~{layout/money :: amount(${prepaymentSummary.bookingTotal}, ${prepaymentSummary.currency})}">0</span></dd>
+                    <dt th:text="#{payment.prepayment.received}">Prepayment Received</dt>
+                    <dd><span th:replace="~{layout/money :: amount(${prepaymentSummary.activeTotal}, ${prepaymentSummary.currency})}">0</span></dd>
+                    <dt th:text="#{payment.prepayment.remaining}">Remaining Booking Amount</dt>
+                    <dd><span th:replace="~{layout/money :: amount(${prepaymentSummary.remaining}, ${prepaymentSummary.currency})}">0</span></dd>
+                </dl>
+            </section>
+
             <section aria-labelledby="check-in-actions-heading" class="card reservation-detail-section actions" th:if="${review.eligibleForCheckIn}">
                 <div class="reservation-detail-section-header">
                     <div>

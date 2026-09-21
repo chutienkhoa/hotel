@@ -58,6 +58,9 @@ class CheckInReadinessPageTest {
     private RoomQueryService roomQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.PrepaymentService prepaymentService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms blockers, ready rooms and warnings render in English with the affected room named. */

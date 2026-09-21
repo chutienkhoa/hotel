@@ -208,12 +208,12 @@ class MonthlyHotelPerformanceExcelIntegrationTest {
     }
 
     private void payment(UUID stay, String status, String paidAt, String amount, String currency) {
-        jdbc.update("INSERT INTO payment (id, stay_id, amount, currency, applied_amount, method, status, paid_at, reference, "
+        jdbc.update("INSERT INTO payment (id, stay_id, reservation_id, amount, currency, applied_amount, method, status, paid_at, reference, "
                         + "refund_reason, created_at, created_by, updated_at, updated_by) "
-                        + "VALUES (?, ?, ?, ?, ?, 'CASH', ?, ?, 'Front Desk', ?, now(), ?, now(), ?)",
+                        + "SELECT ?, ?, s.reservation_id, ?, ?, ?, 'CASH', ?, ?, 'Front Desk', ?, now(), ?, now(), ? FROM stay s WHERE s.id = ?",
                 UUID.randomUUID(), stay, new BigDecimal(amount), currency, new BigDecimal(amount), status,
                 paidAt == null ? null : Timestamp.from(Instant.parse(paidAt)),
-                status.equals("REFUNDED") ? "guest request" : null, user, user);
+                status.equals("REFUNDED") ? "guest request" : null, user, user, stay);
     }
 
     private void expense(UUID category, String status, String date, String amount) {
