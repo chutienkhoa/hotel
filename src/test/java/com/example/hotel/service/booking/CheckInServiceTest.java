@@ -144,7 +144,7 @@ class CheckInServiceTest {
     void shouldRejectDirectSourceForOtaEntry() {
         Fixture fixture = fixture(Clock.systemDefaultZone());
         CreateRequest request = new CreateRequest(
-                UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), BookingSource.DIRECT, null, "VND", null,
+                UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), 1, 0, BookingSource.DIRECT, null, "VND", null,
                 List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
 
         assertThrows(ResponseStatusException.class, () -> fixture.service.createOtaEntry(request));
@@ -156,7 +156,7 @@ class CheckInServiceTest {
         Fixture fixture = fixture(Clock.systemDefaultZone());
         UUID reservationId = UUID.randomUUID();
         CreateRequest request = new CreateRequest(
-                UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), BookingSource.AGODA, "AG-1", "VND", null,
+                UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), 2, 1, BookingSource.AGODA, "AG-1", "VND", null,
                 List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
         when(fixture.reservationService.create(request))
                 .thenReturn(new Response(reservationId, "R1", "DRAFT", BigDecimal.TEN, "VND"));
@@ -178,7 +178,7 @@ class CheckInServiceTest {
         Fixture fixture = fixture(Clock.fixed(today.atTime(9, 0).atZone(ZONE).toInstant(), ZONE));
         UUID reservationId = UUID.randomUUID();
         WalkInRequest request = new WalkInRequest(
-                UUID.randomUUID(), today.plusDays(2), "VND", null, List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
+                UUID.randomUUID(), today.plusDays(2), 3, 1, "VND", null, List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
         when(fixture.reservationService.create(any(CreateRequest.class)))
                 .thenReturn(new Response(reservationId, "R1", "DRAFT", BigDecimal.TEN, "VND"));
         when(fixture.reservationService.confirm(reservationId))
@@ -192,6 +192,8 @@ class CheckInServiceTest {
         verify(fixture.reservationService).create(captor.capture());
         assertEquals(BookingSource.DIRECT, captor.getValue().source());
         assertEquals(today, captor.getValue().checkInDate());
+        assertEquals(3, captor.getValue().adultCount());
+        assertEquals(1, captor.getValue().childCount());
         var order = inOrder(fixture.reservationService);
         order.verify(fixture.reservationService).create(any(CreateRequest.class));
         order.verify(fixture.reservationService).confirm(reservationId);
@@ -204,7 +206,7 @@ class CheckInServiceTest {
         Fixture fixture = fixture(Clock.systemDefaultZone());
         UUID reservationId = UUID.randomUUID();
         WalkInRequest request = new WalkInRequest(
-                UUID.randomUUID(), LocalDate.now().plusDays(1), "VND", null,
+                UUID.randomUUID(), LocalDate.now().plusDays(1), 1, 0, "VND", null,
                 List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
         when(fixture.reservationService.create(any(CreateRequest.class)))
                 .thenReturn(new Response(reservationId, "R1", "DRAFT", BigDecimal.TEN, "VND"));
@@ -232,7 +234,7 @@ class CheckInServiceTest {
         when(fixture.roomRepository.findById(room.getId())).thenReturn(Optional.of(room));
         LocalDate checkOut = LocalDate.now().plusDays(2);
         WalkInRequest request = new WalkInRequest(
-                guestId, checkOut, "VND", null, List.of(new RoomRequest(room.getId(), new BigDecimal("1000000"))));
+                guestId, checkOut, 1, 0, "VND", null, List.of(new RoomRequest(room.getId(), new BigDecimal("1000000"))));
 
         WalkInReviewResponse review = fixture.service.reviewWalkIn(request);
 

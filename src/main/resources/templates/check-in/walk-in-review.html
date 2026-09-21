@@ -75,6 +75,17 @@
                     </div>
 
                     <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.guests.title}">Guests</p>
+                            <p class="reservation-info-value" th:text="|#{reservation.guests.adults}: ${walkInForm.adultCount}|">Adults: 1</p>
+                            <p class="reservation-info-secondary" th:text="|#{reservation.guests.children}: ${walkInForm.childCount}|">Children: 0</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
                         <span class="reservation-info-icon reservation-info-icon--amber">
                             <svg th:replace="~{layout/icons :: coins}"></svg>
                         </span>
@@ -140,6 +151,8 @@
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <input name="guestId" th:value="${walkInForm.guestId}" type="hidden" />
                     <input name="checkOutDate" th:value="${#temporals.format(walkInForm.checkOutDate, 'yyyy-MM-dd')}" type="hidden" />
+                    <input name="adultCount" th:value="${walkInForm.adultCount}" type="hidden" />
+                    <input name="childCount" th:value="${walkInForm.childCount}" type="hidden" />
                     <input name="currency" th:value="${walkInForm.currency}" type="hidden" />
                     <input name="notes" th:value="${walkInForm.notes}" type="hidden" />
                     <th:block th:each="roomRequest, roomRowStat : ${walkInForm.rooms}">

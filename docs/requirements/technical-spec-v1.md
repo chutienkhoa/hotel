@@ -4483,4 +4483,24 @@ Check-in, Check-out, Housekeeping, Thanh toán, Room Change hay Room Reassignmen
 - **Giới hạn đã biết**: danh sách ứng viên của Room Change trong Stay (đã biết) chưa được sửa; không có view arrival tương lai;
   Dashboard chưa tích hợp Front Desk.
 
+## 66. Reservation Guest Composition — Adults & Children (P1 Task A)
+
+Reservation có thêm `adultCount` và `childCount` (cột `adult_count`, `child_count`, migration V30) để lưu quy mô đoàn khách vật lý.
+
+- **Bất biến**: `adultCount >= 1` (bắt buộc), `childCount >= 0` (bắt buộc), cả hai là số nguyên; giá trị thiếu, thập phân hoặc không hợp lệ bị từ chối
+  (Bean Validation ở form/API, kiểm tra lại ở `ReservationService`, bất biến ở entity và ràng buộc CHECK + NOT NULL ở database). Không có nhóm tuổi hay "infant".
+- **`partySize = adultCount + childCount`**: giá trị dẫn xuất, KHÔNG lưu thành cột. Hiển thị là "Total Guests"/"Tổng số khách" (không gọi là
+  "Occupancy" vì Occupancy trong báo cáo hiện tại là room-night occupancy và KHÔNG thay đổi).
+- **Guest chính và quy mô đoàn tách biệt**: Reservation vẫn có đúng một Guest chính bắt buộc. Số Guest profile không cần bằng `partySize`; số lượng không được
+  suy ra từ Guest, phòng, `RoomType.capacity` hay ảnh passport. Passport và các quy tắc Guest không đổi.
+- **Tạo Reservation**: mọi luồng tạo mới (form Create Reservation, `POST /api/reservations`, OTA Booking Not Entered, Walk-in) phải cung cấp số lượng tường minh;
+  form mặc định Adults = 1, Children = 0. Walk-in chuyển số lượng vào Reservation DIRECT được tạo. Constructor dành cho fixture/dữ liệu lịch sử dùng mặc định 1 người lớn, 0 trẻ em.
+- **Sửa DRAFT**: có thể đổi số lượng như các trường DRAFT khác. Reservation `CONFIRMED` trở đi KHÔNG thể đổi qua Draft edit (thao tác "Update Guest Composition" cho reservation đã
+  confirm thuộc task sau và chưa được triển khai).
+- **Dữ liệu cũ**: migration V30 thêm cột `NOT NULL DEFAULT` nên mọi Reservation hiện có được backfill `1` người lớn, `0` trẻ em; giá trị mặc định ở database được giữ lại để các INSERT SQL trực tiếp
+  (fixture/seeder) vẫn hợp lệ, còn ứng dụng luôn truyền giá trị tường minh cho Reservation mới.
+- **Hiển thị**: Reservation Detail hiển thị Adults, Children và Total Guests; Walk-in Review hiển thị số lượng. Check-in Review, Front Desk và mọi báo cáo/Dashboard/PDF/Excel KHÔNG đổi trong Task A.
+- **Sức chứa (capacity)**: KHÔNG được kiểm tra trong Task A. Quy tắc dự kiến ở task sau (`adultCount <= SUM(RoomType.capacity)`, trẻ em không chiếm sức chứa người lớn) chưa được triển khai; DRAFT (và
+  confirm/check-in) có thể có số người lớn vượt sức chứa phòng, `RoomType.capacity` không được sửa hay dùng. **Accompanying Guests → Task B; kiểm tra capacity → Task C** (chưa triển khai).
+
 **End of Specification v1.0**

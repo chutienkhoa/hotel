@@ -65,7 +65,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(27, flyway.info().applied().length);
+        assertEquals(30, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -86,11 +86,14 @@ class MigrationIntegrationTest {
                         "CHECK_OUT",
                         "CHANGE_ROOM",
                         "MANAGE_STAFF",
-                        "MANAGE_ATTENDANCE"));
+                        "MANAGE_ATTENDANCE",
+                        "CHECK_IN",
+                        "MANAGE_HOUSEKEEPING"));
         assertPermissionCodes(
                 "MANAGER",
                 Set.of(
                         "MANAGE_ROOM",
+                        "MANAGE_HOUSEKEEPING",
                         "MANAGE_BOOKING",
                         "MANAGE_PAYMENT",
                         "MANAGE_EXPENSE",

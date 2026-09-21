@@ -117,6 +117,8 @@ public class ReservationService {
                         draftData.guest(),
                         request.checkInDate(),
                         request.checkOutDate(),
+                        request.adultCount(),
+                        request.childCount(),
                         request.source(),
                         request.otaBookingReference(),
                         draftData.currency().getCurrencyCode(),
@@ -150,6 +152,8 @@ public class ReservationService {
                     draftData.guest(),
                     request.checkInDate(),
                     request.checkOutDate(),
+                    request.adultCount(),
+                    request.childCount(),
                     request.source(),
                     request.otaBookingReference(),
                     draftData.currency().getCurrencyCode(),
@@ -167,6 +171,12 @@ public class ReservationService {
     private ReservationDraftData validateDraftData(CreateRequest request) {
         if (!request.checkOutDate().isAfter(request.checkInDate())) {
             throw bad("check_out_date must be after check_in_date");
+        }
+        if (request.adultCount() == null || request.adultCount() < 1) {
+            throw bad("adult_count must be at least 1");
+        }
+        if (request.childCount() == null || request.childCount() < 0) {
+            throw bad("child_count must not be negative");
         }
         Currency currency;
         try {

@@ -64,6 +64,8 @@ class RequiresOtaBookingReferenceValidatorTest {
                 UUID.randomUUID(),
                 LocalDate.of(2027, 1, 10),
                 LocalDate.of(2027, 1, 12),
+                1,
+                0,
                 source,
                 otaBookingReference,
                 "VND",

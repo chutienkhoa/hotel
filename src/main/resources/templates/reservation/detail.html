@@ -107,6 +107,19 @@
                     </div>
 
                     <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.guests.title}">Guests</p>
+                            <p class="reservation-info-value" id="reservation-adults" th:text="|#{reservation.guests.adults}: ${reservation.adultCount}|">Adults: 1</p>
+                            <p class="reservation-info-value" id="reservation-children" th:text="|#{reservation.guests.children}: ${reservation.childCount}|">Children: 0</p>
+                            <p class="reservation-info-secondary" id="reservation-total-guests"
+                               th:text="|#{reservation.guests.total}: ${reservation.adultCount + reservation.childCount}|">Total Guests: 1</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
                         <span class="reservation-info-icon reservation-info-icon--amber">
                             <svg th:replace="~{layout/icons :: coins}"></svg>
                         </span>

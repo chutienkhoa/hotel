@@ -272,6 +272,8 @@ public class CheckInService {
                 request.guestId(),
                 checkInDate,
                 request.checkOutDate(),
+                request.adultCount(),
+                request.childCount(),
                 BookingSource.DIRECT,
                 null,
                 request.currency(),

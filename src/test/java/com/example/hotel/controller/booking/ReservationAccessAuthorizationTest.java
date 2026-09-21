@@ -399,6 +399,8 @@ class ReservationAccessAuthorizationTest {
                         .param("guestId", guestId.toString())
                         .param("checkInDate", "2027-01-10")
                         .param("checkOutDate", "2027-01-12")
+                        .param("adultCount", "2")
+                        .param("childCount", "1")
                         .param("source", "DIRECT")
                         .param("currency", "VND")
                         .param("rooms[0].roomId", roomId.toString())
@@ -426,6 +428,8 @@ class ReservationAccessAuthorizationTest {
                 guestId,
                 LocalDate.of(2026, 9, 20),
                 LocalDate.of(2026, 9, 22),
+                2,
+                1,
                 com.example.hotel.entity.booking.BookingSource.AGODA,
                 "AG-998877",
                 "VND",
@@ -487,6 +491,8 @@ class ReservationAccessAuthorizationTest {
                         .param("guestId", guestId.toString())
                         .param("checkInDate", "2027-01-10")
                         .param("checkOutDate", "2027-01-12")
+                        .param("adultCount", "2")
+                        .param("childCount", "1")
                         .param("source", "DIRECT")
                         .param("currency", "VND")
                         .param("rooms[0].roomId", roomId.toString())

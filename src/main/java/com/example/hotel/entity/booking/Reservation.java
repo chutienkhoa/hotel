@@ -42,6 +42,12 @@ public class Reservation extends AuditedEntity {
     @Column(nullable = false)
     private BookingSource source;
 
+    @Column(name = "adult_count", nullable = false)
+    private int adultCount;
+
+    @Column(name = "child_count", nullable = false)
+    private int childCount;
+
     @Column(name = "external_booking_id")
     private String externalBookingId;
 
@@ -73,11 +79,18 @@ public class Reservation extends AuditedEntity {
     @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReservationRoom> rooms = new ArrayList<>();
 
+    /** Safe V1 default adult count for fixtures and backfilled historical rows. */
+    public static final int DEFAULT_ADULT_COUNT = 1;
+
+    /** Safe V1 default child count for fixtures and backfilled historical rows. */
+    public static final int DEFAULT_CHILD_COUNT = 0;
+
     /** Tạo thực thể rỗng cho JPA. */
     protected Reservation() {}
 
     /**
-     * Tạo một reservation nháp từ dữ liệu đặt phòng trực tiếp.
+     * Tạo một reservation nháp từ dữ liệu đặt phòng trực tiếp, with the fixture-default guest composition
+     * (1 adult, 0 children); production creation flows must pass explicit counts.
      *
      * @param id định danh reservation
      * @param reservationNumber mã số reservation do backend tạo
@@ -101,18 +114,22 @@ public class Reservation extends AuditedEntity {
     }
 
     /**
-     * Creates a draft Reservation with its staff-entered external OTA booking reference.
+     * Creates a draft Reservation with its staff-entered external OTA booking reference and an EXPLICIT guest
+     * composition. This is the constructor every new-Reservation creation flow must use.
      *
      * @param id định danh reservation
      * @param reservationNumber mã số reservation do backend tạo
-     * @param guest khách thực hiện đặt phòng
+     * @param guest khách thực hiện đặt phòng (the primary Guest)
      * @param checkInDate ngày nhận phòng
      * @param checkOutDate ngày trả phòng
+     * @param adultCount number of adults, at least 1
+     * @param childCount number of children, at least 0
      * @param source nguồn tạo reservation
      * @param otaBookingReference the external booking reference entered by staff for an OTA
      *     source; discarded when {@code source} is {@link BookingSource#DIRECT}
      * @param currency mã tiền tệ
      * @param notes ghi chú đặt phòng
+     * @throws IllegalArgumentException if {@code adultCount < 1} or {@code childCount < 0}
      */
     public Reservation(
             UUID id,
@@ -120,6 +137,8 @@ public class Reservation extends AuditedEntity {
             Guest guest,
             LocalDate checkInDate,
             LocalDate checkOutDate,
+            int adultCount,
+            int childCount,
             BookingSource source,
             String otaBookingReference,
             String currency,
@@ -133,8 +152,38 @@ public class Reservation extends AuditedEntity {
         this.notes = notes;
         this.source = source;
         this.otaBookingReference = normalizeOtaBookingReference(source, otaBookingReference);
+        applyGuestComposition(adultCount, childCount);
         status = ReservationStatus.DRAFT;
         reservedAt = Instant.now();
+    }
+
+    /**
+     * Creates a draft Reservation for existing domain FIXTURES and historical-style data, with the safe V1 default
+     * guest composition of {@value #DEFAULT_ADULT_COUNT} adult and {@value #DEFAULT_CHILD_COUNT} children. New
+     * Reservations created by production flows must use the constructor with explicit counts instead.
+     *
+     * @param id định danh reservation
+     * @param reservationNumber mã số reservation do backend tạo
+     * @param guest khách thực hiện đặt phòng
+     * @param checkInDate ngày nhận phòng
+     * @param checkOutDate ngày trả phòng
+     * @param source nguồn tạo reservation
+     * @param otaBookingReference the external booking reference, discarded for DIRECT
+     * @param currency mã tiền tệ
+     * @param notes ghi chú đặt phòng
+     */
+    public Reservation(
+            UUID id,
+            String reservationNumber,
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            BookingSource source,
+            String otaBookingReference,
+            String currency,
+            String notes) {
+        this(id, reservationNumber, guest, checkInDate, checkOutDate, DEFAULT_ADULT_COUNT, DEFAULT_CHILD_COUNT,
+                source, otaBookingReference, currency, notes);
     }
 
     /**
@@ -195,19 +244,17 @@ public class Reservation extends AuditedEntity {
             String currency,
             String notes,
             List<ReservationRoom> updatedRooms) {
-        updateDraft(guest, checkInDate, checkOutDate, source, null, currency, notes, updatedRooms);
+        updateDraft(guest, checkInDate, checkOutDate, adultCount, childCount, source, null, currency, notes, updatedRooms);
     }
 
     /**
-     * Updates the editable data, source-dependent OTA booking reference, and complete room-price
-     * snapshots of a draft Reservation.
+     * Updates a draft Reservation's editable data and room snapshots while KEEPING its current guest composition.
      *
      * @param guest replacement Guest
      * @param checkInDate replacement planned check-in date
      * @param checkOutDate replacement planned check-out date
      * @param source replacement booking source
-     * @param otaBookingReference replacement external OTA booking reference; discarded when
-     *     {@code source} is {@link BookingSource#DIRECT}
+     * @param otaBookingReference replacement external OTA booking reference; discarded for DIRECT
      * @param currency replacement currency code
      * @param notes replacement optional notes
      * @param updatedRooms complete submitted room snapshots
@@ -221,9 +268,43 @@ public class Reservation extends AuditedEntity {
             String currency,
             String notes,
             List<ReservationRoom> updatedRooms) {
+        updateDraft(guest, checkInDate, checkOutDate, adultCount, childCount, source, otaBookingReference, currency,
+                notes, updatedRooms);
+    }
+
+    /**
+     * Updates the editable data, source-dependent OTA booking reference, and complete room-price
+     * snapshots of a draft Reservation.
+     *
+     * @param guest replacement Guest
+     * @param checkInDate replacement planned check-in date
+     * @param checkOutDate replacement planned check-out date
+     * @param adultCount replacement number of adults, at least 1
+     * @param childCount replacement number of children, at least 0
+     * @param source replacement booking source
+     * @param otaBookingReference replacement external OTA booking reference; discarded when
+     *     {@code source} is {@link BookingSource#DIRECT}
+     * @param currency replacement currency code
+     * @param notes replacement optional notes
+     * @param updatedRooms complete submitted room snapshots
+     * @throws IllegalStateException if the Reservation is not a DRAFT
+     * @throws IllegalArgumentException if {@code adultCount < 1} or {@code childCount < 0}
+     */
+    public void updateDraft(
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            int adultCount,
+            int childCount,
+            BookingSource source,
+            String otaBookingReference,
+            String currency,
+            String notes,
+            List<ReservationRoom> updatedRooms) {
         if (status != ReservationStatus.DRAFT) {
             throw new IllegalStateException("Only draft reservations can be edited");
         }
+        applyGuestComposition(adultCount, childCount);
         this.guest = guest;
         this.checkInDate = checkInDate;
         this.checkOutDate = checkOutDate;
@@ -233,6 +314,49 @@ public class Reservation extends AuditedEntity {
         this.notes = notes;
         reconcileDraftRooms(updatedRooms);
         calculateTotal();
+    }
+
+    /**
+     * Validates and stores the guest composition. Adults must be at least 1 and children at least 0; nothing is
+     * inferred from Guest profiles, rooms or RoomType capacity, and capacity is not checked here.
+     */
+    private void applyGuestComposition(int adultCount, int childCount) {
+        if (adultCount < 1) {
+            throw new IllegalArgumentException("adultCount must be at least 1");
+        }
+        if (childCount < 0) {
+            throw new IllegalArgumentException("childCount must not be negative");
+        }
+        this.adultCount = adultCount;
+        this.childCount = childCount;
+    }
+
+    /**
+     * Returns the number of adults.
+     *
+     * @return the adult count, at least 1
+     */
+    public int getAdultCount() {
+        return adultCount;
+    }
+
+    /**
+     * Returns the number of children.
+     *
+     * @return the child count, at least 0
+     */
+    public int getChildCount() {
+        return childCount;
+    }
+
+    /**
+     * Returns the physical party size, derived as adults plus children. It is not persisted and is not related to
+     * the number of Guest profiles.
+     *
+     * @return {@code adultCount + childCount}
+     */
+    public int getPartySize() {
+        return adultCount + childCount;
     }
 
     /**

@@ -10,6 +10,7 @@ import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
+import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.service.booking.ReservationQueryService;
@@ -194,6 +195,8 @@ public class ReservationPageController {
                 reservation.guestId(),
                 reservation.checkInDate(),
                 reservation.checkOutDate(),
+                reservation.adultCount(),
+                reservation.childCount(),
                 reservation.source(),
                 reservation.otaBookingReference(),
                 reservation.currency(),
@@ -520,7 +523,8 @@ public class ReservationPageController {
      * @return the initial reservation form model
      */
     private CreateRequest emptyReservationForm() {
-        return new CreateRequest(null, null, null, null, null, null, null, List.of(new RoomRequest(null, null)));
+        return new CreateRequest(null, null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
+                null, null, null, null, List.of(new RoomRequest(null, null)));
     }
 
     /**

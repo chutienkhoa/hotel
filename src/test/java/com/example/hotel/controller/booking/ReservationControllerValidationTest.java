@@ -13,6 +13,7 @@ import com.example.hotel.exception.ApiExceptionHandler;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsEmptyRoomList() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[]}";
         assertDoesNotThrow(
                 () ->
                         mvc.perform(
@@ -52,7 +53,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsZeroNightlyRate() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":0}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":0}]}";
         assertDoesNotThrow(
                 () ->
                         mvc.perform(
@@ -64,7 +65,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsReservationWithoutSource() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
 
         assertDoesNotThrow(
                 () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
@@ -75,7 +76,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsOtaSourceWithoutOtaBookingReference() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"AGODA\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"AGODA\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
 
         assertDoesNotThrow(
                 () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
@@ -86,7 +87,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsWhitespaceOnlyOtaBookingReferenceForOtaSource() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"BOOKING_COM\",\"otaBookingReference\":\"   \",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"BOOKING_COM\",\"otaBookingReference\":\"   \",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
 
         assertDoesNotThrow(
                 () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
@@ -99,7 +100,7 @@ class ReservationControllerValidationTest {
         when(reservationService.create(any()))
                 .thenReturn(new Response(UUID.randomUUID(), "R20260911-000002", "DRAFT", BigDecimal.ONE, "VND"));
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
 
         mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk());
@@ -117,10 +118,45 @@ class ReservationControllerValidationTest {
                                 BigDecimal.ONE,
                                 "JPY"));
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}],\"reservationNumber\":\"CLIENT-OVERRIDE\"}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}],\"reservationNumber\":\"CLIENT-OVERRIDE\"}";
 
         mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reservationNumber").value("R20260911-000001"));
+    }
+
+    private static String body(String counts) {
+        return "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\","
+                + counts
+                + "\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100000}]}";
+    }
+
+    /** Confirms zero adults, negative children, missing counts and decimal counts are rejected by the API. */
+    @Test
+    void rejectsInvalidGuestComposition() throws Exception {
+        for (String counts : List.of(
+                "\"adultCount\":0,\"childCount\":0,",
+                "\"adultCount\":-1,\"childCount\":0,",
+                "\"adultCount\":1,\"childCount\":-1,",
+                "\"childCount\":0,",
+                "\"adultCount\":1,",
+                "\"adultCount\":null,\"childCount\":0,",
+                "\"adultCount\":1.5,\"childCount\":0,",
+                "\"adultCount\":1,\"childCount\":0.5,",
+                "\"adultCount\":\"1.5\",\"childCount\":0,")) {
+            mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body(counts)))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    /** Confirms the API accepts and forwards valid counts (children may be zero, party may exceed room capacity). */
+    @Test
+    void acceptsValidGuestComposition() throws Exception {
+        when(reservationService.create(any()))
+                .thenReturn(new Response(UUID.randomUUID(), "R20260911-000003", "DRAFT", BigDecimal.ONE, "VND"));
+        for (String counts : List.of("\"adultCount\":1,\"childCount\":0,", "\"adultCount\":3,\"childCount\":2,")) {
+            mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body(counts)))
+                    .andExpect(status().isOk());
+        }
     }
 }

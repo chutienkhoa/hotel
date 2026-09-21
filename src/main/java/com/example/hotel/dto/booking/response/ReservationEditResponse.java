@@ -12,6 +12,8 @@ public record ReservationEditResponse(
         UUID guestId,
         LocalDate checkInDate,
         LocalDate checkOutDate,
+        int adultCount,
+        int childCount,
         BookingSource source,
         String otaBookingReference,
         String currency,

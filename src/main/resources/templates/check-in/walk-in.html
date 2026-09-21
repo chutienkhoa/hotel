@@ -67,6 +67,18 @@
                                    type="text" />
                             <p class="field-error" th:errors="*{checkOutDate}"></p>
                         </div>
+
+                        <div class="form-field">
+                            <label for="adultCount" th:text="#{reservation.guests.adults} + ' *'">Adults *</label>
+                            <input id="adultCount" inputmode="numeric" min="1" required step="1" th:field="*{adultCount}" type="number" />
+                            <p class="field-error" th:errors="*{adultCount}"></p>
+                        </div>
+
+                        <div class="form-field">
+                            <label for="childCount" th:text="#{reservation.guests.children} + ' *'">Children *</label>
+                            <input id="childCount" inputmode="numeric" min="0" required step="1" th:field="*{childCount}" type="number" />
+                            <p class="field-error" th:errors="*{childCount}"></p>
+                        </div>
                         <div class="form-field">
                             <label>Source</label>
                             <p><strong>Direct</strong> (Walk-in is always Direct)</p>

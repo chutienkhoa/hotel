@@ -11,6 +11,7 @@ import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.WalkInReviewResponse;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.BookingSource;
+import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.service.booking.CheckInService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
@@ -318,7 +319,8 @@ public class CheckInPageController {
      * @return the initial OTA entry form model
      */
     private CreateRequest emptyOtaEntryForm() {
-        return new CreateRequest(null, null, null, null, null, null, null, List.of(new RoomRequest(null, null)));
+        return new CreateRequest(null, null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
+                null, null, null, null, List.of(new RoomRequest(null, null)));
     }
 
     /**
@@ -327,7 +329,8 @@ public class CheckInPageController {
      * @return the initial Walk-in form model
      */
     private WalkInRequest emptyWalkInForm() {
-        return new WalkInRequest(null, null, null, null, List.of(new RoomRequest(null, null)));
+        return new WalkInRequest(null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
+                null, null, List.of(new RoomRequest(null, null)));
     }
 
     private void putIfPresent(Map<String, String> filters, String name, String value) {
