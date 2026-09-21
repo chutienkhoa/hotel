@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -68,7 +69,7 @@ class RoomChangeServiceTest {
                 new RoomChangeRequest(fixture.room305.getId(), RoomChangeReason.GUEST_REQUEST, null));
 
         assertEquals("CHECKED_IN", response.status());
-        assertEquals(RoomStatus.AVAILABLE, fixture.room201.getStatus());
+        assertEquals(RoomStatus.DIRTY, fixture.room201.getStatus(), "a vacated room needs housekeeping, not AVAILABLE");
         assertEquals(RoomStatus.OCCUPIED, fixture.room305.getStatus());
         assertEquals(RoomStatus.OCCUPIED, fixture.room202.getStatus(), "the other lineage's room must be unaffected");
 
@@ -297,8 +298,81 @@ class RoomChangeServiceTest {
         for (StayRoomAssignment saved : captor.getAllValues()) {
             assertEquals(fixture.reservationRoom201, saved.getOriginalReservationRoom());
         }
-        assertEquals(RoomStatus.AVAILABLE, fixture.room305.getStatus());
+        assertEquals(RoomStatus.DIRTY, fixture.room201.getStatus());
+        assertEquals(RoomStatus.DIRTY, fixture.room305.getStatus());
         assertEquals(RoomStatus.OCCUPIED, fixture.room402.getStatus());
+    }
+
+    /** Confirms the vacated room cannot be used for an immediate check-in while DIRTY. */
+    @Test
+    void shouldNotAllowImmediateCheckInIntoTheVacatedRoomWhileDirty() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+
+        fixture.service.changeRoom(
+                fixture.reservationId,
+                fixture.room201.getId(),
+                new RoomChangeRequest(fixture.room305.getId(), RoomChangeReason.GUEST_REQUEST, null));
+
+        assertTrue(!fixture.room201.isReadyForCheckIn());
+        assertThrows(IllegalStateException.class, fixture.room201::occupy);
+        assertEquals(RoomStatus.DIRTY, fixture.room201.getStatus());
+    }
+
+    /** Confirms the vacated room returns to service only through the existing DIRTY, CLEANING, AVAILABLE transitions. */
+    @Test
+    void shouldReturnVacatedRoomToServiceThroughTheHousekeepingTransitions() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+        fixture.service.changeRoom(
+                fixture.reservationId,
+                fixture.room201.getId(),
+                new RoomChangeRequest(fixture.room305.getId(), RoomChangeReason.GUEST_REQUEST, null));
+
+        assertThrows(IllegalStateException.class, fixture.room201::finishCleaning, "cannot skip CLEANING");
+        fixture.room201.startCleaning();
+        assertEquals(RoomStatus.CLEANING, fixture.room201.getStatus());
+        assertTrue(!fixture.room201.isReadyForCheckIn());
+        fixture.room201.finishCleaning();
+
+        assertEquals(RoomStatus.AVAILABLE, fixture.room201.getStatus());
+        assertTrue(fixture.room201.isReadyForCheckIn());
+    }
+
+    /** Confirms assignment history stays valid: old assignment closed at the change instant, new one opened at it. */
+    @Test
+    void shouldKeepAssignmentHistoryAndReasonWhileDirtyingTheOldRoom() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+
+        fixture.service.changeRoom(
+                fixture.reservationId,
+                fixture.room201.getId(),
+                new RoomChangeRequest(fixture.room305.getId(), RoomChangeReason.ROOM_ISSUE, "AC broken"));
+
+        ArgumentCaptor<StayRoomAssignment> captor = ArgumentCaptor.forClass(StayRoomAssignment.class);
+        verify(fixture.assignmentRepository).save(captor.capture());
+        StayRoomAssignment opened = captor.getValue();
+        assertEquals(fixture.openAssignment201.getAssignedTo(), opened.getAssignedFrom(), "no gap and no overlap");
+        assertEquals(RoomChangeReason.ROOM_ISSUE, opened.getReason());
+        assertEquals("AC broken", opened.getNotes());
+        assertNull(opened.getAssignedTo());
+        assertEquals(RoomStatus.DIRTY, fixture.room201.getStatus());
+    }
+
+    /** Confirms a rejected change dirties nothing: the old room stays OCCUPIED, its assignment open, nothing saved. */
+    @Test
+    void shouldNotDirtyOrMoveAnythingWhenTheChangeIsRejected() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+        fixture.room305.markOutOfOrder();
+
+        assertThrows(ResponseStatusException.class, () -> fixture.service.changeRoom(
+                fixture.reservationId,
+                fixture.room201.getId(),
+                new RoomChangeRequest(fixture.room305.getId(), RoomChangeReason.GUEST_REQUEST, null)));
+
+        assertEquals(RoomStatus.OCCUPIED, fixture.room201.getStatus());
+        assertEquals(RoomStatus.OUT_OF_ORDER, fixture.room305.getStatus());
+        assertNull(fixture.openAssignment201.getAssignedTo());
+        verify(fixture.assignmentRepository, org.mockito.Mockito.never()).save(any(StayRoomAssignment.class));
+        verify(fixture.auditLogRepository, org.mockito.Mockito.never()).save(any(AuditLog.class));
     }
 
     /** Builds a fixed Clock reporting the supplied business date at a stable time of day. */

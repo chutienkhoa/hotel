@@ -5,6 +5,7 @@ import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.request.WalkInRequest;
+import com.example.hotel.dto.booking.response.ArrivalReadiness;
 import com.example.hotel.dto.booking.response.CheckInReviewResponse;
 import com.example.hotel.dto.booking.response.CheckInRoomLine;
 import com.example.hotel.dto.booking.response.CheckInTiming;
@@ -21,6 +22,7 @@ import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.mapper.customer.GuestMapper;
 import com.example.hotel.repository.booking.ReservationRepository;
+import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.service.room.RoomAvailabilityService;
@@ -53,6 +55,7 @@ public class CheckInService {
     private final ReservationService reservationService;
     private final RoomRepository roomRepository;
     private final RoomAvailabilityService roomAvailability;
+    private final StayRepository stayRepository;
     private final GuestRepository guestRepository;
     private final GuestMapper guestMapper;
     private final GuestDocumentService guestDocumentService;
@@ -66,6 +69,7 @@ public class CheckInService {
      * @param reservationService service holding the authoritative create/confirm/checkIn lifecycle
      * @param roomRepository repository used to resolve Rooms for the Walk-in preview
      * @param roomAvailability service that lists Rooms ready for an immediate check-in
+     * @param stayRepository repository used to detect an already existing Stay for Arrival Readiness
      * @param guestRepository repository used to resolve the selected Guest for Review/Walk-in
      * @param guestMapper mapper used to compute the Guest display name
      * @param guestDocumentService service used to read passport availability
@@ -77,6 +81,7 @@ public class CheckInService {
             ReservationService reservationService,
             RoomRepository roomRepository,
             RoomAvailabilityService roomAvailability,
+            StayRepository stayRepository,
             GuestRepository guestRepository,
             GuestMapper guestMapper,
             GuestDocumentService guestDocumentService,
@@ -86,6 +91,7 @@ public class CheckInService {
         this.reservationService = reservationService;
         this.roomRepository = roomRepository;
         this.roomAvailability = roomAvailability;
+        this.stayRepository = stayRepository;
         this.guestRepository = guestRepository;
         this.guestMapper = guestMapper;
         this.guestDocumentService = guestDocumentService;
@@ -124,10 +130,18 @@ public class CheckInService {
                 .findById(reservationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
         LocalDate today = LocalDate.now(clock);
-        CheckInTiming timing = classify(today, reservation.getCheckInDate());
-        boolean eligible = reservation.getStatus() == ReservationStatus.CONFIRMED && timing != CheckInTiming.EARLY;
+        CheckInTiming timing = ArrivalReadinessRules.classify(today, reservation.getCheckInDate());
         Guest guest = reservation.getGuest();
         boolean passportAvailable = guestDocumentService.hasPassport(guest.getId());
+        ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(
+                reservation.getStatus(),
+                reservation.getCheckInDate(),
+                today,
+                reservation.getStatus() == ReservationStatus.CONFIRMED
+                        && stayRepository.existsByReservationId(reservation.getId()),
+                reservation.getRooms().stream().map(ReservationRoom::getRoom).toList(),
+                passportAvailable);
+        boolean eligible = readiness.blockers().isEmpty();
         return new CheckInReviewResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
@@ -147,7 +161,8 @@ public class CheckInService {
                 passportAvailable,
                 reservation.getRooms().stream().map(this::toRoomLine).toList(),
                 reservation.getTotalAmount(),
-                reservation.getCurrency());
+                reservation.getCurrency(),
+                readiness);
     }
 
     /**
@@ -265,23 +280,6 @@ public class CheckInService {
         Response created = reservationService.create(createRequest);
         reservationService.confirm(created.id());
         return reservationService.checkIn(created.id());
-    }
-
-    /**
-     * Classifies the hotel current date against a Reservation's planned check-in date.
-     *
-     * @param today authoritative hotel current date
-     * @param checkInDate the Reservation's planned check-in date
-     * @return the Early/Normal/Late classification
-     */
-    private CheckInTiming classify(LocalDate today, LocalDate checkInDate) {
-        if (today.isBefore(checkInDate)) {
-            return CheckInTiming.EARLY;
-        }
-        if (today.isAfter(checkInDate)) {
-            return CheckInTiming.LATE;
-        }
-        return CheckInTiming.NORMAL;
     }
 
     /**

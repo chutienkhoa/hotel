@@ -83,6 +83,16 @@ class RolePermissionIntegrationTest {
         assertEquals(3, roleRepository.lockBuiltInRoleIds().size());
     }
 
+    /** Confirms migration V29 seeded MANAGE_HOUSEKEEPING for ADMIN and MANAGER only, not for STAFF. */
+    @Test
+    void shouldSeedManageHousekeepingForAdministrativeRolesOnly() {
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM permission WHERE code = 'MANAGE_HOUSEKEEPING'", Integer.class));
+        assertEquals(1, count("ADMIN", "MANAGE_HOUSEKEEPING"));
+        assertEquals(1, count("MANAGER", "MANAGE_HOUSEKEEPING"));
+        assertEquals(0, count("STAFF", "MANAGE_HOUSEKEEPING"));
+    }
+
     /** Confirms a real save changes role_permission, audits once with sorted values, and leaves other roles alone. */
     @Test
     void shouldPersistChangeAndAuditOnlyChangedRole() {
@@ -143,7 +153,7 @@ class RolePermissionIntegrationTest {
 
     private List<String> allExposed() {
         return List.of("VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
-                "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
+                "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
                 "MANAGE_STAFF", "MANAGE_ATTENDANCE", "MANAGE_USER");
     }
 

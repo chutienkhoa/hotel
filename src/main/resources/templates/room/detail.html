@@ -22,13 +22,13 @@
         <section class="card actions" aria-label="Room operations">
             <form data-confirm-label="Start cleaning" data-confirm-message="Start cleaning this room?"
                   data-confirm-severity="NORMAL" data-confirm-title="Start cleaning" method="post"
-                  th:action="@{/rooms/{id}/start-cleaning(id=${room.id})}" th:if="${room.status == 'DIRTY'}">
+                  th:action="@{/rooms/{id}/start-cleaning(id=${room.id})}" th:if="${canManageHousekeeping and room.status == 'DIRTY'}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Start Cleaning</button>
             </form>
             <form data-confirm-label="Finish cleaning" data-confirm-message="Finish cleaning this room?"
                   data-confirm-severity="NORMAL" data-confirm-title="Finish cleaning" method="post"
-                  th:action="@{/rooms/{id}/finish-cleaning(id=${room.id})}" th:if="${room.status == 'CLEANING'}">
+                  th:action="@{/rooms/{id}/finish-cleaning(id=${room.id})}" th:if="${canManageHousekeeping and room.status == 'CLEANING'}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Finish Cleaning</button>
             </form>

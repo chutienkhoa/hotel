@@ -250,6 +250,29 @@ class RoomServiceTest {
         assertUnchangedRoomProfile(room, roomId, roomType);
     }
 
+    /** Confirms a checkout-dirtied room and a Room-Change-vacated room enter the same housekeeping lifecycle. */
+    @Test
+    void shouldLetCheckoutAndRoomChangeDirtiedRoomsFollowTheHousekeepingLifecycle() {
+        Room checkedOut = Room.create(UUID.randomUUID(), "101", roomType(), "1");
+        checkedOut.occupy();
+        checkedOut.markDirty();
+        Room vacated = Room.create(UUID.randomUUID(), "102", roomType(), "1");
+        vacated.occupy();
+        vacated.releaseForRoomChange();
+
+        for (Room room : List.of(checkedOut, vacated)) {
+            assertEquals(RoomStatus.DIRTY, room.getStatus());
+            assertFalse(room.isReadyForCheckIn());
+            assertThrows(IllegalStateException.class, room::finishCleaning);
+            room.startCleaning();
+            assertEquals(RoomStatus.CLEANING, room.getStatus());
+            assertFalse(room.isReadyForCheckIn());
+            room.finishCleaning();
+            assertEquals(RoomStatus.AVAILABLE, room.getStatus());
+            assertTrue(room.isReadyForCheckIn());
+        }
+    }
+
     /**
      * Confirms each service operation locks the Room, records the authenticated updater, and preserves the creator.
      *

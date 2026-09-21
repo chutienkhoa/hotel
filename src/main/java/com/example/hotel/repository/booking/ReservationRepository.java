@@ -228,4 +228,21 @@ public interface ReservationRepository
                     + "ORDER BY rt.code")
     List<ReservationRoomTypeRow> findBookedRoomTypesByCheckInWithin(
             @Param("start") LocalDate start, @Param("endExclusive") LocalDate endExclusive);
+
+    /**
+     * Finds, per Room, the earliest check-in date on or after a date among Reservations that are still to arrive
+     * (only the given statuses), in one grouped query.
+     *
+     * @param from inclusive earliest arrival date (the hotel current date)
+     * @param statuses Reservation statuses that represent an upcoming arrival
+     * @return one row per Room that has a qualifying arrival
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.booking.RoomNextArrivalRow(rr.room.id, MIN(rr.checkInDate)) "
+                    + "FROM ReservationRoom rr "
+                    + "WHERE rr.reservation.status IN :statuses "
+                    + "AND rr.checkInDate >= :from "
+                    + "GROUP BY rr.room.id")
+    List<RoomNextArrivalRow> findNextArrivalsFrom(
+            @Param("from") LocalDate from, @Param("statuses") Collection<ReservationStatus> statuses);
 }

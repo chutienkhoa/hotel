@@ -43,7 +43,7 @@ class RolePermissionServiceTest {
 
     private static final List<String> EXPOSED = List.of(
             "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
-            "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
+            "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
             "MANAGE_STAFF", "MANAGE_ATTENDANCE", "MANAGE_USER");
 
     private final RoleRepository roles = mock(RoleRepository.class);
@@ -66,10 +66,10 @@ class RolePermissionServiceTest {
         }
         catalogue.put("DELETE_RESERVATION", permission("DELETE_RESERVATION"));
         admin = role("ADMIN", "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
-                "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
+                "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
                 "MANAGE_STAFF", "MANAGE_ATTENDANCE", "MANAGE_USER");
         manager = role("MANAGER", "VIEW_REPORT", "VIEW_BOOKING", "MANAGE_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM",
-                "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
+                "MANAGE_PAYMENT", "MANAGE_GUEST", "MANAGE_ROOM", "MANAGE_HOUSEKEEPING", "MANAGE_EXPENSE", "MANAGE_ADDITIONAL_REVENUE",
                 "MANAGE_STAFF", "MANAGE_ATTENDANCE");
         staff = role("STAFF", "VIEW_BOOKING", "CHECK_IN", "CHECK_OUT", "CHANGE_ROOM", "MANAGE_PAYMENT");
         when(roles.findByCodeIn(any())).thenReturn(List.of(admin, manager, staff));
@@ -98,12 +98,12 @@ class RolePermissionServiceTest {
         assertEquals(List.of("ADMIN", "MANAGER", "STAFF"), matrix.roles());
         Map<String, RolePermissionMatrixResponse.Item> items = new LinkedHashMap<>();
         matrix.groups().forEach(group -> group.items().forEach(item -> items.put(item.code(), item)));
-        assertEquals(14, items.size());
+        assertEquals(15, items.size());
         assertFalse(items.containsKey("DELETE_RESERVATION"));
         assertTrue(items.get("VIEW_REPORT").granted().get("MANAGER"));
         assertFalse(items.get("VIEW_REPORT").granted().get("STAFF"));
         assertTrue(items.get("CHECK_IN").granted().get("STAFF"));
-        assertEquals(List.of("Dashboard", "Reservations", "Guests", "Rooms", "Finance", "Administration"),
+        assertEquals(List.of("Dashboard", "Reservations", "Guests", "Rooms", "Housekeeping", "Finance", "Administration"),
                 matrix.groups().stream().map(RolePermissionMatrixResponse.Group::label).toList());
     }
 

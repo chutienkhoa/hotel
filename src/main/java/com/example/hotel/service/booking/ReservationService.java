@@ -2,6 +2,7 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.booking.response.ArrivalIssueCode;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Reservation;
@@ -296,15 +297,14 @@ public class ReservationService {
     public Response checkIn(UUID id) {
         Reservation reservation = load(id);
         CurrentUser user = currentUser();
-        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
-            throw conflict("Invalid reservation state transition");
-        }
-        if (LocalDate.now(clock).isBefore(reservation.getCheckInDate())) {
-            throw conflict("Early check-in is not allowed. Create a separate DIRECT reservation for the "
-                    + "additional earlier stay.");
-        }
-        if (stays.existsByReservationId(id)) {
-            throw conflict("Stay already exists");
+        // The same rule set backs the derived Arrival Readiness, so readiness and check-in cannot disagree.
+        List<ArrivalIssueCode> reservationBlockers = ArrivalReadinessRules.reservationBlockers(
+                reservation.getStatus(),
+                reservation.getCheckInDate(),
+                LocalDate.now(clock),
+                () -> stays.existsByReservationId(id));
+        if (!reservationBlockers.isEmpty()) {
+            throw checkInConflict(reservationBlockers.get(0));
         }
         List<UUID> roomIds = reservation.getRooms().stream()
                 .map(reservationRoom -> reservationRoom.getRoom().getId())
@@ -315,7 +315,7 @@ public class ReservationService {
             throw notFound("Room");
         }
         for (Room room : lockedRooms) {
-            if (!room.isActive() || room.getStatus() != RoomStatus.AVAILABLE) {
+            if (ArrivalReadinessRules.roomBlocker(room).isPresent()) {
                 throw conflict("Room is not available for check-in");
             }
         }
@@ -332,6 +332,21 @@ public class ReservationService {
         createRoomCharges(stay, reservation, user);
         audit(user, "CHECK_IN", reservation, "CONFIRMED", "CHECKED_IN");
         return response(reservation);
+    }
+
+    /**
+     * Maps a Reservation-level Arrival Readiness blocker to the established check-in conflict response.
+     *
+     * @param blocker the first failing blocker
+     * @return the conflict exception carrying the existing message
+     */
+    private ResponseStatusException checkInConflict(ArrivalIssueCode blocker) {
+        return switch (blocker) {
+            case ARRIVAL_TOO_EARLY -> conflict("Early check-in is not allowed. Create a separate DIRECT reservation "
+                    + "for the additional earlier stay.");
+            case STAY_ALREADY_EXISTS -> conflict("Stay already exists");
+            default -> conflict("Invalid reservation state transition");
+        };
     }
 
     /**

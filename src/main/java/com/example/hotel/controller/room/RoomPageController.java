@@ -211,7 +211,7 @@ public class RoomPageController {
      * @return a detail redirect after the operation result is recorded
      */
     @PostMapping("/rooms/{id}/start-cleaning")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_HOUSEKEEPING')")
     public String startCleaning(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
         return executeOperation(id, roomService::startCleaning, "Cleaning started successfully.", redirectAttributes);
     }
@@ -224,7 +224,7 @@ public class RoomPageController {
      * @return a detail redirect after the operation result is recorded
      */
     @PostMapping("/rooms/{id}/finish-cleaning")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_HOUSEKEEPING')")
     public String finishCleaning(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
         return executeOperation(id, roomService::finishCleaning, "Cleaning finished successfully.", redirectAttributes);
     }

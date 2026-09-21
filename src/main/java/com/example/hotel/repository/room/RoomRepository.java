@@ -38,6 +38,17 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
     List<Object[]> countActiveByStatus();
 
     /**
+     * Loads every active Room with its RoomType in one query, in room-number order, for the housekeeping worklist.
+     *
+     * @return active Rooms with their RoomType initialized
+     */
+    @Query(
+            "SELECT r FROM Room r JOIN FETCH r.roomType "
+                    + "WHERE r.active = TRUE "
+                    + "ORDER BY r.roomNumber")
+    List<Room> findActiveWithRoomType();
+
+    /**
      * Counts Rooms that remain in the active hotel inventory.
      *
      * @return active Room count

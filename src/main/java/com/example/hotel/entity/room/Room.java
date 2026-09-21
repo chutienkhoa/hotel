@@ -167,14 +167,14 @@ public class Room extends AuditedEntity {
     }
 
     /**
-     * Releases an occupied room straight back to available as the old side of a Room Change. This
-     * transition is specific to Room Change and must never be used for normal check-out, which
-     * transitions to DIRTY via {@link #markDirty()} instead.
+     * Vacates an occupied room as the old side of a Room Change. A room a guest has just left is not
+     * clean, so it becomes DIRTY exactly like a checked-out room and only returns to AVAILABLE through
+     * the housekeeping transitions (DIRTY, then CLEANING, then AVAILABLE).
      *
      * @throws IllegalStateException if the room is not currently occupied
      */
     public void releaseForRoomChange() {
-        transition(RoomStatus.OCCUPIED, RoomStatus.AVAILABLE, "room change release");
+        transition(RoomStatus.OCCUPIED, RoomStatus.DIRTY, "room change release");
     }
 
     /** Transitions a dirty room into cleaning. */

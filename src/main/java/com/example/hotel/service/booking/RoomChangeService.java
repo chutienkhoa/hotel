@@ -140,7 +140,7 @@ public class RoomChangeService {
 
     /**
      * Executes one atomic Room Change: closes the current room's open assignment, opens a
-     * replacement assignment in the same lineage, releases the old Room to AVAILABLE, occupies the
+     * replacement assignment in the same lineage, marks the vacated old Room DIRTY (it needs housekeeping), occupies the
      * replacement Room, and writes the existing-style CHANGE_ROOM audit entry. Any failure rolls
      * back every effect since all of it runs inside this one transaction.
      *

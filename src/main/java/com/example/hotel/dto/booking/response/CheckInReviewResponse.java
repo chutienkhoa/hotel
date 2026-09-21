@@ -15,7 +15,7 @@ import java.util.UUID;
  * @param reservationId the reservation identifier
  * @param reservationNumber the external reservation number
  * @param status the current reservation status
- * @param eligibleForCheckIn {@code true} only when status is CONFIRMED and timing is not EARLY
+ * @param eligibleForCheckIn {@code true} only when the derived readiness has no BLOCKER (status, timing, Stay and room state)
  * @param timing the Early/Normal/Late classification of the hotel current date
  * @param scheduledCheckInDate the reservation's planned check-in date
  * @param scheduledCheckOutDate the reservation's planned check-out date
@@ -31,6 +31,7 @@ import java.util.UUID;
  * @param rooms the assigned-room lines
  * @param totalAmount the reservation's snapshot total amount
  * @param currency the three-letter currency code
+ * @param readiness the derived, non-persisted Arrival Readiness (blockers, warnings and info)
  */
 public record CheckInReviewResponse(
         UUID reservationId,
@@ -51,5 +52,6 @@ public record CheckInReviewResponse(
         boolean passportAvailable,
         List<CheckInRoomLine> rooms,
         BigDecimal totalAmount,
-        String currency) {
+        String currency,
+        ArrivalReadiness readiness) {
 }

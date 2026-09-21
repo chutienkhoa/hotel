@@ -441,7 +441,8 @@ Deactivate/reactivate Room không thuộc current Room Management slice.
 Authorization:
 
 ```text
-MANAGE_ROOM bảo vệ Room Management operations.
+MANAGE_ROOM bảo vệ Room Management operations (master data, maintenance, out-of-order).
+MANAGE_HOUSEKEEPING bảo vệ các transition housekeeping `start-cleaning` / `finish-cleaning` (mục 21).
 Reservation room lookup tiếp tục dùng MANAGE_BOOKING.
 ```
 
@@ -850,7 +851,8 @@ Khi Room Change thành công, trong cùng một transaction:
 ```text
 1. Đóng assignment hiện tại: assigned_to = thời điểm hiện tại theo Clock
 2. Tạo assignment mới, cùng original_reservation_room_id (cùng lineage), assigned_to = null
-3. Phòng cũ: OCCUPIED -> AVAILABLE qua Room Change release (xem mục 21)
+3. Phòng cũ: OCCUPIED -> DIRTY qua Room Change release (xem mục 21); phòng cũ cần housekeeping
+   (DIRTY -> CLEANING -> AVAILABLE) trước khi sẵn sàng cho khách khác
 4. Phòng mới: AVAILABLE -> OCCUPIED (qua toán tử occupy hiện có)
 5. Ghi AuditLog: entity_type = RESERVATION, action = CHANGE_ROOM, entity_id = Reservation ID,
    old_value = "Room <old>", new_value = "Room <new>"
@@ -1822,11 +1824,11 @@ Permission: CHECK_OUT
 
 DIRTY -> CLEANING
 Operation: start-cleaning
-Permission: MANAGE_ROOM
+Permission: MANAGE_HOUSEKEEPING
 
 CLEANING -> AVAILABLE
 Operation: finish-cleaning
-Permission: MANAGE_ROOM
+Permission: MANAGE_HOUSEKEEPING
 
 AVAILABLE -> MAINTENANCE
 Operation: start-maintenance
@@ -1844,15 +1846,31 @@ OUT_OF_ORDER -> AVAILABLE
 Operation: restore-to-service
 Permission: MANAGE_ROOM
 
-OCCUPIED -> AVAILABLE
+OCCUPIED -> DIRTY
 Operation: room-change-release
 Permission: CHANGE_ROOM
 ```
 
-Transition `OCCUPIED -> AVAILABLE` (room-change-release) chỉ được sử dụng bởi Room Change (xem
-mục 8.3) để giải phóng phòng cũ. Transition này không thay thế, không thay đổi, và không được
-dùng cho check-out (`OCCUPIED -> DIRTY`, xem mục 24). Room Change không tự động chuyển phòng cũ
-sang `OUT_OF_ORDER`; Maintenance/Room Management chịu trách nhiệm riêng cho việc đó.
+Transition `OCCUPIED -> DIRTY` (room-change-release) chỉ được sử dụng bởi Room Change (xem mục 8.3)
+để giải phóng phòng cũ. Một phòng khách vừa rời đi không tự động sạch, nên vòng đời V1 thống nhất:
+
+```text
+Room Change:   OCCUPIED -> DIRTY
+Check-out:     OCCUPIED -> DIRTY
+Housekeeping:  DIRTY -> CLEANING -> AVAILABLE
+```
+
+Housekeeping thuộc phạm vi V1 (không còn hoãn sang V2). `MANAGE_HOUSEKEEPING` chỉ ủy quyền hai
+transition `start-cleaning` (DIRTY -> CLEANING) và `finish-cleaning` (CLEANING -> AVAILABLE); nó KHÔNG cấp quyền
+tạo/sửa Room, maintenance hay out-of-order (các thao tác đó vẫn thuộc `MANAGE_ROOM`), và không thay cho việc kiểm tra
+state transition. V1 không có role Housekeeper riêng và không có trạng thái `READY` được lưu: "sẵn sàng" chỉ là khái
+niệm dẫn xuất và tương đương `AVAILABLE`. Worklist/workspace housekeeping chưa thuộc phần đã triển khai.
+
+Phòng bị bỏ lại sau Room Change phải qua housekeeping (`start-cleaning`, `finish-cleaning`) trước khi thành
+`AVAILABLE` và mới được coi là sẵn sàng cho khách khác; nó không được check-in hoặc chọn làm phòng thay thế trong
+khi còn `DIRTY`/`CLEANING`. `AVAILABLE` vẫn là trạng thái sẵn sàng đón khách duy nhất của V1 (không có `READY`).
+Room Change không tự động chuyển phòng cũ sang `OUT_OF_ORDER`; Maintenance/Room Management chịu trách nhiệm
+riêng cho việc đó.
 
 Không được thêm Room status transition khác.
 
@@ -2283,6 +2301,7 @@ CHECK_IN
 CHECK_OUT
 DELETE_RESERVATION
 CHANGE_ROOM
+MANAGE_HOUSEKEEPING
 ```
 
 Permission mapping đã thống nhất:
@@ -2291,6 +2310,7 @@ Permission mapping đã thống nhất:
 ADMIN
  ├── MANAGE_USER
  ├── MANAGE_ROOM
+ ├── MANAGE_HOUSEKEEPING
  ├── MANAGE_BOOKING
  ├── MANAGE_PAYMENT
  ├── MANAGE_EXPENSE
@@ -2304,6 +2324,7 @@ ADMIN
 ```text
 MANAGER
  ├── MANAGE_ROOM
+ ├── MANAGE_HOUSEKEEPING
  ├── MANAGE_BOOKING
  ├── MANAGE_PAYMENT
  ├── VIEW_REPORT
@@ -2322,6 +2343,10 @@ STAFF
  ├── MANAGE_PAYMENT
  └── CHANGE_ROOM
 ```
+
+STAFF mặc định KHÔNG có `MANAGE_HOUSEKEEPING` (repository/spec không chứng minh STAFF là người dọn phòng); ADMIN có thể
+cấp nó qua ma trận permission (mục 58.2). Migration V29 cũng cấp cho mọi role đang giữ `MANAGE_ROOM` để không mất khả
+năng cleaning trước đây.
 
 `DELETE_RESERVATION` được xác định là permission có thể tồn tại trong hệ thống, nhưng business flow reservation không sử dụng hard delete.
 
@@ -3863,7 +3888,7 @@ role, KHÔNG tạo/xóa/đổi tên permission, KHÔNG role hierarchy hay permis
 Permissions), bảo vệ bằng `PERM_MANAGE_USER` (chỉ ADMIN trong V1, không có permission mới). Các
 permission hiển thị, theo nhóm: Dashboard (`VIEW_REPORT`); Reservations (`VIEW_BOOKING`,
 `MANAGE_BOOKING`, `CHECK_IN`, `CHECK_OUT`, `CHANGE_ROOM`); Guests (`MANAGE_GUEST`); Rooms
-(`MANAGE_ROOM`); Finance (`MANAGE_PAYMENT`, `MANAGE_EXPENSE`, `MANAGE_ADDITIONAL_REVENUE`);
+(`MANAGE_ROOM`); Housekeeping (`MANAGE_HOUSEKEEPING`); Finance (`MANAGE_PAYMENT`, `MANAGE_EXPENSE`, `MANAGE_ADDITIONAL_REVENUE`);
 Administration (`MANAGE_STAFF`, `MANAGE_ATTENDANCE`, `MANAGE_USER`). Trạng thái được đọc từ
 database, không hard-code. `DELETE_RESERVATION` là permission "dormant" (đã seed, không role nào có,
 không code nào dùng): KHÔNG hiển thị, KHÔNG cấp, KHÔNG xóa khỏi database; việc lưu ma trận không
@@ -4321,5 +4346,63 @@ POI (`poi-ooxml` 5.5.1) và chỉ điền giá trị, giữ nguyên viền, màu
 - **Phản hồi**: `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
   `Content-Disposition: attachment; filename="hotel-performance-yyyy-MM.xlsx"`, `Cache-Control: no-store`; không ghi
   file tạm. Lối vào tải xuống: nút "Download Excel" cạnh "Download PDF" trên thẻ Reports Overview (cùng ô chọn tháng).
+
+## 62. Housekeeping Workspace (V1)
+
+Housekeeping thuộc phạm vi V1. Workspace là worklist vận hành, KHÔNG phải màn hình quản trị Room.
+
+- **Route và quyền**: `GET /housekeeping` yêu cầu `MANAGE_HOUSEKEEPING` (không cần `MANAGE_ROOM`). Hành động là POST + CSRF:
+  `POST /housekeeping/rooms/{id}/start-cleaning` (DIRTY -> CLEANING) và `/finish-cleaning` (CLEANING -> AVAILABLE),
+  gọi lại đúng `RoomService.startCleaning`/`finishCleaning` (state machine mục 21, không thêm transition), rồi redirect về
+  `/housekeeping`. Hành động cũ ở Room Detail (yêu cầu `MANAGE_HOUSEKEEPING`) giữ nguyên.
+- **Không mở rộng quyền**: `MANAGE_HOUSEKEEPING` KHÔNG cấp đọc/tạo/sửa Room, Room Detail, API `/api/rooms`, maintenance hay
+  out-of-order (vẫn `MANAGE_ROOM`). Workspace dùng read model riêng, không nới quyền đọc của module Rooms. V1 không có role
+  Housekeeper riêng.
+- **Điều hướng**: sidebar HOTEL gồm Rooms (`MANAGE_ROOM`) và Housekeeping (`MANAGE_HOUSEKEEPING`); hai mục hiển thị độc lập.
+- **Read model**: chỉ Room `active`. Bốn nhóm và bộ đếm: **Needs Cleaning** = `DIRTY`; **Cleaning** = `CLEANING`;
+  **Ready** = `AVAILABLE` (READY là khái niệm trình bày dẫn xuất, KHÔNG lưu trong database); **Issues** = `MAINTENANCE` và
+  `OUT_OF_ORDER` (chỉ hiển thị trạng thái, không có hành động). Room `OCCUPIED` và Room không active không xuất hiện. Hành động
+  theo ngữ cảnh: DIRTY -> Start Cleaning, CLEANING -> Mark Clean, nhóm khác không có hành động.
+- **Next arrival**: với mỗi Room, `checkInDate` nhỏ nhất của `ReservationRoom` thuộc Reservation có status `CONFIRMED` và
+  `checkInDate >= ngày hiện tại của khách sạn` (Clock nghiệp vụ Asia/Ho_Chi_Minh). `DRAFT`, `CANCELLED`, `NO_SHOW`,
+  `CHECKED_IN`, `CHECKED_OUT` và Reservation CONFIRMED đã quá ngày check-in không được tính. Hiển thị Today / Tomorrow /
+  dd/MM/yyyy / No upcoming arrival; không có ETA hay giờ đến.
+- **Ưu tiên (dẫn xuất, không lưu)**: Room `DIRTY` có arrival hôm nay là Urgent. Thứ tự Needs Cleaning: Urgent trước, rồi
+  arrival gần nhất, rồi Room không có arrival; hòa thì theo room number. Các nhóm còn lại xếp theo room number (không có
+  timestamp bắt đầu dọn).
+- **Stale action**: domain vẫn là nguồn quyết định; transition không hợp lệ (ví dụ hai người cùng Start Cleaning) trả về
+  thông báo nghiệp vụ trên workspace, không đổi trạng thái.
+- **Ngoài phạm vi**: phân công nhân viên buồng phòng, checklist, inspection, stayover cleaning, linen, work order bảo trì,
+  Front Desk và Arrival Readiness.
+
+## 63. Arrival Readiness (V1 Foundation)
+
+Arrival Readiness cho biết một Reservation có thể check-in ngay bây giờ hay không và vì sao. Nó là khái niệm DẪN XUẤT
+(application/presentation): KHÔNG lưu trong database, KHÔNG phải `ReservationStatus`, và `READY` / `NEEDS_ATTENTION`
+không phải trạng thái persisted.
+
+- **Một bộ luật duy nhất**: `ArrivalReadinessRules` được dùng cả bởi `ReservationService.checkIn` (thao tác check-in vẫn là
+  nguồn quyết định, thông điệp lỗi giữ nguyên) và bởi read model readiness, nên hai bên không thể lệch nhau. Test nhất quán
+  kiểm tra: check-in được chấp nhận khi và chỉ khi readiness không có BLOCKER.
+- **Kết quả**: `ArrivalReadiness` gồm `state` (`READY` nếu không có BLOCKER, ngược lại `NEEDS_ATTENTION`), `timing`
+  (`EARLY`/`NORMAL`/`LATE` theo ngày hiện tại của khách sạn, Clock Asia/Ho_Chi_Minh) và danh sách `issues` có cấu trúc
+  (`severity`, `code`, `roomNumber` nếu là lỗi của một phòng), sắp xếp BLOCKER -> WARNING -> INFO. Không chứa văn bản
+  localized; văn bản được localize ở tầng hiển thị (`checkin.readiness.*`, EN/VI).
+- **Severity**: `BLOCKER` ngăn check-in (thao tác check-in cũng từ chối đúng điều kiện đó); `WARNING` là ngữ cảnh vận hành,
+  không ngăn check-in và không đổi `state`; `INFO` là ngữ cảnh (phòng đã sẵn sàng).
+- **BLOCKER V1 (chính xác)**: (1) Reservation không ở `CONFIRMED`; (2) ngày hiện tại trước ngày check-in (early check-in);
+  (3) đã tồn tại Stay cho Reservation; (4) phòng được gán không `active`; (5) phòng không `AVAILABLE`, phân biệt theo
+  trạng thái: `DIRTY` (cần housekeeping), `CLEANING` (đang dọn), `OCCUPIED` (đang có khách), `MAINTENANCE` và
+  `OUT_OF_ORDER` (không sử dụng được). Sự sẵn sàng của phòng phụ thuộc vào trạng thái `AVAILABLE` hiện có (mục 21), không
+  có `READY` được lưu. Không có blocker nào khác được thêm.
+- **WARNING V1**: `ARRIVAL_OVERDUE` (Reservation `CONFIRMED` đã quá ngày check-in: vẫn hiển thị, check-in muộn vẫn được
+  phép theo quy tắc hiện có, KHÔNG tự động chuyển `NO_SHOW`); `PASSPORT_MISSING` (ảnh hộ chiếu vẫn là tùy chọn trong V1,
+  thiếu hộ chiếu KHÔNG chặn check-in). Thanh toán/số dư/đặt cọc KHÔNG là điều kiện check-in và không phát sinh issue.
+- **INFO V1**: `ROOM_READY` cho mỗi phòng active `AVAILABLE`.
+- **Nhiều phòng**: mỗi phòng được đánh giá riêng và issue nêu số phòng bị ảnh hưởng; một phòng có blocker khiến toàn bộ
+  Reservation `NEEDS_ATTENTION`, các phòng còn lại vẫn hiển thị `ROOM_READY`.
+- **Tích hợp**: mục "Arrival Readiness" trên Check-in Review (`CheckInReviewResponse.readiness`), giữ nguyên quyền
+  `CHECK_IN`; không cấp thêm quyền nào. Nút Confirm Check-in chỉ hiển thị khi không có BLOCKER (chỉ để tiện dùng; backend
+  vẫn xác thực). Chưa có hành động phục hồi (đổi phòng trước check-in, v.v.) và chưa có Front Desk workspace.
 
 **End of Specification v1.0**

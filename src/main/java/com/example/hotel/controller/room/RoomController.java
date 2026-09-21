@@ -87,7 +87,7 @@ public class RoomController {
      * @return the transitioned room profile
      */
     @PostMapping("/{id}/start-cleaning")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_HOUSEKEEPING')")
     RoomResponse startCleaning(@PathVariable UUID id) {
         return roomService.startCleaning(id);
     }
@@ -99,7 +99,7 @@ public class RoomController {
      * @return the transitioned room profile
      */
     @PostMapping("/{id}/finish-cleaning")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_HOUSEKEEPING')")
     RoomResponse finishCleaning(@PathVariable UUID id) {
         return roomService.finishCleaning(id);
     }

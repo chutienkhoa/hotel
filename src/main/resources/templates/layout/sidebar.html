@@ -40,11 +40,15 @@
         </a>
     </div>
 
-    <div class="nav-section" th:if="${canManageRoom}">
+    <div class="nav-section" th:if="${canManageRoom or canManageHousekeeping}">
         <p class="nav-section-label" th:text="#{navigation.section.hotel}">Hotel</p>
-        <a class="sidebar-nav-link nav-rooms" th:href="@{/rooms}">
+        <a class="sidebar-nav-link nav-rooms" th:href="@{/rooms}" th:if="${canManageRoom}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: bed}"></svg></span>
             <span th:text="#{navigation.rooms}">Rooms</span>
+        </a>
+        <a class="sidebar-nav-link nav-housekeeping" th:href="@{/housekeeping}" th:if="${canManageHousekeeping}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
+            <span th:text="#{navigation.housekeeping}">Housekeeping</span>
         </a>
     </div>
 

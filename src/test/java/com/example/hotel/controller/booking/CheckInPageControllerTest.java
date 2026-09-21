@@ -197,7 +197,11 @@ class CheckInPageControllerTest {
                 false,
                 List.of(),
                 java.math.BigDecimal.TEN,
-                "VND");
+                "VND",
+                new com.example.hotel.dto.booking.response.ArrivalReadiness(
+                        eligible ? com.example.hotel.dto.booking.response.ArrivalReadinessState.READY
+                                : com.example.hotel.dto.booking.response.ArrivalReadinessState.NEEDS_ATTENTION,
+                        timing, List.of()));
     }
 
     /** Builds the CHECK_IN authority. */

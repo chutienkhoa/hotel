@@ -46,6 +46,27 @@
                 <p>Original booking dates, nights, rates, and charges remain unchanged.</p>
             </section>
 
+            <section aria-labelledby="check-in-readiness-heading" class="card reservation-detail-section" id="arrival-readiness"
+                     th:if="${review.readiness != null}">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="check-in-readiness-heading" th:text="#{checkin.readiness.title}">Arrival Readiness</h2>
+                        <p id="readiness-state">
+                            <span class="status-badge"
+                                  th:classappend="${review.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'"
+                                  th:text="#{'checkin.readiness.state.' + ${review.readiness.state.name()}}">Needs attention</span>
+                        </p>
+                    </div>
+                </div>
+                <ul class="readiness-issues">
+                    <li th:each="issue : ${review.readiness.issues}"
+                        th:classappend="${' readiness-issue--' + #strings.toLowerCase(issue.severity.name())}">
+                        <strong th:text="#{'checkin.readiness.severity.' + ${issue.severity.name()}}">Blocker</strong>
+                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.roomNumber})}">Room 101 needs cleaning</span>
+                    </li>
+                </ul>
+            </section>
+
             <section aria-labelledby="check-in-info-heading" class="card reservation-detail-section">
                 <div class="reservation-detail-section-header">
                     <div>

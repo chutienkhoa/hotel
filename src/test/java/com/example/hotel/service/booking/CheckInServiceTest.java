@@ -242,6 +242,49 @@ class CheckInServiceTest {
         verify(fixture.reservationService, never()).checkIn(any());
     }
 
+    /** Confirms the review exposes a NEEDS_ATTENTION readiness (and is not eligible) for a DIRTY assigned room. */
+    @Test
+    void shouldExposeReadinessBlockerForDirtyRoomInReview() {
+        LocalDate today = LocalDate.of(2026, 9, 15);
+        Fixture fixture = fixture(Clock.fixed(today.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+        Reservation reservation = reservationWithRoom(today, true);
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                reservation.getRooms().get(0).getRoom(), "status", RoomStatus.DIRTY);
+        when(fixture.reservationRepository.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(fixture.guestDocumentService.hasPassport(any())).thenReturn(true);
+
+        CheckInReviewResponse response = fixture.service.review(reservation.getId());
+
+        assertEquals(com.example.hotel.dto.booking.response.ArrivalReadinessState.NEEDS_ATTENTION,
+                response.readiness().state());
+        assertEquals(com.example.hotel.dto.booking.response.ArrivalIssueCode.ROOM_DIRTY,
+                response.readiness().blockers().get(0).code());
+        assertTrue(!response.eligibleForCheckIn());
+    }
+
+    /** Confirms a missing passport does not block: the review stays eligible and shows only a warning. */
+    @Test
+    void shouldKeepReviewEligibleWhenPassportIsMissing() {
+        CheckInReviewResponse response = review(LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 15));
+
+        assertTrue(response.eligibleForCheckIn());
+        assertEquals(com.example.hotel.dto.booking.response.ArrivalReadinessState.READY, response.readiness().state());
+        assertTrue(response.readiness().issues().stream().anyMatch(issue ->
+                issue.code() == com.example.hotel.dto.booking.response.ArrivalIssueCode.PASSPORT_MISSING));
+    }
+
+    /** Confirms a past-due CONFIRMED reservation stays visible as an overdue warning, still CONFIRMED and eligible. */
+    @Test
+    void shouldShowPastDueArrivalAsWarningUsingTheHotelClock() {
+        CheckInReviewResponse response = review(LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 18));
+
+        assertEquals("CONFIRMED", response.status());
+        assertEquals(CheckInTiming.LATE, response.readiness().timing());
+        assertTrue(response.eligibleForCheckIn());
+        assertTrue(response.readiness().issues().stream().anyMatch(issue ->
+                issue.code() == com.example.hotel.dto.booking.response.ArrivalIssueCode.ARRIVAL_OVERDUE));
+    }
+
     /** Builds a Check-in Review for a Reservation with the supplied scheduled/current dates. */
     private CheckInReviewResponse review(LocalDate scheduledCheckIn, LocalDate today) {
         Fixture fixture = fixture(Clock.fixed(today.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
@@ -280,6 +323,8 @@ class CheckInServiceTest {
         ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
         ReservationService reservationService = mock(ReservationService.class);
         RoomRepository roomRepository = mock(RoomRepository.class);
+        com.example.hotel.repository.booking.StayRepository stayRepository =
+                mock(com.example.hotel.repository.booking.StayRepository.class);
         GuestRepository guestRepository = mock(GuestRepository.class);
         GuestMapper guestMapper = mock(GuestMapper.class);
         GuestDocumentService guestDocumentService = mock(GuestDocumentService.class);
@@ -294,6 +339,7 @@ class CheckInServiceTest {
                 reservationService,
                 roomRepository,
                 new com.example.hotel.service.room.RoomAvailabilityService(roomRepository, reservationRepository),
+                stayRepository,
                 guestRepository,
                 guestMapper,
                 guestDocumentService,

@@ -283,7 +283,7 @@ class RoomAuthorizationTest {
     void shouldAllowAdministrativeRolesToInvokeRoomOperations(String username, String operationPath)
             throws Exception {
         mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
-                        .with(user(username).authorities(manageRoomAuthority()))
+                        .with(user(username).authorities(manageRoomAuthority().get(0), manageHousekeepingAuthority().get(0)))
                         .with(csrf()))
                 .andExpect(status().isOk());
     }
@@ -301,6 +301,104 @@ class RoomAuthorizationTest {
                             .with(csrf()))
                     .andExpect(status().isForbidden());
         }
+    }
+
+    /**
+     * Confirms MANAGE_HOUSEKEEPING alone authorizes both housekeeping transitions, over REST and MVC.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldAllowHousekeepingTransitionsWithoutManageRoom() throws Exception {
+        for (String operationPath : List.of("start-cleaning", "finish-cleaning")) {
+            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                            .with(csrf()))
+                    .andExpect(status().isOk());
+            mockMvc.perform(post("/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                            .with(csrf()))
+                    .andExpect(status().is3xxRedirection());
+        }
+    }
+
+    /**
+     * Confirms MANAGE_ROOM alone no longer authorizes the housekeeping transitions.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectHousekeepingTransitionsWithOnlyManageRoom() throws Exception {
+        for (String operationPath : List.of("start-cleaning", "finish-cleaning")) {
+            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("room-admin").authorities(manageRoomAuthority()))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(post("/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("room-admin").authorities(manageRoomAuthority()))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    /**
+     * Confirms MANAGE_HOUSEKEEPING grants no room master-data, maintenance, out-of-order or read access.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldNotLetHousekeepingPermissionAdministerRooms() throws Exception {
+        for (String operationPath : List.of(
+                "start-maintenance", "finish-maintenance", "mark-out-of-order", "restore-to-service")) {
+            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(post("/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                            .with(csrf()))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(post("/api/rooms")
+                        .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"roomNumber\":\"101\",\"floor\":\"1\",\"roomTypeId\":\"" + ROOM_TYPE_ID + "\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/rooms/{id}", ROOM_ID)
+                        .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                        .with(csrf())
+                        .contentType("application/json")
+                        .content("{\"roomNumber\":\"101\",\"floor\":\"1\",\"roomTypeId\":\"" + ROOM_TYPE_ID + "\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/rooms/{id}", ROOM_ID)
+                        .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/rooms/new").with(user("housekeeper").authorities(manageHousekeepingAuthority())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/rooms/{id}/edit", ROOM_ID)
+                        .with(user("housekeeper").authorities(manageHousekeepingAuthority())))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Confirms the housekeeping navigation flag follows MANAGE_HOUSEKEEPING only. */
+    @Test
+    void shouldExposeHousekeepingFlagOnlyWithManageHousekeeping() {
+        NavigationModelAdvice advice = new NavigationModelAdvice();
+        ExtendedModelMap with = new ExtendedModelMap();
+        ExtendedModelMap without = new ExtendedModelMap();
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();
+
+        advice.addNavigationAttributes(with, new UsernamePasswordAuthenticationToken(
+                "housekeeper", null, manageHousekeepingAuthority()), request);
+        advice.addNavigationAttributes(without, new UsernamePasswordAuthenticationToken(
+                "room-admin", null, manageRoomAuthority()), request);
+
+        org.junit.jupiter.api.Assertions.assertEquals(true, with.get("canManageHousekeeping"));
+        org.junit.jupiter.api.Assertions.assertEquals(false, with.get("canManageRoom"));
+        org.junit.jupiter.api.Assertions.assertEquals(false, without.get("canManageHousekeeping"));
     }
 
     /**
@@ -369,6 +467,15 @@ class RoomAuthorizationTest {
      */
     private static List<SimpleGrantedAuthority> manageRoomAuthority() {
         return List.of(new SimpleGrantedAuthority("PERM_MANAGE_ROOM"));
+    }
+
+    /**
+     * Builds the authority used by housekeeping transitions.
+     *
+     * @return the MANAGE_HOUSEKEEPING authority
+     */
+    private static List<SimpleGrantedAuthority> manageHousekeepingAuthority() {
+        return List.of(new SimpleGrantedAuthority("PERM_MANAGE_HOUSEKEEPING"));
     }
 
     /**

@@ -233,7 +233,7 @@ class ReservationCheckOutServiceTest {
 
         fixture.service().checkOut(fixture.reservation().getId());
 
-        assertEquals(RoomStatus.AVAILABLE, originalRoom201.getStatus(), "already released by Room Change, must stay untouched");
+        assertEquals(RoomStatus.DIRTY, originalRoom201.getStatus(), "already vacated (DIRTY) by Room Change, must stay untouched");
         assertEquals(RoomStatus.DIRTY, replacementRoom305.getStatus());
         assertEquals(RoomStatus.DIRTY, room202.getStatus());
         verify(fixture.roomRepository(), never()).lockAllByIdIn(fixture.roomIds());
@@ -302,7 +302,7 @@ class ReservationCheckOutServiceTest {
 
         fixture.service().checkOut(fixture.reservation().getId());
 
-        assertEquals(RoomStatus.AVAILABLE, originalRoom201.getStatus());
+        assertEquals(RoomStatus.DIRTY, originalRoom201.getStatus());
         assertEquals(RoomStatus.AVAILABLE, intermediateRoom305.getStatus(), "never occupied by this fixture, must stay unaffected");
         assertEquals(RoomStatus.DIRTY, finalRoom402.getStatus());
         assertEquals(firstChangeAt, closedAssignment201.getAssignedTo(), "earlier history must not be rewritten");
@@ -366,8 +366,8 @@ class ReservationCheckOutServiceTest {
         assertEquals(RoomStatus.DIRTY, replacementRoom305.getStatus());
         assertEquals(RoomStatus.DIRTY, unchangedRoom202.getStatus());
         assertEquals(RoomStatus.DIRTY, replacementRoom401.getStatus());
-        assertEquals(RoomStatus.AVAILABLE, originalRoom201.getStatus(), "already released by Room Change, must stay untouched");
-        assertEquals(RoomStatus.AVAILABLE, originalRoom203.getStatus(), "already released by Room Change, must stay untouched");
+        assertEquals(RoomStatus.DIRTY, originalRoom201.getStatus(), "already vacated (DIRTY) by Room Change, must stay untouched");
+        assertEquals(RoomStatus.DIRTY, originalRoom203.getStatus(), "already vacated (DIRTY) by Room Change, must stay untouched");
         Instant actualCheckOutAt = fixture.stay().getActualCheckOutAt();
         assertEquals(actualCheckOutAt, openAssignment305.getAssignedTo());
         assertEquals(actualCheckOutAt, unchangedOpenAssignment202.getAssignedTo());

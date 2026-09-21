@@ -29,6 +29,7 @@ public class NavigationModelAdvice {
         model.addAttribute("canManageBooking", hasAuthority(authentication, "PERM_MANAGE_BOOKING"));
         model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
         model.addAttribute("canManageRoom", hasAuthority(authentication, "PERM_MANAGE_ROOM"));
+        model.addAttribute("canManageHousekeeping", hasAuthority(authentication, "PERM_MANAGE_HOUSEKEEPING"));
         model.addAttribute("canManageExpense", hasAuthority(authentication, "PERM_MANAGE_EXPENSE"));
         model.addAttribute(
                 "canManageAdditionalRevenue", hasAuthority(authentication, "PERM_MANAGE_ADDITIONAL_REVENUE"));
