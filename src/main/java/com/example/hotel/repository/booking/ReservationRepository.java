@@ -162,7 +162,7 @@ public interface ReservationRepository
     @Query(
             "SELECT new com.example.hotel.repository.booking.ReservationRoomRevenueRow("
                     + "rr.id, rr.reservation.id, rr.checkInDate, rr.checkOutDate, rr.nightlyRate, "
-                    + "rr.totalAmount, rr.reservation.currency) "
+                    + "rr.totalAmount, rr.reservation.currency, rr.reservation.status) "
                     + "FROM ReservationRoom rr "
                     + "WHERE rr.checkInDate < :nextMonthStart AND rr.checkOutDate > :monthStart "
                     + "AND rr.reservation.status IN :statuses "

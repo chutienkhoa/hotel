@@ -382,6 +382,8 @@ class StayExtensionIntegrationTest {
         LocalDate out = LocalDate.of(2031, 9, 28);
         UUID a = room("XQ-A", "OCCUPIED");
         UUID stay = seededCheckedIn(a, in, out);
+        // CHECKED_OUT keeps the contracted nights; a CHECKED_IN stay in 2031 would recognize none of them yet.
+        jdbc.update("UPDATE reservation SET status = 'CHECKED_OUT' WHERE id = ?", reservationOf(stay));
         BigDecimal before = financialReport.report(YearMonth.of(2031, 9)).roomRevenue();
         assertEquals(0, new BigDecimal("2000000").compareTo(before));
 

@@ -53,7 +53,7 @@ class ChargeServiceTest {
         UUID userId = UUID.randomUUID();
         Stay stay = stay(stayId);
         setCurrentUser(userId);
-        when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ChargeResponse response = chargeService(chargeRepository, stayRepository)
@@ -80,7 +80,7 @@ class ChargeServiceTest {
         UUID stayId = UUID.randomUUID();
         Stay stay = stay(stayId);
         setCurrentUser(UUID.randomUUID());
-        when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         ChargeResponse response = chargeService(chargeRepository, stayRepository)
@@ -229,7 +229,7 @@ class ChargeServiceTest {
         StayRepository stayRepository = mock(StayRepository.class);
         UUID stayId = UUID.randomUUID();
         setCurrentUser(UUID.randomUUID());
-        when(stayRepository.findById(stayId)).thenReturn(Optional.empty());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.empty());
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -247,7 +247,7 @@ class ChargeServiceTest {
         UUID stayId = UUID.randomUUID();
         Stay stay = stay(stayId);
         when(stay.getStatus()).thenReturn(StayStatus.CHECKED_OUT);
-        when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         setCurrentUser(UUID.randomUUID());
 
         ResponseStatusException exception = assertThrows(
@@ -374,7 +374,7 @@ class ChargeServiceTest {
         UUID stayId = UUID.randomUUID();
         Stay stay = stay(stayId);
         setCurrentUser(UUID.randomUUID());
-        when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         return chargeService(chargeRepository, stayRepository).create(stayId, request);
@@ -421,6 +421,9 @@ class ChargeServiceTest {
         Stay stay = mock(Stay.class);
         when(stay.getId()).thenReturn(stayId);
         when(stay.getStatus()).thenReturn(StayStatus.CHECKED_IN);
+        when(stay.getReservation()).thenReturn(new com.example.hotel.entity.booking.Reservation(
+                UUID.randomUUID(), "R20260920-000001", null, java.time.LocalDate.of(2026, 9, 20),
+                java.time.LocalDate.of(2026, 9, 22), "VND", null));
         return stay;
     }
 
@@ -432,7 +435,13 @@ class ChargeServiceTest {
      * @return configured Charge service
      */
     private ChargeService chargeService(ChargeRepository chargeRepository, StayRepository stayRepository) {
-        return new ChargeService(chargeRepository, stayRepository, new ChargeMapper());
+        com.example.hotel.repository.common.AdditionalRevenueCategoryRepository categories =
+                mock(com.example.hotel.repository.common.AdditionalRevenueCategoryRepository.class);
+        when(categories.findByCode(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation ->
+                Optional.of(com.example.hotel.entity.common.AdditionalRevenueCategory.create(invocation.getArgument(0), "x", null)));
+        return new ChargeService(chargeRepository, stayRepository, new ChargeMapper(),
+                mock(com.example.hotel.repository.common.AdditionalRevenueRepository.class), categories,
+                java.time.Clock.fixed(java.time.Instant.parse("2026-09-20T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
     /** Compares monetary values without treating insignificant scale as a difference. */

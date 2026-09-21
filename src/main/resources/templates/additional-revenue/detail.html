@@ -8,7 +8,7 @@
     <main class="content">
         <a class="back-link" th:href="@{/additional-revenues}">Back to additional revenue</a>
         <div class="page-header"><div><h1 th:text="${revenue.category.name}">Other</h1><p><span th:replace="~{layout/datetime :: date(${revenue.revenueDate})}">—</span></p></div>
-            <a class="button button-primary" th:if="${revenue.status == 'RECORDED'}" th:href="@{/additional-revenues/{id}/edit(id=${revenue.id})}">Edit Revenue</a></div>
+            <a class="button button-primary" th:if="${revenue.status == 'RECORDED' and !revenue.chargeLinked}" th:href="@{/additional-revenues/{id}/edit(id=${revenue.id})}">Edit Revenue</a></div>
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p><p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
         <dl class="detail-list">
             <dt>Category</dt><dd th:text="${revenue.category.name}">Other</dd><dt>Amount</dt><dd><span th:replace="~{layout/money :: amount(${revenue.amount}, ${revenue.currency})}">0 VND</span></dd>
@@ -17,13 +17,14 @@
             <dt th:if="${revenue.description}">Description</dt><dd th:if="${revenue.description}" th:text="${revenue.description}">Description</dd>
             <th:block th:if="${revenue.status == 'VOIDED'}"><dt>Void reason</dt><dd th:text="${revenue.voidReason}">Incorrect entry</dd><dt>Voided at</dt><dd><span th:replace="~{layout/datetime :: dateTime(${revenue.voidedAt})}">—</span></dd></th:block>
         </dl>
-        <section aria-labelledby="actions-heading" class="card actions" th:if="${revenue.status == 'RECORDED'}"><h2 id="actions-heading">Void revenue</h2>
+        <section aria-labelledby="actions-heading" class="card actions" th:if="${revenue.status == 'RECORDED' and !revenue.chargeLinked}"><h2 id="actions-heading">Void revenue</h2>
             <p class="additional-revenue-void-copy">Voiding this revenue will exclude it from revenue reporting. This action cannot be undone.</p>
             <form class="additional-revenue-void-form" data-confirm-label="Void revenue" data-confirm-message="Void this additional revenue? This cannot be undone." data-confirm-severity="DANGER" data-confirm-title="Void additional revenue" method="post" th:action="@{/additional-revenues/{id}/void(id=${revenue.id})}" th:object="${voidForm}">
                 <div class="form-field"><label for="voidReason">Reason</label><textarea id="voidReason" required rows="3" th:field="*{voidReason}"></textarea></div>
                 <div class="additional-revenue-void-form__actions"><button class="button button-danger" type="submit">Void Revenue</button></div>
             </form>
         </section>
+        <p id="linked-revenue-note" th:if="${revenue.chargeLinked}" th:text="#{revenue.additional.linkedNote}">System-managed.</p>
         <p th:if="${revenue.status == 'VOIDED'}">This Additional Revenue is voided and cannot be changed.</p>
     </main>
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>

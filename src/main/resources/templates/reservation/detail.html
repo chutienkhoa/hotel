@@ -345,6 +345,21 @@
                 </div>
             </section>
 
+            <section aria-labelledby="integrity-heading" class="card reservation-detail-section" id="financial-integrity"
+                     th:if="${financialIntegrity != null}">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="integrity-heading" th:text="#{reservation.integrity.title}">Financial Integrity</h2>
+                        <p><span class="status-badge" id="integrity-status"
+                                 th:classappend="${financialIntegrity.status == 'MATCHED'} ? 'status-badge--confirmed' : 'status-badge--cancelled'"
+                                 th:text="#{'reservation.integrity.' + ${financialIntegrity.status}}">Matched</span></p>
+                    </div>
+                </div>
+                <ul th:if="${!#lists.isEmpty(financialIntegrity.issues)}">
+                    <li th:each="issue : ${financialIntegrity.issues}" th:text="#{'reservation.integrity.issue.' + ${issue.type}}">Issue</li>
+                </ul>
+            </section>
+
             <section aria-labelledby="actions-heading" class="card reservation-detail-section actions"
                      th:if="${reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN'}">
                 <div class="reservation-detail-section-header">

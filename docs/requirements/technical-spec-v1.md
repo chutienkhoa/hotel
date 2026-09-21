@@ -4631,4 +4631,25 @@ Một Stay `CHECKED_IN` có thể được gia hạn (dời ngày trả phòng d
 - **Audit**: một `AuditLog` `EXTEND_STAY` (entity RESERVATION) khi thành công: ngày trả phòng cũ → mới, số đêm, extension id, từng phòng hiện tại với giá × số đêm = thành tiền, và tổng tiền gia hạn. Thất bại không ghi audit thành công.
 - **Hoãn/Không thuộc V1**: giá gia hạn do nhân viên nhập, giá động, gia hạn miễn phí, rút ngắn lưu trú, hoàn tiền check-out sớm, gia hạn/trả phòng từng phòng, trả phòng một phần, mô hình DB `RoomAllocation` và exclusion constraint.
 
+## 69. Folio ↔ Revenue Reconciliation (P1, V1)
+
+Các khái niệm tài chính tách biệt; V1 chỉ thêm liên kết và kiểm tra tính toàn vẹn, KHÔNG có sổ cái (RevenueLedger/RevenueEntry/double-entry).
+
+- **Folio**: `Charge` (khách nợ) + `Payment` (khách đã trả). Total Charges = Σ `Charge.amount`; Total Payments = Σ `Payment.appliedAmount` với status `PAID`; Outstanding = Charges − Payments (`StayBalanceService`). PENDING/FAILED/REFUNDED không tính là đã trả; không có outstanding âm. Không đổi refund.
+- **Doanh thu phòng**: `ReservationRoom` (gốc) + `StayExtensionRoom` (gia hạn). `Charge` KHÔNG là nguồn doanh thu phòng; `Payment` KHÔNG tạo doanh thu (Payment không đọc trong báo cáo doanh thu).
+- **Doanh thu dịch vụ**: `AdditionalRevenue`. Charge dịch vụ của khách (`BREAKFAST`, `EXTRA_BED`, `LAUNDRY`, `MINIBAR`, `SERVICE`, `OTHER`) tạo ĐÚNG MỘT `AdditionalRevenue` liên kết (`additional_revenue.charge_id`, UNIQUE) trong CÙNG transaction: amount = `Charge.amount`,
+  `revenueDate` = ngày khách sạn của `Charge.chargedAt` (không có serviceDate; không theo ngày Payment), currency VND, danh mục hệ thống theo mã ổn định `GUEST_<LOẠI>` (seed ở V33; danh mục có sẵn không đổi; danh mục hệ thống được dùng bất kể cờ active).
+  `paymentMethod` = NULL cho dòng liên kết Charge (đăng Charge không phải thanh toán, không bịa CASH); cột chỉ nullable khi có `charge_id` (CHECK). ROOM/gia hạn không tạo `AdditionalRevenue`; TAX/DISCOUNT vẫn không hỗ trợ.
+  Reservation không phải VND thì Charge dịch vụ bị TỪ CHỐI nguyên tử (thông báo i18n), không ghi doanh thu sai tiền tệ. `AdditionalRevenue` độc lập (không có `charge_id`) giữ nguyên hành vi và quyền `MANAGE_ADDITIONAL_REVENUE`.
+- **Doanh thu liên kết do hệ thống quản lý**: dòng có `charge_id` không được sửa/hủy độc lập (bị từ chối; giao diện ẩn Edit/Void); không có sửa/xóa/đảo Charge trong V1 (hoãn).
+- **Charge ROOM gốc**: `charge.source_reservation_room_id` (FK nullable, chỉ ROOM, partial UNIQUE) trỏ tới `ReservationRoom` nguồn, đặt khi check-in trong cùng transaction; số tiền vẫn lấy từ snapshot. Charge ROOM gia hạn không dùng cột này (dùng `stay_extension_room.charge_id`).
+  Backfill V33 chỉ liên kết dòng KHÔNG mơ hồ: charge ROOM có mô tả `Room <số phòng đặt>` và số tiền bằng `ReservationRoom.total_amount`, không thuộc dòng gia hạn, khớp đúng 1 ReservationRoom của Reservation của Stay và ReservationRoom đó khớp đúng 1 charge; còn lại để NULL (reconciliation báo cáo). Không sửa/xóa bản ghi lịch sử.
+- **Reconciliation (chỉ chẩn đoán)**: `FolioReconciliationService.reconcile(stayId)` (4 truy vấn có giới hạn, không tự sửa): kỳ vọng = Σ `ReservationRoom.totalAmount` + Σ `StayExtensionRoom.amount` so với ROOM charge thực tế; báo `MISSING_ORIGINAL_ROOM_CHARGE`,
+  `ORIGINAL_ROOM_CHARGE_AMOUNT_MISMATCH`, `MISSING_EXTENSION_CHARGE`, `EXTENSION_CHARGE_AMOUNT_MISMATCH`, `ORPHAN_ROOM_CHARGE`, `SERVICE_CHARGE_WITHOUT_REVENUE`, `SERVICE_REVENUE_AMOUNT_MISMATCH`. KHÔNG phải điều kiện check-out
+  (check-out vẫn chỉ cần outstanding = 0). Reservation Detail (CHECKED_IN/CHECKED_OUT) hiển thị "Financial Integrity: Matched / Needs Review" cho user có `MANAGE_PAYMENT` (không thêm quyền).
+- **Ghi nhận doanh thu phòng theo đêm đã bắt đầu**: Reservation `CHECKED_IN` chỉ ghi nhận các đêm có ngày bắt đầu ≤ hôm nay theo `Clock` khách sạn: khoảng ghi nhận kết thúc (exclusive) = `min(kết thúc khoảng, hôm nay + 1)` (ví dụ 20→25, hôm nay 21 → đêm 20 và 21). Áp dụng cho `ReservationRoom` và `StayExtensionRoom`,
+  vẫn chia theo tháng. `CHECKED_OUT` giữ nguyên đêm theo hợp đồng (không hoàn/tính lại khi trả phòng sớm). Báo cáo tài chính: Room Revenue = ReservationRoom + StayExtensionRoom đã ghi nhận; Additional Revenue = `RECORDED` (đã gồm dòng liên kết Charge); KHÔNG cộng Charge riêng.
+- **Khóa**: mọi ghi vào folio đi qua khóa Stay (`findByIdForUpdate`/`findByReservationIdForUpdate`, cùng hàng): Charge và Payment (tạo mới, mark-paid, refund) khóa Stay TRƯỚC rồi kiểm tra lại `CHECKED_IN`; check-out, Stay Extension, Room Change cũng khóa Stay trước rồi mới khóa Room. Không đảo thứ tự khóa; không khóa toàn cục.
+- **Không đổi/Hoãn**: Deposit/Prepayment (không phải doanh thu khi nhận, KHÔNG dùng AdditionalRevenue để biểu diễn; hoãn), sửa/đảo Charge, refund sau check-out, Payment âm, sổ cái, doanh thu đa tiền tệ, sửa lại doanh thu khi trả phòng sớm.
+
 **End of Specification v1.0**

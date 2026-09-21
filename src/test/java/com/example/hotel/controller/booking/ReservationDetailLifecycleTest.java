@@ -74,6 +74,9 @@ class ReservationDetailLifecycleTest {
     private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms a DRAFT reservation still shows the booked-room presentation. */

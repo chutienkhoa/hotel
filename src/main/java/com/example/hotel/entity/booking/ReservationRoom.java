@@ -70,6 +70,15 @@ public class ReservationRoom extends AuditedEntity {
     }
 
     /**
+     * Returns the identifier of this booked-room snapshot.
+     *
+     * @return the identifier
+     */
+    public UUID getId() {
+        return id;
+    }
+
+    /**
      * Trả về phòng được gán.
      *
      * @return phòng được gán

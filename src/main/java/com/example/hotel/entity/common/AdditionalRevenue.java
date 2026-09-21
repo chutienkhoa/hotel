@@ -8,6 +8,8 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import com.example.hotel.entity.booking.Charge;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class AdditionalRevenue extends AuditedEntity {
 
     public static final String CURRENCY_VND = "VND";
+    static final String LINKED_MESSAGE = "Additional Revenue created from a folio Charge is system-managed";
 
     @Id
     private UUID id;
@@ -38,7 +41,7 @@ public class AdditionalRevenue extends AuditedEntity {
     private LocalDate revenueDate;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "payment_method", nullable = false)
+    @Column(name = "payment_method")
     private AdditionalRevenuePaymentMethod paymentMethod;
 
     private String description;
@@ -46,6 +49,11 @@ public class AdditionalRevenue extends AuditedEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private AdditionalRevenueStatus status;
+
+    /** The folio Charge this guest service revenue originates from; {@code null} for standalone revenue. */
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "charge_id")
+    private Charge charge;
 
     @Column(name = "void_reason")
     private String voidReason;
@@ -74,6 +82,41 @@ public class AdditionalRevenue extends AuditedEntity {
         return revenue;
     }
 
+    /**
+     * Creates the system-managed guest service revenue of a folio Charge. The amount is the Charge amount, the date is
+     * the supplied hotel-local date of the Charge, and no payment method is recorded (posting a Charge is not a
+     * payment).
+     *
+     * @param category system category of the Charge type
+     * @param charge originating folio Charge
+     * @param revenueDate hotel-local date of the Charge
+     * @param description traceable description
+     * @return the linked revenue row
+     */
+    public static AdditionalRevenue createFromCharge(
+            AdditionalRevenueCategory category, Charge charge, LocalDate revenueDate, String description) {
+        AdditionalRevenue revenue = new AdditionalRevenue();
+        revenue.id = UUID.randomUUID();
+        revenue.currency = CURRENCY_VND;
+        revenue.status = AdditionalRevenueStatus.RECORDED;
+        revenue.category = category;
+        revenue.amount = charge.getAmount();
+        revenue.revenueDate = revenueDate;
+        revenue.paymentMethod = null;
+        revenue.description = description;
+        revenue.charge = charge;
+        return revenue;
+    }
+
+    /**
+     * Tells whether this revenue is system-managed because it originates from a folio Charge.
+     *
+     * @return {@code true} when linked to a Charge
+     */
+    public boolean isChargeLinked() {
+        return charge != null;
+    }
+
     /** Updates client-controlled data while the revenue remains recorded. */
     public void updateRecorded(
             AdditionalRevenueCategory category,
@@ -81,6 +124,9 @@ public class AdditionalRevenue extends AuditedEntity {
             LocalDate revenueDate,
             AdditionalRevenuePaymentMethod paymentMethod,
             String description) {
+        if (charge != null) {
+            throw new IllegalStateException(LINKED_MESSAGE);
+        }
         if (status != null && status != AdditionalRevenueStatus.RECORDED) {
             throw new IllegalStateException("Only recorded Additional Revenue can be updated");
         }
@@ -93,6 +139,9 @@ public class AdditionalRevenue extends AuditedEntity {
 
     /** Voids recorded revenue and records the backend-owned void metadata. */
     public void voidRevenue(String reason, Instant at, UUID by) {
+        if (charge != null) {
+            throw new IllegalStateException(LINKED_MESSAGE);
+        }
         if (status != AdditionalRevenueStatus.RECORDED) {
             throw new IllegalStateException("Only recorded Additional Revenue can be voided");
         }
@@ -110,6 +159,7 @@ public class AdditionalRevenue extends AuditedEntity {
     public AdditionalRevenuePaymentMethod getPaymentMethod() { return paymentMethod; }
     public String getDescription() { return description; }
     public AdditionalRevenueStatus getStatus() { return status; }
+    public Charge getCharge() { return charge; }
     public String getVoidReason() { return voidReason; }
     public Instant getVoidedAt() { return voidedAt; }
     public UUID getVoidedBy() { return voidedBy; }

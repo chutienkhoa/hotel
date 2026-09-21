@@ -548,13 +548,11 @@ public class ReservationService {
         for (ReservationRoom reservationRoom : reservation.getRooms()) {
             long nights = ChronoUnit.DAYS.between(
                     reservationRoom.getCheckInDate(), reservationRoom.getCheckOutDate());
-            Charge charge = Charge.create(
+            Charge charge = Charge.createOriginalRoomCharge(
                     stay,
-                    ChargeType.ROOM,
+                    reservationRoom,
                     "Room " + reservationRoom.getRoom().getRoomNumber(),
-                    BigDecimal.valueOf(nights),
-                    reservationRoom.getNightlyRate(),
-                    reservationRoom.getTotalAmount());
+                    BigDecimal.valueOf(nights));
             charge.audit(user.id());
             charges.save(charge);
         }

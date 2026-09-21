@@ -93,6 +93,9 @@ class ReservationAccessAuthorizationTest {
     private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /**

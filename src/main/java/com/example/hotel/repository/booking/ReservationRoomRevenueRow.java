@@ -14,6 +14,7 @@ import java.util.UUID;
  * @param nightlyRate booked nightly rate snapshot
  * @param totalAmount booked total snapshot
  * @param currency owning Reservation currency code
+ * @param reservationStatus owning Reservation status (CHECKED_IN rows recognize only started nights)
  */
 public record ReservationRoomRevenueRow(
         UUID reservationRoomId,
@@ -22,4 +23,5 @@ public record ReservationRoomRevenueRow(
         LocalDate checkOutDate,
         BigDecimal nightlyRate,
         BigDecimal totalAmount,
-        String currency) {}
+        String currency,
+        com.example.hotel.entity.booking.ReservationStatus reservationStatus) {}

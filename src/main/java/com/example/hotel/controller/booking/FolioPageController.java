@@ -39,6 +39,7 @@ public class FolioPageController {
 
     private final ReservationQueryService reservationQueryService;
     private final StayQueryService stayQueryService;
+    private final com.example.hotel.common.i18n.UiMessages messages;
     private final ChargeService chargeService;
     private final PaymentService paymentService;
     private final StayBalanceService stayBalanceService;
@@ -57,7 +58,9 @@ public class FolioPageController {
             StayQueryService stayQueryService,
             ChargeService chargeService,
             PaymentService paymentService,
-            StayBalanceService stayBalanceService) {
+            StayBalanceService stayBalanceService,
+            org.springframework.context.MessageSource messageSource) {
+        this.messages = new com.example.hotel.common.i18n.UiMessages(messageSource);
         this.reservationQueryService = reservationQueryService;
         this.stayQueryService = stayQueryService;
         this.chargeService = chargeService;
@@ -392,9 +395,7 @@ public class FolioPageController {
      * @return user-safe message
      */
     private String safeMessage(ResponseStatusException exception) {
-        return exception.getReason() == null
-                ? HttpStatus.valueOf(exception.getStatusCode().value()).getReasonPhrase()
-                : exception.getReason();
+        return messages.error(exception);
     }
 
     /** Represents an existing Payment operation invoked by a Folio action. */

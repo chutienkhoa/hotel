@@ -76,7 +76,8 @@ public class PaymentService {
     @Transactional
     public PaymentResponse create(UUID stayId, PaymentCreateRequest request) {
         validateCreationRequest(request);
-        Stay stay = findStay(stayId);
+        // Stay lock first (shared with check-out), then revalidate that the folio is still open.
+        Stay stay = findStayForUpdate(stayId);
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Payments can be created only for checked-in stays");
         }

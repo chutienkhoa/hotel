@@ -33,7 +33,7 @@ public interface StayExtensionRoomRepository extends JpaRepository<StayExtension
      */
     @Query("SELECT new com.example.hotel.repository.booking.StayExtensionRevenueRow("
             + "l.id, l.originalReservationRoom.id, e.stay.reservation.id, l.fromDate, l.toDate, l.nightlyRate, "
-            + "l.amount, e.stay.reservation.currency) "
+            + "l.amount, e.stay.reservation.currency, e.stay.reservation.status) "
             + "FROM StayExtensionRoom l JOIN l.extension e "
             + "WHERE l.fromDate < :nextMonthStart AND l.toDate > :monthStart "
             + "AND e.stay.reservation.status IN :statuses ORDER BY l.fromDate, l.id")
@@ -41,4 +41,13 @@ public interface StayExtensionRoomRepository extends JpaRepository<StayExtension
             @Param("monthStart") LocalDate monthStart,
             @Param("nextMonthStart") LocalDate nextMonthStart,
             @Param("statuses") Collection<ReservationStatus> statuses);
+
+    /**
+     * Loads the extension lines of one Stay with their Charge in one query (reconciliation).
+     *
+     * @param stayId Stay identifier
+     * @return the Stay's extension lines
+     */
+    @Query("SELECT l FROM StayExtensionRoom l JOIN FETCH l.charge WHERE l.extension.stay.id = :stayId")
+    List<StayExtensionRoom> findByStayIdWithCharge(@Param("stayId") UUID stayId);
 }

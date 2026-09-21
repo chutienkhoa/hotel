@@ -14,6 +14,7 @@ import com.example.hotel.repository.common.AdditionalRevenueRepository;
 import com.example.hotel.repository.common.ExpenseRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
@@ -45,6 +46,7 @@ public class MonthlyFinancialReportService {
     private final StayExtensionRoomRepository stayExtensionRoomRepository;
     private final AdditionalRevenueRepository additionalRevenueRepository;
     private final ExpenseRepository expenseRepository;
+    private final Clock clock;
 
     /**
      * Creates the service.
@@ -53,16 +55,19 @@ public class MonthlyFinancialReportService {
      * @param stayExtensionRoomRepository source of Stay Extension pricing snapshots (additive Room Revenue)
      * @param additionalRevenueRepository source of recognized Additional Revenue
      * @param expenseRepository source of recognized Expense
+     * @param clock hotel business clock: CHECKED_IN accommodation is recognized only for hotel nights that have started
      */
     public MonthlyFinancialReportService(
             ReservationRepository reservationRepository,
             StayExtensionRoomRepository stayExtensionRoomRepository,
             AdditionalRevenueRepository additionalRevenueRepository,
-            ExpenseRepository expenseRepository) {
+            ExpenseRepository expenseRepository,
+            Clock clock) {
         this.reservationRepository = reservationRepository;
         this.stayExtensionRoomRepository = stayExtensionRoomRepository;
         this.additionalRevenueRepository = additionalRevenueRepository;
         this.expenseRepository = expenseRepository;
+        this.clock = clock;
     }
 
     /**
@@ -76,6 +81,8 @@ public class MonthlyFinancialReportService {
     public MonthlyFinancialReport report(YearMonth month) {
         LocalDate monthStart = month.atDay(1);
         LocalDate nextMonthStart = month.plusMonths(1).atDay(1);
+        // A night is recognized once its start date has begun: a CHECKED_IN interval ends (exclusive) at hotelToday + 1.
+        LocalDate startedNightsEnd = LocalDate.now(clock).plusDays(1);
 
         BigDecimal roomRevenue = BigDecimal.ZERO;
         Set<java.util.UUID> excludedReservations = new HashSet<>();
@@ -92,8 +99,8 @@ public class MonthlyFinancialReportService {
                 continue;
             }
             LocalDate overlapStart = row.checkInDate().isAfter(monthStart) ? row.checkInDate() : monthStart;
-            LocalDate overlapEnd = row.checkOutDate().isBefore(nextMonthStart) ? row.checkOutDate() : nextMonthStart;
-            long nightsInsideMonth = ChronoUnit.DAYS.between(overlapStart, overlapEnd);
+            LocalDate overlapEnd = earliest(recognizedEnd(row.checkOutDate(), row.reservationStatus(), startedNightsEnd), nextMonthStart);
+            long nightsInsideMonth = Math.max(0, ChronoUnit.DAYS.between(overlapStart, overlapEnd));
             roomRevenue = roomRevenue.add(row.nightlyRate().multiply(BigDecimal.valueOf(nightsInsideMonth)));
         }
 
@@ -108,8 +115,8 @@ public class MonthlyFinancialReportService {
                 continue;
             }
             LocalDate overlapStart = row.fromDate().isAfter(monthStart) ? row.fromDate() : monthStart;
-            LocalDate overlapEnd = row.toDate().isBefore(nextMonthStart) ? row.toDate() : nextMonthStart;
-            long nightsInsideMonth = ChronoUnit.DAYS.between(overlapStart, overlapEnd);
+            LocalDate overlapEnd = earliest(recognizedEnd(row.toDate(), row.reservationStatus(), startedNightsEnd), nextMonthStart);
+            long nightsInsideMonth = Math.max(0, ChronoUnit.DAYS.between(overlapStart, overlapEnd));
             roomRevenue = roomRevenue.add(row.nightlyRate().multiply(BigDecimal.valueOf(nightsInsideMonth)));
         }
 
@@ -158,6 +165,18 @@ public class MonthlyFinancialReportService {
                     "StayExtensionRoom " + row.extensionRoomId() + " amount " + row.amount()
                             + " differs from nightly rate x extension nights " + expectedTotal);
         }
+    }
+
+    /**
+     * End (exclusive) of the recognizable accommodation interval: CHECKED_OUT keeps the contracted end, CHECKED_IN is
+     * capped at the end of the current hotel night so future nights are not recognized yet.
+     */
+    private static LocalDate recognizedEnd(LocalDate intervalEnd, ReservationStatus status, LocalDate startedNightsEnd) {
+        return status == ReservationStatus.CHECKED_IN ? earliest(intervalEnd, startedNightsEnd) : intervalEnd;
+    }
+
+    private static LocalDate earliest(LocalDate first, LocalDate second) {
+        return first.isBefore(second) ? first : second;
     }
 
     private BigDecimal zeroIfNull(BigDecimal amount) {

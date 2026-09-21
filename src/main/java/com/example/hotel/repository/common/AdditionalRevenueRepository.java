@@ -68,4 +68,14 @@ public interface AdditionalRevenueRepository
                     com.example.hotel.entity.common.AdditionalRevenueStatus status,
             @org.springframework.data.repository.query.Param("startInclusive") java.time.LocalDate startInclusive,
             @org.springframework.data.repository.query.Param("endExclusive") java.time.LocalDate endExclusive);
+
+    /**
+     * Loads the revenue rows linked to any of the given Charges in one query (reconciliation).
+     *
+     * @param chargeIds Charge identifiers
+     * @return linked revenue rows
+     */
+    @Query("SELECT r FROM AdditionalRevenue r JOIN FETCH r.charge WHERE r.charge.id IN :chargeIds")
+    java.util.List<AdditionalRevenue> findByChargeIdIn(
+            @org.springframework.data.repository.query.Param("chargeIds") java.util.Collection<java.util.UUID> chargeIds);
 }

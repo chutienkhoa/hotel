@@ -3,6 +3,12 @@ package com.example.hotel.service.booking;
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.entity.booking.Charge;
+import com.example.hotel.entity.common.AdditionalRevenue;
+import com.example.hotel.entity.common.AdditionalRevenueCategory;
+import com.example.hotel.exception.LocalizedResponseStatusException;
+import com.example.hotel.repository.common.AdditionalRevenueCategoryRepository;
+import com.example.hotel.repository.common.AdditionalRevenueRepository;
+import java.time.Clock;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
@@ -29,6 +35,9 @@ public class ChargeService {
     private final ChargeRepository chargeRepository;
     private final StayRepository stayRepository;
     private final ChargeMapper chargeMapper;
+    private final AdditionalRevenueRepository additionalRevenues;
+    private final AdditionalRevenueCategoryRepository additionalRevenueCategories;
+    private final Clock clock;
 
     /**
      * Creates the Charge service with its required persistence and mapping collaborators.
@@ -38,11 +47,19 @@ public class ChargeService {
      * @param chargeMapper mapper used to return client-safe responses
      */
     public ChargeService(
-            ChargeRepository chargeRepository, StayRepository stayRepository, ChargeMapper chargeMapper) {
+            ChargeRepository chargeRepository,
+            StayRepository stayRepository,
+            ChargeMapper chargeMapper,
+            AdditionalRevenueRepository additionalRevenues,
+            AdditionalRevenueCategoryRepository additionalRevenueCategories,
+            Clock clock) {
         this.chargeRepository = chargeRepository;
         this.stayRepository = stayRepository;
         this.chargeMapper = chargeMapper;
-    }
+        this.additionalRevenues = additionalRevenues;
+        this.additionalRevenueCategories = additionalRevenueCategories;
+        this.clock = clock;
+}
 
     /**
      * Records a Charge v1 entry against an existing Stay.
@@ -55,9 +72,16 @@ public class ChargeService {
     @Transactional
     public ChargeResponse create(UUID stayId, ChargeCreateRequest request) {
         BigDecimal amount = validateAndResolveAmount(request);
-        Stay stay = findStay(stayId);
+        // Lock order shared with check-out, Stay Extension and Room Change: the Stay row first, then revalidate its
+        // state, so a Charge can never commit after a check-out decided the folio was settled.
+        Stay stay = stayRepository.findByIdForUpdate(stayId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stay not found"));
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Charges can be created only for checked-in stays");
+        }
+        AdditionalRevenueCategory category = null;
+        if (request.type().isGuestServiceRevenue()) {
+            category = resolveGuestServiceCategory(stay, request.type());
         }
         Charge charge = Charge.create(
                 stay,
@@ -66,8 +90,42 @@ public class ChargeService {
                 request.quantity(),
                 request.unitPrice(),
                 amount);
-        charge.audit(currentUser().id());
-        return chargeMapper.toResponse(chargeRepository.save(charge));
+        CurrentUser user = currentUser();
+        charge.audit(user.id());
+        Charge saved = chargeRepository.save(charge);
+        if (category != null) {
+            // Guest service revenue: exactly one linked, system-managed Additional Revenue in the same transaction.
+            AdditionalRevenue revenue = AdditionalRevenue.createFromCharge(
+                    category,
+                    saved,
+                    saved.getChargedAt().atZone(clock.getZone()).toLocalDate(),
+                    revenueDescription(stay, saved));
+            revenue.audit(user.id());
+            additionalRevenues.save(revenue);
+        }
+        return chargeMapper.toResponse(saved);
+    }
+
+    private AdditionalRevenueCategory resolveGuestServiceCategory(Stay stay, ChargeType type) {
+        if (!AdditionalRevenue.CURRENCY_VND.equals(stay.getReservation().getCurrency())) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "payment.folio.charge.error.serviceRevenueCurrency",
+                    "Guest service charges require a VND reservation because service revenue is recorded in VND");
+        }
+        return additionalRevenueCategories.findByCode(type.guestServiceCategoryCode()).orElseThrow(() ->
+                new LocalizedResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "payment.folio.charge.error.serviceRevenueCategory",
+                        "Guest service revenue category is not configured: " + type.guestServiceCategoryCode()));
+    }
+
+    private String revenueDescription(Stay stay, Charge charge) {
+        String detail = charge.getDescription() == null || charge.getDescription().isBlank()
+                ? ""
+                : ": " + charge.getDescription().trim();
+        return "Folio charge " + charge.getType().name() + " (" + stay.getReservation().getReservationNumber() + ")"
+                + detail;
     }
 
     /**

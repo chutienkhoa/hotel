@@ -38,4 +38,13 @@ public interface ChargeRepository extends JpaRepository<Charge, UUID> {
     @Query("SELECT new com.example.hotel.repository.booking.StayAmountRow(c.stay.id, SUM(c.amount)) "
             + "FROM Charge c WHERE c.stay.id IN :stayIds GROUP BY c.stay.id")
     List<StayAmountRow> sumAmountByStayIdIn(@Param("stayIds") Collection<UUID> stayIds);
+
+    /**
+     * Loads every Charge of a Stay with its original-room source in one query (reconciliation).
+     *
+     * @param stayId Stay identifier
+     * @return the Stay's Charges
+     */
+    @Query("SELECT c FROM Charge c LEFT JOIN FETCH c.sourceReservationRoom WHERE c.stay.id = :stayId")
+    List<Charge> findByStayIdWithSource(@Param("stayId") UUID stayId);
 }

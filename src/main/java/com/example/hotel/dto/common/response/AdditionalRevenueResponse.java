@@ -17,4 +17,5 @@ public record AdditionalRevenueResponse(
         String status,
         String voidReason,
         Instant voidedAt,
-        UUID voidedBy) {}
+        UUID voidedBy,
+        boolean chargeLinked) {}

@@ -171,13 +171,13 @@ class AdditionalRevenuePageControllerTest {
     private static AdditionalRevenueResponse recorded(String paymentMethod) {
         return new AdditionalRevenueResponse(
                 REVENUE_ID, category(true), new BigDecimal("150000"), "VND", LocalDate.of(2026, 9, 15),
-                paymentMethod, null, "RECORDED", null, null, null);
+                paymentMethod, null, "RECORDED", null, null, null, false);
     }
 
     private static AdditionalRevenueResponse voided() {
         return new AdditionalRevenueResponse(
                 REVENUE_ID, category(false), new BigDecimal("150000"), "VND", LocalDate.of(2026, 9, 15),
-                "CASH", null, "VOIDED", "Incorrect duplicate entry", Instant.parse("2026-09-15T10:00:00Z"), UUID.randomUUID());
+                "CASH", null, "VOIDED", "Incorrect duplicate entry", Instant.parse("2026-09-15T10:00:00Z"), UUID.randomUUID(), false);
     }
 
     private void stubRevenuePage(AdditionalRevenueResponse... revenues) {

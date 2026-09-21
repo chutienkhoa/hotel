@@ -67,6 +67,7 @@ class PaymentServiceTest {
         Stay stay = stay(stayId, StayStatus.CHECKED_IN);
         setCurrentUser(userId);
         when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PaymentResponse response = service(paymentRepository, stayRepository, chargeRepository)
@@ -238,6 +239,7 @@ class PaymentServiceTest {
         UUID stayId = UUID.randomUUID();
         Stay stay = stay(stayId, StayStatus.CHECKED_OUT);
         when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         setCurrentUser(UUID.randomUUID());
 
         assertConflict(() -> service(paymentRepository, stayRepository, mock(ChargeRepository.class))
@@ -251,6 +253,7 @@ class PaymentServiceTest {
         StayRepository stayRepository = mock(StayRepository.class);
         UUID stayId = UUID.randomUUID();
         when(stayRepository.findById(stayId)).thenReturn(Optional.empty());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.empty());
         setCurrentUser(UUID.randomUUID());
 
         ResponseStatusException exception = assertThrows(
@@ -428,6 +431,7 @@ class PaymentServiceTest {
         Payment second = Payment.create(
                 stay, BigDecimal.TEN, PaymentCurrency.VND, null, BigDecimal.TEN, PaymentMethod.OTHER, "REF");
         when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(paymentRepository.findByStayIdOrderByCreatedAtAscIdAsc(stayId)).thenReturn(List.of(first, second));
 
         List<PaymentResponse> payments = service(paymentRepository, stayRepository, mock(ChargeRepository.class))
@@ -710,6 +714,7 @@ class PaymentServiceTest {
         Stay stay = stay(stayId, StayStatus.CHECKED_IN);
         setCurrentUser(UUID.randomUUID());
         when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         return service(paymentRepository, stayRepository, mock(ChargeRepository.class))
                 .create(stayId, request(BigDecimal.ONE, method, reference));
@@ -735,6 +740,7 @@ class PaymentServiceTest {
         UUID stayId = UUID.randomUUID();
         Stay stay = stay(stayId, StayStatus.CHECKED_IN, reservationCurrency);
         when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         setCurrentUser(UUID.randomUUID());
 
         ResponseStatusException exception = assertThrows(
@@ -760,6 +766,7 @@ class PaymentServiceTest {
         Stay stay = stay(stayId, StayStatus.CHECKED_IN, reservationCurrency);
         setCurrentUser(UUID.randomUUID());
         when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
         return service(paymentRepository, stayRepository, mock(ChargeRepository.class))
                 .create(stayId, request(amount, currency, exchangeRate, PaymentMethod.CASH, null));

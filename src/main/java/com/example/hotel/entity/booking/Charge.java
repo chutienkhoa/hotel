@@ -44,8 +44,29 @@ public class Charge extends AuditedEntity {
     @Column(name = "charged_at", nullable = false)
     private Instant chargedAt;
 
+    /** The booked room an ORIGINAL check-in ROOM charge was created from; {@code null} for every other charge. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_reservation_room_id")
+    private ReservationRoom sourceReservationRoom;
+
     /** Creates an empty Charge for JPA. */
     protected Charge() {}
+
+    /**
+     * Creates the ORIGINAL check-in ROOM Charge of one booked room, linked to its immutable {@link ReservationRoom}
+     * source. The amount is copied from the ReservationRoom snapshot; extension charges never use this factory.
+     *
+     * @param stay owning stay
+     * @param source booked room the charge is created from
+     * @param description charge description
+     * @return the new ROOM charge
+     */
+    public static Charge createOriginalRoomCharge(Stay stay, ReservationRoom source, String description, BigDecimal nights) {
+        Charge charge = create(
+                stay, ChargeType.ROOM, description, nights, source.getNightlyRate(), source.getTotalAmount());
+        charge.sourceReservationRoom = source;
+        return charge;
+    }
 
     /**
      * Creates a Charge v1 record with server-owned identity and charge timestamp values.
@@ -75,6 +96,15 @@ public class Charge extends AuditedEntity {
         charge.amount = amount;
         charge.chargedAt = Instant.now();
         return charge;
+    }
+
+    /**
+     * Returns the booked room this ORIGINAL ROOM charge was created from.
+     *
+     * @return the source ReservationRoom, or {@code null}
+     */
+    public ReservationRoom getSourceReservationRoom() {
+        return sourceReservationRoom;
     }
 
     /**

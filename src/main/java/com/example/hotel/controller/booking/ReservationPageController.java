@@ -57,6 +57,7 @@ public class ReservationPageController {
     private final StayBalanceService stayBalanceService;
     private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
     private final StayExtensionService stayExtensionService;
+    private final com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -70,6 +71,7 @@ public class ReservationPageController {
      * @param stayBalanceService service used to supply non-financial checkout readiness
      * @param stayRoomAssignmentQueryService service used to supply current rooms and Room History
      * @param stayExtensionService service used to supply the extension history and derived accommodation totals
+     * @param folioReconciliationService read-only financial integrity diagnostic
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
@@ -79,7 +81,8 @@ public class ReservationPageController {
             StayQueryService stayQueryService,
             StayBalanceService stayBalanceService,
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
-            StayExtensionService stayExtensionService) {
+            StayExtensionService stayExtensionService,
+            com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
@@ -88,6 +91,7 @@ public class ReservationPageController {
         this.stayBalanceService = stayBalanceService;
         this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
         this.stayExtensionService = stayExtensionService;
+        this.folioReconciliationService = folioReconciliationService;
     }
 
     /**
@@ -155,7 +159,15 @@ public class ReservationPageController {
         addRoomOccupancyAttributes(model, reservation);
         boolean hasStay = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
         model.addAttribute("stayExtensionSummary", hasStay ? stayExtensionService.summary(id) : null);
+        // Financial integrity is a diagnostic for users who may already see the folio (MANAGE_PAYMENT).
+        boolean canSeeIntegrity = hasStay && hasAuthority(authentication, "PERM_MANAGE_PAYMENT");
+        model.addAttribute("financialIntegrity", canSeeIntegrity ? integrityFor(id) : null);
         return "reservation/detail";
+    }
+
+    private com.example.hotel.dto.booking.response.FolioReconciliationResponse integrityFor(UUID reservationId) {
+        var stay = stayQueryService.findByReservationId(reservationId);
+        return stay == null ? null : folioReconciliationService.reconcile(stay.id());
     }
 
     /**

@@ -17,12 +17,13 @@ public class AdditionalRevenueMapper {
                 revenue.getAmount(),
                 revenue.getCurrency(),
                 revenue.getRevenueDate(),
-                revenue.getPaymentMethod().name(),
+                revenue.getPaymentMethod() == null ? null : revenue.getPaymentMethod().name(),
                 revenue.getDescription(),
                 revenue.getStatus().name(),
                 revenue.getVoidReason(),
                 revenue.getVoidedAt(),
-                revenue.getVoidedBy());
+                revenue.getVoidedBy(),
+                revenue.isChargeLinked());
     }
 
     public AdditionalRevenueCategoryResponse toCategoryResponse(AdditionalRevenueCategory category) {

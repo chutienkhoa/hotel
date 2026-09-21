@@ -41,7 +41,8 @@ class MonthlyFinancialReportServiceTest {
     private final com.example.hotel.repository.booking.StayExtensionRoomRepository extensionRooms =
             mock(com.example.hotel.repository.booking.StayExtensionRoomRepository.class);
     private final MonthlyFinancialReportService service =
-            new MonthlyFinancialReportService(reservations, extensionRooms, revenues, expenses);
+            new MonthlyFinancialReportService(reservations, extensionRooms, revenues, expenses,
+                    java.time.Clock.fixed(java.time.Instant.parse("2027-01-01T00:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
 
     private void rows(ReservationRoomRevenueRow... rows) {
         when(reservations.findRoomRevenueRows(any(), any(), any())).thenReturn(List.of(rows));
@@ -58,7 +59,8 @@ class MonthlyFinancialReportServiceTest {
         BigDecimal actualTotal = total != null
                 ? total
                 : rate.multiply(BigDecimal.valueOf(java.time.temporal.ChronoUnit.DAYS.between(in, out)));
-        return new ReservationRoomRevenueRow(UUID.randomUUID(), reservationId, in, out, rate, actualTotal, currency);
+        return new ReservationRoomRevenueRow(UUID.randomUUID(), reservationId, in, out, rate, actualTotal, currency,
+                ReservationStatus.CHECKED_OUT);
     }
 
     private static void assertMoney(String expected, BigDecimal actual) {
@@ -73,7 +75,7 @@ class MonthlyFinancialReportServiceTest {
                 : RATE.multiply(BigDecimal.valueOf(java.time.temporal.ChronoUnit.DAYS.between(in, out)));
         when(extensionRooms.findRevenueRows(any(), any(), any())).thenReturn(List.of(
                 new com.example.hotel.repository.booking.StayExtensionRevenueRow(
-                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), in, out, RATE, amount, currency)));
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), in, out, RATE, amount, currency, ReservationStatus.CHECKED_OUT)));
     }
 
     /** Confirms extension revenue is added once on top of the unchanged original room revenue. */
@@ -312,5 +314,70 @@ class MonthlyFinancialReportServiceTest {
         MonthlyFinancialReport expenseOnly = service.report(SEPTEMBER);
         assertMoney("-1500", expenseOnly.netProfit());
         assertNull(expenseOnly.profitMargin());
+    }
+
+    // ------------------------------------------------------------ recognition of started nights
+
+    private MonthlyFinancialReportService serviceOn(String today) {
+        return new MonthlyFinancialReportService(reservations, extensionRooms, revenues, expenses,
+                java.time.Clock.fixed(LocalDate.parse(today).atTime(10, 0).atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
+                        java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
+    }
+
+    private static ReservationRoomRevenueRow rowWithStatus(String in, String out, ReservationStatus status) {
+        LocalDate checkIn = LocalDate.parse(in);
+        LocalDate checkOut = LocalDate.parse(out);
+        BigDecimal total = RATE.multiply(BigDecimal.valueOf(java.time.temporal.ChronoUnit.DAYS.between(checkIn, checkOut)));
+        return new ReservationRoomRevenueRow(UUID.randomUUID(), UUID.randomUUID(), checkIn, checkOut, RATE, total, "VND", status);
+    }
+
+    /** Confirms a CHECKED_IN 20 to 25 stay on 21/09 recognizes only nights 20 and 21. */
+    @Test
+    void shouldRecognizeOnlyStartedNightsOfACheckedInStay() {
+        rows(rowWithStatus("2026-09-20", "2026-09-25", ReservationStatus.CHECKED_IN));
+
+        assertMoney("2000000", serviceOn("2026-09-21").report(SEPTEMBER).roomRevenue());
+        assertMoney("3000000", serviceOn("2026-09-22").report(SEPTEMBER).roomRevenue());
+        assertMoney("5000000", serviceOn("2026-09-30").report(SEPTEMBER).roomRevenue());
+    }
+
+    /** Confirms CHECKED_OUT keeps the contracted nights even when the clock is before the booked end. */
+    @Test
+    void shouldKeepContractedNightsForCheckedOutStays() {
+        rows(rowWithStatus("2026-09-20", "2026-09-25", ReservationStatus.CHECKED_OUT));
+
+        assertMoney("5000000", serviceOn("2026-09-21").report(SEPTEMBER).roomRevenue());
+    }
+
+    /** Confirms the month boundary: 30/09 to 03/10 with today 01/10 gives September 1 night, October 1 night. */
+    @Test
+    void shouldSplitStartedNightsAcrossMonths() {
+        rows(rowWithStatus("2026-09-30", "2026-10-03", ReservationStatus.CHECKED_IN));
+        MonthlyFinancialReportService service = serviceOn("2026-10-01");
+
+        assertMoney("1000000", service.report(SEPTEMBER).roomRevenue());
+        assertMoney("1000000", service.report(OCTOBER).roomRevenue());
+    }
+
+    /** Confirms a future month recognizes nothing for a CHECKED_IN stay whose nights have not started. */
+    @Test
+    void shouldRecognizeNothingForMonthsThatHaveNotStarted() {
+        rows(rowWithStatus("2026-10-02", "2026-10-04", ReservationStatus.CHECKED_IN));
+
+        assertMoney("0", serviceOn("2026-09-21").report(OCTOBER).roomRevenue());
+    }
+
+    /** Confirms extension lines follow the same started-night cap; elapsed extension nights are recognized. */
+    @Test
+    void shouldCapExtensionNightsLikeOriginalNights() {
+        rows();
+        when(extensionRooms.findRevenueRows(any(), any(), any())).thenReturn(List.of(
+                new com.example.hotel.repository.booking.StayExtensionRevenueRow(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                        LocalDate.parse("2026-09-22"), LocalDate.parse("2026-09-25"), RATE, RATE.multiply(BigDecimal.valueOf(3)), "VND",
+                        ReservationStatus.CHECKED_IN)));
+
+        assertMoney("2000000", serviceOn("2026-09-23").report(SEPTEMBER).roomRevenue());
+        assertMoney("0", serviceOn("2026-09-21").report(SEPTEMBER).roomRevenue());
+        assertMoney("3000000", serviceOn("2026-09-26").report(SEPTEMBER).roomRevenue());
     }
 }
