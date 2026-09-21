@@ -17,6 +17,7 @@ import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.exception.GuestCompositionUpdateException;
+import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
@@ -39,6 +40,7 @@ import java.util.Currency;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -574,16 +576,25 @@ public class ReservationService {
      */
     @Transactional
     public Response checkOut(UUID id) {
-        Reservation reservation = load(id);
         CurrentUser user = currentUser();
+        // The Stay is locked first (post-check-in serialization boundary shared with Stay Extension and Room Change);
+        // the Reservation is read AFTER the lock so its status and planned check-out are never older than the lock.
+        Optional<Stay> lockedStay = stays.findByReservationIdForUpdate(id);
+        Reservation reservation = load(id);
         if (reservation.getStatus() != ReservationStatus.CHECKED_IN) {
             throw conflict("Invalid reservation state transition");
         }
-        Stay stay = stays
-                .findByReservationIdForUpdate(id)
-                .orElseThrow(() -> conflict("Stay not found for reservation"));
+        Stay stay = lockedStay.orElseThrow(() -> conflict("Stay not found for reservation"));
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Invalid stay state transition");
+        }
+        // Overdue Departure: the additional night(s) must be resolved through Stay Extension (billed) first.
+        if (OverdueDeparture.isOverdue(reservation.getCheckOutDate(), LocalDate.now(clock))) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "reservation.checkout.error.overdue",
+                    "Overdue stay must be extended before check-out",
+                    OverdueDeparture.overdueDays(reservation.getCheckOutDate(), LocalDate.now(clock)));
         }
         StayBalance balance = stayBalanceService.calculate(stay.getId());
         if (balance.outstanding().compareTo(BigDecimal.ZERO) != 0) {

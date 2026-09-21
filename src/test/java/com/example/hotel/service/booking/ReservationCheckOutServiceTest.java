@@ -93,6 +93,81 @@ class ReservationCheckOutServiceTest {
         verify(fixture.auditLogRepository()).save(any(AuditLog.class));
     }
 
+    private Fixture overdueFixture(String today) {
+        Clock clock = Clock.fixed(LocalDate.parse(today).atTime(10, 0).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
+                ZoneId.of("Asia/Ho_Chi_Minh"));
+        Fixture fixture = fixture(List.of(RoomStatus.OCCUPIED), clock);
+        org.springframework.test.util.ReflectionTestUtils.setField(fixture.reservation(), "checkOutDate", LocalDate.of(2026, 9, 22));
+        return fixture;
+    }
+
+    private void assertOverdueRejectedWithoutMutation(Fixture fixture) {
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> fixture.service().checkOut(fixture.reservation().getId()));
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals("Overdue stay must be extended before check-out", exception.getReason());
+        assertEquals(ReservationStatus.CHECKED_IN, fixture.reservation().getStatus());
+        assertEquals(StayStatus.CHECKED_IN, fixture.stay().getStatus());
+        assertEquals(null, fixture.stay().getActualCheckOutAt());
+        fixture.rooms().forEach(room -> assertEquals(RoomStatus.OCCUPIED, room.getStatus(), "no DIRTY before a valid check-out"));
+        fixture.openAssignments().forEach(assignment -> assertEquals(null, assignment.getAssignedTo(), "assignment stays open"));
+        verify(fixture.auditLogRepository(), never()).save(any(AuditLog.class));
+    }
+
+    /** Confirms an on-time check-out (planned check-out is today) with zero outstanding succeeds. */
+    @Test
+    void shouldCheckOutOnThePlannedCheckOutDate() {
+        Fixture fixture = overdueFixture("2026-09-22");
+        when(fixture.stayBalanceService().calculate(fixture.stay().getId())).thenReturn(balance(BigDecimal.TEN, BigDecimal.TEN));
+
+        assertEquals("CHECKED_OUT", fixture.service().checkOut(fixture.reservation().getId()).status());
+    }
+
+    /** Confirms an overdue stay cannot check out even with zero outstanding, and nothing is mutated. */
+    @Test
+    void shouldRejectOverdueCheckOutWithZeroOutstanding() {
+        Fixture fixture = overdueFixture("2026-09-23");
+        when(fixture.stayBalanceService().calculate(fixture.stay().getId())).thenReturn(balance(BigDecimal.TEN, BigDecimal.TEN));
+
+        assertOverdueRejectedWithoutMutation(fixture);
+    }
+
+    /** Confirms an overdue stay with money owed is rejected too, and a full prepayment (zero outstanding) does not lift it. */
+    @Test
+    void shouldRejectOverdueCheckOutWithPositiveOutstanding() {
+        Fixture fixture = overdueFixture("2026-09-25");
+        when(fixture.stayBalanceService().calculate(fixture.stay().getId())).thenReturn(balance(BigDecimal.TEN, BigDecimal.ONE));
+
+        assertOverdueRejectedWithoutMutation(fixture);
+    }
+
+    /** Confirms after the Stay Extension moves the planned check-out to today (or beyond) the check-out succeeds. */
+    @Test
+    void shouldCheckOutAfterTheStayIsExtendedToTodayOrBeyond() {
+        for (int extendedTo : new int[] {23, 26}) {
+            Fixture fixture = overdueFixture("2026-09-23");
+            when(fixture.stayBalanceService().calculate(fixture.stay().getId())).thenReturn(balance(BigDecimal.TEN, BigDecimal.TEN));
+            fixture.reservation().extendCheckOut(LocalDate.of(2026, 9, extendedTo));
+
+            assertEquals("CHECKED_OUT", fixture.service().checkOut(fixture.reservation().getId()).status());
+        }
+    }
+
+    /** Confirms the Stay is locked before the Reservation is read (lock order) and before the overdue rule is applied. */
+    @Test
+    void shouldLockTheStayBeforeReadingTheReservation() {
+        Fixture fixture = overdueFixture("2026-09-22");
+        when(fixture.stayBalanceService().calculate(fixture.stay().getId())).thenReturn(balance(BigDecimal.TEN, BigDecimal.TEN));
+
+        fixture.service().checkOut(fixture.reservation().getId());
+
+        var order = org.mockito.Mockito.inOrder(fixture.stayRepository(), fixture.reservationRepository(), fixture.roomRepository());
+        order.verify(fixture.stayRepository()).findByReservationIdForUpdate(fixture.reservation().getId());
+        order.verify(fixture.reservationRepository()).findById(fixture.reservation().getId());
+        order.verify(fixture.roomRepository()).lockAllByIdIn(any());
+    }
+
     /** Confirms a Reservation outside CHECKED_IN cannot be checked out. */
     @Test
     void shouldRejectReservationOutsideCheckedInState() {
@@ -437,8 +512,8 @@ class ReservationCheckOutServiceTest {
                 reservationId,
                 "R20260911-000001",
                 null,
-                LocalDate.of(2026, 9, 11),
-                LocalDate.of(2026, 9, 12),
+                LocalDate.of(2099, 1, 1),
+                LocalDate.of(2099, 1, 2),
                 "JPY",
                 null);
         List<Room> rooms = new ArrayList<>();

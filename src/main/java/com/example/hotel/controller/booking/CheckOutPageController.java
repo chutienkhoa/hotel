@@ -35,6 +35,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @RequestMapping("/check-out")
 public class CheckOutPageController {
 
+    private final com.example.hotel.common.i18n.UiMessages messages;
     private final CheckOutQueryService checkOutQueryService;
     private final ReservationService reservationService;
 
@@ -43,8 +44,13 @@ public class CheckOutPageController {
      *
      * @param checkOutQueryService service implementing the Check-out operational search/Review reads
      * @param reservationService service holding the authoritative checkOut lifecycle operation
+     * @param messageSource message source for localized rejections
      */
-    public CheckOutPageController(CheckOutQueryService checkOutQueryService, ReservationService reservationService) {
+    public CheckOutPageController(
+            CheckOutQueryService checkOutQueryService,
+            ReservationService reservationService,
+            org.springframework.context.MessageSource messageSource) {
+        this.messages = new com.example.hotel.common.i18n.UiMessages(messageSource);
         this.checkOutQueryService = checkOutQueryService;
         this.reservationService = reservationService;
     }
@@ -99,9 +105,12 @@ public class CheckOutPageController {
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_CHECK_OUT')")
-    public String review(@PathVariable UUID id, Model model) {
+    public String review(@PathVariable UUID id, Model model, org.springframework.security.core.Authentication authentication) {
         CheckOutReviewResponse review = checkOutQueryService.review(id);
         model.addAttribute("review", review);
+        // The existing Stay Extension permission; never granted implicitly by the template.
+        model.addAttribute("canExtendStay", authentication.getAuthorities().stream()
+                .anyMatch(authority -> "PERM_MANAGE_BOOKING".equals(authority.getAuthority())));
         return "check-out/review";
     }
 
@@ -137,8 +146,6 @@ public class CheckOutPageController {
      * @return a safe message for the browser
      */
     private String safeMessage(ResponseStatusException exception) {
-        return exception.getReason() == null
-                ? HttpStatus.valueOf(exception.getStatusCode().value()).getReasonPhrase()
-                : exception.getReason();
+        return messages.error(exception);
     }
 }

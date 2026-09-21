@@ -40,7 +40,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 /** Verifies Check-out MVC authorization, search/Review rendering, and Confirm delegation. */
 @WebMvcTest(CheckOutPageController.class)
-@Import(CheckOutPageControllerTest.MethodSecurityTestConfiguration.class)
+@Import({CheckOutPageControllerTest.MethodSecurityTestConfiguration.class, com.example.hotel.config.I18nConfig.class})
 class CheckOutPageControllerTest {
 
     private static final UUID RESERVATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -89,6 +89,59 @@ class CheckOutPageControllerTest {
                 .andExpect(content().string(containsString("305, 202")))
                 .andExpect(content().string(containsString("Ready")))
                 .andExpect(content().string(not(containsString("Nguyen Van A"))));
+    }
+
+    private CheckOutReviewResponse overdueReview(long days) {
+        return new CheckOutReviewResponse(
+                RESERVATION_ID, "R20260917-000009", "CHECKED_IN", false, GUEST_ID, "GUEST-001", List.of(),
+                LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 22), Instant.parse("2026-09-17T10:00:00Z"), "READY",
+                days, LocalDate.of(2026, 9, 22).plusDays(days));
+    }
+
+    /** Confirms an overdue Review shows the notice, the correct days, no confirm action, and Extend Stay when authorized. */
+    @Test
+    void shouldRenderTheOverdueNoticeWithExtendActionForAuthorizedUsers() throws Exception {
+        when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(overdueReview(2));
+
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("manager").authorities(
+                        new SimpleGrantedAuthority("PERM_CHECK_OUT"), new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"overdue-departure\"")))
+                .andExpect(content().string(containsString("2 days overdue")))
+                .andExpect(content().string(containsString("id=\"overdue-extend-stay\"")))
+                .andExpect(content().string(not(containsString("Confirm check-out"))));
+    }
+
+    /** Confirms a user without the extension permission sees the blocked state and the ask-a-manager hint, not the action. */
+    @Test
+    void shouldHideTheExtendActionWithoutTheExtensionPermission() throws Exception {
+        when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(overdueReview(1));
+
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("1 day overdue")))
+                .andExpect(content().string(containsString("id=\"overdue-ask-manager\"")))
+                .andExpect(content().string(containsString("Ask a manager or authorized staff member to extend the stay.")))
+                .andExpect(content().string(not(containsString("id=\"overdue-extend-stay\""))));
+    }
+
+    /** Confirms the overdue notice is localized to Vietnamese. */
+    @Test
+    void shouldRenderTheOverdueNoticeInVietnamese() throws Exception {
+        when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(overdueReview(3));
+
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi"))
+                        .with(user("staff").authorities(checkOutAuthority())))
+                .andExpect(content().string(containsString("đã quá hạn 3 ngày")));
+    }
+
+    /** Confirms an on-time departure shows no overdue notice. */
+    @Test
+    void shouldNotShowAnOverdueNoticeForAnOnTimeDeparture() throws Exception {
+        when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(review(true, "READY"));
+
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
+                .andExpect(content().string(not(containsString("id=\"overdue-departure\""))));
     }
 
     /** Confirms a blocked (not-eligible) Review renders no Confirm action. */
@@ -204,7 +257,7 @@ class CheckOutPageControllerTest {
     /** Builds a representative Check-out list item. */
     private CheckOutListItemResponse listItem() {
         return new CheckOutListItemResponse(
-                RESERVATION_ID, "R20260917-000009", GUEST_ID, "GUEST-001", "305, 202", LocalDate.of(2026, 9, 19), "READY");
+                RESERVATION_ID, "R20260917-000009", GUEST_ID, "GUEST-001", "305, 202", LocalDate.of(2026, 9, 19), "READY", 0);
     }
 
     /** Builds a representative Check-out Review. */
@@ -220,7 +273,9 @@ class CheckOutPageControllerTest {
                 LocalDate.of(2026, 9, 17),
                 LocalDate.of(2026, 9, 19),
                 Instant.parse("2026-09-17T10:00:00Z"),
-                readiness);
+                readiness,
+                0,
+                LocalDate.of(2026, 9, 19));
     }
 
     /** Builds the CHECK_OUT authority. */

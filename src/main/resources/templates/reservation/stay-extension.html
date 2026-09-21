@@ -48,7 +48,7 @@
                     <label for="newCheckOutDate" th:text="#{reservation.stayExtension.newCheckOut} + ' *'">New Check-out Date *</label>
                     <input class="js-date-picker" id="newCheckOutDate" name="newCheckOutDate" required type="text"
                            th:value="${stayExtensionForm.newCheckOutDate == null ? '' : #temporals.format(stayExtensionForm.newCheckOutDate, 'yyyy-MM-dd')}" />
-                    <p class="reservation-info-secondary" th:text="#{reservation.stayExtension.newCheckOutHint(${#temporals.format(context.earliestNewCheckOutDate.minusDays(1), 'dd/MM/yyyy')})}">Must be after the earlier date.</p>
+                    <p class="reservation-info-secondary" th:text="#{reservation.stayExtension.newCheckOutHint(${#temporals.format(context.earliestNewCheckOutDate, 'dd/MM/yyyy')})}">Must be after the earlier date.</p>
                     <p class="field-error" th:errors="*{newCheckOutDate}"></p>
                 </div>
             </div>

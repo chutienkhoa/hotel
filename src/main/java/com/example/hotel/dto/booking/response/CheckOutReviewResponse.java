@@ -15,13 +15,15 @@ import java.util.UUID;
  * @param reservationId the reservation identifier
  * @param reservationNumber the external reservation number
  * @param status the current reservation status
- * @param eligibleForCheckOut {@code true} only when status is CHECKED_IN and readiness is READY
+ * @param eligibleForCheckOut {@code true} only when status is CHECKED_IN, readiness is READY and the stay is not overdue
  * @param guestId the associated guest identifier
  * @param guestCode the associated guest's display code
  * @param currentRooms the Stay's current room assignments
  * @param checkInDate the reservation's planned check-in date
  * @param checkOutDate the reservation's planned check-out date
  * @param actualCheckInAt the Stay's backend-recorded actual check-in time
+ * @param overdueDays whole days the planned check-out is before the hotel date (0 when not overdue)
+ * @param hotelToday hotel-local date used for the overdue calculation
  * @param readiness {@code READY} or {@code PAYMENT_REQUIRED}, from the authoritative StayBalanceService
  */
 public record CheckOutReviewResponse(
@@ -35,4 +37,6 @@ public record CheckOutReviewResponse(
         LocalDate checkInDate,
         LocalDate checkOutDate,
         Instant actualCheckInAt,
-        String readiness) {}
+        String readiness,
+        long overdueDays,
+        LocalDate hotelToday) {}

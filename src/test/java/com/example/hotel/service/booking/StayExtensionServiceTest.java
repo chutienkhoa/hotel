@@ -181,26 +181,74 @@ class StayExtensionServiceTest {
         verify(extensions, never()).save(any());
     }
 
-    /** Confirms the date rule max(current, today) < new for before, same-day and overdue extensions. */
-    @Test
-    void shouldApplyTheDateRule() {
-        checkedIn("1000000");
-        StayExtensionService before = service(LocalDate.of(2026, 9, 21));
-        assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE, rejected(before, request(CHECK_OUT, CHECK_OUT)).getExtensionReason());
-        assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE,
-                rejected(before, request(CHECK_OUT, LocalDate.of(2026, 9, 21))).getExtensionReason());
-        assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE,
-                rejected(before, request(CHECK_OUT, LocalDate.of(2026, 9, 20))).getExtensionReason());
-
-        StayExtensionService overdue = service(LocalDate.of(2026, 9, 23));
-        assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE,
-                rejected(overdue, request(CHECK_OUT, LocalDate.of(2026, 9, 23))).getExtensionReason());
-        assertEquals(CHECK_OUT, reservation.getCheckOutDate());
+    private void assertRejected(StayExtensionService service, LocalDate expected, LocalDate next) {
+        assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE, rejected(service, request(expected, next)).getExtensionReason(),
+                "new " + next);
     }
 
-    /** Confirms extension is valid the day before, on the planned check-out day, and when overdue. */
+    /** Confirms the rule new > current AND new >= today for an overdue stay (current 22, today 23). */
     @Test
-    void shouldAllowBeforeSameDayAndOverdueExtension() {
+    void shouldApplyTheOverdueDateRule() {
+        checkedIn("1000000");
+        StayExtensionService overdue = service(LocalDate.of(2026, 9, 23));
+
+        assertRejected(overdue, CHECK_OUT, CHECK_OUT);
+        assertRejected(overdue, CHECK_OUT, LocalDate.of(2026, 9, 21));
+        assertEquals(CHECK_OUT, reservation.getCheckOutDate());
+
+        overdue.extend(reservation.getId(), request(CHECK_OUT, LocalDate.of(2026, 9, 23)));
+        assertEquals(LocalDate.of(2026, 9, 23), reservation.getCheckOutDate(), "an overdue stay may extend exactly to today");
+    }
+
+    /** Confirms an overdue extension to a later date is accepted too (22 to 24). */
+    @Test
+    void shouldAcceptAnOverdueExtensionBeyondToday() {
+        checkedIn("1000000");
+        service(LocalDate.of(2026, 9, 23)).extend(reservation.getId(), request(CHECK_OUT, LocalDate.of(2026, 9, 24)));
+        assertEquals(LocalDate.of(2026, 9, 24), reservation.getCheckOutDate());
+    }
+
+    /** Confirms the rule when the current check-out is today: same day rejected, next day accepted. */
+    @Test
+    void shouldApplyTheRuleWhenCheckOutIsToday() {
+        checkedIn("1000000");
+        StayExtensionService sameDay = service(CHECK_OUT);
+
+        assertRejected(sameDay, CHECK_OUT, CHECK_OUT);
+        sameDay.extend(reservation.getId(), request(CHECK_OUT, CHECK_OUT.plusDays(1)));
+        assertEquals(CHECK_OUT.plusDays(1), reservation.getCheckOutDate());
+    }
+
+    /** Confirms the rule when the check-out is in the future (current 25, today 23): only later dates pass. */
+    @Test
+    void shouldAlwaysMoveAFutureCheckOutForward() {
+        checkedIn("1000000");
+        StayExtensionService today = service(LocalDate.of(2026, 9, 21));
+        today.extend(reservation.getId(), request(CHECK_OUT, LocalDate.of(2026, 9, 25)));
+        StayExtensionService later = service(LocalDate.of(2026, 9, 23));
+
+        assertRejected(later, LocalDate.of(2026, 9, 25), LocalDate.of(2026, 9, 24));
+        assertRejected(later, LocalDate.of(2026, 9, 25), LocalDate.of(2026, 9, 25));
+        later.extend(reservation.getId(), request(LocalDate.of(2026, 9, 25), LocalDate.of(2026, 9, 26)));
+        assertEquals(LocalDate.of(2026, 9, 26), reservation.getCheckOutDate());
+    }
+
+    /** Confirms 22 to 23 bills exactly one night and 22 to 24 exactly two, both at the original lineage rate. */
+    @Test
+    void shouldBillExactlyTheAddedNightsAtTheOriginalRate() {
+        checkedIn("1000000");
+        service(LocalDate.of(2026, 9, 23)).extend(reservation.getId(), request(CHECK_OUT, LocalDate.of(2026, 9, 23)));
+        ArgumentCaptor<Charge> one = ArgumentCaptor.forClass(Charge.class);
+        verify(charges).save(one.capture());
+        assertEquals(0, new BigDecimal("1").compareTo(one.getValue().getQuantity()));
+        assertEquals(0, new BigDecimal("1000000").compareTo(one.getValue().getAmount()));
+        assertEquals(0, RATE.compareTo(one.getValue().getUnitPrice()));
+        verify(availability).conflictedRoomIds(anyList(), eq(CHECK_OUT), eq(LocalDate.of(2026, 9, 23)), eq(stay.getId()));
+    }
+
+    /** Confirms extension is valid the day before and on the planned check-out day. */
+    @Test
+    void shouldAllowBeforeAndSameDayExtension() {
         checkedIn("1000000");
         service(LocalDate.of(2026, 9, 21)).extend(reservation.getId(), request(CHECK_OUT, LocalDate.of(2026, 9, 23)));
         service(LocalDate.of(2026, 9, 23)).extend(reservation.getId(), request(LocalDate.of(2026, 9, 23), LocalDate.of(2026, 9, 24)));

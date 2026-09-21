@@ -16,6 +16,7 @@ import java.util.UUID;
  * @param rooms CURRENT Rooms from open StayRoomAssignments
  * @param actualCheckInAt actual check-in instant
  * @param plannedCheckOutDate planned check-out date
+ * @param overdueDays whole days the planned check-out is before the hotel date (0 when not overdue)
  * @param overdue {@code true} when the planned check-out date has passed
  * @param paymentRequired {@code true} when the outstanding balance is not zero
  * @param needsAttention {@code true} when overdue or payment is required
@@ -31,6 +32,7 @@ public record FrontDeskStayRow(
         Instant actualCheckInAt,
         LocalDate plannedCheckOutDate,
         boolean overdue,
+        long overdueDays,
         boolean paymentRequired,
         boolean needsAttention,
         BigDecimal outstanding,

@@ -33,6 +33,7 @@ public class CheckOutQueryService {
     private final StayQueryService stayQueryService;
     private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
     private final StayBalanceService stayBalanceService;
+    private final java.time.Clock clock;
 
     /**
      * Creates the Check-out query service with its read-only collaborators.
@@ -46,11 +47,13 @@ public class CheckOutQueryService {
             ReservationQueryService reservationQueryService,
             StayQueryService stayQueryService,
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
-            StayBalanceService stayBalanceService) {
+            StayBalanceService stayBalanceService,
+            java.time.Clock clock) {
         this.reservationQueryService = reservationQueryService;
         this.stayQueryService = stayQueryService;
         this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
         this.stayBalanceService = stayBalanceService;
+        this.clock = clock;
     }
 
 
@@ -99,7 +102,10 @@ public class CheckOutQueryService {
         StayResponse stay = stayQueryService.findByReservationId(reservationId);
         List<CurrentRoomResponse> currentRooms = stayRoomAssignmentQueryService.findCurrentRooms(reservationId);
         String readiness = readiness(stay.id());
-        boolean eligible = "CHECKED_IN".equals(reservation.status()) && READY.equals(readiness);
+        java.time.LocalDate today = java.time.LocalDate.now(clock);
+        long overdueDays = OverdueDeparture.overdueDays(reservation.checkOutDate(), today);
+        // Eligibility composes the financial readiness with the (separate) overdue rule.
+        boolean eligible = "CHECKED_IN".equals(reservation.status()) && READY.equals(readiness) && overdueDays == 0;
         return new CheckOutReviewResponse(
                 reservation.id(),
                 reservation.reservationNumber(),
@@ -111,7 +117,9 @@ public class CheckOutQueryService {
                 reservation.checkInDate(),
                 reservation.checkOutDate(),
                 stay.actualCheckInAt(),
-                readiness);
+                readiness,
+                overdueDays,
+                today);
     }
 
     /**
@@ -135,7 +143,8 @@ public class CheckOutQueryService {
                 detail.guestCode(),
                 roomNumbers,
                 reservation.checkOutDate(),
-                readiness(stay.id()));
+                readiness(stay.id()),
+                OverdueDeparture.overdueDays(reservation.checkOutDate(), java.time.LocalDate.now(clock)));
     }
 
     /**

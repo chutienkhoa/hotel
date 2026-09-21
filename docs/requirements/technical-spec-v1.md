@@ -2133,10 +2133,9 @@ cho toàn bộ transaction và dùng lại chính giá trị đó cho cả `Stay
 `assigned_to` của mọi `StayRoomAssignment` đang mở được đóng trong transaction đó — hai giá trị
 này luôn bằng nhau.
 
-Check-out không phân biệt Early / Normal / Late so với `Reservation.check_out_date`. Cả ba
-trường hợp (`hotelToday < check_out_date`, `== check_out_date`, `> check_out_date`) đều được
-phép check-out như nhau khi các điều kiện hiện có (Reservation/Stay CHECKED_IN, Outstanding = 0,
-current Room = OCCUPIED) đã thỏa mãn. V1 không có cảnh báo, phí, hoàn tiền, thay đổi giá, hoặc
+Check-out sớm (`hotelToday < check_out_date`) và đúng hạn (`== check_out_date`) được phép như nhau khi các điều kiện
+hiện có (Reservation/Stay CHECKED_IN, Outstanding = 0, current Room = OCCUPIED) đã thỏa mãn. Check-out QUÁ HẠN
+(`check_out_date < hotelToday`) bị TỪ CHỐI — xem mục 71 (Overdue Departure). V1 không có cảnh báo, phí, hoàn tiền, thay đổi giá, hoặc
 gia hạn Reservation dựa trên thời điểm check-out thực tế so với ngày dự kiến.
 
 ### Check-out Operational Screen
@@ -4602,8 +4601,8 @@ Một Stay `CHECKED_IN` có thể được gia hạn (dời ngày trả phòng d
   phòng thực tế tại thời điểm gia hạn, không suy ra lại về sau); `Charge` = khoản ROOM đã ghi vào folio. Không gộp các khái niệm này.
 - **Tổng tiền**: `Reservation.totalAmount` vẫn là Original Booking Total (không cộng tiền gia hạn). Extension Amount = Σ `StayExtensionRoom.amount`; Current Accommodation Total = `totalAmount` + Extension Amount là giá trị DẪN XUẤT (không lưu).
 - **Trạng thái**: chỉ khi Reservation `CHECKED_IN` VÀ Stay tồn tại và `CHECKED_IN`; DRAFT/CONFIRMED/CANCELLED/NO_SHOW/CHECKED_OUT, thiếu Stay hoặc Reservation/Stay không nhất quán bị từ chối, không tự sửa dữ liệu.
-- **Quy tắc ngày** (ngày khách sạn từ `Clock`): `newCheckOutDate > max(currentPlannedCheckOut, hotelToday)`. Được phép trước ngày trả phòng, đúng ngày trả phòng, và khi quá hạn. Giai đoạn gia hạn luôn là `[previousCheckOutDate, newCheckOutDate)`,
-  nên đêm quá hạn KHÔNG biến mất khỏi tính tiền (ví dụ hôm nay 23/09, hiện tại 22/09, mới 24/09 → 2 đêm 22 và 23).
+- **Quy tắc ngày** (ngày khách sạn từ `Clock`): `newCheckOutDate > currentPlannedCheckOut` VÀ `newCheckOutDate >= hotelToday` (đã đổi ở mục 71). Được phép trước ngày trả phòng, đúng ngày trả phòng, và khi quá hạn; luôn dời ngày trả phòng về phía trước. Giai đoạn gia hạn luôn là `[previousCheckOutDate, newCheckOutDate)`,
+  nên đêm quá hạn KHÔNG biến mất khỏi tính tiền (hôm nay 23/09, hiện tại 22/09: mới 22/09 bị từ chối; 23/09 → 1 đêm; 24/09 → 2 đêm 22 và 23).
 - **Toàn bộ Stay**: mọi lineage của assignment đang mở đều tham gia cùng `[previous, new)`; không gia hạn từng phòng, không trả phòng một phần.
 - **Nhiều lần gia hạn**: chuỗi tuyến tính theo `sequence_no`; `previousCheckOutDate` của lần sau bằng `Reservation.checkOutDate` đọc dưới khóa. Ràng buộc DB `UNIQUE(stay_id, sequence_no)` và `UNIQUE(stay_id, previous_check_out_date)` chỉ là lớp chặn cuối.
 - **Giá**: luôn là `nightlyRate` của `ReservationRoom` gốc của lineage (kể cả sau A→B→C); không dùng `RoomType.basePrice`, giá phòng hiện tại hay giá động. `amount = nightlyRate × số đêm thêm` (BigDecimal); giá và thành tiền được lưu snapshot ở `StayExtensionRoom`.
@@ -4670,5 +4669,19 @@ Các khái niệm tài chính tách biệt; V1 chỉ thêm liên kết và kiể
 - **Quyền**: `MANAGE_PAYMENT` để xem/ghi nhận/hoàn thanh toán trước; Check-in (`CHECK_IN`) tự áp dụng các khoản đã ghi nhận, không cần `MANAGE_PAYMENT`. Reference chỉ là mã tham chiếu nhân viên nhìn thấy; KHÔNG lưu số thẻ, CVV hay thông tin đăng nhập ngân hàng.
 - **Giao diện/Excel**: Reservation Detail (CONFIRMED, `MANAGE_PAYMENT`) có mục Prepayments (tổng đã nhận/đang hiệu lực/đã hoàn, lịch sử, Record/Refund); Check-in Review hiển thị tóm tắt chỉ đọc; sau check-in các dòng xuất hiện trong Folio thông thường. Sheet Payments của Excel lấy dữ liệu theo `Payment → Reservation` nên có cả thanh toán trước check-in (không đổi bố cục).
 - **Hoãn**: Security Deposit, hoàn một phần, phí hủy/no-show, forfeiture, cổng thanh toán, card hold, số dư có/overpayment.
+
+## 71. Overdue Departure (P1, V1)
+
+- **Định nghĩa (dẫn xuất, không lưu)**: Reservation `CHECKED_IN` VÀ `Reservation.checkOutDate < hotelToday` (ngày khách sạn từ `Clock`). Không có trạng thái `OVERDUE`. `overdueDays = max(0, DAYS.between(checkOutDate, hotelToday))` (0 nếu trả phòng hôm nay hoặc sau; 1 nếu là hôm qua). Quy tắc nằm ở MỘT nơi (`OverdueDeparture`) và được Front Desk, Check-out Review và lệnh check-out dùng chung.
+- **Check-out**: một stay quá hạn KHÔNG thể check-out, kể cả khi Outstanding = 0 (ví dụ đã thanh toán trước đủ). Điều kiện check-out gồm `checkOutDate >= hotelToday` VÀ Outstanding = 0 (và các điều kiện hiện có). Được kiểm tra trong `ReservationService.checkOut` dưới khóa Stay (Stay khóa trước, Reservation đọc sau khóa),
+  nên REST/MVC/gọi service đều được bảo vệ như nhau. Từ chối là lỗi nghiệp vụ 409 ổn định ("Overdue stay must be extended before check-out", có bản dịch EN/VI trên MVC) và không thay đổi gì (Room vẫn OCCUPIED, assignment còn mở, không có `actualCheckOutAt`, Reservation vẫn CHECKED_IN).
+  `DepartureReadinessRules` vẫn chỉ là readiness tài chính (Outstanding = 0); điều kiện đủ check-out = readiness tài chính + không quá hạn. Không có "Checkout Anyway", miễn phí, bỏ qua hay ép check-out.
+- **Cách xử lý**: Stay Extension. Quy tắc ngày: `newCheckOutDate > currentCheckOutDate` VÀ `newCheckOutDate >= hotelToday`; stay quá hạn có thể gia hạn ĐÚNG đến hôm nay. Giai đoạn `[previousCheckOutDate, newCheckOutDate)` tính giá đêm gốc của `ReservationRoom` (22/09→23/09 = 1 đêm; 22/09→24/09 = 2 đêm).
+  Sau khi gia hạn đến hôm nay, `checkOutDate == hotelToday` nên hết quá hạn và có thể check-out sau khi thanh toán phần Charge mới. Check-out không ghi đè `Reservation.checkOutDate`; giờ trả phòng thực tế nằm ở `Stay.actualCheckOutAt`.
+- **Không có**: tự động gia hạn, tính tiền tự động, `ChargeType` mới, scheduler/night audit, miễn phí đêm quá hạn, phí trả phòng muộn theo giờ, giờ trả phòng cấu hình, phí phạt, thông báo tự động, tự chuyển phòng. Đêm quá hạn chỉ được tính tiền qua Stay Extension.
+- **Không đổi**: bảo vệ tồn kho của assignment đang mở (đêm hiện tại khi quá hạn), Room Change (từ chối khi hôm nay ≥ ngày trả phòng dự kiến; sau khi gia hạn quá hôm nay thì cho phép), trạng thái phòng (OCCUPIED cho đến khi check-out hợp lệ rồi DIRTY), ghi nhận doanh thu theo hợp đồng/gia hạn, Occupancy và Room Type Performance theo assignment thực tế
+  (occupancy có thể tạm đi trước doanh thu ghi nhận trong lúc chưa gia hạn; chênh lệch này được chấp nhận và bị chặn bởi việc bắt buộc gia hạn trước check-out).
+- **Giao diện**: Front Desk giữ thứ tự (quá hạn trước), badge "Overdue Departure" và thêm "Overdue N day(s)"; Check-out Review có mục quá hạn nổi bật (ngày dự kiến, hôm nay, số ngày, giải thích chặn check-out, nút Extend Stay khi có quyền Stay Extension hiện tại `MANAGE_BOOKING`, ngược lại thông báo nhờ quản lý/nhân viên có quyền) và không có nút xác nhận check-out.
+  Không thêm/cấp quyền mới (STAFF vẫn không có `MANAGE_BOOKING`).
 
 **End of Specification v1.0**

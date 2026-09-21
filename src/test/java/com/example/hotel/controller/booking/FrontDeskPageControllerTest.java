@@ -104,7 +104,8 @@ class FrontDeskPageControllerTest {
                 .andExpect(content().string(not(containsString("id=\"tab-arrivals\""))))
                 .andExpect(content().string(containsString("id=\"tab-departures\"")))
                 .andExpect(content().string(containsString("id=\"tab-in-house\"")))
-                .andExpect(content().string(containsString("Overdue Departure")));
+                .andExpect(content().string(containsString("Overdue Departure")))
+                .andExpect(content().string(containsString("Overdue 1 day")));
         verify(queryService, never()).arrivals();
     }
 
@@ -222,7 +223,7 @@ class FrontDeskPageControllerTest {
 
     private static FrontDeskStayRow stayRow(List<FrontDeskRoomResponse> rooms, boolean overdue, boolean owing, BigDecimal amount) {
         return new FrontDeskStayRow(RES, "R-9", "Nguyen Van B", "G-1", rooms, Instant.parse("2026-09-20T07:35:00Z"),
-                TODAY.minusDays(overdue ? 1 : 0), overdue, owing, overdue || owing, amount, "VND");
+                TODAY.minusDays(overdue ? 1 : 0), overdue, overdue ? 1 : 0, owing, overdue || owing, amount, "VND");
     }
 
     private static RequestPostProcessor perm(String... authorities) {

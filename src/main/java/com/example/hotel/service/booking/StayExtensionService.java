@@ -131,7 +131,8 @@ public class StayExtensionService {
             throw new StayExtensionException(Reason.NO_CURRENT_ROOM, "Stay has no current room");
         }
         LocalDate today = LocalDate.now(clock);
-        LocalDate base = reservation.getCheckOutDate().isAfter(today) ? reservation.getCheckOutDate() : today;
+        LocalDate next = reservation.getCheckOutDate().plusDays(1);
+        LocalDate earliest = next.isBefore(today) ? today : next;
         Guest guest = reservation.getGuest();
         List<StayExtensionFormResponse.Line> lines = open.stream()
                 .map(a -> new StayExtensionFormResponse.Line(
@@ -146,7 +147,7 @@ public class StayExtensionService {
                 guest.getGuestCode(),
                 reservation.getCurrency(),
                 reservation.getCheckOutDate(),
-                base.plusDays(1),
+                earliest,
                 lines,
                 includeOutstanding ? stayBalanceService.calculate(stay.getId()).outstanding() : null);
     }
@@ -230,11 +231,14 @@ public class StayExtensionService {
             throw new StayExtensionException(Reason.STALE_CHECK_OUT_DATE, "Planned check-out changed; reload and retry");
         }
         LocalDate today = LocalDate.now(clock);
-        LocalDate floor = previous.isAfter(today) ? previous : today;
         LocalDate newDate = request.newCheckOutDate();
-        if (newDate == null || !newDate.isAfter(floor)) {
+        // Approved rule: strictly later than the current planned check-out AND not before hotel today. An overdue stay
+        // may therefore extend exactly to today; the period is always [previous, new).
+        if (newDate == null || !newDate.isAfter(previous) || newDate.isBefore(today)) {
             throw new StayExtensionException(
-                    Reason.INVALID_NEW_CHECK_OUT_DATE, "New check-out must be after " + floor, floor.format(DATE_FORMAT));
+                    Reason.INVALID_NEW_CHECK_OUT_DATE,
+                    "New check-out must be after " + previous + " and not before " + today,
+                    previous.format(DATE_FORMAT), today.format(DATE_FORMAT));
         }
 
         // 4. Amounts are computed before anything is written; every line must be positive.

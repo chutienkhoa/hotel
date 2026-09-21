@@ -73,6 +73,8 @@
                         <td>
                             <span class="status-badge" th:classappend="${reservation.readiness == 'READY' ? ' status-badge--current' : ' status-badge--no_show'}"
                                   th:text="${reservation.readiness == 'READY' ? 'Ready' : 'Payment required'}">Ready</span>
+                            <span class="status-badge housekeeping-urgent" th:if="${reservation.overdueDays > 0}"
+                                  th:text="#{reservation.frontDesk.overdueDays(${reservation.overdueDays})}">Overdue 1 day</span>
                         </td>
                         <td>
                             <a class="button button-primary" th:href="@{/check-out/{id}(id=${reservation.id})}">Review</a>

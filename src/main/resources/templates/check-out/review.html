@@ -32,6 +32,26 @@
                 <p th:text="${'Current status: ' + review.status + '. Only CHECKED_IN reservations can be checked out.'}">Current status</p>
             </section>
 
+            <section class="check-in-review-blocked" id="overdue-departure" th:if="${review.status == 'CHECKED_IN' and review.overdueDays > 0}">
+                <h2 th:text="#{reservation.checkout.overdue.title}">Overdue Departure</h2>
+                <p th:text="#{reservation.checkout.overdue.blocked(${review.overdueDays})}">Check-out is blocked.</p>
+                <dl class="detail-list">
+                    <dt th:text="#{reservation.checkout.overdue.plannedCheckout}">Planned checkout</dt>
+                    <dd><span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span></dd>
+                    <dt th:text="#{reservation.checkout.overdue.today}">Today</dt>
+                    <dd><span th:replace="~{layout/datetime :: date(${review.hotelToday})}">—</span></dd>
+                    <dt th:text="#{reservation.checkout.overdue.days}">Overdue days</dt>
+                    <dd th:text="${review.overdueDays}">1</dd>
+                </dl>
+                <p th:text="#{reservation.checkout.overdue.explain}">Extend the stay.</p>
+                <p th:if="${canExtendStay}">
+                    <a class="button button-primary" id="overdue-extend-stay"
+                       th:href="@{/reservations/{id}/stay-extension(id=${review.reservationId})}"
+                       th:text="#{reservation.checkout.overdue.extend}">Extend Stay</a>
+                </p>
+                <p id="overdue-ask-manager" th:unless="${canExtendStay}" th:text="#{reservation.checkout.overdue.askManager}">Ask a manager.</p>
+            </section>
+
             <section class="check-in-review-blocked" th:if="${review.status == 'CHECKED_IN' and review.readiness != 'READY'}">
                 <h2>Payment required before check-out.</h2>
                 <p>Outstanding balance must be zero before this reservation can be checked out.</p>

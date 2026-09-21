@@ -328,14 +328,14 @@ class StayExtensionIntegrationTest {
         assertTrue(availability.hasInventoryConflict(b, today, today.plusDays(1)), "protected through the new date");
     }
 
-    /** Confirms an overdue request with new date not after today is rejected. */
+    /** Confirms an overdue request that does not move the planned check-out forward is rejected. */
     @Test
     void shouldRejectAnOverdueRequestThatDoesNotPassToday() {
         UUID a = room("XO-A", "OCCUPIED");
         UUID stay = seededCheckedIn(a, today.minusDays(3), today.minusDays(1));
 
         StayExtensionException exception = assertThrows(StayExtensionException.class, () -> extensionService.extend(
-                reservationOf(stay), new StayExtensionRequest(today.minusDays(1), today)));
+                reservationOf(stay), new StayExtensionRequest(today.minusDays(1), today.minusDays(1))));
 
         assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE, exception.getExtensionReason());
     }

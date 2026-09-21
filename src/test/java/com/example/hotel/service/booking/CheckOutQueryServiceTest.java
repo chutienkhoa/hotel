@@ -126,6 +126,30 @@ class CheckOutQueryServiceTest {
         assertEquals("GUEST-001", review.guestCode());
     }
 
+    /** Confirms an overdue Review is not eligible even with zero outstanding, and reports the overdue days. */
+    @Test
+    void shouldMarkAnOverdueReviewNotEligibleEvenWhenFinanciallyReady() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService stayRoomAssignmentQueryService = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
+        when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(List.of(currentRoom("305")));
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
+        // planned check-out is 19/09; hotel today is 21/09
+        CheckOutQueryService overdue = new CheckOutQueryService(
+                reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService,
+                java.time.Clock.fixed(java.time.Instant.parse("2026-09-21T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
+
+        CheckOutReviewResponse review = overdue.review(RESERVATION_ID);
+
+        assertEquals("READY", review.readiness(), "financial readiness is unchanged");
+        assertEquals(2, review.overdueDays());
+        assertEquals(java.time.LocalDate.of(2026, 9, 21), review.hotelToday());
+        org.junit.jupiter.api.Assertions.assertFalse(review.eligibleForCheckOut());
+    }
+
     /** Confirms Review is never eligible when Outstanding is non-zero, regardless of Reservation status. */
     @Test
     void shouldMarkReviewNotEligibleWhenPaymentRequired() {
@@ -302,7 +326,8 @@ class CheckOutQueryServiceTest {
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
             StayBalanceService stayBalanceService) {
         return new CheckOutQueryService(
-                reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService);
+                reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService,
+                java.time.Clock.fixed(java.time.Instant.parse("2026-09-19T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 
     private ReservationSummaryResponse summary() {

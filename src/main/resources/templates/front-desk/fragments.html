@@ -18,6 +18,7 @@
 <th:block th:fragment="plannedDeparture(row)">
     <span th:replace="~{layout/datetime :: date(${row.plannedCheckOutDate})}">—</span>
     <span class="status-badge housekeeping-urgent" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueDeparture}">Overdue Departure</span>
+    <span class="overdue-days" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueDays(${row.overdueDays})}">Overdue 1 day</span>
     <span class="status-badge" th:if="${!row.overdue and row.plannedCheckOutDate == hotelToday}" th:text="#{reservation.frontDesk.today}">Today</span>
 </th:block>
 

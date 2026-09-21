@@ -14,6 +14,7 @@ import java.util.UUID;
  * @param guestCode the associated guest's display code
  * @param currentRoomNumbers the Stay's current room numbers in a compact, comma-separated form
  * @param checkOutDate the reservation's planned check-out date
+ * @param overdueDays whole days the planned check-out is before the hotel date (0 when not overdue)
  * @param readiness {@code READY} or {@code PAYMENT_REQUIRED}, from the authoritative StayBalanceService
  */
 public record CheckOutListItemResponse(
@@ -23,4 +24,5 @@ public record CheckOutListItemResponse(
         String guestCode,
         String currentRoomNumbers,
         LocalDate checkOutDate,
-        String readiness) {}
+        String readiness,
+        long overdueDays) {}

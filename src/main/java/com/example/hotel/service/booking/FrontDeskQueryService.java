@@ -193,7 +193,8 @@ public class FrontDeskQueryService {
             boolean paymentRequired = withBalance
                     && DepartureReadinessRules.readiness(outstanding)
                             == DepartureReadinessRules.FinancialReadiness.PAYMENT_REQUIRED;
-            boolean overdue = reservation.getCheckOutDate().isBefore(today);
+            boolean overdue = OverdueDeparture.isOverdue(reservation.getCheckOutDate(), today);
+            long overdueDays = OverdueDeparture.overdueDays(reservation.getCheckOutDate(), today);
             Guest guest = reservation.getGuest();
             rows.add(new FrontDeskStayRow(
                     reservation.getId(),
@@ -204,6 +205,7 @@ public class FrontDeskQueryService {
                     stay.getActualCheckInAt(),
                     reservation.getCheckOutDate(),
                     overdue,
+                    overdueDays,
                     paymentRequired,
                     withBalance && (overdue || paymentRequired),
                     includeAmounts ? outstanding : null,
