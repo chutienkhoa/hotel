@@ -203,7 +203,8 @@ public class ReservationPageController {
                 reservation.notes(),
                 reservation.rooms().stream()
                         .map(room -> new RoomRequest(room.roomId(), room.nightlyRate()))
-                        .toList());
+                        .toList(),
+                reservation.accompanyingGuestIds());
         addReservationFormAttributes(
                 model,
                 form,
@@ -395,6 +396,9 @@ public class ReservationPageController {
                 : roomQueryService.findAllForReservationEditing(assignedRoomIds));
         model.addAttribute("bookingSources", BookingSource.values());
         model.addAttribute("selectedGuest", selectedGuest);
+        model.addAttribute(
+                "selectedAccompanyingGuests",
+                guestQueryService.findAllByIds(reservationForm.accompanyingGuestIdsOrEmpty()));
     }
 
     private List<UUID> roomIds(CreateRequest reservationForm) {
@@ -524,7 +528,7 @@ public class ReservationPageController {
      */
     private CreateRequest emptyReservationForm() {
         return new CreateRequest(null, null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
-                null, null, null, null, List.of(new RoomRequest(null, null)));
+                null, null, null, null, List.of(new RoomRequest(null, null)), List.of());
     }
 
     /**

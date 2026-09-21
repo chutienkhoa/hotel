@@ -201,7 +201,10 @@ class CheckInPageControllerTest {
                 new com.example.hotel.dto.booking.response.ArrivalReadiness(
                         eligible ? com.example.hotel.dto.booking.response.ArrivalReadinessState.READY
                                 : com.example.hotel.dto.booking.response.ArrivalReadinessState.NEEDS_ATTENTION,
-                        timing, List.of()));
+                        timing, List.of()),
+                1,
+                0,
+                List.of());
     }
 
     /** Builds the CHECK_IN authority. */

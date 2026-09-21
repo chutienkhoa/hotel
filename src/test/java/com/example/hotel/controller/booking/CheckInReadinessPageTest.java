@@ -152,7 +152,7 @@ class CheckInReadinessPageTest {
         return new CheckInReviewResponse(RESERVATION_ID, "R20260915-000001", "CONFIRMED", eligible,
                 readiness.timing(), LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 18),
                 Instant.parse("2026-09-18T10:00:00Z"), BookingSource.DIRECT, null, UUID.randomUUID(), "Nguyen Van A",
-                "GUEST-001", "Vietnam", false, List.of(), BigDecimal.TEN, "VND", readiness);
+                "GUEST-001", "Vietnam", false, List.of(), BigDecimal.TEN, "VND", readiness, 1, 0, List.of());
     }
 
     /** Enables method-security interception for this MVC slice. */

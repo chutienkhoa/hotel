@@ -38,6 +38,65 @@
         update();
     };
 
+
+    const initializeAccompanyingGuests = () => {
+        const container = document.querySelector("[data-accompanying-guests]");
+        if (!container) return;
+        const select = container.querySelector("[data-accompanying-select]");
+        const addButton = container.querySelector("[data-accompanying-add]");
+        const list = container.querySelector("[data-accompanying-list]");
+        const empty = container.querySelector("[data-accompanying-empty]");
+        const error = container.querySelector("[data-accompanying-error]");
+        const template = container.querySelector("[data-accompanying-template]");
+        const primarySelect = document.querySelector("[data-guest-select]");
+        const selectedIds = () => Array.from(list.querySelectorAll("li")).map((item) => item.dataset.guestId);
+        const showError = (message) => {
+            error.textContent = message || "";
+            error.hidden = !message;
+        };
+        const refreshEmpty = () => {
+            empty.hidden = list.children.length > 0;
+        };
+        const checkPrimary = () => {
+            const primaryId = primarySelect ? primarySelect.value : "";
+            showError(primaryId && selectedIds().includes(primaryId) ? container.dataset.messagePrimary : "");
+        };
+        addButton.addEventListener("click", () => {
+            const guestId = select.value;
+            if (!guestId) return;
+            if (primarySelect && primarySelect.value === guestId) {
+                showError(container.dataset.messagePrimary);
+                return;
+            }
+            if (selectedIds().includes(guestId)) {
+                showError(container.dataset.messageDuplicate);
+                return;
+            }
+            showError("");
+            const item = template.content.firstElementChild.cloneNode(true);
+            item.dataset.guestId = guestId;
+            item.querySelector("[data-accompanying-label]").textContent = select.options[select.selectedIndex].textContent;
+            const input = item.querySelector("input");
+            input.value = guestId;
+            input.disabled = false;
+            list.appendChild(item);
+            select.value = "";
+            refreshEmpty();
+        });
+        list.addEventListener("click", (event) => {
+            const remove = event.target.closest("[data-accompanying-remove]");
+            if (!remove) return;
+            remove.closest("li").remove();
+            refreshEmpty();
+            checkPrimary();
+        });
+        if (primarySelect) {
+            primarySelect.addEventListener("change", checkPrimary);
+        }
+        refreshEmpty();
+    };
+    initializeAccompanyingGuests();
+
     if (!roomRows || !template || !addRoomButton) {
         initializeGuestVerification();
         return;

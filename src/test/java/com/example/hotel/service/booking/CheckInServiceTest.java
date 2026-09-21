@@ -145,7 +145,7 @@ class CheckInServiceTest {
         Fixture fixture = fixture(Clock.systemDefaultZone());
         CreateRequest request = new CreateRequest(
                 UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), 1, 0, BookingSource.DIRECT, null, "VND", null,
-                List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
+                List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)), List.of());
 
         assertThrows(ResponseStatusException.class, () -> fixture.service.createOtaEntry(request));
     }
@@ -157,7 +157,7 @@ class CheckInServiceTest {
         UUID reservationId = UUID.randomUUID();
         CreateRequest request = new CreateRequest(
                 UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), 2, 1, BookingSource.AGODA, "AG-1", "VND", null,
-                List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)));
+                List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)), List.of());
         when(fixture.reservationService.create(request))
                 .thenReturn(new Response(reservationId, "R1", "DRAFT", BigDecimal.TEN, "VND"));
         when(fixture.reservationService.confirm(reservationId))
@@ -287,6 +287,33 @@ class CheckInServiceTest {
                 issue.code() == com.example.hotel.dto.booking.response.ArrivalIssueCode.ARRIVAL_OVERDUE));
     }
 
+    /**
+     * Confirms Accompanying Guests are read-only information on the review: they are loaded with ONE call (no query per
+     * Guest), and their presence or missing passports never changes readiness or eligibility.
+     */
+    @Test
+    void shouldExposeAccompanyingGuestsWithoutChangingReadinessOrEligibility() {
+        LocalDate today = LocalDate.of(2026, 9, 15);
+        Fixture fixture = fixture(Clock.fixed(today.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+        Reservation reservation = reservationWithRoom(today, true);
+        when(fixture.reservationRepository.findById(reservation.getId())).thenReturn(Optional.of(reservation));
+        when(fixture.guestDocumentService.hasPassport(any())).thenReturn(true);
+        CheckInReviewResponse without = fixture.service.review(reservation.getId());
+
+        when(fixture.reservationQueryService.findAccompanyingGuests(reservation.getId())).thenReturn(List.of(
+                new com.example.hotel.dto.booking.response.AccompanyingGuestResponse(UUID.randomUUID(), "G-2"),
+                new com.example.hotel.dto.booking.response.AccompanyingGuestResponse(UUID.randomUUID(), "G-3")));
+        CheckInReviewResponse with = fixture.service.review(reservation.getId());
+
+        assertEquals(2, with.accompanyingGuests().size());
+        assertEquals(without.readiness(), with.readiness());
+        assertEquals(without.eligibleForCheckIn(), with.eligibleForCheckIn());
+        assertEquals(1, with.adultCount());
+        assertEquals(0, with.childCount());
+        verify(fixture.guestDocumentService, org.mockito.Mockito.times(2)).hasPassport(any());
+        verify(fixture.reservationQueryService, org.mockito.Mockito.times(2)).findAccompanyingGuests(reservation.getId());
+    }
+
     /** Builds a Check-in Review for a Reservation with the supplied scheduled/current dates. */
     private CheckInReviewResponse review(LocalDate scheduledCheckIn, LocalDate today) {
         Fixture fixture = fixture(Clock.fixed(today.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
@@ -349,6 +376,7 @@ class CheckInServiceTest {
 
         return new Fixture(
                 service,
+                reservationQueryService,
                 reservationRepository,
                 reservationService,
                 roomRepository,
@@ -360,6 +388,7 @@ class CheckInServiceTest {
     /** Bundles a wired CheckInService with its mocked collaborators. */
     private record Fixture(
             CheckInService service,
+            ReservationQueryService reservationQueryService,
             ReservationRepository reservationRepository,
             ReservationService reservationService,
             RoomRepository roomRepository,

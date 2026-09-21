@@ -2043,3 +2043,22 @@ span.flatpickr-weekday {
   display: block;
   font-size: 0.8125rem;
 }
+
+.accompanying-guests__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.accompanying-guests__list {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+.accompanying-guests__list li {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}

@@ -49,32 +49,28 @@ public class GuestQueryService {
     }
 
     /**
-     * Retrieves the eligible Guest data required by the Reservation form.
+     * Retrieves every reusable Guest profile for the Reservation Primary and Accompanying Guest selectors, ordered by
+     * guest code. No Guest is excluded because of a historical (for example CHECKED_OUT) or other Reservation.
      *
      * @return the guest lookup entries
      */
     @Transactional(readOnly = true)
     public List<GuestLookupResponse> findAllForReservationCreation() {
-        return guestRepository.findAllWithoutReservationStatus(ReservationStatus.CHECKED_OUT).stream()
+        return guestRepository.findAllByOrderByGuestCodeAsc().stream()
                 .map(guestMapper::toLookupResponse)
                 .toList();
     }
 
     /**
-     * Retrieves Guest choices for editing a Reservation while retaining its current Guest.
+     * Retrieves the Guest choices for editing a Reservation. Every Guest is selectable, so the current Guest is always
+     * included; the parameter is kept for call-site compatibility.
      *
      * @param currentGuestId Guest currently assigned to the Reservation
-     * @return eligible Guests plus the current Guest when otherwise excluded
+     * @return every Guest ordered by guest code
      */
     @Transactional(readOnly = true)
     public List<GuestLookupResponse> findAllForReservationEditing(UUID currentGuestId) {
-        var guests = new ArrayList<>(guestRepository.findAllWithoutReservationStatus(ReservationStatus.CHECKED_OUT));
-        boolean containsCurrentGuest = guests.stream().anyMatch(guest -> guest.getId().equals(currentGuestId));
-        if (!containsCurrentGuest && currentGuestId != null) {
-            guestRepository.findById(currentGuestId).ifPresent(guests::add);
-        }
-        return guests.stream()
-                .sorted(Comparator.comparing(Guest::getGuestCode))
+        return guestRepository.findAllByOrderByGuestCodeAsc().stream()
                 .map(guestMapper::toLookupResponse)
                 .toList();
     }
@@ -235,5 +231,22 @@ public class GuestQueryService {
                 .map(value -> criteriaBuilder.equal(lowerNationality, value.toLowerCase(Locale.ROOT)))
                 .toList();
         predicates.add(criteriaBuilder.or(acceptableValueMatches.toArray(new Predicate[0])));
+    }
+
+    /**
+     * Loads the lookup entries of several Guests in one query, ordered by guest code. Unknown identifiers are ignored.
+     *
+     * @param guestIds Guest identifiers, possibly {@code null} or empty
+     * @return the matching lookup entries
+     */
+    @Transactional(readOnly = true)
+    public List<GuestLookupResponse> findAllByIds(java.util.Collection<UUID> guestIds) {
+        if (guestIds == null || guestIds.isEmpty()) {
+            return List.of();
+        }
+        return guestRepository.findAllById(guestIds.stream().filter(java.util.Objects::nonNull).toList()).stream()
+                .sorted(Comparator.comparing(Guest::getGuestCode))
+                .map(guestMapper::toLookupResponse)
+                .toList();
     }
 }

@@ -440,7 +440,8 @@ class ReservationAccessAuthorizationTest {
                         LocalDate.of(2026, 9, 20),
                         LocalDate.of(2026, 9, 22),
                         new BigDecimal("1200000"),
-                        new BigDecimal("2400000")))));
+                        new BigDecimal("2400000"))),
+                List.of()));
         when(guestQueryService.findAllForReservationEditing(guestId)).thenReturn(List.of(new GuestLookupResponse(
                 guestId, "G000125", "Nguyen Van A", "guest@example.com", "0901234567", "Vietnam")));
         when(roomQueryService.findAllForReservationEditing(List.of(roomId))).thenReturn(List.of(
@@ -941,7 +942,7 @@ class ReservationAccessAuthorizationTest {
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("class=\"reservation-info-grid\"")))
-                .andExpect(content().string(containsString(">Guest<")))
+                .andExpect(content().string(containsString(">Primary Guest<")))
                 .andExpect(content().string(containsString(">Source<")))
                 .andExpect(content().string(containsString(">Check-in<")))
                 .andExpect(content().string(containsString(">Check-out<")))

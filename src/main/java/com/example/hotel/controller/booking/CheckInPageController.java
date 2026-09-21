@@ -320,7 +320,7 @@ public class CheckInPageController {
      */
     private CreateRequest emptyOtaEntryForm() {
         return new CreateRequest(null, null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
-                null, null, null, null, List.of(new RoomRequest(null, null)));
+                null, null, null, null, List.of(new RoomRequest(null, null)), List.of());
     }
 
     /**

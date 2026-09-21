@@ -110,7 +110,7 @@ class ReservationGuestCompositionServiceTest {
         when(reservations.findById(draft.getId())).thenReturn(Optional.of(draft));
 
         service.updateDraft(draft.getId(), new CreateRequest(guest.getId(), IN, OUT, 3, 1, BookingSource.BOOKING_COM,
-                "BK-1", "VND", "keep", List.of(new RoomRequest(doubleRoom.getId(), BigDecimal.TEN))));
+                "BK-1", "VND", "keep", List.of(new RoomRequest(doubleRoom.getId(), BigDecimal.TEN)), List.of()));
 
         assertEquals(3, draft.getAdultCount());
         assertEquals(1, draft.getChildCount());
@@ -149,6 +149,6 @@ class ReservationGuestCompositionServiceTest {
 
     private CreateRequest request(Integer adults, Integer children) {
         return new CreateRequest(guest.getId(), IN, OUT, adults, children, BookingSource.DIRECT, null, "VND", null,
-                List.of(new RoomRequest(doubleRoom.getId(), BigDecimal.TEN)));
+                List.of(new RoomRequest(doubleRoom.getId(), BigDecimal.TEN)), List.of());
     }
 }

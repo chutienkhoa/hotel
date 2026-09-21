@@ -125,6 +125,7 @@ public class ReservationService {
                         request.notes());
         reservation.audit(user.id());
         createRoomSnapshots(reservation, request, draftData, user).forEach(reservation::addRoom);
+        reservation.replaceAccompanyingGuests(draftData.accompanyingGuests(), user.id());
         reservation.calculateTotal();
         reservations.save(reservation);
         audit(user, "CREATE", reservation, null, "DRAFT");
@@ -158,7 +159,9 @@ public class ReservationService {
                     request.otaBookingReference(),
                     draftData.currency().getCurrencyCode(),
                     request.notes(),
-                    updatedRooms);
+                    updatedRooms,
+                    draftData.accompanyingGuests(),
+                    user.id());
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
         }
@@ -196,7 +199,37 @@ public class ReservationService {
         if (roomsById.size() != roomIds.size()) {
             throw notFound("Room");
         }
-        return new ReservationDraftData(guest, currency, roomsById);
+        return new ReservationDraftData(guest, currency, roomsById, resolveAccompanyingGuests(guest, request));
+    }
+
+    /**
+     * Resolves the requested Accompanying Guests: every identifier must exist, none may repeat, and the Primary Guest
+     * may not be among them. Guest profiles are only associated, never created here; the number of accompanying
+     * Guests is independent of the adult and child counts.
+     */
+    private List<Guest> resolveAccompanyingGuests(Guest primary, CreateRequest request) {
+        List<UUID> ids = request.accompanyingGuestIdsOrEmpty();
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> unique = new HashSet<>();
+        for (UUID accompanyingId : ids) {
+            if (accompanyingId == null) {
+                throw bad("An accompanying guest identifier is required");
+            }
+            if (!unique.add(accompanyingId)) {
+                throw bad("A guest may be selected as an accompanying guest only once");
+            }
+            if (accompanyingId.equals(primary.getId())) {
+                throw bad("The primary guest cannot also be an accompanying guest");
+            }
+        }
+        Map<UUID, Guest> found = guests.findAllById(unique).stream()
+                .collect(Collectors.toMap(Guest::getId, guest -> guest));
+        if (found.size() != unique.size()) {
+            throw notFound("Guest");
+        }
+        return ids.stream().map(found::get).toList();
     }
 
     /** Builds the complete replacement set of immutable room-price snapshots. */
@@ -564,5 +597,6 @@ public class ReservationService {
     }
 
     /** Resolved request data shared by Reservation create and draft-update operations. */
-    private record ReservationDraftData(Guest guest, Currency currency, Map<UUID, Room> roomsById) {}
+    private record ReservationDraftData(
+            Guest guest, Currency currency, Map<UUID, Room> roomsById, List<Guest> accompanyingGuests) {}
 }

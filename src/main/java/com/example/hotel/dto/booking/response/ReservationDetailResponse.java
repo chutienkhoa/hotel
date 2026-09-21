@@ -24,6 +24,7 @@ import java.util.UUID;
  * @param currency the three-letter currency code
  * @param notes the optional reservation notes
  * @param rooms the assigned-room snapshots
+ * @param accompanyingGuests the Accompanying Guests (known Guest profiles; not the full physical party)
  */
 public record ReservationDetailResponse(
         UUID id,
@@ -40,10 +41,12 @@ public record ReservationDetailResponse(
         BigDecimal totalAmount,
         String currency,
         String notes,
-        List<ReservationRoomResponse> rooms) {
+        List<ReservationRoomResponse> rooms,
+        List<AccompanyingGuestResponse> accompanyingGuests) {
 
     /**
-     * Creates a detail response with the fixture-default guest composition (1 adult, 0 children). Production
+     * Creates a detail response with the fixture-default guest composition (1 adult, 0 children) and no
+     * Accompanying Guests. Production
      * mapping always uses the canonical constructor with the stored counts.
      *
      * @param id the reservation identifier
@@ -75,6 +78,6 @@ public record ReservationDetailResponse(
             String notes,
             List<ReservationRoomResponse> rooms) {
         this(id, reservationNumber, guestId, guestCode, status, source, otaBookingReference, checkInDate,
-                checkOutDate, 1, 0, totalAmount, currency, notes, rooms);
+                checkOutDate, 1, 0, totalAmount, currency, notes, rooms, List.of());
     }
 }

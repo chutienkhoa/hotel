@@ -1,6 +1,7 @@
 package com.example.hotel.service.booking;
 
 import com.example.hotel.common.TableSorts;
+import com.example.hotel.dto.booking.response.AccompanyingGuestResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
@@ -10,6 +11,7 @@ import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.mapper.booking.ReservationMapper;
+import com.example.hotel.repository.booking.ReservationGuestRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
@@ -41,17 +43,22 @@ public class ReservationQueryService {
 
     private final ReservationRepository reservationRepository;
     private final ReservationMapper reservationMapper;
+    private final ReservationGuestRepository reservationGuestRepository;
 
     /**
      * Creates the query service with the dependencies required to load and map reservations.
      *
      * @param reservationRepository repository used to load reservations
      * @param reservationMapper mapper used to create response DTOs
+     * @param reservationGuestRepository repository used to load Accompanying Guests in one query
      */
     public ReservationQueryService(
-            ReservationRepository reservationRepository, ReservationMapper reservationMapper) {
+            ReservationRepository reservationRepository,
+            ReservationMapper reservationMapper,
+            ReservationGuestRepository reservationGuestRepository) {
         this.reservationRepository = reservationRepository;
         this.reservationMapper = reservationMapper;
+        this.reservationGuestRepository = reservationGuestRepository;
     }
 
     /**
@@ -188,7 +195,7 @@ public class ReservationQueryService {
         Reservation reservation = reservationRepository
                 .findById(reservationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
-        return reservationMapper.toDetailResponse(reservation);
+        return reservationMapper.toDetailResponse(reservation, findAccompanyingGuests(reservationId));
     }
 
     /** Retrieves one Reservation in the representation required by the draft edit form. */
@@ -197,6 +204,22 @@ public class ReservationQueryService {
         Reservation reservation = reservationRepository
                 .findById(reservationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
-        return reservationMapper.toEditResponse(reservation);
+        return reservationMapper.toEditResponse(
+                reservation,
+                findAccompanyingGuests(reservationId).stream().map(AccompanyingGuestResponse::guestId).toList());
+    }
+
+    /**
+     * Loads the Accompanying Guests of one Reservation with a single query (the Guest profiles are fetched with the
+     * associations, so there is never one query per Guest).
+     *
+     * @param reservationId Reservation identifier
+     * @return the Accompanying Guests ordered by guest code
+     */
+    @Transactional(readOnly = true)
+    public List<AccompanyingGuestResponse> findAccompanyingGuests(UUID reservationId) {
+        return reservationGuestRepository.findByReservationIdWithGuest(reservationId).stream()
+                .map(reservationMapper::toAccompanyingGuestResponse)
+                .toList();
     }
 }

@@ -4503,4 +4503,28 @@ Reservation có thêm `adultCount` và `childCount` (cột `adult_count`, `child
 - **Sức chứa (capacity)**: KHÔNG được kiểm tra trong Task A. Quy tắc dự kiến ở task sau (`adultCount <= SUM(RoomType.capacity)`, trẻ em không chiếm sức chứa người lớn) chưa được triển khai; DRAFT (và
   confirm/check-in) có thể có số người lớn vượt sức chứa phòng, `RoomType.capacity` không được sửa hay dùng. **Accompanying Guests → Task B; kiểm tra capacity → Task C** (chưa triển khai).
 
+## 66.1 Accompanying Guests (P1 Task B)
+
+Ngoài Guest chính (bắt buộc, vẫn nằm ở `reservation.guest_id`), Reservation có thể có **0..N Accompanying Guests**: chính các Guest profile tái sử dụng hiện có,
+được liên kết qua bảng `reservation_guest` (migration V31: `id`, `reservation_id` FK, `guest_id` FK, cột audit, `UNIQUE (reservation_id, guest_id)`).
+
+- **Bản chất**: Accompanying Guest là Guest profile đã có, không tạo thực thể "person" thứ hai và không sao chép dữ liệu Guest vào quan hệ. Một Guest có thể là Guest chính
+  của Reservation này và là Accompanying Guest của Reservation khác, và có thể quay lại ở các lần đặt sau.
+- **Hồ sơ đã biết ≠ quy mô đoàn**: số Guest profile đã biết KHÔNG cần bằng `partySize = adultCount + childCount` và không được suy ra `adultCount`/`childCount`
+  (ví dụ 3 người lớn + 1 trẻ em với chỉ Guest chính và 1 Accompanying Guest là hợp lệ).
+- **Bất biến**: Guest chính không được đồng thời là Accompanying Guest; một Guest chỉ xuất hiện một lần trong Accompanying Guests của một Reservation. Ràng buộc "khác Guest chính"
+  được thực thi ở domain/application (`Reservation`, `ReservationService`), KHÔNG bằng trigger; unique và khóa ngoại được thực thi ở database.
+- **Không gán theo phòng, không thuộc Stay**: Accompanying Guests không gắn với `ReservationRoom`, không được sao chép vào Stay/`StayRoomAssignment`, và Room Change không thay đổi chúng.
+  Stay đọc qua `Stay → Reservation`. Không snapshot Guest.
+- **Tạo/sửa DRAFT**: `CreateRequest.accompanyingGuestIds` (tùy chọn, có thể rỗng). Service từ chối id không tồn tại, id trùng, và Guest chính nằm trong danh sách; không tạo Guest tự động. Khi sửa DRAFT,
+  cả tập được thay thế cùng thao tác (giữ các dòng liên kết còn lại), nên đổi Guest chính sang một Guest đang ở trong danh sách mới bị từ chối rõ ràng, không tự xóa dữ liệu. Reservation `CONFIRMED` trở đi không sửa được
+  qua Draft edit; thao tác "Update Guest Composition" cho Reservation đã confirm chưa được triển khai.
+- **Hiển thị (chỉ đọc)**: Reservation Detail và Check-in Review hiển thị Adults, Children, Total Guests, Guest chính và Accompanying Guests (kèm trạng thái rỗng "No accompanying guests"). Theo quy ước hiện có,
+  Guest được nhận diện bằng Guest Code (liên kết tới hồ sơ chỉ khi có `MANAGE_GUEST`); người dùng chỉ có `VIEW_BOOKING`/`CHECK_IN` không nhận thêm dữ liệu hồ sơ Guest. Không hiển thị bản ghi giả cho người chưa định danh.
+  Check-in Review không đổi eligibility, Arrival Readiness hay blocker; không yêu cầu mọi người có Guest profile.
+- **Passport**: ngữ nghĩa V1 không đổi — cảnh báo passport vẫn dựa trên Guest chính; Accompanying Guests không thêm blocker, cảnh báo hay yêu cầu ảnh passport; `GuestDocument` hiện có không bị di chuyển hay diễn giải lại.
+- **Quyền**: dùng quyền hiện có. Liên kết Guest hiện có với Reservation thuộc `MANAGE_BOOKING` (không cần `MANAGE_GUEST`); tạo/sửa Guest vẫn `MANAGE_GUEST`; Check-in Review `CHECK_IN`; Reservation Detail `VIEW_BOOKING`.
+- **Truy vấn**: Accompanying Guests được nạp bằng MỘT truy vấn (fetch join Guest) cho Detail, form sửa và Check-in Review — không truy vấn theo từng Guest.
+- **Chưa thay đổi**: kiểm tra capacity (Task C, chưa triển khai), Front Desk (vẫn chỉ Guest chính), Dashboard/báo cáo/PDF/Excel, audit (vẫn là entry mức thao tác CREATE/UPDATE, không audit theo trường).
+
 **End of Specification v1.0**

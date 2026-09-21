@@ -162,7 +162,10 @@ public class CheckInService {
                 reservation.getRooms().stream().map(this::toRoomLine).toList(),
                 reservation.getTotalAmount(),
                 reservation.getCurrency(),
-                readiness);
+                readiness,
+                reservation.getAdultCount(),
+                reservation.getChildCount(),
+                reservationQueryService.findAccompanyingGuests(reservation.getId()));
     }
 
     /**
@@ -278,7 +281,8 @@ public class CheckInService {
                 null,
                 request.currency(),
                 request.notes(),
-                request.rooms());
+                request.rooms(),
+                List.of());
         Response created = reservationService.create(createRequest);
         reservationService.confirm(created.id());
         return reservationService.checkIn(created.id());

@@ -31,4 +31,15 @@ public record CreateRequest(
         @Size(max = 255) String otaBookingReference,
         @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
         @Size(max = 5000) String notes,
-        @NotEmpty List<@Valid RoomRequest> rooms) {}
+        @NotEmpty List<@Valid RoomRequest> rooms,
+        List<UUID> accompanyingGuestIds) {
+
+    /**
+     * Returns the requested Accompanying Guest identifiers, never {@code null}.
+     *
+     * @return the identifiers, empty when none were supplied
+     */
+    public List<UUID> accompanyingGuestIdsOrEmpty() {
+        return accompanyingGuestIds == null ? List.of() : accompanyingGuestIds;
+    }
+}

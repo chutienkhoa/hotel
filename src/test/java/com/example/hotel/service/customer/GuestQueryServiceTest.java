@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.response.GuestListResponse;
-import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.mapper.customer.GuestMapper;
 import com.example.hotel.repository.customer.GuestRepository;
@@ -34,20 +33,23 @@ import org.springframework.data.jpa.domain.Specification;
 /** Verifies database-backed Guest list pagination and nationality presentation configuration. */
 class GuestQueryServiceTest {
 
-    /** Confirms Reservation creation omits Guests with a completed Reservation. */
+    /** Confirms Reservation Guest selection loads every reusable Guest profile with no reservation-status exclusion. */
     @Test
-    void shouldLoadOnlyGuestsWithoutCheckedOutReservationsForReservationCreation() {
+    void shouldLoadEveryGuestForReservationSelection() {
         GuestRepository repository = mock(GuestRepository.class);
         GuestMapper mapper = mock(GuestMapper.class);
-        Guest eligibleGuest = mock(Guest.class);
-        when(repository.findAllWithoutReservationStatus(ReservationStatus.CHECKED_OUT))
-                .thenReturn(List.of(eligibleGuest));
+        Guest neverBooked = mock(Guest.class);
+        Guest returning = mock(Guest.class);
+        when(repository.findAllByOrderByGuestCodeAsc()).thenReturn(List.of(neverBooked, returning));
+        GuestQueryService service = new GuestQueryService(repository, mapper);
 
-        new GuestQueryService(repository, mapper).findAllForReservationCreation();
+        service.findAllForReservationCreation();
+        service.findAllForReservationEditing(UUID.randomUUID());
 
-        verify(repository).findAllWithoutReservationStatus(ReservationStatus.CHECKED_OUT);
+        verify(repository, org.mockito.Mockito.times(2)).findAllByOrderByGuestCodeAsc();
+        verify(mapper, org.mockito.Mockito.times(2)).toLookupResponse(neverBooked);
+        verify(mapper, org.mockito.Mockito.times(2)).toLookupResponse(returning);
         verify(repository, never()).findAll();
-        verify(mapper).toLookupResponse(eligibleGuest);
     }
 
     /** Confirms Guest list queries use the approved fixed size and guest-code ordering. */

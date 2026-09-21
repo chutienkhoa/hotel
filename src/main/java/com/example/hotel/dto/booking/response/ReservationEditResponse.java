@@ -18,4 +18,5 @@ public record ReservationEditResponse(
         String otaBookingReference,
         String currency,
         String notes,
-        List<ReservationRoomResponse> rooms) {}
+        List<ReservationRoomResponse> rooms,
+        List<UUID> accompanyingGuestIds) {}

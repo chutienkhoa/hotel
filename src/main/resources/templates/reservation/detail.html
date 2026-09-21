@@ -56,7 +56,7 @@
                             <svg th:replace="~{layout/icons :: user}"></svg>
                         </span>
                         <div class="reservation-info-content">
-                            <p class="reservation-info-label">Guest</p>
+                            <p class="reservation-info-label" th:text="#{reservation.guests.primary}">Primary Guest</p>
                             <a class="reservation-info-value reservation-info-link"
                                th:href="@{/guests/{id}(id=${reservation.guestId})}" th:if="${canManageGuest}">
                                 <span th:text="${reservation.guestCode}">GUEST-001</span>
@@ -116,6 +116,25 @@
                             <p class="reservation-info-value" id="reservation-children" th:text="|#{reservation.guests.children}: ${reservation.childCount}|">Children: 0</p>
                             <p class="reservation-info-secondary" id="reservation-total-guests"
                                th:text="|#{reservation.guests.total}: ${reservation.adultCount + reservation.childCount}|">Total Guests: 1</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item" id="accompanying-guests-item">
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.guests.accompanying}">Accompanying Guests</p>
+                            <ul class="accompanying-guests__list" id="accompanying-guests" th:unless="${#lists.isEmpty(reservation.accompanyingGuests)}">
+                                <li th:each="companion : ${reservation.accompanyingGuests}">
+                                    <a th:href="@{/guests/{id}(id=${companion.guestId})}" th:if="${canManageGuest}"
+                                       th:text="${companion.guestCode}">G-2</a>
+                                    <span th:unless="${canManageGuest}" th:text="${companion.guestCode}">G-2</span>
+                                </li>
+                            </ul>
+                            <p class="reservation-info-value" id="accompanying-empty" th:if="${#lists.isEmpty(reservation.accompanyingGuests)}"
+                               th:text="#{reservation.guests.noAccompanying}">No accompanying guests</p>
+                            <p class="reservation-info-secondary" th:text="#{reservation.guests.profilesNote}">Known guest profiles; the full party may be larger.</p>
                         </div>
                     </div>
 

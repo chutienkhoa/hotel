@@ -1,5 +1,7 @@
 package com.example.hotel.mapper.booking;
 
+import com.example.hotel.entity.booking.ReservationGuest;
+import com.example.hotel.dto.booking.response.AccompanyingGuestResponse;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
@@ -8,6 +10,8 @@ import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.customer.Guest;
+import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
@@ -62,7 +66,8 @@ public class ReservationMapper {
      * @param reservation the reservation entity to convert
      * @return the reservation detail representation
      */
-    public ReservationDetailResponse toDetailResponse(Reservation reservation) {
+    public ReservationDetailResponse toDetailResponse(
+            Reservation reservation, List<AccompanyingGuestResponse> accompanyingGuests) {
         return new ReservationDetailResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
@@ -78,11 +83,23 @@ public class ReservationMapper {
                 reservation.getTotalAmount(),
                 reservation.getCurrency(),
                 reservation.getNotes(),
-                reservation.getRooms().stream().map(this::toRoomResponse).toList());
+                reservation.getRooms().stream().map(this::toRoomResponse).toList(),
+                accompanyingGuests);
+    }
+
+    /**
+     * Maps an Accompanying Guest association to its response (identity only; no Guest data is copied).
+     *
+     * @param link the association whose Guest is initialized
+     * @return the response
+     */
+    public AccompanyingGuestResponse toAccompanyingGuestResponse(ReservationGuest link) {
+        Guest accompanying = link.getGuest();
+        return new AccompanyingGuestResponse(accompanying.getId(), accompanying.getGuestCode());
     }
 
     /** Maps a draft Reservation into the complete editable MVC representation. */
-    public ReservationEditResponse toEditResponse(Reservation reservation) {
+    public ReservationEditResponse toEditResponse(Reservation reservation, List<UUID> accompanyingGuestIds) {
         return new ReservationEditResponse(
                 reservation.getId(),
                 reservation.getStatus().name(),
@@ -95,7 +112,8 @@ public class ReservationMapper {
                 reservation.getOtaBookingReference(),
                 reservation.getCurrency(),
                 reservation.getNotes(),
-                reservation.getRooms().stream().map(this::toRoomResponse).toList());
+                reservation.getRooms().stream().map(this::toRoomResponse).toList(),
+                accompanyingGuestIds);
     }
 
     /**

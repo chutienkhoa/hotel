@@ -70,6 +70,7 @@ class RequiresOtaBookingReferenceValidatorTest {
                 otaBookingReference,
                 "VND",
                 null,
-                List.of(new RoomRequest(UUID.randomUUID(), new BigDecimal("100"))));
+                List.of(new RoomRequest(UUID.randomUUID(), new BigDecimal("100"))),
+                List.of());
     }
 }

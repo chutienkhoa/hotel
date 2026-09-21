@@ -50,6 +50,37 @@
                         </details>
                         <a class="inline-link" th:href="@{/guests/new}">+ Create New Guest</a>
                     </div>
+
+                    <div class="form-field accompanying-guests" data-accompanying-guests
+                         th:attr="data-message-duplicate=#{reservation.guests.alreadySelected},data-message-primary=#{reservation.guests.primaryNotAllowed}">
+                        <label for="accompanyingGuestSelect" th:text="#{reservation.guests.accompanying}">Accompanying Guests</label>
+                        <p class="form-hint" th:text="#{reservation.guests.accompanyingHint}">Optional. Known guest profiles only; they do not need to match the number of adults and children.</p>
+                        <div class="accompanying-guests__add">
+                            <select id="accompanyingGuestSelect" data-accompanying-select>
+                                <option value="" th:text="#{reservation.guests.selectToAdd}">Select a guest to add</option>
+                                <option th:each="guest : ${guests}"
+                                        th:text="${guest.guestCode + ' · ' + guest.fullName}"
+                                        th:value="${guest.id}">G000001 · Guest name</option>
+                            </select>
+                            <button class="button button-secondary" data-accompanying-add th:text="#{reservation.guests.add}" type="button">Add Guest</button>
+                        </div>
+                        <p class="field-error" data-accompanying-error hidden></p>
+                        <ul class="accompanying-guests__list" data-accompanying-list>
+                            <li th:each="selected : ${selectedAccompanyingGuests}" th:attr="data-guest-id=${selected.id}">
+                                <span th:text="${selected.guestCode + ' · ' + selected.fullName}">G000002 · Guest name</span>
+                                <input name="accompanyingGuestIds" th:value="${selected.id}" type="hidden" />
+                                <button class="button button-danger" data-accompanying-remove th:text="#{reservation.guests.remove}" type="button">Remove</button>
+                            </li>
+                        </ul>
+                        <p class="form-hint" data-accompanying-empty th:hidden="${!#lists.isEmpty(selectedAccompanyingGuests)}" th:text="#{reservation.guests.noAccompanying}">No accompanying guests</p>
+                        <template data-accompanying-template>
+                            <li>
+                                <span data-accompanying-label></span>
+                                <input disabled name="accompanyingGuestIds" type="hidden" />
+                                <button class="button button-danger" data-accompanying-remove th:text="#{reservation.guests.remove}" type="button">Remove</button>
+                            </li>
+                        </template>
+                    </div>
                 </section>
 
                 <section aria-labelledby="reservation-details-section-title" class="reservation-form-section">

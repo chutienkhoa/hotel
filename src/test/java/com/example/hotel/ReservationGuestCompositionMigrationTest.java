@@ -68,6 +68,32 @@ class ReservationGuestCompositionMigrationTest {
         assertThrows(DataIntegrityViolationException.class, () -> insertReservation(jdbc, user, guest, "1", "NULL"));
     }
 
+    /** Confirms V31 leaves pre-existing Reservations valid with zero accompanying guests and enforces its constraints. */
+    @Test
+    void shouldCreateReservationGuestTableWithConstraintsAndKeepExistingReservationsValid() {
+        DataSource dataSource = dataSource();
+        resetSchema(dataSource);
+        migrate(dataSource, "30");
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        UUID user = insertUser(jdbc);
+        UUID guest = insertGuest(jdbc, user);
+        UUID other = insertGuest(jdbc, user);
+        UUID legacy = insertLegacyReservation(jdbc, user, guest);
+
+        migrate(dataSource, null);
+
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM reservation_guest WHERE reservation_id = ?", Integer.class, legacy));
+        insertAccompanying(jdbc, user, legacy, other);
+        assertThrows(DataIntegrityViolationException.class, () -> insertAccompanying(jdbc, user, legacy, other));
+        assertThrows(DataIntegrityViolationException.class, () -> insertAccompanying(jdbc, user, UUID.randomUUID(), other));
+        assertThrows(DataIntegrityViolationException.class, () -> insertAccompanying(jdbc, user, legacy, UUID.randomUUID()));
+    }
+
+    private void insertAccompanying(JdbcTemplate jdbc, UUID user, UUID reservation, UUID guest) {
+        jdbc.update("INSERT INTO reservation_guest (id, reservation_id, guest_id, created_at, created_by, updated_at, updated_by) "
+                + "VALUES (?, ?, ?, now(), ?, now(), ?)", UUID.randomUUID(), reservation, guest, user, user);
+    }
+
     private void insertReservation(JdbcTemplate jdbc, UUID user, UUID guest, String adults, String children) {
         UUID id = UUID.randomUUID();
         jdbc.update("INSERT INTO reservation (id, reservation_number, guest_id, source, status, reserved_at, "

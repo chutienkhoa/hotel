@@ -110,7 +110,7 @@ class ReservationGuestCompositionPersistenceIntegrationTest {
 
     private CreateRequest request(LocalDate in, int adults, int children) {
         return new CreateRequest(guest, in, in.plusDays(2), adults, children, BookingSource.DIRECT, null, "VND", null,
-                List.of(new RoomRequest(room, new BigDecimal("1000000"))));
+                List.of(new RoomRequest(room, new BigDecimal("1000000"))), List.of());
     }
 
     private Map<String, Object> row(UUID id) {

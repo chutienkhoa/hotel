@@ -121,7 +121,8 @@ class ReservationGuestCompositionPageTest {
                 RESERVATION_ID, "DRAFT", GUEST_ID, LocalDate.of(2026, 9, 20), LocalDate.of(2026, 9, 22), 3, 1,
                 BookingSource.DIRECT, null, "VND", null,
                 List.of(new ReservationRoomResponse(ROOM_ID, "101", LocalDate.of(2026, 9, 20),
-                        LocalDate.of(2026, 9, 22), BigDecimal.TEN, BigDecimal.TEN))));
+                        LocalDate.of(2026, 9, 22), BigDecimal.TEN, BigDecimal.TEN)),
+                List.of()));
 
         mockMvc.perform(get("/reservations/{id}/edit", RESERVATION_ID).with(manager()))
                 .andExpect(status().isOk())
@@ -232,7 +233,8 @@ class ReservationGuestCompositionPageTest {
                 BookingSource.DIRECT, null, LocalDate.of(2026, 9, 16), LocalDate.of(2026, 9, 18), adults, children,
                 BigDecimal.TEN, "VND", null,
                 List.of(new ReservationRoomResponse(ROOM_ID, "201", LocalDate.of(2026, 9, 16),
-                        LocalDate.of(2026, 9, 18), BigDecimal.TEN, BigDecimal.TEN)));
+                        LocalDate.of(2026, 9, 18), BigDecimal.TEN, BigDecimal.TEN)),
+                List.of());
     }
 
     private static RequestPostProcessor manager() {

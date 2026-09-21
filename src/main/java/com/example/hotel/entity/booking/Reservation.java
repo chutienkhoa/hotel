@@ -20,6 +20,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -78,6 +81,9 @@ public class Reservation extends AuditedEntity {
 
     @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReservationRoom> rooms = new ArrayList<>();
+
+    @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ReservationGuest> accompanyingGuests = new ArrayList<>();
 
     /** Safe V1 default adult count for fixtures and backfilled historical rows. */
     public static final int DEFAULT_ADULT_COUNT = 1;
@@ -301,11 +307,49 @@ public class Reservation extends AuditedEntity {
             String currency,
             String notes,
             List<ReservationRoom> updatedRooms) {
+        updateDraft(guest, checkInDate, checkOutDate, adultCount, childCount, source, otaBookingReference, currency,
+                notes, updatedRooms, currentAccompanyingGuests(), null);
+    }
+
+    /**
+     * Updates a draft Reservation including its Accompanying Guests as one aggregate operation, so a changed Primary
+     * Guest can never be left in the accompanying set.
+     *
+     * @param guest replacement Primary Guest
+     * @param checkInDate replacement planned check-in date
+     * @param checkOutDate replacement planned check-out date
+     * @param adultCount replacement number of adults, at least 1
+     * @param childCount replacement number of children, at least 0
+     * @param source replacement booking source
+     * @param otaBookingReference replacement external OTA booking reference; discarded for DIRECT
+     * @param currency replacement currency code
+     * @param notes replacement optional notes
+     * @param updatedRooms complete submitted room snapshots
+     * @param accompanyingGuests the complete replacement set of Accompanying Guests (may be empty)
+     * @param auditUserId user recorded on newly added associations (only needed when a Guest is added)
+     * @throws IllegalStateException if the Reservation is not a DRAFT
+     * @throws IllegalArgumentException if the counts are invalid, the Primary Guest is among the Accompanying Guests,
+     *     or a Guest appears twice
+     */
+    public void updateDraft(
+            Guest guest,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            int adultCount,
+            int childCount,
+            BookingSource source,
+            String otaBookingReference,
+            String currency,
+            String notes,
+            List<ReservationRoom> updatedRooms,
+            List<Guest> accompanyingGuests,
+            UUID auditUserId) {
         if (status != ReservationStatus.DRAFT) {
             throw new IllegalStateException("Only draft reservations can be edited");
         }
         applyGuestComposition(adultCount, childCount);
         this.guest = guest;
+        applyAccompanyingGuests(accompanyingGuests, auditUserId);
         this.checkInDate = checkInDate;
         this.checkOutDate = checkOutDate;
         this.source = source;
@@ -314,6 +358,67 @@ public class Reservation extends AuditedEntity {
         this.notes = notes;
         reconcileDraftRooms(updatedRooms);
         calculateTotal();
+    }
+
+    /**
+     * Replaces the complete set of Accompanying Guests of a DRAFT Reservation. Accompanying Guests are optional
+     * reusable Guest profiles; their number is independent of the adult and child counts, and they are not assigned to
+     * rooms or Stays.
+     *
+     * @param guests the complete replacement set (may be empty)
+     * @param auditUserId user recorded on newly added associations
+     * @throws IllegalStateException if the Reservation is not a DRAFT
+     * @throws IllegalArgumentException if the Primary Guest is among them or a Guest appears twice
+     */
+    public void replaceAccompanyingGuests(List<Guest> guests, UUID auditUserId) {
+        if (status != ReservationStatus.DRAFT) {
+            throw new IllegalStateException("Only draft reservations can be edited");
+        }
+        applyAccompanyingGuests(guests, auditUserId);
+    }
+
+    /**
+     * Returns the Accompanying Guest profiles (not the Primary Guest).
+     *
+     * @return an unmodifiable list of Accompanying Guests
+     */
+    public List<Guest> getAccompanyingGuests() {
+        return currentAccompanyingGuests();
+    }
+
+    private List<Guest> currentAccompanyingGuests() {
+        return accompanyingGuests.stream().map(ReservationGuest::getGuest).toList();
+    }
+
+    /**
+     * Enforces the Accompanying Guest invariants and reconciles the associations by Guest identity, keeping existing
+     * rows for retained Guests (so a replaced set never deletes and re-inserts the same pair).
+     */
+    private void applyAccompanyingGuests(List<Guest> requested, UUID auditUserId) {
+        List<Guest> wanted = requested == null ? List.of() : requested;
+        Map<UUID, Guest> wantedById = new LinkedHashMap<>();
+        for (Guest candidate : wanted) {
+            if (guest != null && candidate.getId().equals(guest.getId())) {
+                throw new IllegalArgumentException("The primary guest cannot also be an accompanying guest");
+            }
+            if (wantedById.put(candidate.getId(), candidate) != null) {
+                throw new IllegalArgumentException("A guest may be an accompanying guest only once");
+            }
+        }
+        accompanyingGuests.removeIf(link -> !wantedById.containsKey(link.getGuest().getId()));
+        Set<UUID> retained = new HashSet<>();
+        for (ReservationGuest link : accompanyingGuests) {
+            retained.add(link.getGuest().getId());
+        }
+        for (Guest candidate : wantedById.values()) {
+            if (!retained.contains(candidate.getId())) {
+                ReservationGuest link = new ReservationGuest(this, candidate);
+                if (auditUserId != null) {
+                    link.audit(auditUserId);
+                }
+                accompanyingGuests.add(link);
+            }
+        }
     }
 
     /**

@@ -71,6 +71,34 @@
                 </ul>
             </section>
 
+            <section aria-labelledby="check-in-guests-heading" class="card reservation-detail-section" id="guest-composition">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="check-in-guests-heading" th:text="#{reservation.guests.title}">Guests</h2>
+                        <p th:text="#{reservation.guests.profilesNote}">Known guest profiles; the full party may be larger.</p>
+                    </div>
+                </div>
+                <dl class="detail-list">
+                    <dt th:text="#{reservation.guests.primary}">Primary Guest</dt>
+                    <dd id="review-primary-guest" th:text="${review.guestCode}">G-1</dd>
+                    <dt th:text="#{reservation.guests.adults}">Adults</dt>
+                    <dd id="review-adults" th:text="${review.adultCount}">1</dd>
+                    <dt th:text="#{reservation.guests.children}">Children</dt>
+                    <dd id="review-children" th:text="${review.childCount}">0</dd>
+                    <dt th:text="#{reservation.guests.total}">Total Guests</dt>
+                    <dd id="review-total-guests" th:text="${review.adultCount + review.childCount}">1</dd>
+                    <dt th:text="#{reservation.guests.accompanying}">Accompanying Guests</dt>
+                    <dd>
+                        <ul class="accompanying-guests__list" id="review-accompanying" th:unless="${#lists.isEmpty(review.accompanyingGuests)}">
+                            <li th:each="companion : ${review.accompanyingGuests}"
+                                th:text="${companion.guestCode}">G-2</li>
+                        </ul>
+                        <span id="review-accompanying-empty" th:if="${#lists.isEmpty(review.accompanyingGuests)}"
+                              th:text="#{reservation.guests.noAccompanying}">No accompanying guests</span>
+                    </dd>
+                </dl>
+            </section>
+
             <section aria-labelledby="check-in-info-heading" class="card reservation-detail-section">
                 <div class="reservation-detail-section-header">
                     <div>

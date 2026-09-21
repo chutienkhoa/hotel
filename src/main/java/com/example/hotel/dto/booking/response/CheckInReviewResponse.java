@@ -32,6 +32,9 @@ import java.util.UUID;
  * @param totalAmount the reservation's snapshot total amount
  * @param currency the three-letter currency code
  * @param readiness the derived, non-persisted Arrival Readiness (blockers, warnings and info)
+ * @param adultCount the number of adults (read-only information)
+ * @param childCount the number of children (read-only information)
+ * @param accompanyingGuests the Accompanying Guests (known profiles; read-only information, never a readiness input)
  */
 public record CheckInReviewResponse(
         UUID reservationId,
@@ -53,5 +56,8 @@ public record CheckInReviewResponse(
         List<CheckInRoomLine> rooms,
         BigDecimal totalAmount,
         String currency,
-        ArrivalReadiness readiness) {
+        ArrivalReadiness readiness,
+        int adultCount,
+        int childCount,
+        List<AccompanyingGuestResponse> accompanyingGuests) {
 }
