@@ -56,6 +56,16 @@ class DemoDataSeederRoomChargeIntegrationTest {
         assertTrue(mismatches.isEmpty(), "Seeded ROOM Charge amount must equal ReservationRoom.totalAmount: "
                 + mismatches);
 
+        List<Map<String, Object>> unlinked = jdbcTemplate.queryForList(
+                "SELECT rr.id FROM stay s JOIN reservation_room rr ON rr.reservation_id = s.reservation_id "
+                        + "LEFT JOIN charge c ON c.source_reservation_room_id = rr.id AND c.stay_id = s.id AND c.type = 'ROOM' "
+                        + "WHERE s.status IN ('CHECKED_IN', 'CHECKED_OUT') AND c.id IS NULL");
+        assertTrue(unlinked.isEmpty(), "Every seeded original ROOM Charge must link to its ReservationRoom: " + unlinked);
+        assertEquals(roomChargeCount, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM charge WHERE type = 'ROOM' AND source_reservation_room_id IS NOT NULL", Integer.class));
+        assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM charge WHERE type <> 'ROOM' AND source_reservation_room_id IS NOT NULL", Integer.class));
+
         List<Map<String, Object>> descriptions = jdbcTemplate.queryForList(
                 "SELECT description FROM charge WHERE type = 'ROOM'");
         for (Map<String, Object> row : descriptions) {

@@ -533,7 +533,8 @@ public class DemoDataSeeder {
      * Seeds the automatic ROOM Charge that {@code ReservationService.checkIn()} would have created for
      * this ReservationRoom, since seeded CHECKED_IN/CHECKED_OUT Stays are inserted directly and bypass
      * that production check-in flow. The amount is copied from the same nightly-rate/nights snapshot
-     * used to seed the ReservationRoom, not independently recalculated.
+     * used to seed the ReservationRoom, not independently recalculated. The charge is linked to its source
+     * ReservationRoom, exactly like the production check-in path.
      */
     private void insertRoomCharge(
             JdbcTemplate jdbcTemplate, UUID stayId, UUID reservationRoomId, String roomNumber,
@@ -543,11 +544,11 @@ public class DemoDataSeeder {
         Instant chargedAt = checkInDate.atTime(14, 0).atZone(BUSINESS_ZONE).toInstant();
         jdbcTemplate.update(
                 "INSERT INTO charge (id, stay_id, type, description, quantity, unit_price, amount, "
-                        + "charged_at, created_at, created_by, updated_at, updated_by) "
-                        + "VALUES (?, ?, 'ROOM', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "charged_at, created_at, created_by, updated_at, updated_by, source_reservation_room_id) "
+                        + "VALUES (?, ?, 'ROOM', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 deterministicId(PREFIX + "CHARGE-ROOM-" + reservationRoomId), stayId, "Room " + roomNumber,
                 BigDecimal.valueOf(nights), rate, totalAmount, timestamp(chargedAt),
-                createdAt, auditUserId, updatedAt, auditUserId);
+                createdAt, auditUserId, updatedAt, auditUserId, reservationRoomId);
     }
 
     private void setOperationalRoomMix(
