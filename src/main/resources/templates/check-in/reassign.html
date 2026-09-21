@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{checkin.reassign.title})}"></head>
+<body>
+<div class="app-shell page-check-in">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/check-in/reservations/{id}(id=${form.reservationId})}" th:text="#{checkin.reassign.back}">Back to check-in review</a>
+
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{checkin.reassign.title}">Reassign Room</h1>
+                <p th:text="#{checkin.reassign.description}">Replace one assigned room before check-in.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list" id="reassign-context">
+            <dt th:text="#{checkin.reassign.reservation}">Reservation</dt>
+            <dd th:text="${form.reservationNumber}">R20260916-000001</dd>
+            <dt th:text="#{checkin.reassign.currentRoom}">Current Room</dt>
+            <dd th:text="${form.currentRoomTypeName != null} ? ${form.currentRoomNumber + ' (' + form.currentRoomTypeName + ')'} : ${form.currentRoomNumber}">101</dd>
+            <dt th:text="#{checkin.reassign.nightlyRate}">Booked nightly rate</dt>
+            <dd><span th:replace="~{layout/money :: amount(${form.nightlyRate}, ${form.currency})}">0 VND</span></dd>
+        </dl>
+        <p class="form-hint" th:text="#{checkin.reassign.rateUnchanged}">The booked rate and dates do not change.</p>
+
+        <form class="form-card" method="post"
+              th:action="@{/check-in/reservations/{id}/rooms/{roomId}/reassign(id=${form.reservationId},roomId=${form.currentRoomId})}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <div class="form-field">
+                <label for="targetRoomId" th:text="#{checkin.reassign.replacementRoom}">Replacement Room</label>
+                <select id="targetRoomId" name="targetRoomId" required th:disabled="${#lists.isEmpty(form.candidates)}">
+                    <option value="" th:text="#{checkin.reassign.select}">Select a room</option>
+                    <option th:each="room : ${form.candidates}" th:value="${room.id}"
+                            th:text="${room.roomTypeName != null} ? ${room.roomNumber + ' (' + room.roomTypeName + ')'} : ${room.roomNumber}">203</option>
+                </select>
+                <p class="form-hint" id="no-candidates" th:if="${#lists.isEmpty(form.candidates)}" th:text="#{checkin.reassign.noCandidates}">No eligible replacement rooms.</p>
+                <p class="form-hint" th:unless="${#lists.isEmpty(form.candidates)}" th:text="#{checkin.reassign.availableHint}">Only rooms that are ready and free for the booked dates are listed.</p>
+            </div>
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/check-in/reservations/{id}(id=${form.reservationId})}" th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:disabled="${#lists.isEmpty(form.candidates)}" th:text="#{checkin.reassign.confirm}" type="submit">Confirm Reassignment</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

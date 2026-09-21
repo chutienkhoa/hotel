@@ -4405,4 +4405,36 @@ không phải trạng thái persisted.
   `CHECK_IN`; không cấp thêm quyền nào. Nút Confirm Check-in chỉ hiển thị khi không có BLOCKER (chỉ để tiện dùng; backend
   vẫn xác thực). Chưa có hành động phục hồi (đổi phòng trước check-in, v.v.) và chưa có Front Desk workspace.
 
+## 64. Pre-check-in Room Reassignment (V1 Recovery)
+
+Khi một Reservation `CONFIRMED` không thể check-in vì phòng được gán không dùng được (các blocker `ROOM_*` của mục 63),
+staff có thể thay phòng của MỘT dòng phòng thay vì hủy và tạo lại Reservation. Đây là thao tác đặt phòng, KHÔNG phải Stay
+Room Change (mục 8.3): chưa có khách nào ở phòng cũ.
+
+- **Điều kiện**: Reservation ở `CONFIRMED` và chưa có Stay. `DRAFT`, `CANCELLED`, `NO_SHOW`, `CHECKED_IN`, `CHECKED_OUT` bị từ chối,
+  kể cả khi đã có Stay.
+- **Chỉ đổi phòng**: chỉ `reservation_room.room_id` của dòng được chọn thay đổi. Reservation ID, số reservation, guest,
+  source, OTA reference, ngày, trạng thái, ghi chú, giá mỗi đêm, tổng tiền và các dòng phòng khác giữ nguyên. Với
+  Reservation nhiều phòng, mỗi lần chỉ thay một dòng.
+- **Không tự động tính lại giá**: nightly rate/total là snapshot lúc đặt và được giữ nguyên, kể cả khi phòng thay thế thuộc
+  RoomType khác (cùng nguyên tắc với Stay Room Change: giá đi theo booking, không theo phòng). V1 không có rate engine.
+- **Phòng cũ**: trạng thái không đổi (`OUT_OF_ORDER` vẫn `OUT_OF_ORDER`, `DIRTY` vẫn `DIRTY`, ...). Không phát sinh `DIRTY`,
+  không dùng `StayRoomAssignment`, không dùng `CHANGE_ROOM`.
+- **Phòng thay thế hợp lệ**: `active` + `AVAILABLE` (check-in-ready ngay), không có Reservation `CONFIRMED`/`CHECKED_IN` chồng
+  lấn trong khoảng `[check_in, check_out)` của dòng (nửa mở: check-out trùng ngày check-in không xung đột), chưa nằm trong
+  Reservation này và khác phòng hiện tại. Danh sách gợi ý và bước xác thực dùng cùng một điều kiện
+  (`RoomAvailabilityService.isCheckInReadyForPeriod`), nên không tái hiện lỗi danh sách ứng viên của Stay Room Change.
+- **Transaction/đồng thời**: một transaction; khóa hai phòng (cũ, mới) theo thứ tự id rồi khóa dòng Reservation
+  (`PESSIMISTIC_WRITE`) — cùng thứ tự phòng-rồi-reservation với check-in. Dưới khóa, xác thực lại: còn `CONFIRMED`, chưa có
+  Stay, dòng vẫn giữ đúng phòng cũ (chống UI cũ), phòng mới còn hợp lệ và không xung đột. Hai lần thay đồng thời cùng một
+  dòng chỉ một lần thành công; hai Reservation tranh cùng một phòng thay thế không thể cùng thắng. Lỗi thì không thay đổi gì.
+- **Quyền**: `CHECK_IN` (quyền của luồng check-in mà thao tác phục hồi; hẹp hơn `MANAGE_BOOKING` vốn gồm tạo/hủy/no-show).
+  Không cần và không cấp `MANAGE_ROOM`, `MANAGE_HOUSEKEEPING`. POST + CSRF.
+- **Lịch sử/audit**: ghi `AuditLog` với `action = REASSIGN_ROOM`, `entity_type = RESERVATION`, `old_value = "Room <số cũ>"`,
+  `new_value = "Room <số mới>"`, người thực hiện và thời điểm; `updated_by` của Reservation và dòng phòng được cập nhật. Không
+  dùng `CHANGE_ROOM`. Không có bảng lịch sử gán phòng trước check-in riêng.
+- **Giao diện**: trên Check-in Review, mỗi blocker của một phòng có nút "Reassign Room" (`/check-in/reservations/{id}/rooms/{roomId}/reassign`);
+  chọn phòng thay thế, xác nhận, quay lại Review nơi Arrival Readiness được TÍNH LẠI (không lưu). Housekeeping và Front Desk
+  chưa được liên kết/triển khai.
+
 **End of Specification v1.0**

@@ -31,12 +31,13 @@ class ArrivalReadinessRulesTest {
     /** Confirms an active AVAILABLE room and no other blocker is READY, with an INFO ready line for the room. */
     @Test
     void shouldBeReadyForActiveAvailableRoom() {
-        ArrivalReadiness readiness = evaluate(TODAY, false, true, room("101", RoomStatus.AVAILABLE, true));
+        Room room = room("101", RoomStatus.AVAILABLE, true);
+        ArrivalReadiness readiness = evaluate(TODAY, false, true, room);
 
         assertEquals(ArrivalReadinessState.READY, readiness.state());
         assertTrue(readiness.blockers().isEmpty());
         assertEquals(List.of(new ArrivalReadinessIssue(
-                ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, "101")), readiness.issues());
+                ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, "101", room.getId())), readiness.issues());
     }
 
     /** Confirms every non-AVAILABLE room status maps to its specific blocker. */
@@ -46,11 +47,13 @@ class ArrivalReadinessRulesTest {
         "MAINTENANCE,ROOM_MAINTENANCE", "OUT_OF_ORDER,ROOM_OUT_OF_ORDER"
     })
     void shouldMapRoomStatusToBlocker(RoomStatus status, ArrivalIssueCode expected) {
-        ArrivalReadiness readiness = evaluate(TODAY, false, true, room("102", status, true));
+        Room room = room("102", status, true);
+        ArrivalReadiness readiness = evaluate(TODAY, false, true, room);
 
         assertEquals(ArrivalReadinessState.NEEDS_ATTENTION, readiness.state());
-        assertEquals(List.of(new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, expected, "102")),
+        assertEquals(List.of(new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, expected, "102", room.getId())),
                 readiness.blockers());
+        assertTrue(readiness.blockers().get(0).roomBlocker());
     }
 
     /** Confirms an inactive room blocks, even if its status is AVAILABLE or DIRTY. */
@@ -67,14 +70,15 @@ class ArrivalReadinessRulesTest {
     /** Confirms one bad room in a multi-room reservation blocks overall and names the affected room only. */
     @Test
     void shouldIdentifyTheAffectedRoomInMultiRoomReservation() {
-        ArrivalReadiness readiness = evaluate(TODAY, false, true,
-                room("101", RoomStatus.AVAILABLE, true), room("102", RoomStatus.DIRTY, true));
+        Room ok = room("101", RoomStatus.AVAILABLE, true);
+        Room dirty = room("102", RoomStatus.DIRTY, true);
+        ArrivalReadiness readiness = evaluate(TODAY, false, true, ok, dirty);
 
         assertEquals(ArrivalReadinessState.NEEDS_ATTENTION, readiness.state());
         assertEquals(List.of(new ArrivalReadinessIssue(
-                ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.ROOM_DIRTY, "102")), readiness.blockers());
+                ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.ROOM_DIRTY, "102", dirty.getId())), readiness.blockers());
         assertTrue(readiness.issues().contains(new ArrivalReadinessIssue(
-                ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, "101")));
+                ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, "101", ok.getId())));
     }
 
     /** Confirms all rooms ready gives overall READY. */

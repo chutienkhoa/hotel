@@ -2,6 +2,7 @@ package com.example.hotel.entity.booking;
 
 import com.example.hotel.entity.common.AuditedEntity;
 import com.example.hotel.entity.customer.Guest;
+import com.example.hotel.entity.room.Room;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -391,6 +392,42 @@ public class Reservation extends AuditedEntity {
     /** Chuyển reservation từ nháp sang đã xác nhận. */
     public void confirm() {
         transition(ReservationStatus.DRAFT, ReservationStatus.CONFIRMED);
+    }
+
+    /**
+     * Replaces the Room of one assigned line before check-in. Only a CONFIRMED Reservation may be reassigned; the
+     * identity, guest, source, OTA reference, dates, price snapshots and every other line stay unchanged.
+     *
+     * @param currentRoomId the Room of the line being replaced
+     * @param replacement the replacement Room
+     * @return the Room that was replaced (its status is not touched)
+     * @throws IllegalStateException if the Reservation is not CONFIRMED, the line does not exist, or the
+     *     replacement is already assigned to this Reservation
+     */
+    public Room reassignRoom(UUID currentRoomId, Room replacement) {
+        if (status != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("Only a CONFIRMED reservation can be reassigned");
+        }
+        ReservationRoom line = findRoomLine(currentRoomId);
+        if (line == null) {
+            throw new IllegalStateException("Assigned room not found on reservation");
+        }
+        if (findRoomLine(replacement.getId()) != null) {
+            throw new IllegalStateException("Room is already assigned to this reservation");
+        }
+        Room previous = line.getRoom();
+        line.replaceRoom(replacement);
+        return previous;
+    }
+
+    /**
+     * Finds the assigned line for a Room.
+     *
+     * @param roomId Room identifier
+     * @return the line, or {@code null}
+     */
+    public ReservationRoom findRoomLine(UUID roomId) {
+        return rooms.stream().filter(line -> line.getRoom().getId().equals(roomId)).findFirst().orElse(null);
     }
 
     /** Hủy reservation đã xác nhận. */

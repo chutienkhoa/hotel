@@ -42,6 +42,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({CheckInReadinessPageTest.MethodSecurityTestConfiguration.class, I18nConfig.class})
 class CheckInReadinessPageTest {
 
+    private static final UUID DIRTY_ROOM = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final UUID RESERVATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     @Autowired
@@ -91,6 +92,23 @@ class CheckInReadinessPageTest {
                 .andExpect(content().string(containsString("Chưa có ảnh hộ chiếu")));
     }
 
+    /** Confirms a room blocker offers Reassign Room (English and Vietnamese); a READY review offers none. */
+    @Test
+    void shouldOfferReassignRoomForRoomBlockersOnly() throws Exception {
+        when(checkInService.review(RESERVATION_ID)).thenReturn(review());
+        String link = "/check-in/reservations/" + RESERVATION_ID + "/rooms/" + DIRTY_ROOM + "/reassign";
+
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(checkIn()))
+                .andExpect(content().string(containsString(link)))
+                .andExpect(content().string(containsString("Reassign Room")));
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(checkIn())
+                        .cookie(new Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("Đổi phòng")));
+        when(checkInService.review(RESERVATION_ID)).thenReturn(readyReview());
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(checkIn()))
+                .andExpect(content().string(not(containsString("/reassign"))));
+    }
+
     /** Confirms a READY review offers the confirm action. */
     @Test
     void shouldOfferConfirmWhenReady() throws Exception {
@@ -119,7 +137,7 @@ class CheckInReadinessPageTest {
 
     private static CheckInReviewResponse review() {
         return build(false, new ArrivalReadiness(ArrivalReadinessState.NEEDS_ATTENTION, CheckInTiming.LATE, List.of(
-                new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.ROOM_DIRTY, "102"),
+                new ArrivalReadinessIssue(ArrivalIssueSeverity.BLOCKER, ArrivalIssueCode.ROOM_DIRTY, "102", DIRTY_ROOM),
                 new ArrivalReadinessIssue(ArrivalIssueSeverity.WARNING, ArrivalIssueCode.ARRIVAL_OVERDUE, null),
                 new ArrivalReadinessIssue(ArrivalIssueSeverity.WARNING, ArrivalIssueCode.PASSPORT_MISSING, null),
                 new ArrivalReadinessIssue(ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, "101"))));

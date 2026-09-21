@@ -117,10 +117,10 @@ public final class ArrivalReadinessRules {
                 Optional<ArrivalIssueCode> blocker = roomBlocker(room);
                 if (blocker.isPresent()) {
                     blockers.add(new ArrivalReadinessIssue(
-                            ArrivalIssueSeverity.BLOCKER, blocker.get(), room.getRoomNumber()));
+                            ArrivalIssueSeverity.BLOCKER, blocker.get(), room.getRoomNumber(), room.getId()));
                 } else {
                     info.add(new ArrivalReadinessIssue(
-                            ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, room.getRoomNumber()));
+                            ArrivalIssueSeverity.INFO, ArrivalIssueCode.ROOM_READY, room.getRoomNumber(), room.getId()));
                 }
             }
             if (timing == CheckInTiming.LATE) {

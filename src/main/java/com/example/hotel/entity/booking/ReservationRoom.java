@@ -115,6 +115,16 @@ public class ReservationRoom extends AuditedEntity {
     }
 
     /**
+     * Replaces only the assigned Room. Dates, nightly rate and total are the immutable booking snapshot and are
+     * deliberately left untouched (no repricing).
+     *
+     * @param replacement the newly assigned Room
+     */
+    void replaceRoom(Room replacement) {
+        room = replacement;
+    }
+
+    /**
      * Refreshes the date and price snapshot while its owning Reservation remains a draft.
      *
      * @param checkInDate replacement check-in snapshot

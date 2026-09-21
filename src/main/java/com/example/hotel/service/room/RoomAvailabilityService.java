@@ -67,6 +67,21 @@ public class RoomAvailabilityService {
         return roomsForPeriod(checkInDate, checkOutDate, Room::isReadyForCheckIn);
     }
 
+    /**
+     * Tells whether one Room can be checked in IMMEDIATELY for {@code [checkInDate, checkOutDate)}: it is active
+     * AVAILABLE and has no overlapping CONFIRMED or CHECK_IN Reservation. This is the single predicate behind
+     * {@link #checkInReadyRoomsForPeriod} and pre-check-in Room reassignment.
+     *
+     * @param room the Room to test
+     * @param checkInDate inclusive check-in date
+     * @param checkOutDate exclusive check-out date
+     * @return {@code true} when the Room is check-in-ready and conflict-free for the period
+     */
+    public boolean isCheckInReadyForPeriod(Room room, LocalDate checkInDate, LocalDate checkOutDate) {
+        return room.isReadyForCheckIn()
+                && !reservationRepository.hasOverlap(room.getId(), checkInDate, checkOutDate, BLOCKING_STATUSES);
+    }
+
     private List<RoomLookupResponse> roomsForPeriod(LocalDate checkInDate, LocalDate checkOutDate, Predicate<Room> eligible) {
         return roomRepository.findByActiveTrue().stream()
                 .filter(eligible)
