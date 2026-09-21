@@ -36,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class RoomAvailabilityService {
 
+    /** Sentinel meaning "exclude no Stay" (a real Stay identifier is never all zeros). */
+    private static final UUID NO_STAY = new UUID(0L, 0L);
+
     private final RoomRepository roomRepository;
     private final Clock clock;
 
@@ -113,6 +116,21 @@ public class RoomAvailabilityService {
      * @return the identifiers of the Rooms that are already allocated for any part of {@code [in, out)}
      */
     public Set<UUID> conflictedRoomIds(Collection<UUID> roomIds, LocalDate in, LocalDate out) {
+        return conflictedRoomIds(roomIds, in, out, NO_STAY);
+    }
+
+    /**
+     * The shared primitive with one Stay's own allocation ignored. Only Stay Extension passes a Stay: the extending
+     * Stay's open assignment would otherwise conflict with itself (it protects at least the current night). Confirm,
+     * Room Change and the lookups never exclude anything.
+     *
+     * @param roomIds Rooms to test
+     * @param in inclusive first requested hotel night
+     * @param out exclusive end of the requested interval
+     * @param excludedStayId the Stay whose own allocation is ignored
+     * @return the identifiers of the Rooms allocated to anything else for any part of {@code [in, out)}
+     */
+    public Set<UUID> conflictedRoomIds(Collection<UUID> roomIds, LocalDate in, LocalDate out, UUID excludedStayId) {
         if (roomIds.isEmpty()) {
             return Set.of();
         }
@@ -126,7 +144,8 @@ public class RoomAvailabilityService {
                 in.plusDays(1).atStartOfDay(zone).toInstant(),
                 !today.isBefore(in),
                 ReservationStatus.CONFIRMED,
-                StayStatus.CHECKED_IN));
+                StayStatus.CHECKED_IN,
+                excludedStayId));
     }
 
     private List<RoomLookupResponse> roomsForPeriod(LocalDate checkInDate, LocalDate checkOutDate, Predicate<Room> eligible) {

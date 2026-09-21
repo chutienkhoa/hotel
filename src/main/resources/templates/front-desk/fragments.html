@@ -64,6 +64,8 @@
                        th:if="${row.housekeepingRelated and canManageHousekeeping}" th:text="#{reservation.frontDesk.action.housekeeping}">Housekeeping</a>
                     <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
                        th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
+                    <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
+                       th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
                 </td>
             </tr>
             </tbody>

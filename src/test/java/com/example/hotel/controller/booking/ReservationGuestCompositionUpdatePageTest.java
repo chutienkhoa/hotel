@@ -89,6 +89,9 @@ class ReservationGuestCompositionUpdatePageTest {
     private StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the detail action appears only for a CONFIRMED reservation and a booking manager. */

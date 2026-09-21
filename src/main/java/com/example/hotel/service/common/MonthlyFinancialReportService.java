@@ -8,6 +8,8 @@ import com.example.hotel.entity.common.ExpenseStatus;
 import com.example.hotel.exception.ReportDataIntegrityException;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.ReservationRoomRevenueRow;
+import com.example.hotel.repository.booking.StayExtensionRevenueRow;
+import com.example.hotel.repository.booking.StayExtensionRoomRepository;
 import com.example.hotel.repository.common.AdditionalRevenueRepository;
 import com.example.hotel.repository.common.ExpenseRepository;
 import java.math.BigDecimal;
@@ -40,6 +42,7 @@ public class MonthlyFinancialReportService {
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final ReservationRepository reservationRepository;
+    private final StayExtensionRoomRepository stayExtensionRoomRepository;
     private final AdditionalRevenueRepository additionalRevenueRepository;
     private final ExpenseRepository expenseRepository;
 
@@ -47,14 +50,17 @@ public class MonthlyFinancialReportService {
      * Creates the service.
      *
      * @param reservationRepository source of ReservationRoom pricing snapshots
+     * @param stayExtensionRoomRepository source of Stay Extension pricing snapshots (additive Room Revenue)
      * @param additionalRevenueRepository source of recognized Additional Revenue
      * @param expenseRepository source of recognized Expense
      */
     public MonthlyFinancialReportService(
             ReservationRepository reservationRepository,
+            StayExtensionRoomRepository stayExtensionRoomRepository,
             AdditionalRevenueRepository additionalRevenueRepository,
             ExpenseRepository expenseRepository) {
         this.reservationRepository = reservationRepository;
+        this.stayExtensionRoomRepository = stayExtensionRoomRepository;
         this.additionalRevenueRepository = additionalRevenueRepository;
         this.expenseRepository = expenseRepository;
     }
@@ -91,6 +97,22 @@ public class MonthlyFinancialReportService {
             roomRevenue = roomRevenue.add(row.nightlyRate().multiply(BigDecimal.valueOf(nightsInsideMonth)));
         }
 
+        // Stay Extension lines are an additive second source with the same eligibility, overlap and currency rules.
+        for (StayExtensionRevenueRow row :
+                stayExtensionRoomRepository.findRevenueRows(monthStart, nextMonthStart, ELIGIBLE_STATUSES)) {
+            verifyExtension(row);
+            if (!REPORT_CURRENCY.equals(row.currency())) {
+                excludedReservations.add(row.reservationId());
+                excludedRooms++;
+                excludedCurrencies.add(row.currency());
+                continue;
+            }
+            LocalDate overlapStart = row.fromDate().isAfter(monthStart) ? row.fromDate() : monthStart;
+            LocalDate overlapEnd = row.toDate().isBefore(nextMonthStart) ? row.toDate() : nextMonthStart;
+            long nightsInsideMonth = ChronoUnit.DAYS.between(overlapStart, overlapEnd);
+            roomRevenue = roomRevenue.add(row.nightlyRate().multiply(BigDecimal.valueOf(nightsInsideMonth)));
+        }
+
         BigDecimal additionalRevenue = zeroIfNull(additionalRevenueRepository.sumAmountByStatusWithin(
                 AdditionalRevenueStatus.RECORDED, monthStart, nextMonthStart));
         BigDecimal expense = zeroIfNull(
@@ -123,6 +145,18 @@ public class MonthlyFinancialReportService {
                     row.reservationRoomId(),
                     "ReservationRoom " + row.reservationRoomId() + " total " + row.totalAmount()
                             + " differs from nightly rate x booked nights " + expectedTotal);
+        }
+    }
+
+    /** Same invariant as {@link #verifySnapshot} for an extension line: {@code amount = nightlyRate x nights}. */
+    private void verifyExtension(StayExtensionRevenueRow row) {
+        long nights = ChronoUnit.DAYS.between(row.fromDate(), row.toDate());
+        BigDecimal expectedTotal = row.nightlyRate().multiply(BigDecimal.valueOf(nights));
+        if (expectedTotal.compareTo(row.amount()) != 0) {
+            throw new ReportDataIntegrityException(
+                    row.extensionRoomId(),
+                    "StayExtensionRoom " + row.extensionRoomId() + " amount " + row.amount()
+                            + " differs from nightly rate x extension nights " + expectedTotal);
         }
     }
 

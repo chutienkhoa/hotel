@@ -167,10 +167,25 @@ class RoomChangeServiceTest {
         assertEquals("CHECKED_IN", response.status());
     }
 
-    /** Confirms Room Change is rejected once today reaches the lineage's planned check-out date. */
+    /** Confirms Room Change takes the Stay lock before it locks the rooms (order shared with extension and check-out). */
+    @Test
+    void shouldLockTheStayBeforeTheRooms() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+
+        fixture.service.changeRoom(
+                fixture.reservationId,
+                fixture.room201.getId(),
+                new RoomChangeRequest(fixture.room305.getId(), RoomChangeReason.GUEST_REQUEST, null));
+
+        var order = org.mockito.Mockito.inOrder(fixture.stayRepository, fixture.roomRepository);
+        order.verify(fixture.stayRepository).findByReservationIdForUpdate(fixture.reservationId);
+        order.verify(fixture.roomRepository).lockAllByIdIn(anyList());
+    }
+
+    /** Confirms Room Change is rejected once today reaches the CURRENT planned check-out (Reservation.checkOutDate). */
     @Test
     void shouldRejectOnOrAfterPlannedCheckOutDate() {
-        Fixture fixture = fixture(clockOn(CHECK_OUT_201));
+        Fixture fixture = fixture(clockOn(CHECK_OUT_202));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -205,7 +220,7 @@ class RoomChangeServiceTest {
     void shouldRejectTargetRoomWithOverlap() {
         Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
         when(fixture.roomRepository.findRoomIdsWithInventoryConflict(
-                any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+                any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any()))
                 .thenReturn(List.of(fixture.room305.getId()));
 
         ResponseStatusException exception = assertThrows(
@@ -422,6 +437,7 @@ class RoomChangeServiceTest {
 
         when(reservationRepository.findById(reservationId)).thenReturn(Optional.of(reservation));
         when(stayRepository.findByReservationId(reservationId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByReservationIdForUpdate(reservationId)).thenReturn(Optional.of(stay));
         when(assignmentRepository.findOpenByStayIdAndRoomId(stay.getId(), room201.getId()))
                 .thenReturn(Optional.of(openAssignment201));
         when(assignmentRepository.findOpenByStayIdAndRoomId(stay.getId(), room202.getId()))

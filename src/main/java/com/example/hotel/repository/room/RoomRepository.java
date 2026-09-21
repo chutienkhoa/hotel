@@ -79,11 +79,11 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
                     + "AND rr.reservation.status = :confirmed "
                     + "AND rr.checkInDate < :out AND rr.checkOutDate > :in) "
                     + "OR EXISTS (SELECT 1 FROM StayRoomAssignment a WHERE a.room = r "
-                    + "AND a.stay.status = :stayCheckedIn "
+                    + "AND a.stay.status = :stayCheckedIn AND a.stay.id <> :excludedStayId "
                     + "AND a.assignedFrom < :outStart "
                     + "AND ((a.assignedTo IS NOT NULL AND a.assignedTo >= :inNextStart) "
                     + "OR (a.assignedTo IS NULL AND (:currentNightProtected = TRUE "
-                    + "OR a.originalReservationRoom.checkOutDate > :in)))))")
+                    + "OR a.stay.reservation.checkOutDate > :in)))))")
     List<UUID> findRoomIdsWithInventoryConflict(
             @Param("roomIds") Collection<UUID> roomIds,
             @Param("in") java.time.LocalDate in,
@@ -92,7 +92,8 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
             @Param("inNextStart") java.time.Instant inNextStart,
             @Param("currentNightProtected") boolean currentNightProtected,
             @Param("confirmed") com.example.hotel.entity.booking.ReservationStatus confirmed,
-            @Param("stayCheckedIn") com.example.hotel.entity.booking.StayStatus stayCheckedIn);
+            @Param("stayCheckedIn") com.example.hotel.entity.booking.StayStatus stayCheckedIn,
+            @Param("excludedStayId") UUID excludedStayId);
 
     /**
      * Counts Rooms that remain in the active hotel inventory.

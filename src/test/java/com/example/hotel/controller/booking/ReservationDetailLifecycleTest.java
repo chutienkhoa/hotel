@@ -71,6 +71,9 @@ class ReservationDetailLifecycleTest {
     private StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms a DRAFT reservation still shows the booked-room presentation. */
@@ -128,6 +131,43 @@ class ReservationDetailLifecycleTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"current-rooms-heading\"")))
                 .andExpect(content().string(not(containsString("Change Room"))));
+    }
+
+    /** Confirms Extend Stay shows only for CHECKED_IN with MANAGE_BOOKING and never for other states or users. */
+    @Test
+    void shouldShowExtendStayOnlyForCheckedInWithManageBooking() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        var manager = user("m").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"), new SimpleGrantedAuthority("PERM_MANAGE_BOOKING"));
+        var viewer = user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager))
+                .andExpect(content().string(containsString("id=\"extend-stay\"")));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer))
+                .andExpect(content().string(not(containsString("id=\"extend-stay\""))));
+        for (String status : List.of("DRAFT", "CONFIRMED", "CANCELLED", "NO_SHOW", "CHECKED_OUT")) {
+            when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation(status));
+            mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager))
+                    .andExpect(content().string(not(containsString("id=\"extend-stay\""))));
+        }
+    }
+
+    /** Confirms an extended stay shows Original Booking Total, Extension Amount and Current Accommodation Total. */
+    @Test
+    void shouldShowDerivedAccommodationTotalsForAnExtendedStay() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        when(stayExtensionService.summary(RESERVATION_ID)).thenReturn(
+                new com.example.hotel.dto.booking.response.StayExtensionSummaryResponse(
+                        new BigDecimal("2000000"), new BigDecimal("2000000"), new BigDecimal("4000000"),
+                        List.of(new com.example.hotel.dto.booking.response.StayExtensionSummaryResponse.Event(
+                                1, LocalDate.of(2026, 9, 22), LocalDate.of(2026, 9, 24),
+                                List.of(new com.example.hotel.dto.booking.response.StayExtensionSummaryResponse.Line(
+                                        "305", new BigDecimal("1000000"), 2, new BigDecimal("2000000")))))));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(content().string(containsString("Original Booking Total")))
+                .andExpect(content().string(containsString("Extension Amount")))
+                .andExpect(content().string(containsString("Current Accommodation Total")))
+                .andExpect(content().string(containsString("id=\"stay-extensions\"")));
     }
 
     /** Confirms CHECKED_OUT hides Current rooms and the empty Available actions card, but keeps Room History. */

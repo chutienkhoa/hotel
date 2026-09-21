@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{reservation.stayExtension.title})}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${context.reservationId})}" th:text="#{reservation.stayExtension.back}">Back to reservation</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{reservation.stayExtension.title}">Extend Stay</h1>
+                <p th:text="#{reservation.stayExtension.description}">Move the planned check-out to a later date.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list" id="extension-context">
+            <dt th:text="#{reservation.stayExtension.reservation}">Reservation</dt>
+            <dd th:text="${context.reservationNumber}">R20260916-000001</dd>
+            <dt th:text="#{reservation.stayExtension.primaryGuest}">Primary Guest</dt>
+            <dd th:text="${context.guestName + ' (' + context.guestCode + ')'}">Guest</dd>
+            <dt th:text="#{reservation.stayExtension.currentCheckOut}">Current Check-out</dt>
+            <dd id="extension-current-checkout"><span th:replace="~{layout/datetime :: date(${context.currentCheckOutDate})}">—</span></dd>
+            <dt th:text="#{reservation.stayExtension.currentRooms}">Current room(s)</dt>
+            <dd>
+                <div th:each="room : ${context.rooms}">
+                    <span th:text="${room.roomNumber}">101</span> —
+                    <span th:text="#{reservation.stayExtension.rate}">Original booked nightly rate</span>:
+                    <span th:replace="~{layout/money :: amount(${room.nightlyRate}, ${context.currency})}">0 VND</span>
+                </div>
+            </dd>
+            <th:block th:if="${context.outstanding != null}">
+                <dt th:text="#{reservation.stayExtension.outstanding}">Current outstanding balance</dt>
+                <dd id="extension-outstanding"><span th:replace="~{layout/money :: amount(${context.outstanding}, ${context.currency})}">0 VND</span></dd>
+            </th:block>
+        </dl>
+
+        <form class="form-card" method="post" th:action="@{/reservations/{id}/stay-extension(id=${context.reservationId})}"
+              th:object="${stayExtensionForm}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <input name="expectedCurrentCheckOutDate" th:value="${context.currentCheckOutDate}" type="hidden" />
+
+            <div class="form-grid reservation-details-grid">
+                <div class="form-field">
+                    <label for="newCheckOutDate" th:text="#{reservation.stayExtension.newCheckOut} + ' *'">New Check-out Date *</label>
+                    <input class="js-date-picker" id="newCheckOutDate" name="newCheckOutDate" required type="text"
+                           th:value="${stayExtensionForm.newCheckOutDate == null ? '' : #temporals.format(stayExtensionForm.newCheckOutDate, 'yyyy-MM-dd')}" />
+                    <p class="reservation-info-secondary" th:text="#{reservation.stayExtension.newCheckOutHint(${#temporals.format(context.earliestNewCheckOutDate.minusDays(1), 'dd/MM/yyyy')})}">Must be after the earlier date.</p>
+                    <p class="field-error" th:errors="*{newCheckOutDate}"></p>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${context.reservationId})}" th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="#{reservation.stayExtension.submit}" type="submit">Extend Stay</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

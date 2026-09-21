@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -99,7 +100,8 @@ public class RoomChangeService {
     public List<RoomLookupResponse> candidateRooms(UUID reservationId, UUID currentRoomId) {
         StayRoomAssignment openAssignment = openAssignmentOrThrow(reservationId, currentRoomId);
         LocalDate today = LocalDate.now(clock);
-        LocalDate plannedCheckOutDate = openAssignment.getOriginalReservationRoom().getCheckOutDate();
+        // CURRENT planned departure (moves with Stay Extension); the original booking dates are not used here.
+        LocalDate plannedCheckOutDate = openAssignment.getStay().getReservation().getCheckOutDate();
         List<Room> candidates = rooms.findByActiveTrue().stream()
                 .filter(room -> room.getStatus() != RoomStatus.OUT_OF_ORDER)
                 .filter(room -> !room.getId().equals(currentRoomId))
@@ -141,7 +143,7 @@ public class RoomChangeService {
                 targetRoom.getRoomNumber(),
                 request.reason(),
                 request.notes(),
-                openAssignment.getOriginalReservationRoom().getCheckOutDate());
+                reservation.getCheckOutDate());
     }
 
     /**
@@ -158,11 +160,14 @@ public class RoomChangeService {
      */
     @Transactional
     public Response changeRoom(UUID reservationId, UUID currentRoomId, RoomChangeRequest request) {
+        // Lock order shared with Stay Extension and check-out: the Stay first, then the rooms (sorted by id below).
+        // The Reservation is read after the Stay lock so its state is never older than the lock.
+        Optional<Stay> lockedStay = stays.findByReservationIdForUpdate(reservationId);
         Reservation reservation = loadReservation(reservationId);
         if (reservation.getStatus() != ReservationStatus.CHECKED_IN) {
             throw conflict("Room Change requires a CHECKED_IN Reservation");
         }
-        Stay stay = stays.findByReservationId(reservationId).orElseThrow(() -> conflict("Stay not found for reservation"));
+        Stay stay = lockedStay.orElseThrow(() -> conflict("Stay not found for reservation"));
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Room Change requires an active CHECKED_IN Stay");
         }
@@ -180,7 +185,7 @@ public class RoomChangeService {
                 && (request.notes() == null || request.notes().isBlank())) {
             throw bad("Notes are required when reason is OTHER");
         }
-        LocalDate plannedCheckOutDate = openAssignment.getOriginalReservationRoom().getCheckOutDate();
+        LocalDate plannedCheckOutDate = reservation.getCheckOutDate();
         LocalDate today = LocalDate.now(clock);
         if (!today.isBefore(plannedCheckOutDate)) {
             throw conflict(

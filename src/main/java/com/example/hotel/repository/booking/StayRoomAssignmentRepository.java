@@ -42,6 +42,17 @@ public interface StayRoomAssignmentRepository extends JpaRepository<StayRoomAssi
     List<StayRoomAssignment> findOpenByStayId(@Param("stayId") UUID stayId);
 
     /**
+     * Finds every open assignment (current room) of a Stay together with its Room and its lineage
+     * ReservationRoom in one query, so Stay Extension never loads them one by one.
+     *
+     * @param stayId Stay identifier
+     * @return open assignments ordered by room number
+     */
+    @Query("SELECT a FROM StayRoomAssignment a JOIN FETCH a.room room JOIN FETCH a.originalReservationRoom "
+            + "WHERE a.stay.id = :stayId AND a.assignedTo IS NULL ORDER BY room.roomNumber")
+    List<StayRoomAssignment> findOpenByStayIdWithLineage(@Param("stayId") UUID stayId);
+
+    /**
      * Tìm toàn bộ lịch sử chiếm phòng (mở và đã đóng) của một lưu trú, theo thứ tự thời gian.
      *
      * @param stayId định danh lưu trú

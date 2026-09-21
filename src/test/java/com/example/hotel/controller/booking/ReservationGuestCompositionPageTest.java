@@ -84,6 +84,9 @@ class ReservationGuestCompositionPageTest {
     private StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the Create Reservation form defaults to Adults = 1, Children = 0 with whole-number constraints. */

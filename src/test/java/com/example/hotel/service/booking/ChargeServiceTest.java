@@ -121,7 +121,7 @@ class ChargeServiceTest {
                         .create(UUID.randomUUID(), request(ChargeType.ROOM, null, null, BigDecimal.ONE)));
 
         assertEquals(400, exception.getStatusCode().value());
-        assertEquals("ROOM charges are created automatically at check-in", exception.getReason());
+        assertEquals("ROOM charges are created only by the system (check-in and Stay Extension)", exception.getReason());
     }
 
     /** Confirms fixed Charges accept a client-supplied positive amount without itemized fields. */

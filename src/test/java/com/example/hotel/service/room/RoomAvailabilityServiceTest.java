@@ -35,7 +35,7 @@ class RoomAvailabilityServiceTest {
             rooms, java.time.Clock.fixed(LocalDate.of(2026, 10, 1).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
     {
-        when(rooms.findRoomIdsWithInventoryConflict(any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+        when(rooms.findRoomIdsWithInventoryConflict(any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     java.util.Collection<UUID> asked = invocation.getArgument(0);
                     return asked.stream().filter(conflicting::contains).toList();
@@ -95,7 +95,7 @@ class RoomAvailabilityServiceTest {
         verify(rooms, org.mockito.Mockito.times(1)).findRoomIdsWithInventoryConflict(
                 eq(List.of(a.getId(), b.getId())), eq(IN), eq(OUT),
                 eq(OUT.atStartOfDay(ZONE).toInstant()), eq(IN.plusDays(1).atStartOfDay(ZONE).toInstant()),
-                eq(false), eq(ReservationStatus.CONFIRMED), eq(com.example.hotel.entity.booking.StayStatus.CHECKED_IN));
+                eq(false), eq(ReservationStatus.CONFIRMED), eq(com.example.hotel.entity.booking.StayStatus.CHECKED_IN), any());
     }
 
     /** Confirms the current night is protected only once the requested interval has started (today >= in). */
@@ -107,7 +107,7 @@ class RoomAvailabilityServiceTest {
         service.bookableRoomsForPeriod(LocalDate.of(2026, 10, 1), OUT);
 
         verify(rooms).findRoomIdsWithInventoryConflict(
-                any(), any(), any(), any(), any(), eq(true), any(), any());
+                any(), any(), any(), any(), any(), eq(true), any(), any(), any());
     }
 
     /** Confirms no query is issued for an empty room list. */
@@ -161,5 +161,20 @@ class RoomAvailabilityServiceTest {
         conflicting.add(room.getId());
 
         assertEquals(List.of(), numbers(service.checkInReadyRoomsForPeriod(IN, OUT)));
+    }
+
+    /** Confirms normal callers exclude no Stay, and only an explicit Stay identifier is passed through. */
+    @Test
+    void shouldExcludeNoStayByDefaultAndOnlyTheGivenStayWhenAsked() {
+        UUID roomId = UUID.randomUUID();
+        UUID stayId = UUID.randomUUID();
+
+        service.conflictedRoomIds(List.of(roomId), IN, OUT);
+        service.conflictedRoomIds(List.of(roomId), IN, OUT, stayId);
+
+        verify(rooms).findRoomIdsWithInventoryConflict(
+                any(), any(), any(), any(), any(), anyBoolean(), any(), any(), eq(new UUID(0L, 0L)));
+        verify(rooms).findRoomIdsWithInventoryConflict(
+                any(), any(), any(), any(), any(), anyBoolean(), any(), any(), eq(stayId));
     }
 }

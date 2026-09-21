@@ -207,7 +207,7 @@ class ReservationRoomReassignmentServiceTest {
         service.reassign(reservation.getId(), oldRoom.getId(), target.getId());
 
         verify(rooms).findRoomIdsWithInventoryConflict(
-                eq(List.of(target.getId())), eq(CHECK_IN), eq(CHECK_OUT), any(), any(), anyBoolean(), any(), any());
+                eq(List.of(target.getId())), eq(CHECK_IN), eq(CHECK_OUT), any(), any(), anyBoolean(), any(), any(), any());
     }
 
     /** Confirms every non-CONFIRMED reservation state is rejected. */
@@ -311,7 +311,7 @@ class ReservationRoomReassignmentServiceTest {
             }
             return found;
         });
-        when(rooms.findRoomIdsWithInventoryConflict(any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+        when(rooms.findRoomIdsWithInventoryConflict(any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     java.util.Collection<UUID> asked = invocation.getArgument(0);
                     return asked.stream().filter(conflictingRoomIds::contains).toList();

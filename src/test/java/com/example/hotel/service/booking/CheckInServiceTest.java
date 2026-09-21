@@ -94,7 +94,7 @@ class CheckInServiceTest {
         LocalDate checkIn = LocalDate.of(2026, 9, 20);
         LocalDate checkOut = LocalDate.of(2026, 9, 22);
         when(fixture.roomRepository.findRoomIdsWithInventoryConflict(
-                        any(), eq(checkIn), eq(checkOut), any(), any(), anyBoolean(), any(), any()))
+                        any(), eq(checkIn), eq(checkOut), any(), any(), anyBoolean(), any(), any(), any()))
                 .thenReturn(List.of(occupiedOverlap.getId()));
 
         List<RoomLookupResponse> result = fixture.service.availableRoomsForRange(checkIn, checkOut);

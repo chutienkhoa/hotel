@@ -728,6 +728,23 @@ public class Reservation extends AuditedEntity {
     }
 
     /**
+     * Moves the CURRENT planned check-out date forward for a CHECKED_IN reservation (Stay Extension). The original
+     * booking snapshot (the {@link ReservationRoom} lines and {@link #getTotalAmount()}) is never touched.
+     *
+     * @param newCheckOutDate the later planned check-out date
+     * @throws IllegalStateException if the reservation is not CHECKED_IN or the date does not move forward
+     */
+    public void extendCheckOut(LocalDate newCheckOutDate) {
+        if (status != ReservationStatus.CHECKED_IN) {
+            throw new IllegalStateException("Only a CHECKED_IN reservation can be extended");
+        }
+        if (!newCheckOutDate.isAfter(checkOutDate)) {
+            throw new IllegalStateException("Extension must move the planned check-out forward");
+        }
+        checkOutDate = newCheckOutDate;
+    }
+
+    /**
      * Thực hiện một chuyển đổi trạng thái hợp lệ.
      *
      * @param from trạng thái nguồn bắt buộc

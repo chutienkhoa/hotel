@@ -17,6 +17,7 @@ import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalance;
 import com.example.hotel.service.booking.StayBalanceService;
+import com.example.hotel.service.booking.StayExtensionService;
 import com.example.hotel.service.booking.StayQueryService;
 import com.example.hotel.service.booking.StayRoomAssignmentQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
@@ -55,6 +56,7 @@ public class ReservationPageController {
     private final StayQueryService stayQueryService;
     private final StayBalanceService stayBalanceService;
     private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
+    private final StayExtensionService stayExtensionService;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -67,6 +69,7 @@ public class ReservationPageController {
      * @param stayQueryService service used to resolve a Reservation's Stay
      * @param stayBalanceService service used to supply non-financial checkout readiness
      * @param stayRoomAssignmentQueryService service used to supply current rooms and Room History
+     * @param stayExtensionService service used to supply the extension history and derived accommodation totals
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
@@ -75,7 +78,8 @@ public class ReservationPageController {
             RoomQueryService roomQueryService,
             StayQueryService stayQueryService,
             StayBalanceService stayBalanceService,
-            StayRoomAssignmentQueryService stayRoomAssignmentQueryService) {
+            StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
+            StayExtensionService stayExtensionService) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
@@ -83,6 +87,7 @@ public class ReservationPageController {
         this.stayQueryService = stayQueryService;
         this.stayBalanceService = stayBalanceService;
         this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
+        this.stayExtensionService = stayExtensionService;
     }
 
     /**
@@ -148,6 +153,8 @@ public class ReservationPageController {
         model.addAttribute("reservation", reservation);
         addCheckoutReadiness(model, reservation, authentication);
         addRoomOccupancyAttributes(model, reservation);
+        boolean hasStay = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
+        model.addAttribute("stayExtensionSummary", hasStay ? stayExtensionService.summary(id) : null);
         return "reservation/detail";
     }
 

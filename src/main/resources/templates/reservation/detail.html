@@ -26,6 +26,10 @@
                    th:href="@{/reservations/{id}/guest-composition(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and canManageBooking}"
                    th:text="#{reservation.composition.action}">Edit Guest Composition</a>
+                <a class="button button-secondary" id="extend-stay"
+                   th:href="@{/reservations/{id}/stay-extension(id=${reservation.id})}"
+                   th:if="${reservation.status == 'CHECKED_IN' and canManageBooking}"
+                   th:text="#{reservation.stayExtension.action}">Extend Stay</a>
                 <a class="button button-secondary"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id})}"
                    th:if="${canManagePayment and (reservation.status == 'CHECKED_IN' or reservation.status == 'CHECKED_OUT')}">View Folio</a>
@@ -154,6 +158,27 @@
                         </div>
                     </div>
 
+                    <th:block th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
+                        <div class="reservation-info-item" id="original-booking-total">
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.stayExtension.originalTotal}">Original Booking Total</p>
+                                <p class="reservation-info-value"><span th:replace="~{layout/money :: amount(${stayExtensionSummary.originalBookingTotal}, ${reservation.currency})}">0 VND</span></p>
+                            </div>
+                        </div>
+                        <div class="reservation-info-item" id="extension-amount">
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</p>
+                                <p class="reservation-info-value"><span th:replace="~{layout/money :: amount(${stayExtensionSummary.extensionAmount}, ${reservation.currency})}">0 VND</span></p>
+                            </div>
+                        </div>
+                        <div class="reservation-info-item" id="current-accommodation-total">
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.stayExtension.currentTotal}">Current Accommodation Total</p>
+                                <p class="reservation-info-value"><span th:replace="~{layout/money :: amount(${stayExtensionSummary.currentAccommodationTotal}, ${reservation.currency})}">0 VND</span></p>
+                            </div>
+                        </div>
+                    </th:block>
+
                     <div class="reservation-info-item reservation-info-notes">
                         <span class="reservation-info-icon reservation-info-icon--purple">
                             <svg th:replace="~{layout/icons :: note}"></svg>
@@ -277,6 +302,43 @@
                             </td>
                             <td th:text="${line.reasonDisplay}">Initial Check-in</td>
                             <td class="text-muted" th:text="${line.changedByUsername}">staff01</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section aria-labelledby="extensions-heading" class="card reservation-detail-section" id="stay-extensions"
+                     th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
+                <div class="assigned-rooms-header">
+                    <div class="assigned-rooms-header-copy">
+                        <h2 id="extensions-heading" th:text="#{reservation.stayExtension.section.title}">Stay extensions</h2>
+                        <p th:text="#{reservation.stayExtension.section.description}">Extension history.</p>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col" th:text="#{reservation.stayExtension.period}">Extension period</th>
+                            <th scope="col">Room</th>
+                            <th scope="col" th:text="#{reservation.stayExtension.nights}">Extension Nights</th>
+                            <th scope="col" th:text="#{reservation.stayExtension.rate}">Rate</th>
+                            <th scope="col" th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</th>
+                        </tr>
+                        </thead>
+                        <tbody th:each="event : ${stayExtensionSummary.events}">
+                        <tr th:each="line : ${event.lines}">
+                            <td th:text="${event.sequenceNo}">1</td>
+                            <td>
+                                <span th:replace="~{layout/datetime :: date(${event.previousCheckOutDate})}">—</span> –
+                                <span th:replace="~{layout/datetime :: date(${event.newCheckOutDate})}">—</span>
+                            </td>
+                            <td th:text="${line.roomNumber}">101</td>
+                            <td th:text="${line.nights}">2</td>
+                            <td><span th:replace="~{layout/money :: amount(${line.nightlyRate}, ${reservation.currency})}">0 VND</span></td>
+                            <td><span th:replace="~{layout/money :: amount(${line.amount}, ${reservation.currency})}">0 VND</span></td>
                         </tr>
                         </tbody>
                     </table>

@@ -81,6 +81,8 @@
                                th:if="${canManagePayment}" th:text="#{reservation.frontDesk.action.folio}">Folio</a>
                             <a class="button button-secondary" th:href="@{/check-out/{id}(id=${row.reservationId})}"
                                th:if="${canCheckOut}" th:text="#{reservation.frontDesk.action.checkoutReview}">Check-out review</a>
+                            <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
+                               th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
                             <a class="button button-secondary" th:if="${canChangeRoom}" th:each="room : ${row.rooms}"
                                th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${row.reservationId},roomId=${room.roomId})}"
                                th:text="#{reservation.frontDesk.action.changeRoom(${room.roomNumber})}">Change Room</a>

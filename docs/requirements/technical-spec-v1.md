@@ -819,8 +819,9 @@ updated_by
 `original_reservation_room_id` là lineage anchor: mọi assignment sinh ra từ cùng một phòng đặt
 ban đầu (assignment khởi tạo lúc check-in và mọi assignment thay thế sau đó qua Room Change) đều
 tham chiếu cùng một `ReservationRoom`. Do đó ranh giới thời gian lưu trú còn lại ("planned
-check-out boundary") của lineage đó luôn được đọc từ `ReservationRoom.check_out_date` bất biến,
-không lưu trùng lặp.
+check-out boundary") là ngày trả phòng dự kiến HIỆN TẠI `Reservation.check_out_date` (bằng
+`ReservationRoom.check_out_date` bất biến cho tới khi có Stay Extension, xem mục 68; sau đó
+`ReservationRoom` vẫn giữ ngày đặt gốc), không lưu trùng lặp.
 
 Khi check-in, backend tạo một `StayRoomAssignment` mở (`assigned_to = null`, `reason = null`) cho
 mỗi `ReservationRoom` của Reservation, với `assigned_from = Stay.actual_check_in_at`.
@@ -839,7 +840,7 @@ Quy tắc:
 - Phòng thay thế phải AVAILABLE và active, và không có overlap với Reservation khác
   (CONFIRMED/CHECKED_IN) trong khoảng [ngày hiện tại theo Clock, planned check-out boundary
   của lineage đang đổi)
-- Room Change bị từ chối khi ngày hiện tại (theo Clock) >= planned check-out boundary của lineage
+- Room Change bị từ chối khi ngày hiện tại (theo Clock) >= planned check-out boundary hiện tại (`Reservation.check_out_date`, mục 68)
 - Room Change KHÔNG BAO GIỜ tự động thay đổi ReservationRoom.nightly_rate, ReservationRoom.total_amount,
   Reservation.total_amount, hoặc các Charge ROOM đã tạo khi check-in
 - Nếu khách sạn cần thu thêm phí (ví dụ nâng hạng phòng), Staff tạo Charge riêng qua Charge/Folio
@@ -4589,6 +4590,45 @@ Tính sẵn sàng khi ĐẶT phòng (booking availability) dùng MỘT primitive
 - **Status tách khỏi availability theo ngày**: `Room.status` (OCCUPIED/DIRTY/CLEANING…) không bao giờ chặn Confirm hay đặt tương lai; kiểm tra vật lý lúc check-in (AVAILABLE, `ROOM_OCCUPIED`) và Room Change (đích phải AVAILABLE) giữ nguyên.
 - **Nơi gọi**: `ReservationService.confirm`, `RoomChangeService` (danh sách ứng viên + `changeRoom`), tra cứu phòng (`RoomAvailabilityService`, gồm Pre-check-in Reassignment với ngữ nghĩa không đổi). Người khách đổi lại B→A và đổi nhiều bước A→B→C đúng mà không cần loại trừ đặc biệt.
 - **Đồng thời**: V1 do ứng dụng bảo đảm; kiểm tra overlap luôn thực hiện KHI đang giữ khóa dòng Room (`lockAllByIdIn`, sắp xếp theo id) ở cả Confirm lẫn Room Change nên hai thao tác cạnh tranh cùng phòng/ngày được tuần tự hóa.
-- **Không tự sửa** các xung đột đã tồn tại trong dữ liệu. Mô hình phân bổ ở mức DB (bảng allocation / exclusion constraint) được hoãn. **Stay Extension chưa được triển khai.**
+- **Không tự sửa** các xung đột đã tồn tại trong dữ liệu. Mô hình phân bổ ở mức DB (bảng allocation / exclusion constraint) được hoãn. Stay Extension được triển khai ở mục 68.
+
+## 68. Stay Extension (P1, V1)
+
+Một Stay `CHECKED_IN` có thể được gia hạn (dời ngày trả phòng dự kiến muộn hơn) qua MỘT thao tác chuyên biệt: `StayExtensionService.extend`
+(MVC `GET|POST /reservations/{id}/stay-extension`, REST `POST /api/reservations/{id}/stay-extension`). Không có PATCH ngày tổng quát.
+
+- **Các khái niệm tách biệt**: `ReservationRoom` = snapshot đặt phòng/giá GỐC bất biến (không bị Stay Extension sửa: phòng, ngày, giá đêm, thành tiền); `Reservation.checkOutDate` = ngày trả phòng dự kiến HIỆN TẠI sau khi check-in
+  (`Reservation.extendCheckOut`: chỉ `CHECKED_IN`, chỉ tiến lên, không có setter chung); `StayRoomAssignment` = chiếm phòng thực tế; `StayExtension` = một sự kiện gia hạn; `StayExtensionRoom` = snapshot lưu trú/giá của MỘT lineage (kèm
+  phòng thực tế tại thời điểm gia hạn, không suy ra lại về sau); `Charge` = khoản ROOM đã ghi vào folio. Không gộp các khái niệm này.
+- **Tổng tiền**: `Reservation.totalAmount` vẫn là Original Booking Total (không cộng tiền gia hạn). Extension Amount = Σ `StayExtensionRoom.amount`; Current Accommodation Total = `totalAmount` + Extension Amount là giá trị DẪN XUẤT (không lưu).
+- **Trạng thái**: chỉ khi Reservation `CHECKED_IN` VÀ Stay tồn tại và `CHECKED_IN`; DRAFT/CONFIRMED/CANCELLED/NO_SHOW/CHECKED_OUT, thiếu Stay hoặc Reservation/Stay không nhất quán bị từ chối, không tự sửa dữ liệu.
+- **Quy tắc ngày** (ngày khách sạn từ `Clock`): `newCheckOutDate > max(currentPlannedCheckOut, hotelToday)`. Được phép trước ngày trả phòng, đúng ngày trả phòng, và khi quá hạn. Giai đoạn gia hạn luôn là `[previousCheckOutDate, newCheckOutDate)`,
+  nên đêm quá hạn KHÔNG biến mất khỏi tính tiền (ví dụ hôm nay 23/09, hiện tại 22/09, mới 24/09 → 2 đêm 22 và 23).
+- **Toàn bộ Stay**: mọi lineage của assignment đang mở đều tham gia cùng `[previous, new)`; không gia hạn từng phòng, không trả phòng một phần.
+- **Nhiều lần gia hạn**: chuỗi tuyến tính theo `sequence_no`; `previousCheckOutDate` của lần sau bằng `Reservation.checkOutDate` đọc dưới khóa. Ràng buộc DB `UNIQUE(stay_id, sequence_no)` và `UNIQUE(stay_id, previous_check_out_date)` chỉ là lớp chặn cuối.
+- **Giá**: luôn là `nightlyRate` của `ReservationRoom` gốc của lineage (kể cả sau A→B→C); không dùng `RoomType.basePrice`, giá phòng hiện tại hay giá động. `amount = nightlyRate × số đêm thêm` (BigDecimal); giá và thành tiền được lưu snapshot ở `StayExtensionRoom`.
+  Không hỗ trợ gia hạn miễn phí/giá 0 (Charge và extension yêu cầu amount > 0).
+- **Room Change tương thích**: dòng gia hạn lưu `original_reservation_room_id` (lineage, neo giá) VÀ `room_id` (phòng thực tế lúc gia hạn). Room Change sau đó không đổi lịch sử gia hạn cũ; lần gia hạn sau dùng phòng hiện tại và vẫn lấy giá từ lineage.
+  Room Change dùng `Reservation.checkOutDate` làm ngày trả phòng dự kiến hiện tại (ứng viên, review và điều kiện `today < planned`); hành vi nghiệp vụ khác của Room Change không đổi.
+- **Tồn kho (mục 67)**: assignment CHECKED_IN đang mở bảo vệ tới `max(Reservation.checkOutDate, hôm nay + 1)` (nguồn planned checkout đổi từ `ReservationRoom` sang `Reservation`); CONFIRMED vẫn dùng `ReservationRoom`; assignment đã đóng không đổi.
+  Kiểm tra gia hạn dùng primitive dùng chung với tham số `excludedStayId` (chỉ Stay Extension truyền Stay hiện tại, tránh tự xung đột đặc biệt khi gia hạn đúng/sau ngày trả phòng). Confirm, Room Change và tra cứu không loại trừ gì.
+  Xung đột với đặt phòng/lưu trú khác bị TỪ CHỐI; không tự chuyển phòng, không tự hủy.
+- **Billing**: với mỗi `StayExtensionRoom` tạo MỘT `Charge` ROOM chỉ cho các đêm thêm (quantity = số đêm, unitPrice = giá lineage, amount = thành tiền, mô tả `Room <số phòng> extension dd/MM/yyyy - dd/MM/yyyy`); `StayExtensionRoom.charge` tham chiếu Charge (mỗi Charge thuộc tối đa một dòng).
+  Charge ROOM gốc lúc check-in không bị tạo lại/sửa/xóa. ROOM Charge thủ công qua `ChargeService` vẫn bị cấm (chỉ hệ thống tạo: check-in và Stay Extension).
+- **Không chặn theo thanh toán**: không yêu cầu outstanding = 0 hay trả trước; `StayBalanceService`/check-out readiness tự phản ánh số dư mới. Check-out sớm vẫn như cũ: không hoàn tiền, không rút ngắn, không đảo Charge.
+- **Bảo vệ yêu cầu cũ**: request mang `expectedCurrentCheckOutDate` và `newCheckOutDate`; dưới khóa, `Reservation.checkOutDate` phải bằng expected, nếu không bị từ chối (stale, HTTP 409).
+- **Khóa/đồng thời**: (1) khóa Stay (`findByReservationIdForUpdate`), (2) khóa các Room của assignment đang mở theo thứ tự id, (3) đọc lại assignment dưới khóa, (4) kiểm tra lại trạng thái, (5) ngày dự kiến, (6) tồn kho với Stay hiện tại bị loại trừ, (7) thay đổi trong cùng transaction.
+  Room Change được sửa tối thiểu để cũng khóa Stay TRƯỚC khi khóa Room (thứ tự Stay → Rooms dùng chung với Stay Extension và Check-out); Confirm vẫn khóa Room. Các cặp Extend/Confirm, Extend/Extend, Extend/Check-out, Extend/Room Change được tuần tự hóa.
+- **Atomic**: kiểm tra trạng thái, khóa, tồn kho, `Reservation.checkOutDate`, `StayExtension`, `StayExtensionRoom`, `Charge` và `AuditLog` trong MỘT transaction; lỗi thì không có gì được ghi.
+- **Schema (V32, additive)**: `stay_extension(id, stay_id, sequence_no, previous_check_out_date, new_check_out_date, audit)` với `CHECK new > previous`, `UNIQUE(stay_id, sequence_no)`, `UNIQUE(stay_id, previous_check_out_date)`;
+  `stay_extension_room(id, stay_extension_id, original_reservation_room_id, room_id, from_date, to_date, nightly_rate, amount, charge_id, audit)` với `CHECK to_date > from_date`, `CHECK amount > 0`, `UNIQUE(stay_extension_id, original_reservation_room_id)`, `UNIQUE(charge_id)`.
+  Không backfill; Reservation cũ có 0 bản ghi gia hạn; không sửa dòng `ReservationRoom` nào.
+- **Báo cáo**: Monthly Financial Report cộng thêm doanh thu gia hạn như nguồn thứ hai (cùng trạng thái đủ điều kiện CHECKED_IN/CHECKED_OUT, cùng công thức chồng lấn tháng theo `[from_date, to_date)`, cùng kiểm tra toàn vẹn `amount = rate × số đêm`, tiền tệ theo `Reservation.currency`,
+  ngoài VND vào cảnh báo non-VND); tính theo lineage gốc. Phần `ReservationRoom` giữ nguyên. Occupancy và Room Type Performance vẫn dựa trên `StayRoomAssignment` thực tế. PDF/Excel dùng lại kết quả báo cáo nên tổng/KPI tài chính đã gồm doanh thu gia hạn; bố cục workbook đã duyệt (kể cả sheet Reservations, cột "Booking Amount" vẫn là tổng đặt phòng gốc) KHÔNG đổi.
+- **Quyền**: `MANAGE_BOOKING` (ADMIN, MANAGER; STAFF không có); không cần `MANAGE_PAYMENT` vì Charge ROOM do server tính (tương tự Charge ROOM tự động lúc check-in). Số dư chỉ hiển thị trên form cho user có `MANAGE_PAYMENT`.
+- **Giao diện**: Reservation Detail của Reservation `CHECKED_IN` có action "Extend Stay" (cần `MANAGE_BOOKING`) và hiển thị Original Booking Total / Extension Amount / Current Accommodation Total và lịch sử gia hạn khi đã có gia hạn; Front Desk In-house/Departures có liên kết
+  tới cùng form. Form chỉ nhận ngày trả phòng mới (kèm ngày hiện tại ẩn để chống yêu cầu cũ); không chọn phòng, không sửa giá/số tiền. Văn bản dùng i18n EN/VI (`stayextension.*`).
+- **Audit**: một `AuditLog` `EXTEND_STAY` (entity RESERVATION) khi thành công: ngày trả phòng cũ → mới, số đêm, extension id, từng phòng hiện tại với giá × số đêm = thành tiền, và tổng tiền gia hạn. Thất bại không ghi audit thành công.
+- **Hoãn/Không thuộc V1**: giá gia hạn do nhân viên nhập, giá động, gia hạn miễn phí, rút ngắn lưu trú, hoàn tiền check-out sớm, gia hạn/trả phòng từng phòng, trả phòng một phần, mô hình DB `RoomAllocation` và exclusion constraint.
 
 **End of Specification v1.0**

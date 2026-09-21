@@ -97,7 +97,7 @@ public class ChargeService {
             throw badRequest("Unsupported Charge v1 type");
         }
         if (request.type() == ChargeType.ROOM) {
-            throw badRequest("ROOM charges are created automatically at check-in");
+            throw badRequest("ROOM charges are created only by the system (check-in and Stay Extension)");
         }
         if ((request.quantity() == null) != (request.unitPrice() == null)) {
             throw badRequest("quantity and unitPrice must both be present or absent");

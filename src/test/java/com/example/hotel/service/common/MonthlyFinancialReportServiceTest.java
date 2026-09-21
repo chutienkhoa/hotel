@@ -38,8 +38,10 @@ class MonthlyFinancialReportServiceTest {
     private final ReservationRepository reservations = mock(ReservationRepository.class);
     private final AdditionalRevenueRepository revenues = mock(AdditionalRevenueRepository.class);
     private final ExpenseRepository expenses = mock(ExpenseRepository.class);
+    private final com.example.hotel.repository.booking.StayExtensionRoomRepository extensionRooms =
+            mock(com.example.hotel.repository.booking.StayExtensionRoomRepository.class);
     private final MonthlyFinancialReportService service =
-            new MonthlyFinancialReportService(reservations, revenues, expenses);
+            new MonthlyFinancialReportService(reservations, extensionRooms, revenues, expenses);
 
     private void rows(ReservationRoomRevenueRow... rows) {
         when(reservations.findRoomRevenueRows(any(), any(), any())).thenReturn(List.of(rows));
@@ -61,6 +63,83 @@ class MonthlyFinancialReportServiceTest {
 
     private static void assertMoney(String expected, BigDecimal actual) {
         assertEquals(0, new BigDecimal(expected).compareTo(actual), "expected " + expected + " but was " + actual);
+    }
+
+    private void extension(String from, String to, String currency, String amountOverride) {
+        LocalDate in = LocalDate.parse(from);
+        LocalDate out = LocalDate.parse(to);
+        BigDecimal amount = amountOverride != null
+                ? new BigDecimal(amountOverride)
+                : RATE.multiply(BigDecimal.valueOf(java.time.temporal.ChronoUnit.DAYS.between(in, out)));
+        when(extensionRooms.findRevenueRows(any(), any(), any())).thenReturn(List.of(
+                new com.example.hotel.repository.booking.StayExtensionRevenueRow(
+                        UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), in, out, RATE, amount, currency)));
+    }
+
+    /** Confirms extension revenue is added once on top of the unchanged original room revenue. */
+    @Test
+    void shouldAddExtensionRevenueOnceToTheOriginalRoomRevenue() {
+        rows(row("2026-09-20", "2026-09-22", "VND"));
+        extension("2026-09-22", "2026-09-24", "VND", null);
+
+        assertMoney("4000000", service.report(SEPTEMBER).roomRevenue());
+    }
+
+    /** Confirms a month with only extension revenue reports it, and non-extended data is unchanged. */
+    @Test
+    void shouldReportExtensionOnlyMonthAndLeaveNonExtendedDataUnchanged() {
+        rows(row("2026-09-10", "2026-09-12", "VND"));
+        assertMoney("2000000", service.report(SEPTEMBER).roomRevenue());
+
+        rows();
+        extension("2026-09-29", "2026-10-02", "VND", null);
+        assertMoney("2000000", service.report(SEPTEMBER).roomRevenue());
+        assertMoney("1000000", service.report(OCTOBER).roomRevenue());
+    }
+
+    /** Confirms an extension crossing the month boundary is split by night start like ReservationRoom revenue. */
+    @Test
+    void shouldSplitAnExtensionCrossingTheMonthBoundary() {
+        rows();
+        extension("2026-09-29", "2026-10-02", "VND", null);
+
+        assertMoney("2000000", service.report(SEPTEMBER).roomRevenue());
+        assertMoney("1000000", service.report(OCTOBER).roomRevenue());
+    }
+
+    /** Confirms a non-VND extension follows the Reservation currency: excluded and reported in the warning. */
+    @Test
+    void shouldExcludeNonVndExtensionAndWarn() {
+        rows();
+        extension("2026-09-22", "2026-09-24", "USD", null);
+
+        MonthlyFinancialReport report = service.report(SEPTEMBER);
+
+        assertMoney("0", report.roomRevenue());
+        assertEquals(List.of("USD"), report.nonVndWarning().currencies());
+    }
+
+    /** Confirms an extension whose amount differs from rate x nights fails the integrity check. */
+    @Test
+    void shouldFailIntegrityCheckForAnInconsistentExtension() {
+        rows();
+        extension("2026-09-22", "2026-09-24", "VND", "1");
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+                com.example.hotel.exception.ReportDataIntegrityException.class, () -> service.report(SEPTEMBER));
+    }
+
+    /** Confirms the extension query uses the same eligible statuses (CHECKED_IN, CHECKED_OUT only). */
+    @Test
+    void shouldRequestExtensionsForTheSameEligibleStatuses() {
+        rows();
+
+        service.report(SEPTEMBER);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<ReservationStatus>> statuses = ArgumentCaptor.forClass(Collection.class);
+        verify(extensionRooms).findRevenueRows(eq(LocalDate.of(2026, 9, 1)), eq(LocalDate.of(2026, 10, 1)), statuses.capture());
+        assertEquals(List.of(ReservationStatus.CHECKED_IN, ReservationStatus.CHECKED_OUT), List.copyOf(statuses.getValue()));
     }
 
     /** Confirms a 30/09 to 03/10 booking gives September one night and October two nights. */
