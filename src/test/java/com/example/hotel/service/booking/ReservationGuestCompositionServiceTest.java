@@ -54,7 +54,7 @@ class ReservationGuestCompositionServiceTest {
     private final ReservationService service = new ReservationService(
             reservations, guests, rooms, mock(StayRepository.class), mock(StayRoomAssignmentRepository.class),
             mock(ChargeRepository.class), mock(AuditLogRepository.class), new ReservationMapper(), numbers,
-            mock(StayBalanceService.class), Clock.fixed(IN.atTime(10, 0).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
+            mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), Clock.fixed(IN.atTime(10, 0).atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(),
                     ZoneId.of("Asia/Ho_Chi_Minh")));
 
     private Guest guest;

@@ -187,7 +187,7 @@ class ReservationCheckInTimingTest {
                 auditLogRepository,
                 new ReservationMapper(),
                 reservationNumberGenerator,
-                stayBalanceService,
+                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
                 clock);
 
         return new Fixture(service, reservation, reservationId, stayRepository, chargeRepository, roomRepository);

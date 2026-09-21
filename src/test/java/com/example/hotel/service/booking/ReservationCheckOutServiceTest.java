@@ -492,7 +492,7 @@ class ReservationCheckOutServiceTest {
                         auditLogRepository,
                         new ReservationMapper(),
                         reservationNumberGenerator,
-                        stayBalanceService,
+                        stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
                         clock),
                 reservationRepository,
                 roomRepository,

@@ -27,6 +27,7 @@ import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
+import com.example.hotel.service.room.RoomAvailabilityService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -59,6 +60,7 @@ public class ReservationService {
     private final ReservationMapper reservationMapper;
     private final ReservationNumberGenerator reservationNumberGenerator;
     private final StayBalanceService stayBalanceService;
+    private final RoomAvailabilityService roomAvailability;
     private final Clock clock;
 
     /**
@@ -75,6 +77,7 @@ public class ReservationService {
      * @param reservationMapper mapper chuyển đổi reservation thành DTO phản hồi
      * @param reservationNumberGenerator generator tạo reservation number hằng ngày
      * @param stayBalanceService service tính số dư của Stay khi check-out
+     * @param roomAvailability shared lifecycle-aware booking-availability primitive used by Confirm
      * @param clock authoritative hotel business clock used for Check-in date rules
      */
     ReservationService(
@@ -88,6 +91,7 @@ public class ReservationService {
             ReservationMapper reservationMapper,
             ReservationNumberGenerator reservationNumberGenerator,
             StayBalanceService stayBalanceService,
+            RoomAvailabilityService roomAvailability,
             Clock clock) {
         this.reservations = reservations;
         this.guests = guests;
@@ -99,6 +103,7 @@ public class ReservationService {
         this.reservationMapper = reservationMapper;
         this.reservationNumberGenerator = reservationNumberGenerator;
         this.stayBalanceService = stayBalanceService;
+        this.roomAvailability = roomAvailability;
         this.clock = clock;
     }
 
@@ -275,14 +280,12 @@ public class ReservationService {
         if (lockedRooms.size() != roomIds.size()) {
             throw notFound("Room");
         }
-        for (ReservationRoom reservationRoom : reservation.getRooms()) {
-            if (reservations.hasOverlap(
-                    reservationRoom.getRoom().getId(),
-                    reservation.getCheckInDate(),
-                    reservation.getCheckOutDate(),
-                    List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN))) {
-                throw conflict("Room is already booked for these dates");
-            }
+        // Lifecycle-aware inventory check under the room locks taken above (CONFIRMED via ReservationRoom, CHECKED_IN
+        // via the actual StayRoomAssignments), in one bounded query for all of the reservation's rooms.
+        if (!roomAvailability
+                .conflictedRoomIds(roomIds, reservation.getCheckInDate(), reservation.getCheckOutDate())
+                .isEmpty()) {
+            throw conflict("Room is already booked for these dates");
         }
         // Capacity is checked on the locked, final room set (same rule as readiness, check-in and reassignment).
         requireAdultCapacity(reservation, lockedRooms);

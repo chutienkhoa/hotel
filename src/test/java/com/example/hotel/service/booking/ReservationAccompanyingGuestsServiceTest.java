@@ -54,7 +54,7 @@ class ReservationAccompanyingGuestsServiceTest {
     private final ReservationService service = new ReservationService(
             reservations, guests, rooms, mock(StayRepository.class), mock(StayRoomAssignmentRepository.class),
             mock(ChargeRepository.class), mock(AuditLogRepository.class), new ReservationMapper(), numbers,
-            mock(StayBalanceService.class), Clock.fixed(IN.atTime(10, 0).atZone(zone).toInstant(), zone));
+            mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class), Clock.fixed(IN.atTime(10, 0).atZone(zone).toInstant(), zone));
 
     private Guest primary;
     private Guest second;

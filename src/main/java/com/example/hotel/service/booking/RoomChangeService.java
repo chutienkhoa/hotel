@@ -21,11 +21,13 @@ import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
+import com.example.hotel.service.room.RoomAvailabilityService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
@@ -49,6 +51,7 @@ public class RoomChangeService {
     private final RoomRepository rooms;
     private final AuditLogRepository audits;
     private final ReservationMapper reservationMapper;
+    private final RoomAvailabilityService roomAvailability;
     private final Clock clock;
 
     /**
@@ -60,6 +63,7 @@ public class RoomChangeService {
      * @param rooms repository used to lock and validate Room state
      * @param audits repository used to write the existing-style CHANGE_ROOM audit entry
      * @param reservationMapper mapper used to build the Reservation response returned on success
+     * @param roomAvailability shared lifecycle-aware booking-availability primitive used for the target room
      * @param clock authoritative hotel business clock
      */
     public RoomChangeService(
@@ -69,7 +73,9 @@ public class RoomChangeService {
             RoomRepository rooms,
             AuditLogRepository audits,
             ReservationMapper reservationMapper,
+            RoomAvailabilityService roomAvailability,
             Clock clock) {
+        this.roomAvailability = roomAvailability;
         this.reservations = reservations;
         this.stays = stays;
         this.assignments = assignments;
@@ -94,14 +100,14 @@ public class RoomChangeService {
         StayRoomAssignment openAssignment = openAssignmentOrThrow(reservationId, currentRoomId);
         LocalDate today = LocalDate.now(clock);
         LocalDate plannedCheckOutDate = openAssignment.getOriginalReservationRoom().getCheckOutDate();
-        return rooms.findByActiveTrue().stream()
+        List<Room> candidates = rooms.findByActiveTrue().stream()
                 .filter(room -> room.getStatus() != RoomStatus.OUT_OF_ORDER)
                 .filter(room -> !room.getId().equals(currentRoomId))
-                .filter(room -> !reservations.hasOverlap(
-                        room.getId(),
-                        today,
-                        plannedCheckOutDate,
-                        List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN)))
+                .toList();
+        Set<UUID> conflicted = roomAvailability.conflictedRoomIds(
+                candidates.stream().map(Room::getId).toList(), today, plannedCheckOutDate);
+        return candidates.stream()
+                .filter(room -> !conflicted.contains(room.getId()))
                 .map(room -> new RoomLookupResponse(
                         room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive()))
                 .toList();
@@ -198,11 +204,8 @@ public class RoomChangeService {
         if (!targetRoom.isActive() || targetRoom.getStatus() != RoomStatus.AVAILABLE) {
             throw conflict("Room is not available for room change");
         }
-        if (reservations.hasOverlap(
-                targetRoomId,
-                today,
-                plannedCheckOutDate,
-                List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN))) {
+        // Lifecycle-aware inventory check, made while both room rows are locked.
+        if (roomAvailability.hasInventoryConflict(targetRoomId, today, plannedCheckOutDate)) {
             throw conflict("Room is already booked for these dates");
         }
 

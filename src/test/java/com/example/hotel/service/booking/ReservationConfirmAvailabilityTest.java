@@ -45,10 +45,12 @@ class ReservationConfirmAvailabilityTest {
 
     private final ReservationRepository reservations = mock(ReservationRepository.class);
     private final RoomRepository rooms = mock(RoomRepository.class);
+    private final com.example.hotel.service.room.RoomAvailabilityService roomAvailability =
+            mock(com.example.hotel.service.room.RoomAvailabilityService.class);
     private final ReservationService service = new ReservationService(
             reservations, mock(GuestRepository.class), rooms, mock(StayRepository.class),
             mock(StayRoomAssignmentRepository.class), mock(ChargeRepository.class), mock(AuditLogRepository.class),
-            new ReservationMapper(), mock(ReservationNumberGenerator.class), mock(StayBalanceService.class),
+            new ReservationMapper(), mock(ReservationNumberGenerator.class), mock(StayBalanceService.class), roomAvailability,
             Clock.systemDefaultZone());
 
     /** Clears the authentication established by the test. */
@@ -77,10 +79,9 @@ class ReservationConfirmAvailabilityTest {
                 new UsernamePasswordAuthenticationToken(new CurrentUser(UUID.randomUUID(), "booking-manager"), null));
         when(reservations.findById(reservation.getId())).thenReturn(Optional.of(reservation));
         when(rooms.lockAllByIdIn(List.of(room.getId()))).thenReturn(List.of(room));
-        when(reservations.hasOverlap(
-                        room.getId(), LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 12),
-                        List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN)))
-                .thenReturn(overlap);
+        when(roomAvailability.conflictedRoomIds(
+                        List.of(room.getId()), LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 12)))
+                .thenReturn(overlap ? java.util.Set.of(room.getId()) : java.util.Set.of());
     }
 
     /**

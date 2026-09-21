@@ -269,7 +269,7 @@ class ReservationCheckInRoomChargeTest {
                 auditLogRepository,
                 new ReservationMapper(),
                 reservationNumberGenerator,
-                stayBalanceService,
+                stayBalanceService, mock(com.example.hotel.service.room.RoomAvailabilityService.class),
                 Clock.systemDefaultZone());
 
         return new Fixture(

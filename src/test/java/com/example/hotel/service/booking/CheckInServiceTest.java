@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -91,12 +93,9 @@ class CheckInServiceTest {
         when(fixture.roomRepository.findByActiveTrue()).thenReturn(List.of(available, occupiedOverlap, outOfOrder));
         LocalDate checkIn = LocalDate.of(2026, 9, 20);
         LocalDate checkOut = LocalDate.of(2026, 9, 22);
-        when(fixture.reservationRepository.hasOverlap(
-                        available.getId(), checkIn, checkOut, List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN)))
-                .thenReturn(false);
-        when(fixture.reservationRepository.hasOverlap(
-                        occupiedOverlap.getId(), checkIn, checkOut, List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN)))
-                .thenReturn(true);
+        when(fixture.roomRepository.findRoomIdsWithInventoryConflict(
+                        any(), eq(checkIn), eq(checkOut), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(List.of(occupiedOverlap.getId()));
 
         List<RoomLookupResponse> result = fixture.service.availableRoomsForRange(checkIn, checkOut);
 
@@ -121,7 +120,6 @@ class CheckInServiceTest {
                 activeRoom(RoomStatus.OUT_OF_ORDER),
                 activeRoom(RoomStatus.OCCUPIED),
                 ready));
-        when(fixture.reservationRepository.hasOverlap(any(), any(), any(), any())).thenReturn(false);
 
         List<RoomLookupResponse> result = fixture.service.availableRoomsForWalkIn(LocalDate.of(2026, 9, 22));
 
@@ -368,7 +366,7 @@ class CheckInServiceTest {
                 reservationQueryService,
                 reservationService,
                 roomRepository,
-                new com.example.hotel.service.room.RoomAvailabilityService(roomRepository, reservationRepository),
+                new com.example.hotel.service.room.RoomAvailabilityService(roomRepository, clock),
                 stayRepository,
                 guestRepository,
                 guestMapper,

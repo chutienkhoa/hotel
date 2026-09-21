@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -56,9 +58,11 @@ class ReservationRoomReassignmentServiceTest {
     private final StayRepository stays = mock(StayRepository.class);
     private final RoomRepository rooms = mock(RoomRepository.class);
     private final AuditLogRepository audits = mock(AuditLogRepository.class);
-    private final RoomAvailabilityService availability = new RoomAvailabilityService(rooms, reservations);
+    private final RoomAvailabilityService availability = new RoomAvailabilityService(rooms, java.time.Clock.fixed(
+            CHECK_IN.atTime(10, 0).atZone(java.time.ZoneId.of("Asia/Ho_Chi_Minh")).toInstant(), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     private final ReservationRoomReassignmentService service =
             new ReservationRoomReassignmentService(reservations, stays, rooms, availability, audits);
+    private final java.util.Set<UUID> conflictingRoomIds = new java.util.HashSet<>();
     private final UUID actor = UUID.randomUUID();
     private final Guest guest = Guest.create(UUID.randomUUID(), "G-1", "Ann", "Lee", null, null, "Vietnam", null, null);
 
@@ -162,8 +166,7 @@ class ReservationRoomReassignmentServiceTest {
         Room maintenance = room("304", RoomStatus.MAINTENANCE, true);
         Room outOfOrder = room("305", RoomStatus.OUT_OF_ORDER, true);
         Room conflicting = room("306", RoomStatus.AVAILABLE, true);
-        when(reservations.hasOverlap(conflicting.getId(), CHECK_IN, CHECK_OUT, RoomAvailabilityService.BLOCKING_STATUSES))
-                .thenReturn(true);
+        conflictingRoomIds.add(conflicting.getId());
         when(rooms.findActiveWithRoomType()).thenReturn(List.of(oldRoom, otherRoom, target, occupied, dirty, cleaning,
                 maintenance, outOfOrder, conflicting));
 
@@ -193,8 +196,7 @@ class ReservationRoomReassignmentServiceTest {
     /** Confirms an overlapping blocking reservation on the target is rejected. */
     @Test
     void shouldRejectOverlappingTarget() {
-        when(reservations.hasOverlap(target.getId(), CHECK_IN, CHECK_OUT, RoomAvailabilityService.BLOCKING_STATUSES))
-                .thenReturn(true);
+        conflictingRoomIds.add(target.getId());
 
         assertUnavailable();
     }
@@ -204,7 +206,8 @@ class ReservationRoomReassignmentServiceTest {
     void shouldCheckOverlapForTheBookedHalfOpenPeriod() {
         service.reassign(reservation.getId(), oldRoom.getId(), target.getId());
 
-        verify(reservations).hasOverlap(target.getId(), CHECK_IN, CHECK_OUT, RoomAvailabilityService.BLOCKING_STATUSES);
+        verify(rooms).findRoomIdsWithInventoryConflict(
+                eq(List.of(target.getId())), eq(CHECK_IN), eq(CHECK_OUT), any(), any(), anyBoolean(), any(), any());
     }
 
     /** Confirms every non-CONFIRMED reservation state is rejected. */
@@ -308,7 +311,11 @@ class ReservationRoomReassignmentServiceTest {
             }
             return found;
         });
-        when(reservations.hasOverlap(any(), any(), any(), any())).thenReturn(false);
+        when(rooms.findRoomIdsWithInventoryConflict(any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenAnswer(invocation -> {
+                    java.util.Collection<UUID> asked = invocation.getArgument(0);
+                    return asked.stream().filter(conflictingRoomIds::contains).toList();
+                });
     }
 
     /** Confirms a replacement that keeps enough total adult capacity succeeds. */

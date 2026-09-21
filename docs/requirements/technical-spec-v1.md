@@ -4574,4 +4574,21 @@ Reservation `CONFIRMED` (chưa có Stay) có thể cập nhật Guest Compositio
 - **Giao diện**: trên Reservation Detail, action "Edit Guest Composition" chỉ hiện cho `CONFIRMED` và user có `MANAGE_BOOKING`; form hiển thị Guest chính chỉ đọc và dùng lại picker Accompanying Guests của Draft form. Lỗi capacity/trạng thái được localize (EN/VI).
 - **Không đổi / hoãn**: passport (vẫn cảnh báo dựa trên Guest chính), báo cáo (Occupancy vẫn là room-night), và hành vi capacity của Stay Room Change (sau check-in) vẫn là quyết định hoãn — không triển khai trong Task D.
 
+## 67. Room Change-aware Booking Availability (P1 Inventory Integrity)
+
+Tính sẵn sàng khi ĐẶT phòng (booking availability) dùng MỘT primitive overlap duy nhất, nhận biết vòng đời: `RoomAvailabilityService.conflictedRoomIds / hasInventoryConflict`
+(một truy vấn JPQL có giới hạn trong `RoomRepository.findRoomIdsWithInventoryConflict`, theo danh sách room-id, không N+1). Mọi nơi cần kiểm tra overlap phải đi qua primitive này.
+
+- **`ReservationRoom` là snapshot đặt phòng/giá bất biến** và KHÔNG bị Room Change thay đổi (báo cáo, Charge, giá không đổi).
+- **Reservation `CONFIRMED`** chặn phòng bằng khoảng ngày của `ReservationRoom`. **Reservation `CHECKED_IN`** chặn phòng bằng các `StayRoomAssignment` THỰC TẾ (đổi sang ngày khách sạn); `ReservationRoom` của Reservation CHECKED_IN KHÔNG được đếm thêm.
+  Các trạng thái khác (DRAFT, CANCELLED, NO_SHOW, CHECKED_OUT) không chặn.
+- **Khoảng nửa mở `[in, out)`**: lưu trú kết thúc đúng ngày `in` không chặn lưu trú bắt đầu ngày đó.
+- **Ranh giới ngày Room Change**: Room Change vào ngày khách sạn D chuyển tồn kho từ D (A=`[20/09,21/09)`, B=`[21/09,24/09)`). Assignment đã đóng phủ `[date(assignedFrom), date(assignedTo))` theo cùng quy ước đêm khách sạn của Occupancy Report.
+  Việc đổi `Instant` sang ngày khách sạn dùng `Clock`/múi giờ khách sạn được tiêm (Asia/Ho_Chi_Minh), tính bằng Java, không đổi múi giờ trong SQL.
+- **Quá hạn (overdue)**: assignment đang mở bảo vệ tới `max(ngày check-out dự kiến, hôm nay + 1)`; nghĩa là stay quá hạn chỉ bảo vệ đêm hiện tại. Hệ quả: vào ngày check-out dự kiến khi còn CHECKED_IN, phòng vẫn bị giữ cho đêm nay tới khi check-out đóng assignment.
+- **Status tách khỏi availability theo ngày**: `Room.status` (OCCUPIED/DIRTY/CLEANING…) không bao giờ chặn Confirm hay đặt tương lai; kiểm tra vật lý lúc check-in (AVAILABLE, `ROOM_OCCUPIED`) và Room Change (đích phải AVAILABLE) giữ nguyên.
+- **Nơi gọi**: `ReservationService.confirm`, `RoomChangeService` (danh sách ứng viên + `changeRoom`), tra cứu phòng (`RoomAvailabilityService`, gồm Pre-check-in Reassignment với ngữ nghĩa không đổi). Người khách đổi lại B→A và đổi nhiều bước A→B→C đúng mà không cần loại trừ đặc biệt.
+- **Đồng thời**: V1 do ứng dụng bảo đảm; kiểm tra overlap luôn thực hiện KHI đang giữ khóa dòng Room (`lockAllByIdIn`, sắp xếp theo id) ở cả Confirm lẫn Room Change nên hai thao tác cạnh tranh cùng phòng/ngày được tuần tự hóa.
+- **Không tự sửa** các xung đột đã tồn tại trong dữ liệu. Mô hình phân bổ ở mức DB (bảng allocation / exclusion constraint) được hoãn. **Stay Extension chưa được triển khai.**
+
 **End of Specification v1.0**

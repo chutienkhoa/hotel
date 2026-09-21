@@ -63,9 +63,11 @@ class ReservationCapacityLifecycleTest {
     private final ChargeRepository charges = mock(ChargeRepository.class);
     private final AuditLogRepository audits = mock(AuditLogRepository.class);
     private final ReservationNumberGenerator numbers = mock(ReservationNumberGenerator.class);
+    private final com.example.hotel.service.room.RoomAvailabilityService roomAvailability =
+            mock(com.example.hotel.service.room.RoomAvailabilityService.class);
     private final ReservationService service = new ReservationService(
             reservations, guests, rooms, stays, mock(StayRoomAssignmentRepository.class), charges, audits,
-            new ReservationMapper(), numbers, mock(StayBalanceService.class),
+            new ReservationMapper(), numbers, mock(StayBalanceService.class), roomAvailability,
             Clock.fixed(IN.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
     private final Guest primary = Guest.create(UUID.randomUUID(), "G-1", "Ann", "Lee", null, null, "Vietnam", null, null);
@@ -282,7 +284,8 @@ class ReservationCapacityLifecycleTest {
         when(reservations.findById(reservation.getId())).thenReturn(Optional.of(reservation));
         List<Room> roomList = reservation.getRooms().stream().map(ReservationRoom::getRoom).toList();
         when(rooms.lockAllByIdIn(any())).thenReturn(roomList);
-        when(reservations.hasOverlap(any(), any(), any(), any())).thenReturn(overlap);
+        when(roomAvailability.conflictedRoomIds(any(), any(), any()))
+                .thenReturn(overlap ? java.util.Set.of(roomList.get(0).getId()) : java.util.Set.of());
     }
 
     private void arrangeCheckIn(Reservation reservation) {

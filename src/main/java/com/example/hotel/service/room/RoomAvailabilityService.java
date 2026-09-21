@@ -2,10 +2,16 @@ package com.example.hotel.service.room;
 
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.ReservationStatus;
+import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.entity.room.Room;
-import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.room.RoomRepository;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Predicate;
@@ -13,36 +19,40 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Answers which Rooms can be offered for a stay period, keeping two concepts apart. BOOKING availability is
- * about a requested period: the Room is bookable inventory and has no overlapping CONFIRMED or CHECKED_IN
- * Reservation (existing half-open overlap semantics: a stay ending on a date does not block one starting on it).
- * CHECK-IN readiness is about right now: the Room must additionally be AVAILABLE, the only check-in-ready
- * RoomStatus in V1. Current OCCUPIED, DIRTY or CLEANING status never blocks a future booking.
+ * The single source of BOOKING availability. It answers which Rooms can be offered for a stay period, keeping two
+ * concepts apart. BOOKING availability is about a requested hotel-night interval {@code [in, out)} (half-open: a stay
+ * ending on a date does not block one starting on it) and is lifecycle-aware:
+ * <ul>
+ *   <li>CONFIRMED Reservations block through their immutable {@code ReservationRoom} intervals;</li>
+ *   <li>CHECKED_IN Stays block through their ACTUAL {@code StayRoomAssignment}s, so after a Room Change the room the
+ *       guest left is released and the room they occupy is protected (see {@code RoomRepository
+ *       .findRoomIdsWithInventoryConflict}). The CHECKED_IN {@code ReservationRoom} is never counted.</li>
+ * </ul>
+ * A Room Change on hotel date D transfers inventory starting D; an open assignment protects at least the current
+ * hotel night even past its planned check-out. CHECK-IN readiness is separate and about right now: the Room must
+ * additionally be AVAILABLE, the only check-in-ready RoomStatus in V1. Current OCCUPIED, DIRTY or CLEANING status
+ * never blocks a future booking. Existing conflicts already stored are never repaired here.
  */
 @Service
 public class RoomAvailabilityService {
 
-    /** Reservation statuses that occupy a Room for their booked dates. */
-    public static final List<ReservationStatus> BLOCKING_STATUSES =
-            List.of(ReservationStatus.CONFIRMED, ReservationStatus.CHECKED_IN);
-
     private final RoomRepository roomRepository;
-    private final ReservationRepository reservationRepository;
+    private final Clock clock;
 
     /**
      * Creates the service.
      *
-     * @param roomRepository source of active Rooms
-     * @param reservationRepository source of the date-overlap check
+     * @param roomRepository source of active Rooms and of the lifecycle-aware overlap query
+     * @param clock authoritative hotel business clock; its zone defines hotel dates
      */
-    public RoomAvailabilityService(RoomRepository roomRepository, ReservationRepository reservationRepository) {
+    public RoomAvailabilityService(RoomRepository roomRepository, Clock clock) {
         this.roomRepository = roomRepository;
-        this.reservationRepository = reservationRepository;
+        this.clock = clock;
     }
 
     /**
      * Lists Rooms that can be BOOKED for {@code [checkInDate, checkOutDate)}: bookable inventory without an
-     * overlapping Reservation. Current RoomStatus OCCUPIED, DIRTY or CLEANING does not exclude a Room.
+     * inventory conflict. Current RoomStatus OCCUPIED, DIRTY or CLEANING does not exclude a Room.
      *
      * @param checkInDate inclusive requested check-in date
      * @param checkOutDate exclusive requested check-out date
@@ -55,8 +65,8 @@ public class RoomAvailabilityService {
 
     /**
      * Lists Rooms that can be checked in IMMEDIATELY for {@code [checkInDate, checkOutDate)}: active AVAILABLE
-     * Rooms without an overlapping Reservation. DIRTY, CLEANING, MAINTENANCE, OUT_OF_ORDER and OCCUPIED Rooms are
-     * not offered.
+     * Rooms without an inventory conflict. DIRTY, CLEANING, MAINTENANCE, OUT_OF_ORDER and OCCUPIED Rooms are not
+     * offered.
      *
      * @param checkInDate inclusive requested check-in date (the hotel current date for a Walk-in)
      * @param checkOutDate exclusive requested check-out date
@@ -69,7 +79,7 @@ public class RoomAvailabilityService {
 
     /**
      * Tells whether one Room can be checked in IMMEDIATELY for {@code [checkInDate, checkOutDate)}: it is active
-     * AVAILABLE and has no overlapping CONFIRMED or CHECK_IN Reservation. This is the single predicate behind
+     * AVAILABLE and has no inventory conflict. This is the single predicate behind
      * {@link #checkInReadyRoomsForPeriod} and pre-check-in Room reassignment.
      *
      * @param room the Room to test
@@ -78,14 +88,52 @@ public class RoomAvailabilityService {
      * @return {@code true} when the Room is check-in-ready and conflict-free for the period
      */
     public boolean isCheckInReadyForPeriod(Room room, LocalDate checkInDate, LocalDate checkOutDate) {
-        return room.isReadyForCheckIn()
-                && !reservationRepository.hasOverlap(room.getId(), checkInDate, checkOutDate, BLOCKING_STATUSES);
+        return room.isReadyForCheckIn() && !hasInventoryConflict(room.getId(), checkInDate, checkOutDate);
+    }
+
+    /**
+     * The shared lifecycle-aware overlap primitive for one Room. Authoritative write operations (Confirm, Room Change)
+     * call it while holding the Room row lock, so it always reads committed data at that point.
+     *
+     * @param roomId Room identifier
+     * @param in inclusive first requested hotel night
+     * @param out exclusive end of the requested interval
+     * @return {@code true} when the Room is already allocated for any part of {@code [in, out)}
+     */
+    public boolean hasInventoryConflict(UUID roomId, LocalDate in, LocalDate out) {
+        return !conflictedRoomIds(List.of(roomId), in, out).isEmpty();
+    }
+
+    /**
+     * The shared lifecycle-aware overlap primitive for many Rooms, in a single bounded query.
+     *
+     * @param roomIds Rooms to test
+     * @param in inclusive first requested hotel night
+     * @param out exclusive end of the requested interval
+     * @return the identifiers of the Rooms that are already allocated for any part of {@code [in, out)}
+     */
+    public Set<UUID> conflictedRoomIds(Collection<UUID> roomIds, LocalDate in, LocalDate out) {
+        if (roomIds.isEmpty()) {
+            return Set.of();
+        }
+        ZoneId zone = clock.getZone();
+        LocalDate today = LocalDate.now(clock);
+        return new HashSet<>(roomRepository.findRoomIdsWithInventoryConflict(
+                roomIds,
+                in,
+                out,
+                out.atStartOfDay(zone).toInstant(),
+                in.plusDays(1).atStartOfDay(zone).toInstant(),
+                !today.isBefore(in),
+                ReservationStatus.CONFIRMED,
+                StayStatus.CHECKED_IN));
     }
 
     private List<RoomLookupResponse> roomsForPeriod(LocalDate checkInDate, LocalDate checkOutDate, Predicate<Room> eligible) {
-        return roomRepository.findByActiveTrue().stream()
-                .filter(eligible)
-                .filter(room -> !reservationRepository.hasOverlap(room.getId(), checkInDate, checkOutDate, BLOCKING_STATUSES))
+        List<Room> candidates = roomRepository.findByActiveTrue().stream().filter(eligible).toList();
+        Set<UUID> conflicted = conflictedRoomIds(candidates.stream().map(Room::getId).toList(), checkInDate, checkOutDate);
+        return candidates.stream()
+                .filter(room -> !conflicted.contains(room.getId()))
                 .sorted(Comparator.comparing(Room::getRoomNumber))
                 .map(room -> new RoomLookupResponse(room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive()))
                 .toList();

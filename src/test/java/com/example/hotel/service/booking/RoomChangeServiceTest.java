@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -203,9 +204,9 @@ class RoomChangeServiceTest {
     @Test
     void shouldRejectTargetRoomWithOverlap() {
         Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
-        when(fixture.reservationRepository.hasOverlap(
-                eq(fixture.room305.getId()), any(), any(), anyList()))
-                .thenReturn(true);
+        when(fixture.roomRepository.findRoomIdsWithInventoryConflict(
+                any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(List.of(fixture.room305.getId()));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -429,7 +430,6 @@ class RoomChangeServiceTest {
         List<UUID> lockIds = List.of(room201.getId(), room305.getId()).stream().sorted().toList();
         when(roomRepository.lockAllByIdIn(lockIds)).thenReturn(
                 List.of(room201, room305).stream().sorted(java.util.Comparator.comparing(Room::getId)).toList());
-        when(reservationRepository.hasOverlap(any(), any(), any(), anyList())).thenReturn(false);
 
         setCurrentUser(userId);
 
@@ -440,6 +440,7 @@ class RoomChangeServiceTest {
                 roomRepository,
                 auditLogRepository,
                 new ReservationMapper(),
+                new com.example.hotel.service.room.RoomAvailabilityService(roomRepository, clock),
                 clock);
 
         return new Fixture(

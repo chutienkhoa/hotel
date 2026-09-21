@@ -151,29 +151,6 @@ public interface ReservationRepository
     Optional<String> allocateReservationNumber();
 
     /**
-     * Kiểm tra xem một phòng có reservation thuộc các trạng thái được chỉ định bị giao ngày hay
-     * không.
-     *
-     * @param roomId định danh phòng
-     * @param in ngày bắt đầu cần kiểm tra
-     * @param out ngày kết thúc cần kiểm tra
-     * @param statuses các trạng thái reservation được tính là đang chiếm phòng
-     * @return {@code true} nếu tồn tại khoảng ngày giao nhau
-     */
-    @Query(
-            "SELECT COUNT(rr) > 0 "
-                    + "FROM ReservationRoom rr "
-                    + "WHERE rr.room.id = :roomId "
-                    + "AND rr.reservation.status IN :statuses "
-                    + "AND rr.checkInDate < :out "
-                    + "AND rr.checkOutDate > :in")
-    boolean hasOverlap(
-            @Param("roomId") UUID roomId,
-            @Param("in") LocalDate in,
-            @Param("out") LocalDate out,
-            @Param("statuses") Collection<ReservationStatus> statuses);
-
-    /**
      * Finds the ReservationRoom pricing snapshots whose booked interval overlaps a month and whose
      * Reservation is in one of the given statuses, as a narrow projection (no entity graph).
      *

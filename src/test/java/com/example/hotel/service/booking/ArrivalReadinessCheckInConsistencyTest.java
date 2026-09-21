@@ -124,7 +124,7 @@ class ArrivalReadinessCheckInConsistencyTest {
         ReservationService service = new ReservationService(
                 reservations, mock(GuestRepository.class), rooms, stays, mock(StayRoomAssignmentRepository.class),
                 charges, mock(AuditLogRepository.class), new ReservationMapper(), mock(ReservationNumberGenerator.class),
-                mock(StayBalanceService.class),
+                mock(StayBalanceService.class), mock(com.example.hotel.service.room.RoomAvailabilityService.class),
                 Clock.fixed(TODAY.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
         ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(
