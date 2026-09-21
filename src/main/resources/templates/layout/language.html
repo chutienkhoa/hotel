@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- VI | EN switch. languageSwitchBase is the current URL (query only, without lang) ending in ? or &.
+     A controller that renders a form from a POST sets languageSwitchPath to the matching GET route. -->
+<nav aria-label="Language" class="language-switch" th:aria-label="#{common.language.label}" th:fragment="switcher">
+    <a class="language-switch__option" hreflang="vi" lang="vi"
+       th:aria-current="${#locale.language == 'vi'} ? 'true'"
+       th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=vi'}" th:text="#{common.language.vi}"
+       th:title="#{common.language.vi.title}">VI</a>
+    <span aria-hidden="true">|</span>
+    <a class="language-switch__option" hreflang="en" lang="en"
+       th:aria-current="${#locale.language == 'en'} ? 'true'"
+       th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=en'}" th:text="#{common.language.en}"
+       th:title="#{common.language.en.title}">EN</a>
+</nav>
+</body>
+</html>

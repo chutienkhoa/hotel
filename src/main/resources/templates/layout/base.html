@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:fragment="head(pageTitle)">
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1" name="viewport" />
+    <title th:text="${pageTitle} + ' | ' + #{common.app.name}">Hotel Management</title>
+    <!-- Translated strings for JavaScript: read with PmsI18n.t(key, fallback). -->
+    <meta name="pms-i18n:js.datePicker.clear" th:content="#{js.datePicker.clear}" content="Clear" />
+    <meta name="pms-i18n:js.datePicker.clear.aria" th:content="#{js.datePicker.clear.aria}" content="Clear date" />
+    <meta name="pms-i18n:js.datePicker.today" th:content="#{js.datePicker.today}" content="Today" />
+    <meta name="pms-i18n:js.datePicker.today.aria" th:content="#{js.datePicker.today.aria}" content="Select today" />
+    <link rel="stylesheet" th:href="@{/css/vendor/flatpickr-4.6.13.min.css}" />
+    <link rel="stylesheet" th:href="@{/css/common/layout.css}" />
+    <script defer th:src="@{/js/common/i18n.js}"></script>
+    <script defer th:src="@{/js/vendor/flatpickr-4.6.13.min.js}"></script>
+    <script defer th:src="@{/js/common/date-picker.js}"></script>
+    <script defer th:src="@{/js/common/money-input.js}"></script>
+    <script defer th:src="@{/js/common/confirmation.js}"></script>
+</head>
+</html>

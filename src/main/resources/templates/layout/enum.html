@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Display label of an internal value: enum.<semanticType>.<VALUE>. The value itself never changes;
+     when no label exists the raw value is shown. -->
+<span th:fragment="label(type, value)"
+      th:text="${value == null ? '' : (#messages.msgOrNull('enum.' + type + '.' + value) ?: value)}">CHECKED_IN</span>
+<!-- Status badge: keeps the semantic CSS class from the internal value; only the text is translated. -->
+<span class="status-badge" th:class="'status-badge ' + ${cssClass}" th:fragment="badge(type, value, cssClass)"
+      th:text="${value == null ? '' : (#messages.msgOrNull('enum.' + type + '.' + value) ?: value)}">ACTIVE</span>
+</body>
+</html>

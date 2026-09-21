@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Expense Categories')}"></head>
+<body>
+<div class="app-shell page-expenses">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/expenses}">Back to expenses</a>
+        <div class="page-header">
+            <div>
+                <h1>Expense Categories</h1>
+                <p>Configure the categories available to classify Expenses.</p>
+            </div>
+            <a class="button button-primary" th:if="${canManageExpense}" th:href="@{/expense-categories/new}">Add Category</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <p class="empty-state" th:if="${#lists.isEmpty(categories)}">No Expense categories found.</p>
+
+        <div class="table-wrap" th:unless="${#lists.isEmpty(categories)}">
+            <table>
+                <thead>
+                <tr>
+                    <th scope="col">Code</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Status</th>
+                    <th class="table-actions" scope="col">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="category : ${categories}">
+                    <td th:text="${category.code}">ELECTRICITY</td>
+                    <td th:text="${category.name}">Electricity</td>
+                    <td>
+                        <span class="status-badge"
+                              th:classappend="${category.active} ? ' status-badge--available' : ' status-badge--checked_out'"
+                              th:text="${category.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+                    </td>
+                    <td class="table-actions">
+                        <div class="action-row" th:if="${canManageExpense}">
+                            <a class="button button-secondary table-action"
+                               th:href="@{/expense-categories/{id}/edit(id=${category.id})}">Edit</a>
+                            <form th:if="${category.active}" data-confirm-label="Deactivate category"
+                                  data-confirm-severity="WARNING" data-confirm-title="Deactivate category" method="post"
+                                  th:action="@{/expense-categories/{id}/deactivate(id=${category.id})}"
+                                  th:attr="data-confirm-message=|Deactivate category ${category.code}?|">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-danger table-action" type="submit">Deactivate</button>
+                            </form>
+                            <form th:unless="${category.active}" data-confirm-label="Reactivate category"
+                                  data-confirm-severity="NORMAL" data-confirm-title="Reactivate category" method="post"
+                                  th:action="@{/expense-categories/{id}/reactivate(id=${category.id})}"
+                                  th:attr="data-confirm-message=|Reactivate category ${category.code}?|">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-primary table-action" type="submit">Reactivate</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

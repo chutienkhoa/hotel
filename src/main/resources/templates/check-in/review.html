@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Check-in Review')}"></head>
+<body>
+<div class="app-shell page-check-in">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/check-in/existing}">Back to search</a>
+
+        <div class="page-header">
+            <div>
+                <h1>Check-in Review</h1>
+                <div class="reservation-detail-heading-meta">
+                    <span th:text="${review.reservationNumber}">R20260916-000001</span>
+                    <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(review.status)}" th:text="${review.status}">CONFIRMED</span>
+                </div>
+            </div>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <div class="reservation-detail">
+            <section class="check-in-review-blocked" th:if="${review.status != 'CONFIRMED'}">
+                <h2>This reservation is not available for check-in.</h2>
+                <p th:text="${'Current status: ' + review.status + '. Only CONFIRMED reservations can be checked in.'}">Current status</p>
+            </section>
+
+            <section class="check-in-review-blocked" th:if="${review.status == 'CONFIRMED' and review.timing.name() == 'EARLY'}">
+                <h2>Early check-in is not allowed.</h2>
+                <p>
+                    Scheduled check-in date: <span th:replace="~{layout/datetime :: date(${review.scheduledCheckInDate})}">—</span>.
+                    Current hotel date: <span th:replace="~{layout/datetime :: date(${review.currentHotelDate})}">—</span>.
+                </p>
+                <p>Staff must create a separate DIRECT reservation for the additional earlier stay.</p>
+            </section>
+
+            <section class="check-in-review-warning" th:if="${review.status == 'CONFIRMED' and review.timing.name() == 'LATE'}">
+                <h2>This guest is checking in late.</h2>
+                <p>
+                    Scheduled check-in date: <span th:replace="~{layout/datetime :: date(${review.scheduledCheckInDate})}">—</span>.
+                    Current hotel date: <span th:replace="~{layout/datetime :: date(${review.currentHotelDate})}">—</span>.
+                </p>
+                <p>Original booking dates, nights, rates, and charges remain unchanged.</p>
+            </section>
+
+            <section aria-labelledby="check-in-info-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="check-in-info-heading">Reservation information</h2>
+                        <p>Read-only. Guest, room, source, dates, rate, and totals cannot be changed here.</p>
+                    </div>
+                </div>
+
+                <div class="reservation-info-grid">
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--blue">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Guest</p>
+                            <a class="reservation-info-value reservation-info-link"
+                               th:href="@{/guests/{id}(id=${review.guestId})}" th:if="${canManageGuest}">
+                                <span th:text="${review.guestCode}">GUEST-001</span>
+                                <span class="reservation-info-link-icon"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                            </a>
+                            <p class="reservation-info-value" th:text="${review.guestCode}" th:unless="${canManageGuest}">GUEST-001</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--green">
+                            <svg th:replace="~{layout/icons :: building}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Source</p>
+                            <p class="reservation-info-value" th:text="${review.source.displayName}">Direct</p>
+                            <p class="reservation-info-secondary" th:if="${review.otaBookingReference}"
+                               th:text="${'Ref: ' + review.otaBookingReference}">Ref: 123456789</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--blue">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Check-in</p>
+                            <p class="reservation-info-value">
+                                <span th:replace="~{layout/datetime :: date(${review.scheduledCheckInDate})}">—</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--blue">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Check-out</p>
+                            <p class="reservation-info-value">
+                                <span th:replace="~{layout/datetime :: date(${review.scheduledCheckOutDate})}">—</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--amber">
+                            <svg th:replace="~{layout/icons :: coins}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Total</p>
+                            <p class="reservation-info-value">
+                                <span th:replace="~{layout/money :: amount(${review.totalAmount}, ${review.currency})}">0 VND</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Actual check-in (preview)</p>
+                            <p class="reservation-info-value">
+                                <span th:replace="~{layout/datetime :: dateTime(${review.actualCheckInPreview})}">—</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="check-in-rooms-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="check-in-rooms-heading">Assigned rooms</h2>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col">Room</th>
+                            <th scope="col">Room type</th>
+                            <th scope="col">Check-in</th>
+                            <th scope="col">Check-out</th>
+                            <th scope="col">Nightly rate</th>
+                            <th scope="col">Total</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="room : ${review.rooms}">
+                            <td th:text="${room.roomNumber}">101</td>
+                            <td th:text="${room.roomTypeName} ?: '—'">—</td>
+                            <td><span th:replace="~{layout/datetime :: date(${room.checkInDate})}">—</span></td>
+                            <td><span th:replace="~{layout/datetime :: date(${room.checkOutDate})}">—</span></td>
+                            <td><span th:replace="~{layout/money :: amount(${room.nightlyRate}, ${review.currency})}">0 VND</span></td>
+                            <td><span th:replace="~{layout/money :: amount(${room.totalAmount}, ${review.currency})}">0 VND</span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section aria-labelledby="check-in-actions-heading" class="card reservation-detail-section actions" th:if="${review.eligibleForCheckIn}">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="check-in-actions-heading">Confirm check-in</h2>
+                    </div>
+                </div>
+                <form data-confirm-label="Confirm Check-in" data-confirm-severity="WARNING"
+                      data-confirm-title="Confirm check-in" method="post"
+                      th:action="@{/check-in/reservations/{id}/confirm(id=${review.reservationId})}"
+                      th:attr="data-confirm-message=|Check in reservation ${review.reservationNumber}?|">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-primary" type="submit">Confirm Check-in</button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

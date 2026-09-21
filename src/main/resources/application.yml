@@ -1,0 +1,30 @@
+spring:
+  messages:
+    basename: messages
+    encoding: UTF-8
+    fallback-to-system-locale: false
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 40MB
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hotel}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+security:
+  jwt-secret: ${JWT_SECRET}
+  jwt-expiration: PT8H
+  bootstrap-admin-username: ${BOOTSTRAP_ADMIN_USERNAME}
+  bootstrap-admin-password: ${BOOTSTRAP_ADMIN_PASSWORD}
+hotel:
+  storage:
+    guest-documents:
+      path: ${GUEST_DOCUMENTS_PATH:var/guest-documents}
+  i18n:
+    cookie-secure: ${HOTEL_I18N_COOKIE_SECURE:false}

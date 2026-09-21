@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Change Room — Review')}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link"
+           th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${review.reservationId},roomId=${review.currentRoomId})}">Back to Change Room</a>
+
+        <div class="page-header">
+            <div>
+                <h1>Change Room — Review</h1>
+                <div class="reservation-detail-heading-meta">
+                    <span th:text="${review.reservationNumber}">R20260916-000001</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="reservation-detail">
+            <section aria-labelledby="room-change-review-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="room-change-review-heading">Room change details</h2>
+                        <p>Read-only. Pricing, existing charges, and payments are never affected by Room Change.</p>
+                    </div>
+                </div>
+
+                <div class="reservation-info-grid">
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--blue">
+                            <svg th:replace="~{layout/icons :: building}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Current room</p>
+                            <p class="reservation-info-value" th:text="${review.currentRoomNumber}">201</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--green">
+                            <svg th:replace="~{layout/icons :: building}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Replacement room</p>
+                            <p class="reservation-info-value" th:text="${review.targetRoomNumber}">305</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--amber">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Reason</p>
+                            <p class="reservation-info-value" th:text="${review.reason}">GUEST_REQUEST</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item reservation-info-notes">
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Notes</p>
+                            <p class="reservation-info-value"
+                               th:text="${#strings.isEmpty(review.notes) ? '—' : review.notes}">—</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item">
+                        <span class="reservation-info-icon reservation-info-icon--blue">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label">Planned check-out for this room</p>
+                            <p class="reservation-info-value">
+                                <span th:replace="~{layout/datetime :: date(${review.plannedCheckOutDate})}">—</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="room-change-confirm-heading" class="card reservation-detail-section actions">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="room-change-confirm-heading">Confirm change</h2>
+                    </div>
+                </div>
+                <form data-confirm-label="Confirm Change" data-confirm-severity="WARNING"
+                      data-confirm-title="Confirm room change" method="post"
+                      th:action="@{/reservations/{id}/rooms/{roomId}/change/confirm(id=${review.reservationId},roomId=${review.currentRoomId})}"
+                      th:attr="data-confirm-message=|Move this guest from Room ${review.currentRoomNumber} to Room ${review.targetRoomNumber}?|">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <input name="targetRoomId" th:value="${review.targetRoomId}" type="hidden" />
+                    <input name="reason" th:value="${review.reason}" type="hidden" />
+                    <input name="notes" th:value="${review.notes}" type="hidden" />
+                    <button class="button button-primary" type="submit">Confirm Change</button>
+                </form>
+            </section>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

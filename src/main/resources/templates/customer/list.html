@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Guests')}"></head>
+<body>
+<div class="app-shell page-guests">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Guests</h1>
+                <p>Manage guest profiles used by reservations.</p>
+            </div>
+            <a class="button button-primary" th:href="@{/guests/new}">Create Guest</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+
+        <section class="form-card" aria-label="Filter guests">
+            <form method="get" th:action="@{/guests}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
+                <div class="form-grid guest-form-grid">
+                    <div class="form-field">
+                        <label for="guestCode">Guest Code</label>
+                        <input id="guestCode" name="guestCode" type="search"
+                               th:value="${searchCriteria.guestCode}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="firstName">First Name</label>
+                        <input id="firstName" name="firstName" type="search"
+                               th:value="${searchCriteria.firstName}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="lastName">Last Name</label>
+                        <input id="lastName" name="lastName" type="search"
+                               th:value="${searchCriteria.lastName}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="email">Email</label>
+                        <input id="email" name="email" type="search"
+                               th:value="${searchCriteria.email}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="nationality">Nationality</label>
+                        <select id="nationality" name="nationality">
+                            <option th:selected="${searchCriteria.nationality == null}" value="">
+                                All nationalities
+                            </option>
+                            <option th:each="country : ${countries}"
+                                    th:selected="${country.name == searchCriteria.nationality}"
+                                    th:text="${country.flag + ' ' + country.name}"
+                                    th:value="${country.name}">🇻🇳 Vietnam</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-row guest-filter-actions">
+                    <a class="button button-secondary" th:href="@{/guests}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="guest-results">
+            <div class="results-toolbar">
+                <p><span th:replace="~{layout/table :: resultSummary(${guestPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${guestPage}, 'Guest pages', 'pagination guest-pagination')}"></nav>
+            </div>
+
+            <p class="empty-state" th:if="${guestPage.empty}">No guests match the current filters.</p>
+
+            <div class="table-wrap" th:unless="${guestPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th th:replace="~{layout/table :: sortHeader('Guest Code', 'guestCode')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('First Name', 'firstName')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('Last Name', 'lastName')}"></th>
+                        <th scope="col">Email</th>
+                        <th scope="col">Nationality</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="guest : ${guestPage.content}">
+                        <td>
+                            <a th:href="@{/guests/{id}(id=${guest.id})}" th:text="${guest.guestCode}">G000001</a>
+                        </td>
+                        <td th:text="${guest.firstName}">First name</td>
+                        <td th:text="${guest.lastName}">Last name</td>
+                        <td th:text="${guest.email}">email@example.com</td>
+                        <td>
+                            <span aria-hidden="true" th:if="${guest.nationality.flag != null}"
+                                  th:text="${guest.nationality.flag}">🇻🇳</span>
+                            <span th:text="${guest.nationality.displayName}">Vietnam</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

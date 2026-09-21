@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Debug HotelApplication",
+      "request": "launch",
+      "mainClass": "com.example.hotel.HotelApplication",
+      "projectName": "hotel-management",
+      "envFile": "${workspaceFolder}/.env",
+      "preLaunchTask": "Maven: Build",
+      "env": {
+        "SPRING_PROFILES_ACTIVE": "dev"
+      },
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "Tomcat started on port (\\d+)",
+        "uriFormat": "http://localhost:%s/"
+      }
+    }
+  ]
+}

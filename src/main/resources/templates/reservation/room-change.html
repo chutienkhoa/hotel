@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Change Room')}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${reservationId})}">Back to reservation</a>
+
+        <div class="page-header">
+            <div>
+                <h1>Change Room</h1>
+                <p>Select a replacement room available for the remaining planned stay of the current room only.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form class="form-card" method="post"
+              th:action="@{/reservations/{id}/rooms/{roomId}/change/review(id=${reservationId},roomId=${roomId})}"
+              th:object="${roomChangeForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <div class="form-field">
+                <label for="targetRoomId">Replacement room</label>
+                <select id="targetRoomId" required th:field="*{targetRoomId}">
+                    <option value="">Select a room</option>
+                    <option th:each="room : ${candidateRooms}" th:text="${room.roomNumber}" th:value="${room.id}">101</option>
+                </select>
+                <p class="field-error" th:errors="*{targetRoomId}"></p>
+                <p class="form-hint" th:if="${#lists.isEmpty(candidateRooms)}">
+                    No rooms are available for the remainder of this room's planned stay.
+                </p>
+            </div>
+
+            <div class="form-field">
+                <label for="reason">Reason</label>
+                <select id="reason" required th:field="*{reason}">
+                    <option value="">Select a reason</option>
+                    <option th:each="reasonOption : ${reasons}" th:text="${reasonOption}" th:value="${reasonOption}">GUEST_REQUEST</option>
+                </select>
+                <p class="field-error" th:errors="*{reason}"></p>
+            </div>
+
+            <div class="form-field">
+                <label for="notes">Notes</label>
+                <textarea id="notes" maxlength="2000" rows="3" th:field="*{notes}"></textarea>
+                <p class="field-error" th:errors="*{notes}"></p>
+                <p class="form-hint">Required when reason is OTHER.</p>
+            </div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservationId})}">Cancel</a>
+                <button class="button button-primary" type="submit">Review Room Change</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Maven: Build",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["clean", "package", "-DskipTests"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$javac"]
+    },
+    {
+      "label": "Maven: Test",
+      "type": "shell",
+      "command": "mvn",
+      "args": ["test"],
+      "group": "test",
+      "problemMatcher": ["$javac"]
+    }
+  ]
+}

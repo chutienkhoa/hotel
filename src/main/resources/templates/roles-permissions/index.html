@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Roles & Permissions')}"></head>
+<body>
+<div class="app-shell page-roles">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Roles &amp; Permissions</h1>
+                <p>Configure access permissions for PMS roles.</p>
+            </div>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form data-confirm-label="Save changes" data-confirm-message="Save these role permissions? Changes apply on each user's next request."
+              data-confirm-severity="WARNING" data-confirm-title="Save role permissions" method="post"
+              th:action="@{/roles-permissions}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <input name="submittedRoles" th:each="role : ${matrix.roles}" th:value="${role}" type="hidden" />
+
+            <div class="table-wrap">
+                <table class="roles-matrix">
+                    <colgroup>
+                        <col class="roles-matrix-permission" />
+                        <col class="roles-matrix-role" th:each="role : ${matrix.roles}" />
+                        <col class="roles-matrix-spacer" />
+                    </colgroup>
+                    <thead>
+                    <tr>
+                        <th scope="col">Permission</th>
+                        <th class="roles-matrix-cell" scope="col" th:each="role : ${matrix.roles}" th:text="${role}">ADMIN</th>
+                        <th aria-hidden="true" class="roles-matrix-spacer-cell"></th>
+                    </tr>
+                    </thead>
+                    <tbody th:each="group : ${matrix.groups}">
+                    <tr>
+                        <th colspan="5" scope="colgroup" th:text="${group.label}">Group</th>
+                    </tr>
+                    <tr th:each="item : ${group.items}">
+                        <td th:text="${item.label}">Permission</td>
+                        <td class="roles-matrix-cell" th:each="role : ${matrix.roles}">
+                            <input th:aria-label="|${item.label} for ${role}|" th:checked="${item.granted.get(role)}"
+                                   th:disabled="${item.locked}" th:name="|grants[${role}]|"
+                                   th:unless="${item.locked}" th:value="${item.code}" type="checkbox" />
+                            <span class="roles-matrix-locked" th:if="${item.locked}">
+                                <input aria-disabled="true" th:aria-label="|${item.label} for ${role} (locked)|"
+                                       th:checked="${item.granted.get(role)}" disabled type="checkbox" />
+                                <span>Locked</span>
+                            </span>
+                        </td>
+                        <td class="roles-matrix-spacer-cell"></td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-actions">
+                <button class="button button-primary" type="submit">Save Changes</button>
+            </div>
+        </form>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

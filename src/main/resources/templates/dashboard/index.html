@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Dashboard')}"></head>
+<body>
+<div class="app-shell page-dashboard">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Dashboard</h1>
+                <p>Read-only operational overview.</p>
+            </div>
+        </div>
+
+        <section aria-label="Summary" class="card-grid">
+            <div class="card summary-card">
+                <dt>Reservations</dt>
+                <div class="summary-card__kpis">
+                    <div><dd th:text="${dashboard.reservationsThisYear}">0</dd><p class="summary-card__label">This year</p></div>
+                    <div><p class="summary-card__secondary summary-card__secondary--info" th:text="${dashboard.reservationsThisMonth}">0</p><p class="summary-card__label">This month</p><p class="summary-card__label" th:text="${dashboard.currentMonthLabel}">SEP 2026</p></div>
+                </div>
+            </div>
+            <div class="card summary-card">
+                <dt>Rooms</dt>
+                <div class="summary-card__kpis">
+                    <div><dd th:text="${dashboard.activeRooms}">0</dd><p class="summary-card__label">Active rooms</p></div>
+                    <div><p class="summary-card__secondary summary-card__secondary--available" th:text="${dashboard.availableRooms}">0</p><p class="summary-card__label">Available now</p></div>
+                </div>
+            </div>
+            <div class="card summary-card">
+                <dt>Currently Checked-in</dt>
+                <div class="summary-card__kpis">
+                    <div><dd th:text="${dashboard.checkedInStays}">0</dd><p class="summary-card__label">Current stays</p></div>
+                    <div><p class="summary-card__secondary summary-card__secondary--attention" th:text="${dashboard.checkOutTodayStays}">0</p><p class="summary-card__label">Check-out today</p></div>
+                </div>
+            </div>
+        </section>
+
+        <section aria-labelledby="reservations-by-month-heading" class="card chart-card chart-card-wide">
+            <h2 id="reservations-by-month-heading">Reservations by Check-in Month</h2>
+            <p>Planned reservation volume for the current calendar year.</p>
+            <div class="chart-canvas-wrap">
+                <canvas aria-label="Reservations by check-in month chart" id="reservations-by-month-chart" role="img"></canvas>
+                <p data-chart-empty="reservations-by-month-chart" hidden>No reservations are planned for this year.</p>
+            </div>
+            <details class="chart-fallback">
+                <summary>View reservation counts by month</summary>
+                <div class="table-wrap">
+                    <table class="dashboard-count-table">
+                        <thead>
+                        <tr><th scope="col">Month</th><th class="dashboard-numeric-column" scope="col">Reservations</th></tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="monthCount : ${dashboard.reservationsByCheckInMonth}">
+                            <td th:text="|${monthCount.year}-${#numbers.formatInteger(monthCount.month, 2)}|">2026-01</td>
+                            <td class="dashboard-numeric-column" th:text="${monthCount.count}">0</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <section aria-label="Reservation analytics" class="dashboard-chart-grid">
+            <article aria-labelledby="booked-rooms-by-type-heading" class="card chart-card analytics-card">
+                <h2 id="booked-rooms-by-type-heading">Booked Rooms by RoomType</h2>
+                <p>Room assignments for reservations planned this year.</p>
+                <div class="chart-canvas-wrap analytics-chart-area">
+                    <canvas aria-label="Booked rooms by RoomType chart" id="booked-rooms-by-type-chart" role="img"></canvas>
+                    <p data-chart-empty="booked-rooms-by-type-chart" hidden>No room assignments are planned for this year.</p>
+                </div>
+                <details class="chart-fallback analytics-details">
+                    <summary>View room assignment counts by RoomType</summary>
+                    <div class="table-wrap">
+                        <table class="dashboard-count-table">
+                            <thead>
+                            <tr><th scope="col">RoomType</th><th class="dashboard-numeric-column" scope="col">Assignments</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="roomTypeCount : ${dashboard.bookedRoomsByRoomType}">
+                                <td th:text="|${roomTypeCount.roomTypeCode} — ${roomTypeCount.roomTypeName}|">SINGLE — Single Room</td>
+                                <td class="dashboard-numeric-column" th:text="${roomTypeCount.count}">0</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </article>
+
+            <article aria-labelledby="reservations-by-source-heading" class="card chart-card analytics-card">
+                <h2 id="reservations-by-source-heading">Reservations by Source</h2>
+                <p>Booking sources for reservations planned this year.</p>
+                <div class="chart-canvas-wrap analytics-chart-area">
+                    <canvas aria-label="Reservations by source chart" id="reservations-by-source-chart" role="img"></canvas>
+                    <p data-chart-empty="reservations-by-source-chart" hidden>No reservations are planned for this year.</p>
+                </div>
+                <details class="chart-fallback analytics-details">
+                    <summary>View reservation counts by source</summary>
+                    <div class="table-wrap">
+                        <table class="dashboard-count-table">
+                            <thead>
+                            <tr><th scope="col">Source</th><th class="dashboard-numeric-column" scope="col">Reservations</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="sourceCount : ${dashboard.reservationsBySource}">
+                                <td th:text="${sourceCount.source}">DIRECT</td>
+                                <td class="dashboard-numeric-column" th:text="${sourceCount.count}">0</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+            </article>
+        </section>
+
+        <section class="card">
+            <h2>Reservations by Status</h2>
+            <div class="table-wrap"><table class="dashboard-count-table">
+                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Count</th></tr></thead>
+                <tbody>
+                <tr th:each="statusCount : ${dashboard.reservationsByStatus}">
+                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(statusCount.status)}" th:text="${statusCount.status}">DRAFT</span></td>
+                    <td class="dashboard-numeric-column" th:text="${statusCount.count}">0</td>
+                </tr>
+                </tbody>
+            </table></div>
+        </section>
+
+        <section class="card">
+            <h2>Active Rooms by Operational Status</h2>
+            <div class="table-wrap"><table class="dashboard-count-table">
+                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Count</th></tr></thead>
+                <tbody>
+                <tr th:each="statusCount : ${dashboard.roomsByStatus}">
+                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(statusCount.status)}" th:text="${statusCount.status}">AVAILABLE</span></td>
+                    <td class="dashboard-numeric-column" th:text="${statusCount.count}">0</td>
+                </tr>
+                </tbody>
+            </table></div>
+        </section>
+
+        <section class="card alert-card">
+            <h2>Operational Room Alerts</h2>
+            <div class="table-wrap"><table class="dashboard-count-table">
+                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Active Room Count</th></tr></thead>
+                <tbody>
+                <tr th:each="alert : ${dashboard.operationalRoomAlerts}">
+                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(alert.status)}" th:text="${alert.status}">DIRTY</span></td>
+                    <td class="dashboard-numeric-column" th:text="${alert.count}">0</td>
+                </tr>
+                </tbody>
+            </table></div>
+        </section>
+
+        <section class="card">
+            <h2>Expenses by Status</h2>
+            <div class="table-wrap"><table class="dashboard-count-table">
+                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Count</th></tr></thead>
+                <tbody>
+                <tr th:each="statusCount : ${dashboard.expensesByStatus}">
+                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(statusCount.status)}" th:text="${statusCount.status}">DRAFT</span></td>
+                    <td class="dashboard-numeric-column" th:text="${statusCount.count}">0</td>
+                </tr>
+                </tbody>
+            </table></div>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+<script id="dashboard-analytics-data" th:inline="javascript" type="application/json">
+    {
+        "reservationsByCheckInMonth": /*[[${dashboard.reservationsByCheckInMonth}]]*/ [],
+        "bookedRoomsByRoomType": /*[[${dashboard.bookedRoomsByRoomType}]]*/ [],
+        "reservationsBySource": /*[[${dashboard.reservationsBySource}]]*/ []
+    }
+</script>
+<script defer th:src="@{/webjars/chart.js/4.5.1/dist/chart.umd.js}"></script>
+<script defer th:src="@{/js/dashboard/analytics.js}"></script>
+</body>
+</html>

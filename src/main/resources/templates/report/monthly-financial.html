@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{report.financial.title})}"></head>
+<body>
+<div class="app-shell page-reports">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reports}" th:text="#{report.financial.back}">Back to Reports</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{report.financial.title}">Monthly Financial Report</h1>
+                <p th:text="#{report.financial.description}">Revenue, expenses and profitability for a selected month.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" th:aria-label="#{report.financial.month.label}">
+            <form method="get" th:action="@{/reports/monthly-financial}">
+                <div class="form-field">
+                    <label for="month" th:text="#{report.financial.month.label}">Month</label>
+                    <input id="month" name="month" required th:value="${selectedMonth}" type="month" />
+                </div>
+                <div class="action-row">
+                    <button class="button button-primary" th:text="#{report.financial.view}" type="submit">View report</button>
+                </div>
+            </form>
+        </section>
+
+        <div th:if="${report != null}">
+            <p class="message message-warning" th:if="${report.nonVndWarning != null}"
+               th:text="#{report.financial.warning.nonVnd(${'' + report.nonVndWarning.reservationCount}, ${'' + report.nonVndWarning.reservationRoomCount}, ${warningCurrencies})}">
+                Non-VND room revenue excluded.
+            </p>
+
+            <dl class="detail-list" id="financial-summary">
+                <dt th:text="#{report.financial.roomRevenue}">Room Revenue</dt>
+                <dd id="room-revenue"><span th:replace="~{layout/money :: amount(${report.roomRevenue}, ${report.currency})}">0 VND</span></dd>
+                <dt th:text="#{report.financial.additionalRevenue}">Additional Revenue</dt>
+                <dd id="additional-revenue"><span th:replace="~{layout/money :: amount(${report.additionalRevenue}, ${report.currency})}">0 VND</span></dd>
+                <dt th:text="#{report.financial.totalRevenue}">Total Revenue</dt>
+                <dd id="total-revenue"><span th:replace="~{layout/money :: amount(${report.totalRevenue}, ${report.currency})}">0 VND</span></dd>
+                <dt th:text="#{report.financial.expense}">Expenses</dt>
+                <dd id="expense"><span th:replace="~{layout/money :: amount(${report.expense}, ${report.currency})}">0 VND</span></dd>
+                <dt th:text="#{report.financial.netProfit}">Net Profit</dt>
+                <dd id="net-profit"><span th:replace="~{layout/money :: amount(${report.netProfit}, ${report.currency})}">0 VND</span></dd>
+                <dt th:text="#{report.financial.profitMargin}">Profit Margin</dt>
+                <dd id="profit-margin"
+                    th:text="${report.profitMargin != null} ? ${#numbers.formatDecimal(report.profitMargin, 1, 'COMMA', 2, 'POINT') + '%'} : #{report.financial.margin.na}">N/A</dd>
+            </dl>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

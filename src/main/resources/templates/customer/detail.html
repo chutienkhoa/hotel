@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Guest detail')}"></head>
+<body>
+<div class="app-shell page-guests">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <nav aria-label="Breadcrumb" class="breadcrumb">
+            <a th:href="@{/guests}">Guests</a>
+            <span class="breadcrumb-separator" aria-hidden="true">/</span>
+            <span class="breadcrumb-current" th:text="${guest.guestCode}">G000001</span>
+        </nav>
+
+        <div class="page-header">
+            <div>
+                <h1 th:text="${guest.guestCode}">G000001</h1>
+                <p>Guest profile</p>
+            </div>
+            <a class="button button-primary" th:href="@{/guests/{id}/edit(id=${guest.id})}">Edit Guest</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+
+        <div class="reservation-detail">
+            <section aria-labelledby="guest-profile-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="guest-profile-heading">Personal Information</h2>
+                    </div>
+                    <span class="reservation-info-icon reservation-info-icon--blue">
+                        <svg th:replace="~{layout/icons :: user}"></svg>
+                    </span>
+                </div>
+
+                <div class="profile-info-grid">
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">First name</p>
+                        <p class="profile-info-value" th:text="${guest.firstName}">Thanh</p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Last name</p>
+                        <p class="profile-info-value" th:text="${guest.lastName}">Le</p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Nationality</p>
+                        <p class="profile-info-value" th:text="${guest.nationality} ?: '—'">Vietnam</p>
+                    </div>
+
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Date of birth</p>
+                        <p class="profile-info-value">
+                            <span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">01/01/1971</span>
+                        </p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Email</p>
+                        <p class="profile-info-value" th:text="${guest.email} ?: '—'">demo.guest1@example.test</p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label">Phone</p>
+                        <p class="profile-info-value" th:text="${guest.phone} ?: '—'">+840900000001</p>
+                    </div>
+
+                    <div class="profile-info-field profile-info-field--full">
+                        <p class="profile-info-label">Address</p>
+                        <p class="profile-info-value" th:text="${guest.address} ?: '—'">1 Demo Street, Ho Chi Minh City</p>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="passport-heading" class="card reservation-detail-section">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="passport-heading">Passport Images</h2>
+                    </div>
+                    <div class="action-row">
+                        <span class="reservation-info-secondary">
+                            <span th:text="${#lists.size(passportDocuments)}">0</span>
+                            <span th:text="${#lists.size(passportDocuments) == 1 ? 'image' : 'images'}">images</span>
+                        </span>
+                        <span class="reservation-info-icon reservation-info-icon--purple">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                        </span>
+                    </div>
+                </div>
+
+                <p class="reservation-info-secondary" th:if="${#lists.isEmpty(passportDocuments)}">No passport images on file.</p>
+
+                <ul class="profile-document-list" th:if="${not #lists.isEmpty(passportDocuments)}">
+                    <li class="passport-document-item" th:each="document, iterStat : ${passportDocuments}">
+                        <div class="passport-document-visual" aria-hidden="true">
+                            <svg th:replace="~{layout/icons :: globe}"></svg>
+                            <span class="passport-document-visual-label">Passport</span>
+                        </div>
+                        <div class="passport-document-content">
+                            <p class="passport-document-title" th:text="${'Passport ' + (iterStat.index + 1)}">Passport 1</p>
+                            <p class="passport-document-description">Stored passport image</p>
+                            <div class="passport-document-actions">
+                                <a class="button button-secondary" target="_blank"
+                                   th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${guest.id},documentId=${document.id})}">
+                                    <svg th:replace="~{layout/icons :: eye}"></svg>
+                                    View Passport
+                                </a>
+                            </div>
+                        </div>
+                    </li>
+                </ul>
+            </section>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

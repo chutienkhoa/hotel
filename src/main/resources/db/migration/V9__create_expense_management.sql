@@ -1,0 +1,57 @@
+CREATE TABLE expense_category (
+    id UUID PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    name VARCHAR(128),
+    description TEXT,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL,
+    created_by UUID,
+    updated_at TIMESTAMPTZ NOT NULL,
+    updated_by UUID
+);
+
+CREATE TABLE expense (
+    id UUID PRIMARY KEY,
+    category_id UUID NOT NULL REFERENCES expense_category(id),
+    amount NUMERIC(19, 6) NOT NULL,
+    currency CHAR(3) NOT NULL DEFAULT 'VND',
+    expense_date DATE NOT NULL,
+    payment_method VARCHAR(32) NOT NULL,
+    description TEXT,
+    status VARCHAR(32) NOT NULL,
+    approved_by UUID REFERENCES app_user(id),
+    created_at TIMESTAMPTZ NOT NULL,
+    created_by UUID NOT NULL REFERENCES app_user(id),
+    updated_at TIMESTAMPTZ NOT NULL,
+    updated_by UUID NOT NULL REFERENCES app_user(id),
+    CONSTRAINT expense_amount_positive CHECK (amount > 0),
+    CONSTRAINT expense_currency_vnd CHECK (currency = 'VND'),
+    CONSTRAINT expense_payment_method_supported CHECK (
+        payment_method IN ('CASH', 'BANK_TRANSFER', 'CREDIT_CARD', 'OTHER')
+    ),
+    CONSTRAINT expense_status_supported CHECK (
+        status IN ('DRAFT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'POSTED')
+    )
+);
+
+CREATE INDEX idx_expense_category_date ON expense(category_id, expense_date, id);
+CREATE INDEX idx_expense_status_date ON expense(status, expense_date, id);
+
+INSERT INTO expense_category (
+    id,
+    code,
+    active,
+    created_at,
+    updated_at
+)
+VALUES
+    ('00000000-0000-0000-0000-000000000301', 'ELECTRICITY', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000302', 'WATER', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000303', 'INTERNET', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000304', 'SALARY', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000305', 'LAUNDRY', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000306', 'CLEANING', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000307', 'SUPPLIES', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000308', 'MAINTENANCE', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+    ('00000000-0000-0000-0000-000000000309', 'OTHER', TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO NOTHING;
