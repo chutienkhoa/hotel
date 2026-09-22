@@ -2,6 +2,8 @@ package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
+import com.example.hotel.dto.booking.request.OtaReferenceCorrectionRequest;
+import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
@@ -96,6 +98,33 @@ public class ReservationController {
     Response updateGuestComposition(
             @PathVariable UUID id, @Valid @RequestBody GuestCompositionUpdateRequest request) {
         return service.updateConfirmedGuestComposition(id, request);
+    }
+
+    /**
+     * Changes only the dates and derived totals of an eligible CONFIRMED reservation.
+     *
+     * @param id reservation identifier
+     * @param request replacement planned dates
+     * @return the reservation after the date change
+     */
+    @PostMapping("/{id}/change-dates")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    Response changeDates(@PathVariable UUID id, @Valid @RequestBody ReservationDateChangeRequest request) {
+        return service.changeConfirmedDates(id, request);
+    }
+
+    /**
+     * Corrects only the OTA booking reference of an eligible CONFIRMED reservation.
+     *
+     * @param id reservation identifier
+     * @param request corrected OTA booking reference
+     * @return the reservation after the correction
+     */
+    @PostMapping("/{id}/correct-ota-reference")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    Response correctOtaReference(
+            @PathVariable UUID id, @Valid @RequestBody OtaReferenceCorrectionRequest request) {
+        return service.correctOtaBookingReference(id, request);
     }
 
     /**

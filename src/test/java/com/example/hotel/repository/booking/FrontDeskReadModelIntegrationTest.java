@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
+import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
 import com.example.hotel.dto.booking.response.FrontDeskStayRow;
 import com.example.hotel.entity.booking.PaymentCurrency;
@@ -112,6 +113,19 @@ class FrontDeskReadModelIntegrationTest {
         assertEquals(List.of("R-OVERDUE", "R-TODAY"), numbers);
         assertEquals(2, numbers.size());
         assertTrue(numbers.containsAll(List.of("R-TODAY", "R-OVERDUE")));
+    }
+
+    /** Confirms Front Desk immediately observes a confirmed Reservation moved away from today's arrivals. */
+    @Test
+    void shouldObserveChangedReservationDates() {
+        UUID reservation = add("R-RESCHEDULED", "CONFIRMED", today, today.plusDays(2), "FA-MOVED");
+        assertEquals(List.of("R-RESCHEDULED"),
+                frontDesk.arrivals().stream().map(FrontDeskArrivalRow::reservationNumber).toList());
+
+        reservationService.changeConfirmedDates(
+                reservation, new ReservationDateChangeRequest(today.plusDays(3), today.plusDays(5)));
+
+        assertTrue(frontDesk.arrivals().isEmpty());
     }
 
     /** Confirms check-in moves a reservation from Arrivals to In-house and Departures with grouped balance readiness. */

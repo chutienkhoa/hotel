@@ -195,6 +195,18 @@ public class PrepaymentService {
     }
 
     /**
+     * Returns the total of active PAID prepayments using the single repository definition shared by prepayment
+     * recording, cancellation/no-show guards and confirmed-reservation date changes.
+     *
+     * @param reservationId Reservation identifier
+     * @return active prepayment amount in the Reservation currency
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal activePaidTotal(UUID reservationId) {
+        return payments.sumActivePrepaymentAppliedAmount(reservationId);
+    }
+
+    /**
      * Attaches the Reservation's active prepayments (the SAME rows) to the Stay just created by check-in, in one
      * bounded locked query, and audits the application once.
      *

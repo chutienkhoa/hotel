@@ -2,10 +2,14 @@ package com.example.hotel.repository.booking;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.room.response.HousekeepingWorkspaceResponse;
+import com.example.hotel.security.CurrentUser;
+import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.room.HousekeepingQueryService;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -14,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -35,6 +41,9 @@ class HousekeepingNextArrivalIntegrationTest {
 
     @Autowired
     private HousekeepingQueryService queryService;
+
+    @Autowired
+    private ReservationService reservationService;
 
     @Autowired
     private Clock clock;
@@ -70,6 +79,8 @@ class HousekeepingNextArrivalIntegrationTest {
         guest = UUID.randomUUID();
         jdbc.update("INSERT INTO guest (id, guest_code, first_name, last_name, created_at, created_by, updated_at, updated_by) "
                 + "VALUES (?, ?, 'Ann', 'Lee', now(), ?, now(), ?)", guest, "G" + guest.toString().substring(0, 8), user, user);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(new CurrentUser(user, "staff"), null, List.of()));
     }
 
     /** Confirms only CONFIRMED, not-yet-past arrivals count, and the nearest one wins per Room. */
@@ -126,6 +137,22 @@ class HousekeepingNextArrivalIntegrationTest {
                 .anyMatch(row -> row.roomNumber().startsWith("HK-INACTIVE")));
     }
 
+    /** Confirms Housekeeping next-arrival derives its date from the synchronized ReservationRoom snapshot. */
+    @Test
+    void nextArrivalObservesChangedReservationRoomDates() {
+        LocalDate today = LocalDate.now(clock);
+        UUID room = room("HK-MOVED");
+        UUID reservation = reservation(room, "CONFIRMED", today.plusDays(5));
+
+        reservationService.changeConfirmedDates(
+                reservation, new ReservationDateChangeRequest(today.plusDays(2), today.plusDays(4)));
+
+        Map<UUID, LocalDate> arrivals = reservationRepository
+                .findNextArrivalsFrom(today, HousekeepingQueryService.UPCOMING_ARRIVAL_STATUSES).stream()
+                .collect(Collectors.toMap(RoomNextArrivalRow::roomId, RoomNextArrivalRow::nextArrivalDate));
+        assertEquals(today.plusDays(2), arrivals.get(room));
+    }
+
     private UUID room(String number) {
         jdbc.update("INSERT INTO room (id, room_number, room_type_id, status, active, created_at, created_by, updated_at, updated_by) "
                 + "VALUES (?, ?, ?, 'AVAILABLE', TRUE, now(), ?, now(), ?) ON CONFLICT (room_number) DO NOTHING",
@@ -133,7 +160,7 @@ class HousekeepingNextArrivalIntegrationTest {
         return jdbc.queryForObject("SELECT id FROM room WHERE room_number = ?", UUID.class, number);
     }
 
-    private void reservation(UUID room, String status, LocalDate checkIn) {
+    private UUID reservation(UUID room, String status, LocalDate checkIn) {
         UUID reservation = UUID.randomUUID();
         jdbc.update("INSERT INTO reservation (id, reservation_number, guest_id, source, status, reserved_at, "
                         + "check_in_date, check_out_date, currency, total_amount, created_at, created_by, updated_at, updated_by) "
@@ -142,5 +169,6 @@ class HousekeepingNextArrivalIntegrationTest {
         jdbc.update("INSERT INTO reservation_room (id, reservation_id, room_id, check_in_date, check_out_date, nightly_rate, "
                 + "total_amount, created_at, created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 1, 1, now(), ?, now(), ?)",
                 UUID.randomUUID(), reservation, room, checkIn, checkIn.plusDays(2), user, user);
+        return reservation;
     }
 }

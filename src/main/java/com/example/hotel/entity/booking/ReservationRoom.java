@@ -150,4 +150,21 @@ public class ReservationRoom extends AuditedEntity {
         totalAmount = nightlyRate.multiply(
                 BigDecimal.valueOf(ChronoUnit.DAYS.between(checkInDate, checkOutDate)));
     }
+
+    /**
+     * Moves this confirmed pre-check-in snapshot to a new interval while preserving its Room and nightly rate.
+     *
+     * @param checkInDate replacement check-in date
+     * @param checkOutDate replacement check-out date
+     * @throws IllegalStateException if the owning Reservation is not CONFIRMED
+     */
+    void changeConfirmedDates(LocalDate checkInDate, LocalDate checkOutDate) {
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("Only confirmed reservation rooms can change dates");
+        }
+        this.checkInDate = checkInDate;
+        this.checkOutDate = checkOutDate;
+        totalAmount = nightlyRate.multiply(
+                BigDecimal.valueOf(ChronoUnit.DAYS.between(checkInDate, checkOutDate)));
+    }
 }

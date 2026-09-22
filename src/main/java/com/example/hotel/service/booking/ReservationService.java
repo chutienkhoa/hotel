@@ -2,10 +2,13 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
+import com.example.hotel.dto.booking.request.OtaReferenceCorrectionRequest;
+import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ArrivalIssueCode;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
+import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
@@ -17,6 +20,8 @@ import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.exception.GuestCompositionUpdateException;
+import com.example.hotel.exception.ConfirmedReservationModificationException;
+import com.example.hotel.exception.ConfirmedReservationModificationException.Reason;
 import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
@@ -52,6 +57,13 @@ import org.springframework.web.server.ResponseStatusException;
 /** Điều phối các thao tác nghiệp vụ và transaction của reservation. */
 @Service
 public class ReservationService {
+
+    /** Audit action for the controlled confirmed-reservation date change. */
+    public static final String CHANGE_DATES_AUDIT_ACTION = "CHANGE_RESERVATION_DATES";
+
+    /** Audit action for the controlled confirmed-reservation OTA reference correction. */
+    public static final String CORRECT_OTA_REFERENCE_AUDIT_ACTION = "CORRECT_OTA_REFERENCE";
+
     private final ReservationRepository reservations;
     private final GuestRepository guests;
     private final RoomRepository rooms;
@@ -362,6 +374,136 @@ public class ReservationService {
         return response(reservation);
     }
 
+    /**
+     * Changes the dates of a CONFIRMED Reservation before Stay creation. Rooms are locked in stable identifier order
+     * before the Reservation row, matching check-in and pre-check-in reassignment. Every mutable condition is then
+     * read again under those locks. The current Reservation's own confirmed rows are explicitly excluded from the
+     * shared inventory query; other Reservations and active Stay assignments are not excluded. Rates and Room
+     * references are preserved, room totals are recalculated for the new night count, and the Reservation total is
+     * recalculated from those room totals. Active PAID prepayments may not exceed that proposed total.
+     *
+     * @param id Reservation identifier
+     * @param request replacement check-in and check-out dates
+     * @return the updated Reservation response
+     * @throws ConfirmedReservationModificationException if lifecycle, dates, inventory, concurrency or prepayment
+     *     invariants reject the operation
+     */
+    @Transactional
+    public Response changeConfirmedDates(UUID id, ReservationDateChangeRequest request) {
+        CurrentUser user = currentUser();
+        LockedReservation locked = lockRoomsThenReservation(id, true);
+        Reservation reservation = locked.reservation();
+        requireConfirmedWithoutStay(reservation);
+        LocalDate newCheckInDate = request == null ? null : request.newCheckInDate();
+        LocalDate newCheckOutDate = request == null ? null : request.newCheckOutDate();
+        requireValidChangedDates(newCheckInDate, newCheckOutDate);
+
+        List<UUID> roomIds = locked.rooms().stream().map(Room::getId).sorted().toList();
+        if (!roomAvailability.conflictedRoomIdsExcludingReservation(
+                        roomIds, newCheckInDate, newCheckOutDate, reservation.getId())
+                .isEmpty()) {
+            throw modification(Reason.ROOM_UNAVAILABLE, "Room is already booked for these dates");
+        }
+
+        long nights = ChronoUnit.DAYS.between(newCheckInDate, newCheckOutDate);
+        BigDecimal proposedTotal = reservation.getRooms().stream()
+                .map(room -> room.getNightlyRate().multiply(BigDecimal.valueOf(nights)))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal activePrepayments = prepayments.activePaidTotal(id);
+        if (activePrepayments.compareTo(proposedTotal) > 0) {
+            throw modification(
+                    Reason.PREPAYMENT_EXCEEDS_TOTAL,
+                    "Active prepayments exceed the proposed reservation total; refund the excess before shortening",
+                    activePrepayments,
+                    proposedTotal,
+                    reservation.getCurrency());
+        }
+
+        String oldValue = describeDateChange(
+                reservation.getCheckInDate(), reservation.getCheckOutDate(), reservation.getTotalAmount());
+        reservation.changeConfirmedDates(newCheckInDate, newCheckOutDate);
+        for (ReservationRoom reservationRoom : reservation.getRooms()) {
+            reservationRoom.audit(user.id());
+        }
+        reservation.audit(user.id());
+        audit(user, CHANGE_DATES_AUDIT_ACTION, reservation, oldValue,
+                describeDateChange(newCheckInDate, newCheckOutDate, reservation.getTotalAmount()));
+        return response(reservation);
+    }
+
+    /**
+     * Corrects only the OTA booking reference of a CONFIRMED non-DIRECT Reservation before Stay creation. Source and
+     * legacy {@code externalBookingId} are never changed; the submitted value follows the existing reference
+     * behavior (blank detection and 255-character maximum, with non-blank text otherwise stored verbatim).
+     *
+     * @param id Reservation identifier
+     * @param request corrected OTA reference
+     * @return the updated Reservation response
+     * @throws ConfirmedReservationModificationException if lifecycle, source or reference validation rejects it
+     */
+    @Transactional
+    public Response correctOtaBookingReference(UUID id, OtaReferenceCorrectionRequest request) {
+        CurrentUser user = currentUser();
+        Reservation reservation = loadForUpdate(id);
+        requireConfirmedWithoutStay(reservation);
+        if (reservation.getSource() == BookingSource.DIRECT) {
+            throw modification(Reason.DIRECT_RESERVATION, "DIRECT reservations cannot correct an OTA reference");
+        }
+        String correctedReference = request == null ? null : request.otaBookingReference();
+        if (correctedReference == null || correctedReference.isBlank()) {
+            throw modification(Reason.OTA_REFERENCE_REQUIRED, "OTA Booking Reference is required for this source");
+        }
+        if (correctedReference.length() > 255) {
+            throw modification(Reason.OTA_REFERENCE_TOO_LONG,
+                    "OTA Booking Reference must not exceed 255 characters", 255);
+        }
+
+        String previousReference = reservation.getOtaBookingReference();
+        reservation.correctOtaBookingReference(correctedReference);
+        reservation.audit(user.id());
+        audit(user, CORRECT_OTA_REFERENCE_AUDIT_ACTION, reservation,
+                "otaBookingReference=" + String.valueOf(previousReference),
+                "otaBookingReference=" + correctedReference);
+        return response(reservation);
+    }
+
+    /** Rejects a controlled pre-check-in modification outside the shared lifecycle boundary. */
+    private void requireConfirmedWithoutStay(Reservation reservation) {
+        if (reservation.getStatus() != ReservationStatus.CONFIRMED) {
+            throw modification(Reason.RESERVATION_NOT_CONFIRMED,
+                    "Only a confirmed reservation can use this operation");
+        }
+        if (stays.existsByReservationId(reservation.getId())) {
+            throw modification(Reason.STAY_ALREADY_EXISTS,
+                    "A Stay already exists, so this reservation can no longer be modified");
+        }
+    }
+
+    /** Validates the replacement interval against the deterministic hotel business date. */
+    private void requireValidChangedDates(LocalDate checkInDate, LocalDate checkOutDate) {
+        LocalDate hotelToday = LocalDate.now(clock);
+        if (checkInDate == null || checkInDate.isBefore(hotelToday)) {
+            throw modification(Reason.CHECK_IN_BEFORE_TODAY,
+                    "New check-in date must be today or later", hotelToday);
+        }
+        if (checkOutDate == null || !checkOutDate.isAfter(checkInDate)) {
+            throw modification(Reason.CHECK_OUT_NOT_AFTER_CHECK_IN,
+                    "New check-out date must be after the new check-in date");
+        }
+    }
+
+    /** Builds the stable audit representation of one date-and-total snapshot. */
+    private String describeDateChange(LocalDate checkInDate, LocalDate checkOutDate, BigDecimal total) {
+        return "checkInDate=" + checkInDate + ", checkOutDate=" + checkOutDate + ", totalAmount="
+                + total.toPlainString();
+    }
+
+    /** Creates a structured controlled-modification rejection for REST and localized MVC handling. */
+    private ConfirmedReservationModificationException modification(
+            Reason reason, String detail, Object... arguments) {
+        return new ConfirmedReservationModificationException(reason, detail, arguments);
+    }
+
     private String describeGuestComposition(Reservation reservation) {
         return "adults=" + reservation.getAdultCount() + ", children=" + reservation.getChildCount()
                 + ", accompanying=" + reservation.getAccompanyingGuests().size();
@@ -644,6 +786,18 @@ public class ReservationService {
      * the lock). The room set read before the locks is compared with the authoritative one afterwards.
      */
     private LockedReservation lockRoomsThenReservation(UUID id) {
+        return lockRoomsThenReservation(id, false);
+    }
+
+    /**
+     * Applies the shared pre-check-in lock order and optionally emits the structured concurrent-change rejection
+     * required by the controlled modification UI.
+     *
+     * @param id Reservation identifier
+     * @param structuredConcurrentFailure whether a changed Room set uses the modification exception
+     * @return locked Reservation and Rooms
+     */
+    private LockedReservation lockRoomsThenReservation(UUID id, boolean structuredConcurrentFailure) {
         List<UUID> roomIds = reservations.findRoomIdsByReservationId(id).stream().sorted().toList();
         List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
         if (lockedRooms.size() != roomIds.size()) {
@@ -655,6 +809,10 @@ public class ReservationService {
                 .sorted()
                 .toList();
         if (!currentIds.equals(roomIds)) {
+            if (structuredConcurrentFailure) {
+                throw modification(Reason.ROOMS_CHANGED_CONCURRENTLY,
+                        "Reservation rooms changed concurrently; retry");
+            }
             throw conflict("Reservation rooms changed concurrently; retry");
         }
         return new LockedReservation(reservation, lockedRooms);

@@ -39,6 +39,9 @@ public class RoomAvailabilityService {
     /** Sentinel meaning "exclude no Stay" (a real Stay identifier is never all zeros). */
     private static final UUID NO_STAY = new UUID(0L, 0L);
 
+    /** Sentinel meaning "exclude no Reservation" (a real Reservation identifier is never all zeros). */
+    private static final UUID NO_RESERVATION = new UUID(0L, 0L);
+
     private final RoomRepository roomRepository;
     private final Clock clock;
 
@@ -116,7 +119,7 @@ public class RoomAvailabilityService {
      * @return the identifiers of the Rooms that are already allocated for any part of {@code [in, out)}
      */
     public Set<UUID> conflictedRoomIds(Collection<UUID> roomIds, LocalDate in, LocalDate out) {
-        return conflictedRoomIds(roomIds, in, out, NO_STAY);
+        return conflictedRoomIds(roomIds, in, out, NO_STAY, NO_RESERVATION);
     }
 
     /**
@@ -131,6 +134,41 @@ public class RoomAvailabilityService {
      * @return the identifiers of the Rooms allocated to anything else for any part of {@code [in, out)}
      */
     public Set<UUID> conflictedRoomIds(Collection<UUID> roomIds, LocalDate in, LocalDate out, UUID excludedStayId) {
+        return conflictedRoomIds(roomIds, in, out, excludedStayId, NO_RESERVATION);
+    }
+
+    /**
+     * Tests inventory while ignoring only the CONFIRMED ReservationRoom rows owned by one Reservation. This is used
+     * solely by the controlled pre-check-in date-change operation so its current rows do not conflict with their own
+     * proposed interval. Other Reservations and every active StayRoomAssignment remain visible.
+     *
+     * @param roomIds Rooms to test
+     * @param in inclusive first requested hotel night
+     * @param out exclusive end of the requested interval
+     * @param excludedReservationId Reservation whose own confirmed rows are ignored
+     * @return the identifiers of Rooms allocated to anything else for any part of {@code [in, out)}
+     */
+    public Set<UUID> conflictedRoomIdsExcludingReservation(
+            Collection<UUID> roomIds, LocalDate in, LocalDate out, UUID excludedReservationId) {
+        return conflictedRoomIds(roomIds, in, out, NO_STAY, excludedReservationId);
+    }
+
+    /**
+     * Executes the shared bounded overlap query with independently explicit Stay and Reservation exclusions.
+     *
+     * @param roomIds Rooms to test
+     * @param in inclusive first requested hotel night
+     * @param out exclusive end of the requested interval
+     * @param excludedStayId Stay whose assignments are ignored, or the no-Stay sentinel
+     * @param excludedReservationId Reservation whose booked rows are ignored, or the no-Reservation sentinel
+     * @return identifiers of Rooms that conflict
+     */
+    private Set<UUID> conflictedRoomIds(
+            Collection<UUID> roomIds,
+            LocalDate in,
+            LocalDate out,
+            UUID excludedStayId,
+            UUID excludedReservationId) {
         if (roomIds.isEmpty()) {
             return Set.of();
         }
@@ -145,7 +183,8 @@ public class RoomAvailabilityService {
                 !today.isBefore(in),
                 ReservationStatus.CONFIRMED,
                 StayStatus.CHECKED_IN,
-                excludedStayId));
+                excludedStayId,
+                excludedReservationId));
     }
 
     private List<RoomLookupResponse> roomsForPeriod(LocalDate checkInDate, LocalDate checkOutDate, Predicate<Room> eligible) {

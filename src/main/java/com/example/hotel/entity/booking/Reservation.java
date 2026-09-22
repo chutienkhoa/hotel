@@ -662,6 +662,56 @@ public class Reservation extends AuditedEntity {
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * Changes the planned dates of a CONFIRMED Reservation before check-in, synchronizing every booked-room
+     * snapshot and recalculating totals from each preserved nightly rate. Room references, nightly rates, source,
+     * currency and all other Reservation fields remain untouched.
+     *
+     * @param newCheckInDate replacement planned check-in date
+     * @param newCheckOutDate replacement planned check-out date
+     * @throws IllegalStateException if this Reservation is not CONFIRMED
+     * @throws IllegalArgumentException if the date interval is not positive
+     */
+    public void changeConfirmedDates(LocalDate newCheckInDate, LocalDate newCheckOutDate) {
+        if (status != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("Only a confirmed reservation can change dates");
+        }
+        if (newCheckInDate == null || newCheckOutDate == null || !newCheckOutDate.isAfter(newCheckInDate)) {
+            throw new IllegalArgumentException("check_out_date must be after check_in_date");
+        }
+        for (ReservationRoom room : rooms) {
+            room.changeConfirmedDates(newCheckInDate, newCheckOutDate);
+        }
+        checkInDate = newCheckInDate;
+        checkOutDate = newCheckOutDate;
+        calculateTotal();
+    }
+
+    /**
+     * Corrects only the external OTA booking reference of a CONFIRMED, non-DIRECT Reservation. The value follows
+     * the existing Reservation behavior: surrounding whitespace is preserved, while null/blank and values longer
+     * than the existing 255-character limit are rejected.
+     *
+     * @param correctedReference corrected OTA booking reference
+     * @throws IllegalStateException if this Reservation is not CONFIRMED or is DIRECT
+     * @throws IllegalArgumentException if the reference is blank or too long
+     */
+    public void correctOtaBookingReference(String correctedReference) {
+        if (status != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("Only a confirmed reservation can correct its OTA booking reference");
+        }
+        if (source == BookingSource.DIRECT) {
+            throw new IllegalStateException("DIRECT reservations do not have an OTA booking reference");
+        }
+        if (correctedReference == null || correctedReference.isBlank()) {
+            throw new IllegalArgumentException("OTA Booking Reference is required for this source");
+        }
+        if (correctedReference.length() > 255) {
+            throw new IllegalArgumentException("OTA Booking Reference must not exceed 255 characters");
+        }
+        otaBookingReference = correctedReference;
+    }
+
     /** Chuyển reservation từ nháp sang đã xác nhận. */
     public void confirm() {
         transition(ReservationStatus.DRAFT, ReservationStatus.CONFIRMED);

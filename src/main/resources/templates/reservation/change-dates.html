@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{reservation.changeDates.title})}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}"
+           th:text="#{reservation.modification.back}">Back to reservation</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{reservation.changeDates.title}">Change Reservation Dates</h1>
+                <p th:text="#{reservation.changeDates.description}">Change only the planned dates.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt th:text="#{reservation.modification.reservation}">Reservation</dt>
+            <dd th:text="${reservation.reservationNumber}">R20260924-000001</dd>
+            <dt th:text="#{reservation.changeDates.currentCheckIn}">Current check-in</dt>
+            <dd><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></dd>
+            <dt th:text="#{reservation.changeDates.currentCheckOut}">Current check-out</dt>
+            <dd><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></dd>
+        </dl>
+
+        <form class="form-card" method="post"
+              th:action="@{/reservations/{id}/change-dates(id=${reservation.id})}"
+              th:object="${dateChangeForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}"
+               th:text="#{reservation.modification.fixErrors}">Please correct the highlighted fields.</p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <div class="form-grid reservation-details-grid">
+                <div class="form-field">
+                    <label for="newCheckInDate" th:text="#{reservation.changeDates.newCheckIn} + ' *'">New check-in *</label>
+                    <input id="newCheckInDate" name="newCheckInDate" required th:min="${hotelToday}" type="date"
+                           th:value="${dateChangeForm.newCheckInDate == null ? '' : #temporals.format(dateChangeForm.newCheckInDate, 'yyyy-MM-dd')}" />
+                    <p class="field-error" th:errors="*{newCheckInDate}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="newCheckOutDate" th:text="#{reservation.changeDates.newCheckOut} + ' *'">New check-out *</label>
+                    <input id="newCheckOutDate" name="newCheckOutDate" required type="date"
+                           th:value="${dateChangeForm.newCheckOutDate == null ? '' : #temporals.format(dateChangeForm.newCheckOutDate, 'yyyy-MM-dd')}" />
+                    <p class="field-error" th:errors="*{newCheckOutDate}"></p>
+                </div>
+            </div>
+
+            <p class="text-muted" th:text="#{reservation.changeDates.rateNotice}">
+                Assigned rooms and nightly rates are preserved; totals are recalculated for the new number of nights.
+            </p>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservation.id})}"
+                   th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="#{reservation.changeDates.submit}" type="submit">Change Dates</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

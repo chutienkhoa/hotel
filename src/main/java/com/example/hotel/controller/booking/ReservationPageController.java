@@ -159,15 +159,18 @@ public class ReservationPageController {
         addAuthorizationAttributes(model, authentication);
         ReservationDetailResponse reservation = reservationQueryService.findById(id);
         model.addAttribute("reservation", reservation);
+        boolean hasStay = stayQueryService.findByReservationId(id) != null;
+        model.addAttribute("hasStay", hasStay);
         addCheckoutReadiness(model, reservation, authentication);
         addRoomOccupancyAttributes(model, reservation);
-        boolean hasStay = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
-        model.addAttribute("stayExtensionSummary", hasStay ? stayExtensionService.summary(id) : null);
+        boolean checkedInLifecycle = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
+        model.addAttribute("stayExtensionSummary", checkedInLifecycle ? stayExtensionService.summary(id) : null);
         // Financial integrity is a diagnostic for users who may already see the folio (MANAGE_PAYMENT).
-        boolean canSeeIntegrity = hasStay && hasAuthority(authentication, "PERM_MANAGE_PAYMENT");
+        boolean canSeeIntegrity = checkedInLifecycle && hasAuthority(authentication, "PERM_MANAGE_PAYMENT");
         model.addAttribute("financialIntegrity", canSeeIntegrity ? integrityFor(id) : null);
         model.addAttribute("prepaymentSummary",
-                "CONFIRMED".equals(reservation.status()) && hasAuthority(authentication, "PERM_MANAGE_PAYMENT")
+                "CONFIRMED".equals(reservation.status())
+                        && hasAuthority(authentication, "PERM_MANAGE_PAYMENT")
                         ? prepaymentService.summary(id) : null);
         return "reservation/detail";
     }

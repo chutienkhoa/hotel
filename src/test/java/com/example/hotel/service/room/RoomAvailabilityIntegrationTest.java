@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -110,7 +111,8 @@ class RoomAvailabilityIntegrationTest {
         }
         assertEquals(List.of("101"), numbers(service.bookableRoomsForPeriod(date("2026-10-10"), date("2026-10-12"))));
 
-        reserve(room, "CHECKED_IN", "2026-10-10", "2026-10-12");
+        UUID checkedIn = reserve(room, "CHECKED_IN", "2026-10-10", "2026-10-12");
+        openStayAssignment(checkedIn, room);
         assertEquals(List.of(), numbers(service.bookableRoomsForPeriod(date("2026-10-10"), date("2026-10-12"))));
     }
 
@@ -129,6 +131,34 @@ class RoomAvailabilityIntegrationTest {
         assertEquals(List.of("101"), numbers(service.checkInReadyRoomsForPeriod(date("2026-09-21"), date("2026-09-22"))));
     }
 
+    /** Confirms explicit self-exclusion ignores only the selected Reservation, never another confirmed booking. */
+    @Test
+    void shouldExcludeOnlyTheReservationBeingModified() {
+        UUID room = room("108", "AVAILABLE");
+        UUID ownReservation = reserve(room, "CONFIRMED", "2026-10-10", "2026-10-12");
+
+        assertEquals(Set.of(room), service.conflictedRoomIds(
+                List.of(room), date("2026-10-10"), date("2026-10-13")));
+        assertEquals(Set.of(), service.conflictedRoomIdsExcludingReservation(
+                List.of(room), date("2026-10-10"), date("2026-10-13"), ownReservation));
+
+        reserve(room, "CONFIRMED", "2026-10-12", "2026-10-14");
+        assertEquals(Set.of(room), service.conflictedRoomIdsExcludingReservation(
+                List.of(room), date("2026-10-10"), date("2026-10-13"), ownReservation));
+    }
+
+    /** Confirms Reservation self-exclusion never suppresses an active StayRoomAssignment conflict. */
+    @Test
+    void shouldRetainActiveStayAssignmentConflictsWhenExcludingAReservation() {
+        UUID room = room("109", "AVAILABLE");
+        UUID ownReservation = reserve(room, "CONFIRMED", "2026-10-10", "2026-10-12");
+        UUID occupiedReservation = reserve(room, "CHECKED_IN", "2026-10-10", "2026-10-14");
+        openStayAssignment(occupiedReservation, room);
+
+        assertEquals(Set.of(room), service.conflictedRoomIdsExcludingReservation(
+                List.of(room), date("2026-10-10"), date("2026-10-13"), ownReservation));
+    }
+
     private List<String> numbers(List<RoomLookupResponse> rooms) {
         return rooms.stream().map(RoomLookupResponse::roomNumber).toList();
     }
@@ -144,14 +174,28 @@ class RoomAvailabilityIntegrationTest {
         return id;
     }
 
-    private void reserve(UUID room, String status, String checkIn, String checkOut) {
+    private UUID reserve(UUID room, String status, String checkIn, String checkOut) {
         UUID reservation = UUID.randomUUID();
         jdbc.update("INSERT INTO reservation (id, reservation_number, guest_id, source, status, reserved_at, check_in_date, "
                         + "check_out_date, currency, total_amount, created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, 'DIRECT', ?, now(), ?, ?, 'VND', 1, now(), ?, now(), ?)",
                 reservation, "AV-%04d".formatted(++sequence), guest, status, date(checkIn), date(checkOut), user, user);
         jdbc.update("INSERT INTO reservation_room (id, reservation_id, room_id, check_in_date, check_out_date, nightly_rate, "
-                        + "total_amount, created_at, created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 1, 1, now(), ?, now(), ?)",
+                + "total_amount, created_at, created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, ?, 1, 1, now(), ?, now(), ?)",
                 UUID.randomUUID(), reservation, room, date(checkIn), date(checkOut), user, user);
+        return reservation;
+    }
+
+    /** Creates the active Stay and open assignment that authoritatively block a CHECKED_IN Reservation's Room. */
+    private void openStayAssignment(UUID reservation, UUID room) {
+        UUID line = jdbc.queryForObject(
+                "SELECT id FROM reservation_room WHERE reservation_id = ?", UUID.class, reservation);
+        UUID stay = UUID.randomUUID();
+        jdbc.update("INSERT INTO stay (id, reservation_id, status, actual_check_in_at, created_at, created_by, updated_at, updated_by) "
+                + "VALUES (?, ?, 'CHECKED_IN', now(), now(), ?, now(), ?)", stay, reservation, user, user);
+        jdbc.update("INSERT INTO stay_room_assignment (id, stay_id, room_id, original_reservation_room_id, assigned_from, "
+                        + "assigned_to, created_at, created_by, updated_at, updated_by) "
+                        + "VALUES (?, ?, ?, ?, now(), NULL, now(), ?, now(), ?)",
+                UUID.randomUUID(), stay, room, line, user, user);
     }
 }

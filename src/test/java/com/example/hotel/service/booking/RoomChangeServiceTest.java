@@ -220,7 +220,7 @@ class RoomChangeServiceTest {
     void shouldRejectTargetRoomWithOverlap() {
         Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
         when(fixture.roomRepository.findRoomIdsWithInventoryConflict(
-                any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any()))
+                any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any()))
                 .thenReturn(List.of(fixture.room305.getId()));
 
         ResponseStatusException exception = assertThrows(

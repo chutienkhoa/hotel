@@ -26,6 +26,14 @@
                    th:href="@{/reservations/{id}/guest-composition(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and canManageBooking}"
                    th:text="#{reservation.composition.action}">Edit Guest Composition</a>
+                <a class="button button-secondary" id="change-reservation-dates"
+                   th:href="@{/reservations/{id}/change-dates(id=${reservation.id})}"
+                   th:if="${reservation.status == 'CONFIRMED' and !hasStay and canManageBooking}"
+                   th:text="#{reservation.changeDates.action}">Change Dates</a>
+                <a class="button button-secondary" id="correct-ota-reference"
+                   th:href="@{/reservations/{id}/correct-ota-reference(id=${reservation.id})}"
+                   th:if="${reservation.status == 'CONFIRMED' and !hasStay and reservation.source.name() != 'DIRECT' and canManageBooking}"
+                   th:text="#{reservation.otaReference.action}">Correct OTA Reference</a>
                 <a class="button button-secondary" id="record-prepayment"
                    th:href="@{/reservations/{id}/prepayments(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and canManagePayment}"

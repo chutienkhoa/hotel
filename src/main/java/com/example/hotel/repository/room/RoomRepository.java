@@ -71,12 +71,14 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
      *     assignment also protects the current hotel night even past its planned check-out
      * @param confirmed the CONFIRMED Reservation status
      * @param stayCheckedIn the CHECKED_IN Stay status
+     * @param excludedReservationId Reservation whose own ReservationRoom conflicts are ignored, or a sentinel
      * @return identifiers of the Rooms that conflict
      */
     @Query(
             "SELECT r.id FROM Room r WHERE r.id IN :roomIds AND ("
                     + "EXISTS (SELECT 1 FROM ReservationRoom rr WHERE rr.room = r "
                     + "AND rr.reservation.status = :confirmed "
+                    + "AND rr.reservation.id <> :excludedReservationId "
                     + "AND rr.checkInDate < :out AND rr.checkOutDate > :in) "
                     + "OR EXISTS (SELECT 1 FROM StayRoomAssignment a WHERE a.room = r "
                     + "AND a.stay.status = :stayCheckedIn AND a.stay.id <> :excludedStayId "
@@ -93,7 +95,8 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
             @Param("currentNightProtected") boolean currentNightProtected,
             @Param("confirmed") com.example.hotel.entity.booking.ReservationStatus confirmed,
             @Param("stayCheckedIn") com.example.hotel.entity.booking.StayStatus stayCheckedIn,
-            @Param("excludedStayId") UUID excludedStayId);
+            @Param("excludedStayId") UUID excludedStayId,
+            @Param("excludedReservationId") UUID excludedReservationId);
 
     /**
      * Counts Rooms that remain in the active hotel inventory.
