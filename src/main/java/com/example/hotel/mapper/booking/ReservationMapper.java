@@ -64,10 +64,22 @@ public class ReservationMapper {
      * Converts a reservation entity and its assigned rooms into the detail representation.
      *
      * @param reservation the reservation entity to convert
+     * @param accompanyingGuests the reservation's Accompanying Guests
+     * @param effectiveContactName the effective Booking Contact name already resolved by the caller (the
+     *     Reservation's own snapshot, or the Primary Guest fallback)
+     * @param effectiveContactPhone the effective Booking Contact phone already resolved by the caller
+     * @param effectiveContactEmail the effective Booking Contact email already resolved by the caller
+     * @param bookingContactFromPrimaryGuest whether the three effective values above came from the Primary Guest
+     *     fallback rather than the Reservation's own Booking Contact snapshot
      * @return the reservation detail representation
      */
     public ReservationDetailResponse toDetailResponse(
-            Reservation reservation, List<AccompanyingGuestResponse> accompanyingGuests) {
+            Reservation reservation,
+            List<AccompanyingGuestResponse> accompanyingGuests,
+            String effectiveContactName,
+            String effectiveContactPhone,
+            String effectiveContactEmail,
+            boolean bookingContactFromPrimaryGuest) {
         return new ReservationDetailResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
@@ -84,7 +96,11 @@ public class ReservationMapper {
                 reservation.getCurrency(),
                 reservation.getNotes(),
                 reservation.getRooms().stream().map(this::toRoomResponse).toList(),
-                accompanyingGuests);
+                accompanyingGuests,
+                effectiveContactName,
+                effectiveContactPhone,
+                effectiveContactEmail,
+                bookingContactFromPrimaryGuest);
     }
 
     /**
@@ -113,7 +129,10 @@ public class ReservationMapper {
                 reservation.getCurrency(),
                 reservation.getNotes(),
                 reservation.getRooms().stream().map(this::toRoomResponse).toList(),
-                accompanyingGuestIds);
+                accompanyingGuestIds,
+                reservation.getBookingContactName(),
+                reservation.getBookingContactPhone(),
+                reservation.getBookingContactEmail());
     }
 
     /**

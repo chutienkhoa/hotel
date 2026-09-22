@@ -195,7 +195,14 @@ public class ReservationQueryService {
         Reservation reservation = reservationRepository
                 .findById(reservationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
-        return reservationMapper.toDetailResponse(reservation, findAccompanyingGuests(reservationId));
+        EffectiveBookingContact contact = EffectiveBookingContact.of(reservation);
+        return reservationMapper.toDetailResponse(
+                reservation,
+                findAccompanyingGuests(reservationId),
+                contact.name(),
+                contact.phone(),
+                contact.email(),
+                contact.fromPrimaryGuest());
     }
 
     /** Retrieves one Reservation in the representation required by the draft edit form. */

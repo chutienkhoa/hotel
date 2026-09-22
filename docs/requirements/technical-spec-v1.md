@@ -4710,4 +4710,58 @@ Reservation `CONFIRMED` chưa có Stay có đúng hai thao tác sửa chuyên bi
 - **Audit**: Date Change ghi một `AuditLog` action `CHANGE_RESERVATION_DATES` với ngày nhận/trả và tổng Reservation trước/sau. OTA correction ghi `CORRECT_OTA_REFERENCE` với reference trước/sau. Thao tác thất bại không có audit thành công.
 - **Giao diện và read model**: Reservation Detail chỉ hiển thị action đủ điều kiện theo trạng thái, Stay, source và quyền; form là narrow form, dùng i18n EN/VI và không mở các trường Guest, source, currency, số Reservation, `reservedAt`, Room, giá, `externalBookingId` hay notes. Front Desk tự đọc ngày Reservation mới; Housekeeping next-arrival tự đọc ngày ReservationRoom đã đồng bộ; không lưu readiness/cache mới và không đổi báo cáo hay lịch sử Stay.
 
+## 74. Booking Contact + Reservation Notes (V1)
+
+Reservation có ba trường snapshot mới `bookingContactName`, `bookingContactPhone`, `bookingContactEmail`, và
+`Reservation.notes` hiện có được mở rộng phạm vi chỉnh sửa. Đây KHÔNG phải Guest, không phải entity riêng, không
+phải lịch sử nhiều phiên bản, và không phải CRM.
+
+- **Mô hình Booking Contact**: là snapshot ba trường trên Reservation, độc lập hoàn toàn với Primary Guest,
+  Accompanying Guests, `otaBookingReference` và `externalBookingId`. Booking Contact KHÔNG bắt buộc phải là một
+  Guest; mỗi trường tùy chọn độc lập và Reservation hợp lệ khi cả ba đều rỗng/`null`. Không thêm ràng buộc
+  định dạng/độ dài chặt hơn Guest hiện có (`bookingContactPhone` ≤ 100 ký tự, `bookingContactEmail` ≤ 255 ký tự
+  như Guest; `bookingContactName` ≤ 200 ký tự).
+- **Mặc định từ Primary Guest**: khi tạo Reservation mới, mỗi trường Booking Contact rỗng/`null` được sao chép
+  một lần từ Primary Guest tương ứng (`firstName + lastName`, `phone`, `email`) tại thời điểm tạo; giá trị được
+  nhập tường minh (không rỗng) luôn được giữ nguyên. Đây là bản sao (snapshot), KHÔNG phải tham chiếu sống: sau
+  khi tạo, sửa hồ sơ Guest không tự đổi Booking Contact đã lưu, và sửa Booking Contact không đổi Guest. Draft Edit
+  và thao tác sửa Booking Contact có kiểm soát KHÔNG áp lại mặc định này — giá trị rỗng khi sửa nghĩa là xóa, đổi
+  Primary Guest trong Draft Edit không tự đồng bộ lại Booking Contact.
+- **Dự phòng khi đọc (không ghi)**: với Reservation không có snapshot Booking Contact (cả ba trường rỗng, gồm dữ
+  liệu lịch sử trước tính năng này), màn hình đọc (Reservation Detail, Front Desk Arrivals) hiển thị thông tin
+  Primary Guest hiện tại làm dự phòng hiển thị. Dự phòng này KHÔNG được ghi vào Reservation, không tạo Guest,
+  không sinh audit, và không được gán nhãn như dữ liệu snapshot lịch sử; Reservation Detail hiển thị rõ khi đang
+  dùng dự phòng. Không có migration backfill dữ liệu lịch sử vì không xác định được Primary Guest lịch sử có
+  đúng là người liên hệ đặt phòng hay không.
+- **Vòng đời/quyền Booking Contact**: sửa được khi `Reservation.status` là DRAFT, CONFIRMED hoặc CHECKED_IN; bị
+  từ chối khi CHECKED_OUT, CANCELLED hoặc NO_SHOW. Không yêu cầu "không có Stay" như mục 73 — Booking Contact độc
+  lập với Room/giá/Stay. Xem dùng `VIEW_BOOKING` (không yêu cầu `MANAGE_GUEST`, để STAFF vận hành lễ tân biết
+  liên hệ mà không cần quyền quản lý Guest); sửa dùng `MANAGE_BOOKING` hiện có ở MVC và REST. Backend kiểm tra
+  lại vòng đời dưới khóa Reservation (`PESSIMISTIC_WRITE`, không khóa Room); ẩn nút chỉ là hướng dẫn UI.
+- **Reservation Notes**: giữ nguyên `Reservation.notes` hiện có (ghi chú nội bộ/vận hành, tối đa 5000 ký tự,
+  được phép rỗng/`null`, không có category/attachment/trường khách-hàng-thấy riêng). Sửa được (thao tác có kiểm
+  soát mới, chỉ đổi đúng `notes`) khi DRAFT, CONFIRMED hoặc CHECKED_IN, cùng ranh giới vòng đời và quyền
+  (`VIEW_BOOKING` để xem, `MANAGE_BOOKING` để sửa) như Booking Contact; bị từ chối khi CHECKED_OUT, CANCELLED
+  hoặc NO_SHOW. Draft Edit hiện có (chỉ khi DRAFT) không đổi.
+- **Khóa và nguyên tử**: cả hai thao tác chỉ khóa Reservation (`PESSIMISTIC_WRITE`), không khóa Room, theo đúng
+  mẫu của Correct OTA Booking Reference (mục 73) — nhỏ nhất đủ an toàn vì không đụng Room/tồn kho/giá/thanh
+  toán. Nhờ vậy tuần tự hóa an toàn với Check-in, Cancel, No-show, Date Change, Guest Composition update và một
+  thao tác Contact/Notes khác, không đảo thứ tự khóa Rooms-rồi-Reservation của các thao tác kia.
+- **Audit — quy tắc riêng tư bắt buộc**: Booking Contact update ghi một `AuditLog` action
+  `UPDATE_BOOKING_CONTACT`; `oldValue` rỗng, `newValue` chỉ chứa `changedFields=<danh sách trường đã đổi>` (ví dụ
+  `changedFields=phone`), KHÔNG BAO GIỜ chứa tên/số điện thoại/email thật. Notes update ghi action
+  `UPDATE_RESERVATION_NOTES` với `oldValue`/`newValue` đều rỗng — chỉ định danh thao tác (ai, khi nào, Reservation
+  nào) là đủ, không lưu nội dung notes vào audit. Thao tác thất bại (vòng đời đóng) không ghi audit thành công.
+- **Giao diện**: Booking Contact xuất hiện ở Create Reservation, Draft Edit và Reservation Detail (cùng action
+  sửa có kiểm soát khi vòng đời/quyền cho phép); Front Desk Arrivals hiển thị tối thiểu số điện thoại liên hệ
+  hiệu lực (snapshot hoặc dự phòng Primary Guest) cho STAFF có `VIEW_BOOKING`, không cần `MANAGE_GUEST`. Notes
+  hiển thị ở Reservation Detail với action sửa có kiểm soát cùng điều kiện; không mở rộng Front Desk/Check-in
+  Review/Stay ngoài phạm vi tối thiểu này.
+- **Không đổi**: Primary Guest, Accompanying Guests, adult/child, Source, `otaBookingReference`,
+  `externalBookingId`, Date Change, Room Reassignment, Prepayment, Check-in, Room Change, Stay Extension,
+  Checkout, Housekeeping, báo cáo/export (Monthly Financial/Occupancy/Performance Excel/PDF) — không trường nào
+  trong mục này được thêm vào báo cáo. Không tạo entity `BookingContact`/lịch sử contact/`ReservationNote` mới,
+  không CRM, không company/travel-agent profile, không channel manager, không messaging/email/SMS, không nhiều
+  Booking Contact trên một Reservation.
+
 **End of Specification v1.0**

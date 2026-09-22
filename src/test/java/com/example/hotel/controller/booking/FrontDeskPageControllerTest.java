@@ -72,11 +72,11 @@ class FrontDeskPageControllerTest {
         ArrivalReadiness ok = new ArrivalReadiness(ArrivalReadinessState.READY, CheckInTiming.NORMAL, List.of());
         when(queryService.arrivals()).thenReturn(List.of(
                 new FrontDeskArrivalRow(RES, "R-1028", "Tran Minh", "G-00141", BookingSource.DIRECT, null, TODAY,
-                        false, true, needs, List.of(dirty), true),
+                        false, true, needs, List.of(dirty), true, "0900000001"),
                 new FrontDeskArrivalRow(UUID.randomUUID(), "R-1030", "John Smith", "G-00152", BookingSource.BOOKING_COM,
                         "BK-77", TODAY, false, false, ok,
                         List.of(new FrontDeskRoomResponse(UUID.randomUUID(), "301", "Twin", null),
-                                new FrontDeskRoomResponse(UUID.randomUUID(), "302", "Twin", null)), false)));
+                                new FrontDeskRoomResponse(UUID.randomUUID(), "302", "Twin", null)), false, null)));
         List<FrontDeskRoomResponse> rooms = List.of(new FrontDeskRoomResponse(ROOM, "101", "Single", null));
         when(queryService.departures(false)).thenReturn(List.of(stayRow(rooms, true, true, null)));
         when(queryService.departures(true)).thenReturn(List.of(stayRow(rooms, true, true, new BigDecimal("300000"))));
@@ -168,10 +168,22 @@ class FrontDeskPageControllerTest {
                         null, null, 3, 2, null)));
         when(queryService.arrivals()).thenReturn(List.of(new FrontDeskArrivalRow(RES, "R-2000", "Ann", "G-1",
                 BookingSource.DIRECT, null, TODAY, false, true, capacity,
-                List.of(new FrontDeskRoomResponse(ROOM, "101", "Double", null)), false)));
+                List.of(new FrontDeskRoomResponse(ROOM, "101", "Double", null)), false, null)));
 
         mockMvc.perform(get("/front-desk").with(perm("PERM_CHECK_IN")))
                 .andExpect(content().string(containsString("has 3 adults but the assigned rooms support only 2 adults")));
+    }
+
+    /**
+     * Confirms front-desk STAFF (CHECK_IN + VIEW_BOOKING, no MANAGE_GUEST) can see the effective Booking Contact
+     * phone directly on Arrivals, and that a row without one renders no broken/placeholder phone text.
+     */
+    @Test
+    void shouldShowEffectiveContactPhoneOnArrivalsWithoutManageGuest() throws Exception {
+        mockMvc.perform(get("/front-desk").with(perm("PERM_CHECK_IN", "PERM_VIEW_BOOKING")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"arrival-contact-phone\"")))
+                .andExpect(content().string(containsString("0900000001")));
     }
 
     /** Confirms a ready multi-room arrival is one row with both rooms, and a blocked room shows its issue. */

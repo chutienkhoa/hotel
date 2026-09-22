@@ -1,7 +1,9 @@
 package com.example.hotel.controller.booking;
 
+import com.example.hotel.dto.booking.request.BookingContactUpdateRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
+import com.example.hotel.dto.booking.request.NotesUpdateRequest;
 import com.example.hotel.dto.booking.request.OtaReferenceCorrectionRequest;
 import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
@@ -125,6 +127,34 @@ public class ReservationController {
     Response correctOtaReference(
             @PathVariable UUID id, @Valid @RequestBody OtaReferenceCorrectionRequest request) {
         return service.correctOtaBookingReference(id, request);
+    }
+
+    /**
+     * Changes only the Booking Contact (name, phone, email) of an eligible reservation. Available through DRAFT,
+     * CONFIRMED and CHECKED_IN; rejected once CHECKED_OUT, CANCELLED or NO_SHOW.
+     *
+     * @param id reservation identifier
+     * @param request replacement Booking Contact values
+     * @return the reservation after the update
+     */
+    @PostMapping("/{id}/booking-contact")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    Response updateBookingContact(@PathVariable UUID id, @Valid @RequestBody BookingContactUpdateRequest request) {
+        return service.updateBookingContact(id, request);
+    }
+
+    /**
+     * Changes only the internal operational Reservation Notes of an eligible reservation. Available through
+     * DRAFT, CONFIRMED and CHECKED_IN; rejected once CHECKED_OUT, CANCELLED or NO_SHOW.
+     *
+     * @param id reservation identifier
+     * @param request replacement notes
+     * @return the reservation after the update
+     */
+    @PostMapping("/{id}/notes")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
+    Response updateNotes(@PathVariable UUID id, @Valid @RequestBody NotesUpdateRequest request) {
+        return service.updateReservationNotes(id, request);
     }
 
     /**

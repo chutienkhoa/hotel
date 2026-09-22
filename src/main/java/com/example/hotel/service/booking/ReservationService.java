@@ -1,7 +1,9 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.dto.booking.request.BookingContactUpdateRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
+import com.example.hotel.dto.booking.request.NotesUpdateRequest;
 import com.example.hotel.dto.booking.request.OtaReferenceCorrectionRequest;
 import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
@@ -23,6 +25,7 @@ import com.example.hotel.exception.GuestCompositionUpdateException;
 import com.example.hotel.exception.ConfirmedReservationModificationException;
 import com.example.hotel.exception.ConfirmedReservationModificationException.Reason;
 import com.example.hotel.exception.LocalizedResponseStatusException;
+import com.example.hotel.exception.ReservationFieldUpdateException;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
@@ -41,10 +44,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Currency;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -63,6 +68,12 @@ public class ReservationService {
 
     /** Audit action for the controlled confirmed-reservation OTA reference correction. */
     public static final String CORRECT_OTA_REFERENCE_AUDIT_ACTION = "CORRECT_OTA_REFERENCE";
+
+    /** Audit action for the controlled Booking Contact update. */
+    public static final String UPDATE_BOOKING_CONTACT_AUDIT_ACTION = "UPDATE_BOOKING_CONTACT";
+
+    /** Audit action for the controlled Reservation Notes update. */
+    public static final String UPDATE_NOTES_AUDIT_ACTION = "UPDATE_RESERVATION_NOTES";
 
     private final ReservationRepository reservations;
     private final GuestRepository guests;
@@ -152,9 +163,40 @@ public class ReservationService {
         createRoomSnapshots(reservation, request, draftData, user).forEach(reservation::addRoom);
         reservation.replaceAccompanyingGuests(draftData.accompanyingGuests(), user.id());
         reservation.calculateTotal();
+        applyBookingContactDefaults(reservation, request, draftData.guest());
         reservations.save(reservation);
         audit(user, "CREATE", reservation, null, "DRAFT");
         return response(reservation);
+    }
+
+    /**
+     * Sets the new Reservation's Booking Contact snapshot as ONE independent whole, never mixing fields from two
+     * different people: when every submitted field is blank/omitted, the ENTIRE snapshot is copied from the
+     * Primary Guest at this moment (a one-time COPY, never a live reference); when at least one field is
+     * explicitly supplied, the submitted values are kept exactly as given — including any blank sibling fields,
+     * which stay {@code null} rather than being individually backfilled from the Primary Guest. This runs only at
+     * creation; draft editing and the controlled Booking Contact update never re-apply this default, so a later
+     * Primary Guest change never silently overwrites an already-set Booking Contact.
+     *
+     * @param reservation newly constructed Reservation (still DRAFT, not yet persisted)
+     * @param request submitted creation data
+     * @param guest the resolved Primary Guest, used only as the whole-snapshot default source
+     */
+    private void applyBookingContactDefaults(Reservation reservation, CreateRequest request, Guest guest) {
+        String name = normalizeContactValue(request.bookingContactName());
+        String phone = normalizeContactValue(request.bookingContactPhone());
+        String email = normalizeContactValue(request.bookingContactEmail());
+        if (name == null && phone == null && email == null) {
+            reservation.changeBookingContact(
+                    EffectiveBookingContact.guestFullName(guest), guest.getPhone(), guest.getEmail());
+        } else {
+            reservation.changeBookingContact(name, phone, email);
+        }
+    }
+
+    /** Normalizes a Booking Contact or Notes value: blank and {@code null} both become {@code null}. */
+    private static String normalizeContactValue(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     /**
@@ -190,6 +232,13 @@ public class ReservationService {
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
         }
+        // Draft editing never re-applies the create-time Primary Guest default: whatever the form submits (including
+        // blank, which clears it) is stored exactly as submitted, so an edited Primary Guest never silently
+        // overwrites an already-set Booking Contact.
+        reservation.changeBookingContact(
+                normalizeContactValue(request.bookingContactName()),
+                normalizeContactValue(request.bookingContactPhone()),
+                normalizeContactValue(request.bookingContactEmail()));
         reservation.audit(user.id());
         audit(user, "UPDATE", reservation, "DRAFT", "DRAFT");
         return response(reservation);
@@ -465,6 +514,76 @@ public class ReservationService {
                 "otaBookingReference=" + String.valueOf(previousReference),
                 "otaBookingReference=" + correctedReference);
         return response(reservation);
+    }
+
+    /**
+     * Replaces the Booking Contact snapshot (name, phone, email) of a Reservation that has not yet been checked
+     * out, cancelled or marked no-show. Unlike Change Dates and OTA correction, this operation remains available
+     * through DRAFT, CONFIRMED and CHECKED_IN, and does not require the absence of a Stay: Booking Contact is
+     * independent from Room/rate/Stay state. Only the three Booking Contact fields change; nothing else is read
+     * from or written to the Primary Guest, Accompanying Guests, OTA reference or {@code externalBookingId}. The
+     * audit entry never records the submitted name, phone or email — only which fields actually changed.
+     *
+     * @param id Reservation identifier
+     * @param request replacement Booking Contact values (every field individually optional)
+     * @return the updated Reservation response
+     * @throws ReservationFieldUpdateException if the Reservation's lifecycle no longer allows this change
+     */
+    @Transactional
+    public Response updateBookingContact(UUID id, BookingContactUpdateRequest request) {
+        CurrentUser user = currentUser();
+        Reservation reservation = loadForUpdate(id);
+        requireEditableForContactAndNotes(reservation);
+        String newName = normalizeContactValue(request == null ? null : request.bookingContactName());
+        String newPhone = normalizeContactValue(request == null ? null : request.bookingContactPhone());
+        String newEmail = normalizeContactValue(request == null ? null : request.bookingContactEmail());
+        List<String> changedFields = new ArrayList<>();
+        if (!Objects.equals(reservation.getBookingContactName(), newName)) {
+            changedFields.add("name");
+        }
+        if (!Objects.equals(reservation.getBookingContactPhone(), newPhone)) {
+            changedFields.add("phone");
+        }
+        if (!Objects.equals(reservation.getBookingContactEmail(), newEmail)) {
+            changedFields.add("email");
+        }
+        reservation.changeBookingContact(newName, newPhone, newEmail);
+        reservation.audit(user.id());
+        audit(user, UPDATE_BOOKING_CONTACT_AUDIT_ACTION, reservation, null,
+                "changedFields=" + String.join(",", changedFields));
+        return response(reservation);
+    }
+
+    /**
+     * Replaces the internal operational Reservation Notes of a Reservation that has not yet been checked out,
+     * cancelled or marked no-show. This is the same lifecycle boundary as Booking Contact and, like it, remains
+     * available through CHECKED_IN. Only {@link Reservation#getNotes()} changes. The audit entry never records the
+     * submitted notes content; action identity (who, when, which Reservation) is sufficient.
+     *
+     * @param id Reservation identifier
+     * @param request replacement notes (optional; blank/{@code null} clears the notes)
+     * @return the updated Reservation response
+     * @throws ReservationFieldUpdateException if the Reservation's lifecycle no longer allows this change
+     */
+    @Transactional
+    public Response updateReservationNotes(UUID id, NotesUpdateRequest request) {
+        CurrentUser user = currentUser();
+        Reservation reservation = loadForUpdate(id);
+        requireEditableForContactAndNotes(reservation);
+        reservation.changeNotes(request == null ? null : request.notes());
+        reservation.audit(user.id());
+        audit(user, UPDATE_NOTES_AUDIT_ACTION, reservation, null, null);
+        return response(reservation);
+    }
+
+    /** Rejects a Booking Contact or Notes change once the Reservation is CHECKED_OUT, CANCELLED or NO_SHOW. */
+    private void requireEditableForContactAndNotes(Reservation reservation) {
+        ReservationStatus status = reservation.getStatus();
+        if (status == ReservationStatus.CHECKED_OUT || status == ReservationStatus.CANCELLED
+                || status == ReservationStatus.NO_SHOW) {
+            throw new ReservationFieldUpdateException(ReservationFieldUpdateException.Reason.RESERVATION_LOCKED,
+                    "This reservation's lifecycle no longer allows this change");
+        }
     }
 
     /** Rejects a controlled pre-check-in modification outside the shared lifecycle boundary. */

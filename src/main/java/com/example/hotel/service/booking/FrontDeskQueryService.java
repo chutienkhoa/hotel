@@ -242,7 +242,8 @@ public class FrontDeskQueryService {
                 overdue || hasBlocker,
                 readiness,
                 roomRows,
-                housekeeping);
+                housekeeping,
+                EffectiveBookingContact.of(reservation).phone());
     }
 
     private static int arrivalRank(FrontDeskArrivalRow row) {

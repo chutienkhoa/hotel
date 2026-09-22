@@ -39,7 +39,11 @@
             <tbody>
             <tr th:each="row : ${rows}" th:classappend="${row.overdue} ? 'housekeeping-row-urgent'">
                 <td th:text="${row.reservationNumber}">R-1</td>
-                <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                <td>
+                    <th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block>
+                    <span class="front-desk-secondary" id="arrival-contact-phone" th:if="${row.contactPhone}"
+                          th:text="${row.contactPhone}">0900000000</span>
+                </td>
                 <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
                 <td>
                     <span th:text="${row.source.displayName}">Direct</span>

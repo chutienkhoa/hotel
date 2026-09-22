@@ -34,6 +34,14 @@
                    th:href="@{/reservations/{id}/correct-ota-reference(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and !hasStay and reservation.source.name() != 'DIRECT' and canManageBooking}"
                    th:text="#{reservation.otaReference.action}">Correct OTA Reference</a>
+                <a class="button button-secondary" id="edit-booking-contact"
+                   th:href="@{/reservations/{id}/booking-contact(id=${reservation.id})}"
+                   th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN') and canManageBooking}"
+                   th:text="#{reservation.contact.action}">Edit Booking Contact</a>
+                <a class="button button-secondary" id="edit-notes"
+                   th:href="@{/reservations/{id}/notes(id=${reservation.id})}"
+                   th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN') and canManageBooking}"
+                   th:text="#{reservation.notesEdit.action}">Edit Notes</a>
                 <a class="button button-secondary" id="record-prepayment"
                    th:href="@{/reservations/{id}/prepayments(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and canManagePayment}"
@@ -190,6 +198,26 @@
                             </div>
                         </div>
                     </th:block>
+
+                    <div class="reservation-info-item" id="booking-contact-item">
+                        <span class="reservation-info-icon reservation-info-icon--blue">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.contact.label}">Booking Contact</p>
+                            <p class="reservation-info-value" id="booking-contact-name"
+                               th:text="${#strings.isEmpty(reservation.effectiveBookingContactName) ? '—' : reservation.effectiveBookingContactName}">—</p>
+                            <p class="reservation-info-value" id="booking-contact-phone"
+                               th:if="${!#strings.isEmpty(reservation.effectiveBookingContactPhone)}"
+                               th:text="${reservation.effectiveBookingContactPhone}">0900000000</p>
+                            <p class="reservation-info-value" id="booking-contact-email"
+                               th:if="${!#strings.isEmpty(reservation.effectiveBookingContactEmail)}"
+                               th:text="${reservation.effectiveBookingContactEmail}">guest@example.com</p>
+                            <p class="reservation-info-secondary" id="booking-contact-fallback-notice"
+                               th:if="${reservation.bookingContactFromPrimaryGuest}"
+                               th:text="#{reservation.contact.fallbackNotice}">Showing Primary Guest contact information; no Booking Contact has been set.</p>
+                        </div>
+                    </div>
 
                     <div class="reservation-info-item reservation-info-notes">
                         <span class="reservation-info-icon reservation-info-icon--purple">

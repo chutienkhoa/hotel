@@ -32,7 +32,44 @@ public record CreateRequest(
         @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
         @Size(max = 5000) String notes,
         @NotEmpty List<@Valid RoomRequest> rooms,
-        List<UUID> accompanyingGuestIds) {
+        List<UUID> accompanyingGuestIds,
+        @Size(max = 200) String bookingContactName,
+        @Size(max = 100) String bookingContactPhone,
+        @Size(max = 255) String bookingContactEmail) {
+
+    /**
+     * Creates a request without explicit Booking Contact values, for callers that predate Booking Contact (Walk-in
+     * and existing tests/fixtures). {@code ReservationService.create} defaults Booking Contact from the Primary
+     * Guest whenever every explicit value is blank, so this constructor still produces a Reservation with a
+     * Booking Contact snapshot.
+     *
+     * @param guestId identifier of the Primary Guest
+     * @param checkInDate planned check-in date
+     * @param checkOutDate planned check-out date
+     * @param adultCount number of adults, at least 1
+     * @param childCount number of children, at least 0
+     * @param source booking source
+     * @param otaBookingReference staff-entered OTA reference, required for a non-DIRECT source
+     * @param currency three-letter currency code
+     * @param notes optional reservation notes
+     * @param rooms requested room/rate assignments
+     * @param accompanyingGuestIds optional Accompanying Guest identifiers
+     */
+    public CreateRequest(
+            UUID guestId,
+            LocalDate checkInDate,
+            LocalDate checkOutDate,
+            Integer adultCount,
+            Integer childCount,
+            BookingSource source,
+            String otaBookingReference,
+            String currency,
+            String notes,
+            List<RoomRequest> rooms,
+            List<UUID> accompanyingGuestIds) {
+        this(guestId, checkInDate, checkOutDate, adultCount, childCount, source, otaBookingReference, currency,
+                notes, rooms, accompanyingGuestIds, null, null, null);
+    }
 
     /**
      * Returns the requested Accompanying Guest identifiers, never {@code null}.

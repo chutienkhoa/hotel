@@ -20,6 +20,8 @@ import java.util.UUID;
  * @param readiness derived Arrival Readiness
  * @param rooms every booked Room, each with its own blocker if any
  * @param housekeepingRelated {@code true} when a Room is DIRTY or CLEANING
+ * @param contactPhone the effective Booking Contact phone (the Reservation's own snapshot, or the Primary Guest
+ *     fallback when no snapshot is set), or {@code null} when neither is available
  */
 public record FrontDeskArrivalRow(
         UUID reservationId,
@@ -33,4 +35,5 @@ public record FrontDeskArrivalRow(
         boolean needsAttention,
         ArrivalReadiness readiness,
         List<FrontDeskRoomResponse> rooms,
-        boolean housekeepingRelated) {}
+        boolean housekeepingRelated,
+        String contactPhone) {}

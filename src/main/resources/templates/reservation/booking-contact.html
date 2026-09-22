@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{reservation.contact.title})}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}"
+           th:text="#{reservation.modification.back}">Back to reservation</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{reservation.contact.title}">Edit Booking Contact</h1>
+                <p th:text="#{reservation.contact.description}">Change only the Booking Contact of this reservation.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt th:text="#{reservation.modification.reservation}">Reservation</dt>
+            <dd th:text="${reservation.reservationNumber}">R20260924-000001</dd>
+        </dl>
+
+        <form class="form-card" method="post"
+              th:action="@{/reservations/{id}/booking-contact(id=${reservation.id})}"
+              th:object="${bookingContactForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}"
+               th:text="#{reservation.modification.fixErrors}">Please correct the highlighted fields.</p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <div class="form-field">
+                <label for="bookingContactName" th:text="#{reservation.contact.name}">Contact Name</label>
+                <input id="bookingContactName" maxlength="200" th:field="*{bookingContactName}" type="text" />
+                <p class="field-error" th:errors="*{bookingContactName}"></p>
+            </div>
+            <div class="form-field">
+                <label for="bookingContactPhone" th:text="#{reservation.contact.phone}">Contact Phone</label>
+                <input id="bookingContactPhone" maxlength="100" th:field="*{bookingContactPhone}" type="text" />
+                <p class="field-error" th:errors="*{bookingContactPhone}"></p>
+            </div>
+            <div class="form-field">
+                <label for="bookingContactEmail" th:text="#{reservation.contact.email}">Contact Email</label>
+                <input id="bookingContactEmail" maxlength="255" th:field="*{bookingContactEmail}" type="text" />
+                <p class="field-error" th:errors="*{bookingContactEmail}"></p>
+            </div>
+
+            <p class="text-muted" th:text="#{reservation.contact.immutableNotice}">
+                Primary Guest, Accompanying Guests, OTA reference and rooms are not changed here.
+            </p>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservation.id})}"
+                   th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="#{reservation.contact.submit}" type="submit">Save Booking Contact</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

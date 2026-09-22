@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{reservation.notesEdit.title})}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}"
+           th:text="#{reservation.modification.back}">Back to reservation</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{reservation.notesEdit.title}">Edit Reservation Notes</h1>
+                <p th:text="#{reservation.notesEdit.description}">Change only the internal operational notes.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt th:text="#{reservation.modification.reservation}">Reservation</dt>
+            <dd th:text="${reservation.reservationNumber}">R20260924-000001</dd>
+        </dl>
+
+        <form class="form-card" method="post"
+              th:action="@{/reservations/{id}/notes(id=${reservation.id})}"
+              th:object="${notesForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}"
+               th:text="#{reservation.modification.fixErrors}">Please correct the highlighted fields.</p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+            <div class="form-field reservation-notes">
+                <label for="notes" th:text="#{reservation.notesEdit.label}">Notes</label>
+                <textarea id="notes" maxlength="5000" rows="4" th:field="*{notes}"></textarea>
+                <p class="field-error" th:errors="*{notes}"></p>
+            </div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservation.id})}"
+                   th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="#{reservation.notesEdit.submit}" type="submit">Save Notes</button>
+            </div>
+        </form>
+    </main>
+</div>
+</body>
+</html>

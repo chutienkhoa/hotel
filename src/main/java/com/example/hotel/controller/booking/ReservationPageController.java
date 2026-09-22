@@ -233,7 +233,10 @@ public class ReservationPageController {
                 reservation.rooms().stream()
                         .map(room -> new RoomRequest(room.roomId(), room.nightlyRate()))
                         .toList(),
-                reservation.accompanyingGuestIds());
+                reservation.accompanyingGuestIds(),
+                reservation.bookingContactName(),
+                reservation.bookingContactPhone(),
+                reservation.bookingContactEmail());
         addReservationFormAttributes(
                 model,
                 form,

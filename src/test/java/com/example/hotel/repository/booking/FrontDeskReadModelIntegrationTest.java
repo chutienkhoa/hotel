@@ -128,6 +128,27 @@ class FrontDeskReadModelIntegrationTest {
         assertTrue(frontDesk.arrivals().isEmpty());
     }
 
+    /**
+     * Confirms Front Desk Arrivals resolves the effective Booking Contact against real PostgreSQL data: the
+     * Primary Guest fallback for a historical/null Booking Contact, and the Reservation's own snapshot when set.
+     */
+    @Test
+    void shouldResolveEffectiveContactPhoneFromSnapshotOrPrimaryGuestFallback() {
+        jdbc.update("UPDATE guest SET phone = ? WHERE id = ?", "0900000001", guest);
+        UUID withoutSnapshot = add("R-FALLBACK", "CONFIRMED", today, today.plusDays(1), "FA-CONTACT-1");
+        UUID withSnapshot = add("R-SNAPSHOT", "CONFIRMED", today, today.plusDays(1), "FA-CONTACT-2");
+        jdbc.update("UPDATE reservation SET booking_contact_phone = ? WHERE id = ?", "0955555555", withSnapshot);
+
+        List<FrontDeskArrivalRow> rows = frontDesk.arrivals();
+        String fallbackPhone = rows.stream()
+                .filter(row -> row.reservationId().equals(withoutSnapshot)).findFirst().orElseThrow().contactPhone();
+        String snapshotPhone = rows.stream()
+                .filter(row -> row.reservationId().equals(withSnapshot)).findFirst().orElseThrow().contactPhone();
+
+        assertEquals("0900000001", fallbackPhone);
+        assertEquals("0955555555", snapshotPhone);
+    }
+
     /** Confirms check-in moves a reservation from Arrivals to In-house and Departures with grouped balance readiness. */
     @Test
     void shouldHandOverFromArrivalsToInHouseAndDeriveBalanceReadiness() {

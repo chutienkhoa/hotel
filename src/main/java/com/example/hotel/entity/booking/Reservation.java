@@ -79,6 +79,15 @@ public class Reservation extends AuditedEntity {
 
     private String notes;
 
+    @Column(name = "booking_contact_name")
+    private String bookingContactName;
+
+    @Column(name = "booking_contact_phone")
+    private String bookingContactPhone;
+
+    @Column(name = "booking_contact_email")
+    private String bookingContactEmail;
+
     @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReservationRoom> rooms = new ArrayList<>();
 
@@ -654,6 +663,33 @@ public class Reservation extends AuditedEntity {
         return notes;
     }
 
+    /**
+     * Returns the Booking Contact's snapshot name, independent from the Primary Guest.
+     *
+     * @return the Booking Contact name, or {@code null} when none is set
+     */
+    public String getBookingContactName() {
+        return bookingContactName;
+    }
+
+    /**
+     * Returns the Booking Contact's snapshot phone number, independent from the Primary Guest.
+     *
+     * @return the Booking Contact phone, or {@code null} when none is set
+     */
+    public String getBookingContactPhone() {
+        return bookingContactPhone;
+    }
+
+    /**
+     * Returns the Booking Contact's snapshot email address, independent from the Primary Guest.
+     *
+     * @return the Booking Contact email, or {@code null} when none is set
+     */
+    public String getBookingContactEmail() {
+        return bookingContactEmail;
+    }
+
     /** Tính lại tổng số tiền từ các dòng phòng đã lưu snapshot. */
     public void calculateTotal() {
         totalAmount =
@@ -710,6 +746,50 @@ public class Reservation extends AuditedEntity {
             throw new IllegalArgumentException("OTA Booking Reference must not exceed 255 characters");
         }
         otaBookingReference = correctedReference;
+    }
+
+    /**
+     * Replaces the Booking Contact snapshot (name, phone, email) while this Reservation is still in an editable
+     * lifecycle state. Booking Contact is a Reservation-level snapshot independent from the Primary Guest,
+     * Accompanying Guests, {@code otaBookingReference} and {@code externalBookingId}; none of those are read or
+     * changed here. Every field is individually optional.
+     *
+     * @param name replacement Booking Contact name, or {@code null}
+     * @param phone replacement Booking Contact phone, or {@code null}
+     * @param email replacement Booking Contact email, or {@code null}
+     * @throws IllegalStateException if this Reservation is CHECKED_OUT, CANCELLED or NO_SHOW
+     */
+    public void changeBookingContact(String name, String phone, String email) {
+        requireEditableForContactAndNotes();
+        bookingContactName = name;
+        bookingContactPhone = phone;
+        bookingContactEmail = email;
+    }
+
+    /**
+     * Replaces the internal operational Reservation Notes while this Reservation is still in an editable lifecycle
+     * state. Notes remain a single free-text field; no history is kept beyond the audit trail of the change itself.
+     *
+     * @param notes replacement notes, or {@code null}
+     * @throws IllegalStateException if this Reservation is CHECKED_OUT, CANCELLED or NO_SHOW
+     */
+    public void changeNotes(String notes) {
+        requireEditableForContactAndNotes();
+        this.notes = notes;
+    }
+
+    /**
+     * Rejects a Booking Contact or Notes change once this Reservation has reached a state where those narrow
+     * fields are no longer editable: CHECKED_OUT, CANCELLED or NO_SHOW. DRAFT, CONFIRMED and CHECKED_IN are all
+     * editable, matching the approved lifecycle for these two controlled operations.
+     */
+    private void requireEditableForContactAndNotes() {
+        if (status == ReservationStatus.CHECKED_OUT || status == ReservationStatus.CANCELLED
+                || status == ReservationStatus.NO_SHOW) {
+            throw new IllegalStateException(
+                    "Booking Contact and Notes can no longer be changed once a reservation is "
+                            + status.name());
+        }
     }
 
     /** Chuyển reservation từ nháp sang đã xác nhận. */
