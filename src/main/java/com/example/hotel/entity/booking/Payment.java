@@ -61,6 +61,9 @@ public class Payment extends AuditedEntity {
     @Column(name = "refund_reason")
     private String refundReason;
 
+    @Column(name = "void_reason")
+    private String voidReason;
+
     /** Creates an empty Payment for JPA. */
     protected Payment() {}
 
@@ -202,6 +205,24 @@ public class Payment extends AuditedEntity {
     }
 
     /**
+     * Voids this paid Payment: the money it represents was never actually received or returned —
+     * the record itself was wrong (wrong amount, wrong method, or a duplicate entry) — and it stops
+     * contributing to Total Payments. This is distinct from {@link #refund(String)}, which records
+     * that money actually received was later handed back to the guest; the two must never be
+     * confused in persisted data. VOIDED is terminal, exactly like REFUNDED: no transition leads out
+     * of it, and a Payment can never move between VOIDED and REFUNDED. {@code updatedAt}/
+     * {@code updatedBy} (set via {@link #audit(UUID)}) remain the authoritative void timestamp/user,
+     * mirroring {@link #refund(String)}.
+     *
+     * @param voidReason non-blank staff-supplied reason; validated by the caller before this
+     *     transition is attempted
+     */
+    public void voidPayment(String voidReason) {
+        transition(PaymentStatus.PAID, PaymentStatus.VOIDED);
+        this.voidReason = voidReason;
+    }
+
+    /**
      * Returns the backend-generated Payment identifier.
      *
      * @return Payment identifier
@@ -299,6 +320,15 @@ public class Payment extends AuditedEntity {
      */
     public String getRefundReason() {
         return refundReason;
+    }
+
+    /**
+     * Returns the reason recorded when this Payment was voided as an erroneous record.
+     *
+     * @return the void reason, or {@code null} before this Payment is voided
+     */
+    public String getVoidReason() {
+        return voidReason;
     }
 
     /**

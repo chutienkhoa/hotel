@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.entity.booking.Payment;
 import com.example.hotel.entity.booking.PaymentCurrency;
@@ -737,6 +738,145 @@ class PaymentServiceTest {
         // Exactly one audit row: refund must never also write a RECORD_PAYMENT entry.
         verify(auditLogRepository, org.mockito.Mockito.times(1)).save(captor.capture());
         assertEquals("REFUND_PAYMENT", captor.getValue().getAction());
+    }
+
+    /** Confirms a PAID Payment can be voided, distinct from refund: VOIDED status, voidReason, VOID_PAYMENT audit. */
+    @Test
+    void shouldVoidPaidPayment() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+
+        PaymentResponse response = fixture.service()
+                .voidPayment(fixture.payment().getId(), new PaymentVoidRequest("Wrong amount entered"));
+
+        assertEquals(PaymentStatus.VOIDED, fixture.payment().getStatus());
+        assertEquals("Wrong amount entered", fixture.payment().getVoidReason());
+        assertNull(fixture.payment().getRefundReason());
+        assertEquals("VOIDED", response.status());
+    }
+
+    /** Confirms void rejects a blank reason without transitioning the Payment. */
+    @Test
+    void shouldRejectVoidWithBlankReason() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+
+        assertBadRequestForOperation(
+                () -> fixture.service().voidPayment(fixture.payment().getId(), new PaymentVoidRequest("   ")));
+        assertEquals(PaymentStatus.PAID, fixture.payment().getStatus());
+    }
+
+    /** Confirms a PENDING Payment cannot be voided (only PAID can). */
+    @Test
+    void shouldRejectVoidForPendingPayment() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+
+        assertConflict(() -> fixture.service()
+                .voidPayment(fixture.payment().getId(), new PaymentVoidRequest("mistake")));
+        assertEquals(PaymentStatus.PENDING, fixture.payment().getStatus());
+    }
+
+    /** Confirms a FAILED Payment cannot be voided. */
+    @Test
+    void shouldRejectVoidForFailedPayment() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markFailed(fixture.payment().getId());
+
+        assertConflict(() -> fixture.service()
+                .voidPayment(fixture.payment().getId(), new PaymentVoidRequest("mistake")));
+        assertEquals(PaymentStatus.FAILED, fixture.payment().getStatus());
+    }
+
+    /** Confirms a REFUNDED Payment cannot be voided: refund and void never cross into each other. */
+    @Test
+    void shouldRejectVoidForRefundedPayment() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+        fixture.service().refund(fixture.payment().getId(), new PaymentRefundRequest("Guest requested refund"));
+
+        assertConflict(() -> fixture.service()
+                .voidPayment(fixture.payment().getId(), new PaymentVoidRequest("mistake")));
+        assertEquals(PaymentStatus.REFUNDED, fixture.payment().getStatus());
+    }
+
+    /** Confirms an already-VOIDED Payment cannot be voided again (terminal state, prevents double-submit). */
+    @Test
+    void shouldRejectVoidingAlreadyVoidedPayment() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.service().markPaid(fixture.payment().getId());
+        fixture.service().voidPayment(fixture.payment().getId(), new PaymentVoidRequest("first void"));
+
+        assertConflict(() -> fixture.service()
+                .voidPayment(fixture.payment().getId(), new PaymentVoidRequest("second attempt")));
+        assertEquals(PaymentStatus.VOIDED, fixture.payment().getStatus());
+    }
+
+    /** Confirms void is rejected once the owning Stay has checked out (post-checkout immutability). */
+    @Test
+    void shouldRejectVoidForCheckedOutStay() {
+        Fixture fixture = transitionFixture(BigDecimal.TEN, BigDecimal.TEN, BigDecimal.ZERO);
+        fixture.payment().markPaid(Instant.now());
+        when(fixture.stay().getStatus()).thenReturn(StayStatus.CHECKED_OUT);
+
+        assertConflict(() -> fixture.service()
+                .voidPayment(fixture.payment().getId(), new PaymentVoidRequest("too late")));
+    }
+
+    /** Confirms a successful void writes exactly one VOID_PAYMENT audit row, never RECORD_PAYMENT or REFUND_PAYMENT. */
+    @Test
+    void shouldWriteVoidPaymentAuditLogExactlyOnce() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        Payment payment = Payment.create(
+                stay, BigDecimal.TEN, PaymentCurrency.VND, null, BigDecimal.TEN, PaymentMethod.CASH, null);
+        payment.audit(UUID.randomUUID());
+        payment.markPaid(Instant.now());
+        setCurrentUser(UUID.randomUUID());
+        when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service(paymentRepository, stayRepository, chargeRepository, auditLogRepository, Clock.systemDefaultZone())
+                .voidPayment(payment.getId(), new PaymentVoidRequest("Duplicate entry"));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository, org.mockito.Mockito.times(1)).save(captor.capture());
+        assertEquals("VOID_PAYMENT", captor.getValue().getAction());
+    }
+
+    /** Confirms the AuditLog row never carries the raw void reason text. */
+    @Test
+    void shouldNotWriteRawVoidReasonToAuditLog() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        Payment payment = Payment.create(
+                stay, BigDecimal.TEN, PaymentCurrency.VND, null, BigDecimal.TEN, PaymentMethod.CASH, null);
+        payment.audit(UUID.randomUUID());
+        payment.markPaid(Instant.now());
+        setCurrentUser(UUID.randomUUID());
+        when(paymentRepository.findByIdForUpdate(payment.getId())).thenReturn(Optional.of(payment));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        String secretReason = "VERY-SENSITIVE-REASON-TEXT";
+
+        service(paymentRepository, stayRepository, chargeRepository, auditLogRepository, Clock.systemDefaultZone())
+                .voidPayment(payment.getId(), new PaymentVoidRequest(secretReason));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog audit = captor.getValue();
+        Object oldValue = org.springframework.test.util.ReflectionTestUtils.getField(audit, "oldValue");
+        Object newValue = org.springframework.test.util.ReflectionTestUtils.getField(audit, "newValue");
+        assertFalse(String.valueOf(oldValue).contains(secretReason));
+        assertFalse(String.valueOf(newValue).contains(secretReason));
     }
 
     /** Confirms invalid record-paid input returns the standard bad-request response. */

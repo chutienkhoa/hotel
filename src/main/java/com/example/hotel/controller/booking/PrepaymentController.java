@@ -2,6 +2,7 @@ package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.dto.booking.response.PrepaymentSummaryResponse;
 import com.example.hotel.service.booking.PrepaymentService;
@@ -69,5 +70,20 @@ public class PrepaymentController {
     PaymentResponse refund(
             @PathVariable UUID reservationId, @PathVariable UUID paymentId, @RequestBody PaymentRefundRequest request) {
         return service.refund(reservationId, paymentId, request);
+    }
+
+    /**
+     * Voids one prepayment recorded in error (wrong amount, wrong method, or a duplicate entry).
+     *
+     * @param reservationId Reservation identifier
+     * @param paymentId prepayment identifier
+     * @param request client-supplied void reason
+     * @return the voided prepayment
+     */
+    @PostMapping("/{paymentId}/void")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    PaymentResponse voidPrepayment(
+            @PathVariable UUID reservationId, @PathVariable UUID paymentId, @RequestBody PaymentVoidRequest request) {
+        return service.voidPrepayment(reservationId, paymentId, request);
     }
 }

@@ -16,4 +16,5 @@ public record PaymentResponse(
         String status,
         Instant paidAt,
         String reference,
-        String refundReason) {}
+        String refundReason,
+        String voidReason) {}

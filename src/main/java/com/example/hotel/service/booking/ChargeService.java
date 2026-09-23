@@ -1,6 +1,7 @@
 package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
+import com.example.hotel.dto.booking.request.ChargeVoidRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.common.AdditionalRevenue;
@@ -11,6 +12,7 @@ import com.example.hotel.repository.common.AdditionalRevenueCategoryRepository;
 import com.example.hotel.repository.common.AdditionalRevenueRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import java.time.Clock;
+import com.example.hotel.entity.booking.ChargeStatus;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
@@ -138,6 +140,95 @@ public class ChargeService {
                 : ": " + charge.getDescription().trim();
         return "Folio charge " + charge.getType().name() + " (" + stay.getReservation().getReservationNumber() + ")"
                 + detail;
+    }
+
+    /**
+     * Voids an ACTIVE, non-ROOM Charge: it stops counting toward Total Charges but the row remains
+     * physically present. A manual guest-service Charge's linked Additional Revenue is voided in the
+     * same transaction, so it also stops counting toward revenue reports; if that linked revenue is
+     * unexpectedly missing or already inconsistent, the whole operation is rejected and nothing is
+     * committed rather than leaving the Folio and reports silently divergent.
+     *
+     * @param chargeId Charge identifier
+     * @param request client-supplied void reason
+     * @return the voided Charge response
+     * @throws ResponseStatusException if the Charge does not exist, is a ROOM charge, is not ACTIVE,
+     *     its Stay is not checked in, or its linked Additional Revenue is missing/inconsistent
+     */
+    @Transactional
+    public ChargeResponse voidCharge(UUID chargeId, ChargeVoidRequest request) {
+        String reason = requireReason(request);
+        // Charge row lock first (already identified by id), then its Stay: mirrors the existing
+        // Payment mutate-by-id convention (markPaid/markFailed/refund lock the leaf row before the
+        // Stay), unlike Charge creation which locks the Stay first because no Charge row exists yet.
+        Charge charge = chargeRepository.findByIdForUpdate(chargeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Charge not found"));
+        Stay stay = stayRepository.findByIdForUpdate(charge.getStay().getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stay not found"));
+        if (stay.getStatus() != StayStatus.CHECKED_IN) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "payment.folio.charge.error.voidNotCheckedIn",
+                    "Charges can be voided only for checked-in stays");
+        }
+        // Localized pre-validation of the same two invariants Charge.voidCharge() itself enforces.
+        // The entity guard below runs regardless (defense-in-depth) and stays English-only/domain-level,
+        // since Charge must not depend on MessageSource/i18n; by construction it can never actually
+        // reject here once these checks already passed, because the Charge row has been locked since
+        // before this point and neither its type nor its status can change out from under this call.
+        if (charge.getType() == ChargeType.ROOM) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT, "payment.folio.charge.error.voidRoomNotAllowed", "ROOM charges cannot be voided");
+        }
+        if (charge.getStatus() != ChargeStatus.ACTIVE) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT, "payment.folio.charge.error.voidNotActive", "Only an active charge can be voided");
+        }
+        try {
+            charge.voidCharge(reason);
+        } catch (IllegalStateException exception) {
+            throw conflict(exception.getMessage());
+        }
+        CurrentUser user = currentUser();
+        if (charge.getType().isGuestServiceRevenue()) {
+            AdditionalRevenue revenue = additionalRevenues.findByChargeIdForUpdate(charge.getId())
+                    .orElseThrow(() -> new LocalizedResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "payment.folio.charge.error.voidRevenueInconsistent",
+                            "Linked Additional Revenue is missing or inconsistent for this Charge"));
+            try {
+                revenue.voidForChargeCorrection(reason, clock.instant(), user.id());
+            } catch (IllegalStateException exception) {
+                throw conflict(exception.getMessage());
+            }
+            revenue.audit(user.id());
+            additionalRevenues.save(revenue);
+        }
+        charge.audit(user.id());
+        Charge saved = chargeRepository.save(charge);
+        auditLogRepository.save(new AuditLog(
+                user.id(),
+                "VOID_CHARGE",
+                stay.getReservation().getId(),
+                "Charge " + saved.getId() + " status=ACTIVE",
+                "Charge " + saved.getId() + " status=VOIDED"));
+        return chargeMapper.toResponse(saved);
+    }
+
+    /**
+     * Validates the client-supplied void reason independently of REST Bean Validation.
+     *
+     * @param request Charge void request
+     * @return trimmed, non-blank reason
+     * @throws ResponseStatusException if the reason is missing or blank
+     */
+    private String requireReason(ChargeVoidRequest request) {
+        String reason = request == null ? null : request.reason();
+        if (reason == null || reason.isBlank()) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "payment.folio.charge.error.voidReasonRequired", "reason is required");
+        }
+        return reason.trim();
     }
 
     /**

@@ -2,6 +2,7 @@ package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.service.booking.PaymentService;
 import jakarta.validation.Valid;
@@ -103,5 +104,19 @@ public class PaymentController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
     PaymentResponse refund(@PathVariable UUID id, @Valid @RequestBody PaymentRefundRequest request) {
         return paymentService.refund(id, request);
+    }
+
+    /**
+     * Voids one paid Payment recorded in error (wrong amount, wrong method, or a duplicate entry).
+     * Distinct from {@link #refund}: no money is claimed to have moved.
+     *
+     * @param id Payment identifier
+     * @param request client-supplied void reason
+     * @return voided Payment
+     */
+    @PostMapping("/api/payments/{id}/void")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    PaymentResponse voidPayment(@PathVariable UUID id, @Valid @RequestBody PaymentVoidRequest request) {
+        return paymentService.voidPayment(id, request);
     }
 }

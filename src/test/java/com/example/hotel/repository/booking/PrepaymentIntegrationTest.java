@@ -10,6 +10,7 @@ import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.FolioReconciliationResponse;
 import com.example.hotel.entity.booking.CancellationReasonCode;
 import com.example.hotel.entity.booking.ChargeType;
@@ -229,6 +230,59 @@ class PrepaymentIntegrationTest {
         prepayments.record(reservation, vnd("3000000", "E"));
         assertEquals(0, new BigDecimal("4000000").compareTo(prepayments.summary(reservation).activeTotal()));
         assertEquals(0, new BigDecimal("3000000").compareTo(prepayments.summary(reservation).refundedTotal()));
+    }
+
+    /**
+     * Confirms voiding an erroneous PAID prepayment (e.g. wrong amount) is distinct from refunding
+     * one: it becomes VOIDED (not REFUNDED), stops counting toward the active/cap total, and no
+     * longer blocks Cancel/No-show, exactly like a refunded prepayment would.
+     */
+    @Test
+    void shouldVoidErroneousPrepaymentAndFreeTheCapAndCancelGuard() {
+        UUID reservation = fourMillion();
+        prepayments.record(reservation, vnd("5000000", "WRONG"));
+        // Overpayment cap already exceeded by the erroneous 5,000,000 row alone would reject a second
+        // record; assert it here to show the erroneous row really is active before it is voided.
+        assertThrows(ResponseStatusException.class, () -> prepayments.record(reservation, vnd("1", "X")));
+        UUID wrong = jdbc.queryForObject("SELECT id FROM payment WHERE reference = 'WRONG'", UUID.class);
+
+        prepayments.voidPrepayment(reservation, wrong, new PaymentVoidRequest("Wrong amount entered"));
+
+        assertEquals(1, count("SELECT COUNT(*) FROM payment WHERE id = ? AND status = 'VOIDED'", wrong), "row remains, now VOIDED");
+        assertEquals(0, BigDecimal.ZERO.compareTo(prepayments.summary(reservation).activeTotal()), "voided no longer active");
+        // The corrected amount can now be recorded under the cap.
+        prepayments.record(reservation, vnd("4000000", "CORRECT"));
+        assertEquals(0, new BigDecimal("4000000").compareTo(prepayments.summary(reservation).activeTotal()));
+        // The reference is free again for reuse since VOIDED is ignored by the duplicate guard.
+        prepayments.record(reservation, new PaymentCreateRequest(BigDecimal.ONE, PaymentCurrency.VND, null, PaymentMethod.BANK_TRANSFER, "WRONG"));
+        // Cancel is no longer blocked by the voided row (only the still-active CORRECT/WRONG-reused prepayments matter);
+        // refund the actives first to demonstrate the voided one truly does not participate in that guard.
+        for (UUID id : jdbc.queryForList("SELECT id FROM payment WHERE reservation_id = ? AND status = 'PAID'", UUID.class, reservation)) {
+            prepayments.refund(reservation, id, new PaymentRefundRequest("cleanup"));
+        }
+        reservationService.cancel(reservation, cancelRequest());
+        assertEquals("CANCELLED", statusOf(reservation));
+        assertEquals(1, count("SELECT COUNT(*) FROM audit_log WHERE action = 'VOID_PAYMENT' AND entity_id = ?", reservation));
+        assertEquals(0, count("SELECT COUNT(*) FROM audit_log WHERE action = 'REFUND_PAYMENT' AND entity_id = ? AND old_value LIKE ?",
+                reservation, "%" + wrong + "%"), "the voided row's own history is VOID_PAYMENT, never REFUND_PAYMENT");
+    }
+
+    /** Confirms voiding only succeeds for a PAID, unattached, same-reservation prepayment (mirrors refund's own guard). */
+    @Test
+    void shouldRejectVoidForIneligiblePrepayment() {
+        UUID reservation = fourMillion();
+        prepayments.record(reservation, vnd("1000000", "V1"));
+        UUID payment = jdbc.queryForObject("SELECT id FROM payment WHERE reference = 'V1'", UUID.class);
+        prepayments.voidPrepayment(reservation, payment, new PaymentVoidRequest("first void"));
+
+        assertThrows(ResponseStatusException.class, () -> prepayments
+                .voidPrepayment(reservation, payment, new PaymentVoidRequest("second attempt")), "already VOIDED, terminal");
+
+        UUID other = fourMillion();
+        prepayments.record(reservation, vnd("500000", "V2"));
+        UUID ownedByReservation = jdbc.queryForObject("SELECT id FROM payment WHERE reference = 'V2'", UUID.class);
+        assertThrows(ResponseStatusException.class, () -> prepayments
+                .voidPrepayment(other, ownedByReservation, new PaymentVoidRequest("wrong reservation")));
     }
 
     /** Confirms only a CONFIRMED reservation without a Stay accepts a prepayment. */

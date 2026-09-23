@@ -93,6 +93,46 @@ class ChargeAuthorizationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /** Confirms MANAGE_PAYMENT authorizes voiding a Charge. */
+    @Test
+    void shouldAllowManagePaymentToVoidCharge() throws Exception {
+        UUID chargeId = UUID.randomUUID();
+        when(chargeService.voidCharge(eq(chargeId), any())).thenReturn(response());
+
+        mockMvc.perform(post("/api/stays/{stayId}/charges/{chargeId}/void", STAY_ID, chargeId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Entered by mistake\"}")
+                        .with(user("manager").authorities(managePaymentAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    /** Confirms users without MANAGE_PAYMENT cannot void a Charge. */
+    @Test
+    void shouldRejectUnauthorizedRoleFromVoidingCharge() throws Exception {
+        UUID chargeId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/stays/{stayId}/charges/{chargeId}/void", STAY_ID, chargeId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Entered by mistake\"}")
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Confirms a void request without a reason is rejected before reaching the service. */
+    @Test
+    void shouldRejectVoidWithoutReasonAtRestBoundary() throws Exception {
+        UUID chargeId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/stays/{stayId}/charges/{chargeId}/void", STAY_ID, chargeId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .with(user("manager").authorities(managePaymentAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
+    }
+
     /** Confirms Charge v1 exposes neither update nor deletion REST operations. */
     @Test
     void shouldNotExposeChargeUpdateOrDeleteOperations() throws Exception {
@@ -141,7 +181,9 @@ class ChargeAuthorizationTest {
                 null,
                 null,
                 BigDecimal.TEN,
-                Instant.now());
+                Instant.now(),
+                "ACTIVE",
+                null);
     }
 
     /** Enables method-security interception for this MVC authorization test slice. */

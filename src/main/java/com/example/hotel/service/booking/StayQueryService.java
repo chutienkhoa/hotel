@@ -42,4 +42,18 @@ public class StayQueryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stay not found"));
         return stayMapper.toResponse(stay);
     }
+
+    /**
+     * Tells whether a Reservation currently has a Stay, without throwing for a Reservation that has
+     * not checked in (DRAFT/CONFIRMED/CANCELLED/NO_SHOW never have one). Unlike
+     * {@link #findByReservationId(UUID)}, this is safe to call unconditionally regardless of
+     * Reservation lifecycle.
+     *
+     * @param reservationId Reservation identifier
+     * @return {@code true} when a Stay exists for the Reservation
+     */
+    @Transactional(readOnly = true)
+    public boolean existsByReservationId(UUID reservationId) {
+        return stayRepository.existsByReservationId(reservationId);
+    }
 }

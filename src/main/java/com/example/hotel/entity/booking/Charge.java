@@ -49,6 +49,13 @@ public class Charge extends AuditedEntity {
     @JoinColumn(name = "source_reservation_room_id")
     private ReservationRoom sourceReservationRoom;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ChargeStatus status;
+
+    @Column(name = "void_reason")
+    private String voidReason;
+
     /** Creates an empty Charge for JPA. */
     protected Charge() {}
 
@@ -95,7 +102,30 @@ public class Charge extends AuditedEntity {
         charge.unitPrice = unitPrice;
         charge.amount = amount;
         charge.chargedAt = Instant.now();
+        charge.status = ChargeStatus.ACTIVE;
         return charge;
+    }
+
+    /**
+     * Voids this Charge: it stops counting toward Total Charges but the row is never edited or
+     * deleted. Only a manual, non-ROOM Charge can ever reach this method; the automatic ROOM Charge
+     * created at check-in or Stay Extension has no correction path in V1. {@code updatedAt}/
+     * {@code updatedBy} (set via {@link #audit(UUID)}) remain the authoritative void timestamp/user,
+     * since VOIDED is a terminal status, mirroring {@code Payment#refund}.
+     *
+     * @param reason non-blank staff-supplied reason; validated by the caller before this transition
+     *     is attempted
+     * @throws IllegalStateException if this Charge is a ROOM charge or is not currently ACTIVE
+     */
+    public void voidCharge(String reason) {
+        if (type == ChargeType.ROOM) {
+            throw new IllegalStateException("ROOM charges cannot be voided");
+        }
+        if (status != ChargeStatus.ACTIVE) {
+            throw new IllegalStateException("Only an active charge can be voided");
+        }
+        status = ChargeStatus.VOIDED;
+        voidReason = reason;
     }
 
     /**
@@ -105,6 +135,24 @@ public class Charge extends AuditedEntity {
      */
     public ReservationRoom getSourceReservationRoom() {
         return sourceReservationRoom;
+    }
+
+    /**
+     * Returns the current Charge lifecycle status.
+     *
+     * @return Charge status
+     */
+    public ChargeStatus getStatus() {
+        return status;
+    }
+
+    /**
+     * Returns the reason recorded when this Charge was voided.
+     *
+     * @return the void reason, or {@code null} before this Charge is voided
+     */
+    public String getVoidReason() {
+        return voidReason;
     }
 
     /**

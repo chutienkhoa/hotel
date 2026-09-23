@@ -23,6 +23,8 @@ public class ChargeMapper {
                 charge.getQuantity(),
                 charge.getUnitPrice(),
                 charge.getAmount(),
-                charge.getChargedAt());
+                charge.getChargedAt(),
+                charge.getStatus().name(),
+                charge.getVoidReason());
     }
 }

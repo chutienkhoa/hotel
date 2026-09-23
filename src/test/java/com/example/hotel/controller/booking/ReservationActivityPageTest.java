@@ -123,6 +123,50 @@ class ReservationActivityPageTest {
                 .andExpect(content().string(containsString(">Hoạt động<")));
     }
 
+    /** Confirms VOID_CHARGE and VOID_PAYMENT render their localized label in both languages, actor included. */
+    @Test
+    void shouldRenderLocalizedVoidLabelsInBothLanguages() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(reservationActivityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of(
+                new ReservationActivityEntry(Instant.parse("2026-09-16T02:00:00Z"), "reception01", "VOID_CHARGE"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T03:00:00Z"), "reception01", "VOID_PAYMENT")));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("en"))
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Charge voided")))
+                .andExpect(content().string(containsString("Payment voided")));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("vi"))
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Đã hủy khoản phí")))
+                .andExpect(content().string(containsString("Đã hủy thanh toán")));
+    }
+
+    /**
+     * Confirms a VIEW_BOOKING-only user sees that a Charge/Payment void occurred but never the raw
+     * void reason, an amount, or any other financial detail alongside it.
+     */
+    @Test
+    void shouldShowVoidActivityWithoutReasonOrAmountForViewBookingOnlyUser() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(reservationActivityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of(
+                new ReservationActivityEntry(Instant.parse("2026-09-16T02:00:00Z"), "reception01", "VOID_CHARGE"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T03:00:00Z"), "reception01", "VOID_PAYMENT")));
+
+        String html = mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String activitySection = html.substring(html.indexOf("id=\"activity\""), html.indexOf("id=\"actions-heading\""));
+
+        org.junit.jupiter.api.Assertions.assertTrue(activitySection.contains("Charge voided"));
+        org.junit.jupiter.api.Assertions.assertTrue(activitySection.contains("Payment voided"));
+        org.junit.jupiter.api.Assertions.assertFalse(activitySection.contains("VND"));
+        org.junit.jupiter.api.Assertions.assertFalse(activitySection.contains("status=VOIDED"));
+        org.junit.jupiter.api.Assertions.assertFalse(activitySection.contains("reason="));
+    }
+
     /** Confirms an unrecognized action never breaks the page and falls back to a generic localized label. */
     @Test
     void shouldFallBackSafelyForUnknownAction() throws Exception {

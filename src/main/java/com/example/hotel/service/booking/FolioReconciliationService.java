@@ -4,6 +4,7 @@ import com.example.hotel.dto.booking.response.FolioReconciliationResponse;
 import com.example.hotel.dto.booking.response.FolioReconciliationResponse.Issue;
 import com.example.hotel.dto.booking.response.FolioReconciliationResponse.IssueType;
 import com.example.hotel.entity.booking.Charge;
+import com.example.hotel.entity.booking.ChargeStatus;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.Stay;
@@ -146,7 +147,15 @@ public class FolioReconciliationService {
                 AdditionalRevenue revenue = revenueByCharge.get(charge.getId());
                 if (revenue == null) {
                     issues.add(new Issue(IssueType.SERVICE_CHARGE_WITHOUT_REVENUE, charge.getId(), charge.getAmount(), null));
-                } else if (revenue.getStatus() != AdditionalRevenueStatus.RECORDED
+                    continue;
+                }
+                // A VOIDED Charge's linked revenue is expected to be VOIDED too (the Charge void workflow voids both
+                // atomically); an ACTIVE Charge's linked revenue is expected to stay RECORDED. Either combination
+                // still crossing is a genuine inconsistency worth reporting.
+                AdditionalRevenueStatus expectedRevenueStatus = charge.getStatus() == ChargeStatus.VOIDED
+                        ? AdditionalRevenueStatus.VOIDED
+                        : AdditionalRevenueStatus.RECORDED;
+                if (revenue.getStatus() != expectedRevenueStatus
                         || revenue.getAmount().compareTo(charge.getAmount()) != 0) {
                     issues.add(new Issue(
                             IssueType.SERVICE_REVENUE_AMOUNT_MISMATCH, charge.getId(), charge.getAmount(), revenue.getAmount()));

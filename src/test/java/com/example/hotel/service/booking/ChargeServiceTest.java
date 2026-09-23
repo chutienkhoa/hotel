@@ -11,15 +11,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
+import com.example.hotel.dto.booking.request.ChargeVoidRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.entity.booking.Charge;
+import com.example.hotel.entity.booking.ChargeStatus;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import com.example.hotel.entity.common.AdditionalRevenue;
+import com.example.hotel.entity.common.AdditionalRevenueCategory;
 import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.mapper.booking.ChargeMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.common.AdditionalRevenueRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.security.CurrentUser;
 import java.math.BigDecimal;
@@ -339,6 +344,221 @@ class ChargeServiceTest {
     }
 
     /**
+     * Confirms an ACTIVE, non-ROOM Charge can be voided, the row remains physically present, and its
+     * linked Additional Revenue is voided atomically in the same call.
+     */
+    @Test
+    void shouldVoidActiveNonRoomCharge() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AdditionalRevenueRepository additionalRevenues = mock(AdditionalRevenueRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, "Late checkout fee", null, null, BigDecimal.TEN);
+        AdditionalRevenue revenue = linkedRevenue(charge);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(additionalRevenues.findByChargeIdForUpdate(charge.getId())).thenReturn(Optional.of(revenue));
+        when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(additionalRevenues.save(any(AdditionalRevenue.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChargeResponse response = chargeService(chargeRepository, stayRepository, mock(AuditLogRepository.class), additionalRevenues)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("Entered by mistake"));
+
+        assertEquals(ChargeStatus.VOIDED, charge.getStatus());
+        assertEquals("Entered by mistake", charge.getVoidReason());
+        assertEquals("VOIDED", response.status());
+        assertEquals(charge.getId(), response.id());
+        assertEquals(com.example.hotel.entity.common.AdditionalRevenueStatus.VOIDED, revenue.getStatus());
+        verify(additionalRevenues).save(revenue);
+    }
+
+    /** Confirms a missing/inconsistent linked Additional Revenue rejects the whole void, rather than diverging silently. */
+    @Test
+    void shouldRejectVoidWhenLinkedAdditionalRevenueIsMissing() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AdditionalRevenueRepository additionalRevenues = mock(AdditionalRevenueRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, null, null, null, BigDecimal.TEN);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(additionalRevenues.findByChargeIdForUpdate(charge.getId())).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> chargeService(
+                        chargeRepository, stayRepository, mock(AuditLogRepository.class), additionalRevenues)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("reason")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(chargeRepository, never()).save(any(Charge.class));
+    }
+
+    /** Confirms void rejects a blank reason without touching the Charge. */
+    @Test
+    void shouldRejectVoidWithBlankReason() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, null, null, null, BigDecimal.TEN);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> chargeService(
+                        chargeRepository, stayRepository)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("   ")));
+
+        assertEquals(400, exception.getStatusCode().value());
+        assertEquals(ChargeStatus.ACTIVE, charge.getStatus());
+        verify(chargeRepository, never()).save(any(Charge.class));
+    }
+
+    /** Confirms an already VOIDED Charge cannot be voided again (state guard, prevents double-submit). */
+    @Test
+    void shouldRejectVoidingAlreadyVoidedCharge() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, null, null, null, BigDecimal.TEN);
+        charge.voidCharge("first void");
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> chargeService(
+                        chargeRepository, stayRepository)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("second attempt")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(chargeRepository, never()).save(any(Charge.class));
+    }
+
+    /** Confirms a ROOM Charge can never be voided, regardless of its status. */
+    @Test
+    void shouldRejectVoidingRoomCharge() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.ROOM, "Room 101", null, null, BigDecimal.TEN);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> chargeService(
+                        chargeRepository, stayRepository)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("try to void room")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals("ROOM charges cannot be voided", exception.getReason());
+        assertEquals(ChargeStatus.ACTIVE, charge.getStatus());
+        verify(chargeRepository, never()).save(any(Charge.class));
+    }
+
+    /** Confirms void is rejected once the owning Stay has checked out (post-checkout immutability). */
+    @Test
+    void shouldRejectVoidForCheckedOutStay() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        when(stay.getStatus()).thenReturn(StayStatus.CHECKED_OUT);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, null, null, null, BigDecimal.TEN);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> chargeService(
+                        chargeRepository, stayRepository)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("too late")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals(ChargeStatus.ACTIVE, charge.getStatus());
+    }
+
+    /** Confirms voiding a missing Charge fails with not-found rather than silently no-op. */
+    @Test
+    void shouldRejectVoidForMissingCharge() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        UUID chargeId = UUID.randomUUID();
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(chargeId)).thenReturn(Optional.empty());
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class, () -> chargeService(
+                        chargeRepository, stayRepository)
+                .voidCharge(chargeId, new ChargeVoidRequest("reason")));
+
+        assertEquals(404, exception.getStatusCode().value());
+    }
+
+    /** Confirms a successful void writes exactly one VOID_CHARGE audit row targeting the owning Reservation. */
+    @Test
+    void shouldWriteVoidChargeAuditEntryExactlyOnce() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        AdditionalRevenueRepository additionalRevenues = mock(AdditionalRevenueRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, null, null, null, BigDecimal.TEN);
+        AdditionalRevenue revenue = linkedRevenue(charge);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(additionalRevenues.findByChargeIdForUpdate(charge.getId())).thenReturn(Optional.of(revenue));
+        when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(additionalRevenues.save(any(AdditionalRevenue.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        chargeService(chargeRepository, stayRepository, auditLogRepository, additionalRevenues)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("Guest disputed the fee"));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository, org.mockito.Mockito.times(1)).save(captor.capture());
+        AuditLog audit = captor.getValue();
+        assertEquals("VOID_CHARGE", audit.getAction());
+        assertEquals(stay.getReservation().getId(), audit.getEntityId());
+    }
+
+    /**
+     * Confirms the AuditLog row never carries the raw void reason: it only records old/new status,
+     * never the free-text reason text itself.
+     */
+    @Test
+    void shouldNotWriteRawVoidReasonToAuditLog() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        AdditionalRevenueRepository additionalRevenues = mock(AdditionalRevenueRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, null, null, null, BigDecimal.TEN);
+        AdditionalRevenue revenue = linkedRevenue(charge);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(additionalRevenues.findByChargeIdForUpdate(charge.getId())).thenReturn(Optional.of(revenue));
+        when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(additionalRevenues.save(any(AdditionalRevenue.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        String secretReason = "VERY-SENSITIVE-REASON-TEXT";
+
+        chargeService(chargeRepository, stayRepository, auditLogRepository, additionalRevenues)
+                .voidCharge(charge.getId(), new ChargeVoidRequest(secretReason));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog audit = captor.getValue();
+        Object oldValue = org.springframework.test.util.ReflectionTestUtils.getField(audit, "oldValue");
+        Object newValue = org.springframework.test.util.ReflectionTestUtils.getField(audit, "newValue");
+        assertFalse(String.valueOf(oldValue).contains(secretReason));
+        assertFalse(String.valueOf(newValue).contains(secretReason));
+    }
+
+    /**
      * Supplies the Charge v1 types that may still be created manually (ROOM is excluded; it is
      * created automatically at check-in and rejected when submitted manually).
      *
@@ -485,14 +705,30 @@ class ChargeServiceTest {
 
     private ChargeService chargeService(
             ChargeRepository chargeRepository, StayRepository stayRepository, AuditLogRepository auditLogRepository) {
+        return chargeService(chargeRepository, stayRepository, auditLogRepository,
+                mock(com.example.hotel.repository.common.AdditionalRevenueRepository.class));
+    }
+
+    /** Creates a Charge service with an explicit Additional Revenue repository, for void tests. */
+    private ChargeService chargeService(
+            ChargeRepository chargeRepository,
+            StayRepository stayRepository,
+            AuditLogRepository auditLogRepository,
+            AdditionalRevenueRepository additionalRevenues) {
         com.example.hotel.repository.common.AdditionalRevenueCategoryRepository categories =
                 mock(com.example.hotel.repository.common.AdditionalRevenueCategoryRepository.class);
         when(categories.findByCode(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation ->
                 Optional.of(com.example.hotel.entity.common.AdditionalRevenueCategory.create(invocation.getArgument(0), "x", null)));
         return new ChargeService(chargeRepository, stayRepository, new ChargeMapper(),
-                mock(com.example.hotel.repository.common.AdditionalRevenueRepository.class), categories,
+                additionalRevenues, categories,
                 auditLogRepository,
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-20T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
+    }
+
+    /** Creates a RECORDED Additional Revenue linked to the given Charge, as ChargeService itself would. */
+    private AdditionalRevenue linkedRevenue(Charge charge) {
+        AdditionalRevenueCategory category = AdditionalRevenueCategory.create("GUEST_SERVICE", "Guest Service", null);
+        return AdditionalRevenue.createFromCharge(category, charge, java.time.LocalDate.of(2026, 9, 20), "Folio charge SERVICE");
     }
 
     /** Compares monetary values without treating insignificant scale as a difference. */

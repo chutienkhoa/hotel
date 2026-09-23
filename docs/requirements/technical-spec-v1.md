@@ -4916,4 +4916,59 @@ phân trang, chính sách lưu trữ/retention, hiển thị số tiền/phươn
 Guest/Room/Housekeeping/Room Image/Staff/User/Role/Expense/AdditionalRevenue, cơ chế event/outbox tích hợp hệ
 thống khác.
 
+## 81. Charge / Payment Void Correction (V1)
+
+Bổ sung cách kiểm soát để sửa sai nghiệp vụ (nhập sai số tiền, sai phương thức, trùng lặp) mà không sửa/xóa
+bản ghi tài chính gốc. Đây KHÔNG phải sửa trực tiếp, KHÔNG phải hard delete, KHÔNG phải Charge/Payment âm, và
+KHÔNG mở rộng phạm vi ngoài Charge/Payment thủ công của một Stay đang `CHECKED_IN`.
+
+- **Khái niệm bắt buộc phân biệt**: `REFUND` = tiền đã thực nhận và sau đó trả lại khách (giữ nguyên hành vi
+  hiện có, `PAID → REFUNDED`, lý do lưu ở `refund_reason`). `VOID` = bản ghi bị sai; số tiền đại diện chưa bao
+  giờ thực sự di chuyển (chưa từng nhận, hoặc chưa từng trả). Hai khái niệm này không bao giờ được lẫn vào
+  nhau trong dữ liệu đã lưu; `VOID` không tái sử dụng `refund_reason`/`REFUNDED`.
+- **Charge**: thêm vòng đời `status` (`ACTIVE` mặc định, `VOIDED` là trạng thái cuối, chuyển đúng một chiều
+  `ACTIVE → VOIDED`). Chỉ Charge thủ công KHÔNG PHẢI `ROOM` mới được void; ROOM Charge tự động (check-in gốc
+  và Stay Extension) không bao giờ được void trực tiếp trong V1 — chặn ở service/domain, không chỉ ẩn ở UI.
+  Void yêu cầu lý do dạng free text bắt buộc (không rỗng sau khi trim), lưu ở `charge.void_reason`; không có
+  `voidedAt`/`voidedBy` riêng — `updated_at`/`updated_by` (audit hiện có) là timestamp/actor void có thẩm
+  quyền, cùng cách REFUNDED của Payment không có `refundedAt`/`refundedBy` riêng. Charge bị void vẫn tồn tại
+  vật lý, không bị sửa/xóa.
+- **Charge ↔ Additional Revenue nguyên tử**: void một Charge dịch vụ thủ công (đã liên kết Additional Revenue
+  hệ thống quản lý, xem mục 69) đồng thời void Additional Revenue liên kết trong CÙNG transaction; nếu thiếu
+  hoặc không nhất quán, toàn bộ thao tác bị từ chối và rollback, không để lệch trạng thái Folio/báo cáo. Đây
+  là cơ chế nội bộ riêng cho thao tác void Charge; quy tắc hiện có "Additional Revenue liên kết Charge không
+  sửa/void độc lập" (mục 69) không đổi cho bất kỳ luồng nào khác.
+- **Payment**: thêm trạng thái cuối `VOIDED` bên cạnh `PENDING/PAID/FAILED/REFUNDED`. Transition mới duy nhất:
+  `PAID → VOIDED`. Không có transition ra khỏi `VOIDED`, và không có transition giữa `VOIDED` và `REFUNDED`
+  theo bất kỳ chiều nào. Void yêu cầu lý do bắt buộc lưu ở cột riêng `payment.void_reason` (không dùng chung
+  `refund_reason`), theo đúng quy ước bắt buộc lý do khi `REFUNDED` đã có ở mục 11. Payment bị void vẫn tồn
+  tại vật lý.
+- **Prepayment**: một prepayment PAID (chưa gắn Stay) ghi sai (sai số tiền, sai phương thức, trùng) có thể
+  void bằng thao tác riêng, phân biệt với hoàn tiền hiện có (mục 70). Sau khi void: không còn tính vào tổng
+  prepayment đang hiệu lực/trần thanh toán trước, không còn chặn Cancel/No-show, và cùng phương thức+reference
+  đó có thể dùng lại ngay cho một prepayment ghi đúng. Giữ nguyên sở hữu Reservation hiện có; không copy/tạo
+  lại dòng.
+- **Số dư (Outstanding)**: `Total Charges = SUM(ACTIVE Charge.amount)` (trước đây là mọi Charge); `Total
+  Payments` giữ nguyên `SUM(appliedAmount WHERE status = PAID)` (VOIDED vốn đã không nằm trong `PAID` nên
+  không cần đổi công thức Payment). Bộ lọc `ACTIVE` áp dụng tập trung tại tầng truy vấn dùng chung bởi
+  `StayBalanceService`, không cài đặt lại rải rác ở controller/query service khác. Doanh thu phòng (mục 69)
+  không đổi.
+- **Sau CHECKED_OUT**: không được void Charge, không được void Payment, không mở lại Folio, không thay đổi
+  hành vi Refund hiện có. Ranh giới bất biến tài chính sau check-out (mục 8.2, 12) giữ nguyên.
+- **Quyền**: dùng lại `MANAGE_PAYMENT` cho void Charge, void Payment, và void prepayment lỗi — không có
+  permission mới, không đổi role-permission mapping hiện có.
+- **AuditLog**: hai action mới `VOID_CHARGE`, `VOID_PAYMENT` (entityType `RESERVATION`, cùng quy ước hiện có).
+  `VOID_PAYMENT` dùng chung cho void Payment thường và void prepayment, giống cách `REFUND_PAYMENT` đã dùng
+  chung cho cả hai ngữ cảnh. Không lưu lý do void thô, không lưu số tiền/phương thức/tham chiếu vào
+  `old_value`/`new_value`.
+- **Operational Timeline**: nhãn đã dịch `reservation.activity.action.VOID_CHARGE`/`VOID_PAYMENT` (EN/VI),
+  theo đúng quy ước ẩn giá trị tài chính hiện có (mục 79) — không hiển thị số tiền, lý do, hay giá trị
+  `AuditLog` thô.
+- **Không đổi/Hoãn**: sửa trực tiếp amount/type/description/quantity/unitPrice/nguồn gốc Charge; hard delete;
+  Charge/Payment âm; hoàn tiền một phần; sửa sau CHECKED_OUT; mở lại Folio; workflow phê duyệt quản lý;
+  permission void riêng; accounting period; general ledger/AccountingEntry; tích hợp kế toán ngoài; sửa
+  Standalone Additional Revenue (giữ nguyên hành vi/permission `MANAGE_ADDITIONAL_REVENUE` hiện có); sửa
+  Expense; sửa ROOM Charge/`ReservationRoom`/`StayExtensionRoom`; FK lineage thay thế/hiệu chỉnh
+  (`replacementOf`/`correctionOf`); tự động tạo bản ghi đúng thay thế (staff phải tự ghi lại sau khi void).
+
 **End of Specification v1.0**

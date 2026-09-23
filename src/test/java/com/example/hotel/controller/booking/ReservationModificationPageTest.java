@@ -134,6 +134,7 @@ class ReservationModificationPageTest {
 
         when(stayQueryService.findByReservationId(RESERVATION_ID))
                 .thenReturn(new StayResponse(UUID.randomUUID(), "CHECKED_IN", Instant.EPOCH, null));
+        when(stayQueryService.existsByReservationId(RESERVATION_ID)).thenReturn(true);
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager()))
                 .andExpect(content().string(not(containsString("/change-dates"))))
                 .andExpect(content().string(not(containsString("/correct-ota-reference"))));
@@ -146,6 +147,7 @@ class ReservationModificationPageTest {
                 .thenReturn(detail("CONFIRMED", BookingSource.AGODA));
         when(stayQueryService.findByReservationId(RESERVATION_ID))
                 .thenReturn(new StayResponse(UUID.randomUUID(), "CHECKED_IN", Instant.EPOCH, null));
+        when(stayQueryService.existsByReservationId(RESERVATION_ID)).thenReturn(true);
         when(prepaymentService.summary(RESERVATION_ID)).thenReturn(new PrepaymentSummaryResponse(
                 "VND",
                 new BigDecimal("3500000"),

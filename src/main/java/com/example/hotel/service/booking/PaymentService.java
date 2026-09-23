@@ -2,6 +2,7 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.entity.booking.Payment;
 import com.example.hotel.entity.booking.PaymentCurrency;
@@ -231,6 +232,46 @@ public class PaymentService {
                 stay.getReservation().getId(),
                 "Payment " + payment.getId() + " status=PAID",
                 "Payment " + payment.getId() + " status=REFUNDED, reason=" + trimmedReason));
+        return paymentMapper.toResponse(saved);
+    }
+
+    /**
+     * Voids a paid Payment: it stops contributing to Total Payments, but the row remains physically
+     * present. Reserved for a Payment recorded in error (wrong amount, wrong method, or a duplicate
+     * entry) where no money was actually received or returned; when money actually needs to be
+     * handed back to the guest, use {@link #refund(UUID, PaymentRefundRequest)} instead. The two
+     * remain distinct in every persisted field: status ({@code VOIDED} vs {@code REFUNDED}), reason
+     * column ({@code voidReason} vs {@code refundReason}), and AuditLog action ({@code VOID_PAYMENT}
+     * vs {@code REFUND_PAYMENT}).
+     *
+     * @param paymentId Payment identifier
+     * @param request client-supplied void reason
+     * @return voided Payment response
+     */
+    @Transactional
+    public PaymentResponse voidPayment(UUID paymentId, PaymentVoidRequest request) {
+        String reason = request == null ? null : request.reason();
+        if (reason == null || reason.isBlank()) {
+            throw badRequest("reason is required");
+        }
+        String trimmedReason = reason.trim();
+        Payment payment = findPaymentForUpdate(paymentId);
+        Stay stay = findStayForUpdate(payment.getStay() == null ? null : payment.getStay().getId());
+        requireCheckedIn(stay);
+        try {
+            payment.voidPayment(trimmedReason);
+        } catch (IllegalStateException exception) {
+            throw conflict(exception.getMessage());
+        }
+        CurrentUser user = currentUser();
+        payment.audit(user.id());
+        Payment saved = paymentRepository.save(payment);
+        auditLogRepository.save(new AuditLog(
+                user.id(),
+                "VOID_PAYMENT",
+                stay.getReservation().getId(),
+                "Payment " + payment.getId() + " status=PAID",
+                "Payment " + payment.getId() + " status=VOIDED"));
         return paymentMapper.toResponse(saved);
     }
 

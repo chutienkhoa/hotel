@@ -80,6 +80,8 @@
                         <th scope="col">Unit price</th>
                         <th scope="col">Amount</th>
                         <th scope="col">Charged at</th>
+                        <th scope="col">Status</th>
+                        <th class="table-actions" scope="col">Actions</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -95,9 +97,25 @@
                         </td>
                         <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></td>
                         <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
+                        <td>
+                            <span class="status-badge" th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Active</span>
+                            <p class="reservation-info-secondary" th:if="${charge.status == 'VOIDED' and charge.voidReason != null}"
+                               th:text="${'Reason: ' + charge.voidReason}">Reason: —</p>
+                        </td>
+                        <td class="table-actions">
+                            <form data-confirm-severity="DANGER" method="post"
+                                  th:action="@{/reservations/{reservationId}/folio/charges/{chargeId}/void(reservationId=${reservation.id},chargeId=${charge.id})}"
+                                  th:attr="data-confirm-label=#{payment.folio.charge.void.action},data-confirm-title=#{payment.folio.charge.void.confirmTitle},data-confirm-message=#{payment.folio.charge.void.confirmMessage}"
+                                  th:if="${folioMutable and charge.status == 'ACTIVE' and charge.type != 'ROOM'}">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <input class="charge-void-reason" maxlength="1000" name="reason"
+                                       th:placeholder="#{payment.folio.charge.void.reasonPlaceholder}" required type="text" />
+                                <button class="button button-danger table-action" th:text="#{payment.folio.charge.void.action}" type="submit">Void</button>
+                            </form>
+                        </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(charges)}">
-                        <td colspan="6">No Charges have been recorded.</td>
+                        <td colspan="8">No Charges have been recorded.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -207,6 +225,8 @@
                             <span class="status-badge" th:text="${payment.status}">PENDING</span>
                             <p class="reservation-info-secondary" th:if="${payment.status == 'REFUNDED' and payment.refundReason != null}"
                                th:text="${'Reason: ' + payment.refundReason}">Reason: —</p>
+                            <p class="reservation-info-secondary" th:if="${payment.status == 'VOIDED' and payment.voidReason != null}"
+                               th:text="${'Reason: ' + payment.voidReason}">Reason: —</p>
                         </td>
                         <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
                         <td class="table-actions">
@@ -234,6 +254,15 @@
                                     <input class="payment-refund-reason" maxlength="1000" name="reason"
                                            placeholder="Refund reason" required type="text" />
                                     <button class="button button-danger table-action" type="submit">Refund</button>
+                                </form>
+                                <form class="payment-void-form" data-confirm-severity="DANGER" method="post"
+                                      th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/void(reservationId=${reservation.id},paymentId=${payment.id})}"
+                                      th:attr="data-confirm-label=#{payment.folio.payment.void.action},data-confirm-title=#{payment.folio.payment.void.confirmTitle},data-confirm-message=#{payment.folio.payment.void.confirmMessage}"
+                                      th:if="${payment.status == 'PAID'}">
+                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                    <input class="payment-void-reason" maxlength="1000" name="reason"
+                                           th:placeholder="#{payment.folio.payment.void.reasonPlaceholder}" required type="text" />
+                                    <button class="button button-danger table-action" th:text="#{payment.folio.payment.void.action}" type="submit">Void</button>
                                 </form>
                             </div>
                         </td>

@@ -173,7 +173,7 @@ public class ReservationPageController {
         addAuthorizationAttributes(model, authentication);
         ReservationDetailResponse reservation = reservationQueryService.findById(id);
         model.addAttribute("reservation", reservation);
-        boolean hasStay = stayQueryService.findByReservationId(id) != null;
+        boolean hasStay = stayQueryService.existsByReservationId(id);
         model.addAttribute("hasStay", hasStay);
         addCheckoutReadiness(model, reservation, authentication);
         addRoomOccupancyAttributes(model, reservation);

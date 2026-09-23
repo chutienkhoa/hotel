@@ -31,6 +31,16 @@ public interface AdditionalRevenueRepository
     Optional<AdditionalRevenue> findByIdForUpdate(@Param("id") UUID id);
 
     /**
+     * Locks the Additional Revenue linked to one Charge, for the coordinated Charge-void workflow.
+     *
+     * @param chargeId originating Charge identifier
+     * @return the locked linked revenue, or empty when the Charge has no linked revenue
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT revenue FROM AdditionalRevenue revenue WHERE revenue.charge.id = :chargeId")
+    Optional<AdditionalRevenue> findByChargeIdForUpdate(@Param("chargeId") UUID chargeId);
+
+    /**
      * Sums Additional Revenue with a status and a revenue date inside a half-open date range.
      *
      * @param status the recognized status ({@code RECORDED})

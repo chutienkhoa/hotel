@@ -464,6 +464,12 @@
                                     <input name="reason" required th:placeholder="#{payment.prepayment.refundReason}" type="text" />
                                     <button class="button button-secondary" th:text="#{payment.prepayment.refund}" type="submit">Refund Prepayment</button>
                                 </form>
+                                <form method="post" th:if="${payment.status == 'PAID'}"
+                                      th:action="@{/reservations/{id}/prepayments/{paymentId}/void(id=${reservation.id},paymentId=${payment.id})}">
+                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                    <input name="reason" required th:placeholder="#{payment.prepayment.voidReason}" type="text" />
+                                    <button class="button button-danger" th:text="#{payment.prepayment.void}" type="submit">Void Prepayment</button>
+                                </form>
                             </td>
                         </tr>
                         </tbody>

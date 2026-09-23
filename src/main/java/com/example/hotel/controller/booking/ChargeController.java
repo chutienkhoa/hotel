@@ -1,6 +1,7 @@
 package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
+import com.example.hotel.dto.booking.request.ChargeVoidRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.service.booking.ChargeService;
 import jakarta.validation.Valid;
@@ -53,5 +54,20 @@ public class ChargeController {
     @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
     List<ChargeResponse> findByStayId(@PathVariable UUID stayId) {
         return chargeService.findByStayId(stayId);
+    }
+
+    /**
+     * Voids an ACTIVE, non-ROOM Charge recorded against the requested Stay.
+     *
+     * @param stayId owning Stay identifier (path consistency only; ownership is resolved from the Charge itself)
+     * @param chargeId Charge identifier
+     * @param request validated client-supplied void reason
+     * @return the voided Charge response
+     */
+    @PostMapping("/{chargeId}/void")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    ChargeResponse voidCharge(
+            @PathVariable UUID stayId, @PathVariable UUID chargeId, @Valid @RequestBody ChargeVoidRequest request) {
+        return chargeService.voidCharge(chargeId, request);
     }
 }

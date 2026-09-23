@@ -12,16 +12,20 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.ArgumentMatchers.any;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import com.example.hotel.config.I18nConfig;
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
+import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.booking.ChargeService;
 import com.example.hotel.service.booking.PaymentService;
@@ -29,6 +33,7 @@ import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.StayBalance;
 import com.example.hotel.service.booking.StayBalanceService;
 import com.example.hotel.service.booking.StayQueryService;
+import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -40,6 +45,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -47,8 +53,12 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** Verifies Folio MVC authorization, mutable rendering, and post-redirect-get behavior. */
 @WebMvcTest(FolioPageController.class)
-@Import(FolioPageControllerTest.MethodSecurityTestConfiguration.class)
+@Import({FolioPageControllerTest.MethodSecurityTestConfiguration.class, I18nConfig.class})
 class FolioPageControllerTest {
+
+    private static Cookie language(String value) {
+        return new Cookie("pms-lang", value);
+    }
 
     private static final UUID RESERVATION_ID =
             UUID.fromString("11111111-1111-1111-1111-111111111111");
@@ -377,6 +387,125 @@ class FolioPageControllerTest {
         assertEquals(new BigDecimal("150000"), captor.getValue().unitPrice());
     }
 
+    /** Confirms the new Charge-void success flash message is localized in EN and VI. */
+    @Test
+    void shouldShowLocalizedChargeVoidSuccessFlashMessage() throws Exception {
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        UUID chargeId = UUID.randomUUID();
+        when(chargeService.voidCharge(eq(chargeId), any())).thenReturn(fixedCharge());
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/charges/{chargeId}/void", RESERVATION_ID, chargeId)
+                        .param("reason", "Entered by mistake")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("successMessage", "Charge voided successfully."));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/charges/{chargeId}/void", RESERVATION_ID, chargeId)
+                        .param("reason", "Entered by mistake")
+                        .cookie(language("vi"))
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("successMessage", "Đã hủy khoản phí thành công."));
+    }
+
+    /** Confirms the new Payment-void success flash message is localized in EN and VI. */
+    @Test
+    void shouldShowLocalizedPaymentVoidSuccessFlashMessage() throws Exception {
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        UUID paymentId = UUID.randomUUID();
+        when(paymentService.voidPayment(eq(paymentId), any())).thenReturn(payment("VOIDED"));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments/{paymentId}/void", RESERVATION_ID, paymentId)
+                        .param("reason", "Duplicate entry")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("successMessage", "Payment voided successfully."));
+
+        mockMvc.perform(post("/reservations/{reservationId}/folio/payments/{paymentId}/void", RESERVATION_ID, paymentId)
+                        .param("reason", "Duplicate entry")
+                        .cookie(language("vi"))
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("successMessage", "Đã hủy thanh toán thành công."));
+    }
+
+    /**
+     * Confirms every new Charge-void failure reason is localized in EN and VI, none of them the raw
+     * English domain-exception text leaking through untranslated.
+     */
+    @Test
+    void shouldShowLocalizedChargeVoidErrorMessages() throws Exception {
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        UUID chargeId = UUID.randomUUID();
+        record Case(String messageKey, String english, String vietnamese) {}
+        List<Case> cases = List.of(
+                new Case("payment.folio.charge.error.voidReasonRequired",
+                        "A reason is required to void a charge.", "Vui lòng nhập lý do để hủy khoản phí."),
+                new Case("payment.folio.charge.error.voidNotCheckedIn",
+                        "Charges can be voided only for checked-in stays.",
+                        "Chỉ có thể hủy khoản phí khi lưu trú đang ở trạng thái đã nhận phòng."),
+                new Case("payment.folio.charge.error.voidRoomNotAllowed",
+                        "Room charges cannot be voided.", "Không thể hủy phí phòng (ROOM)."),
+                new Case("payment.folio.charge.error.voidNotActive",
+                        "Only an active charge can be voided.", "Chỉ có thể hủy khoản phí đang hiệu lực."),
+                new Case("payment.folio.charge.error.voidRevenueInconsistent",
+                        "The linked additional revenue for this charge is missing or inconsistent. Nothing was voided.",
+                        "Doanh thu bổ sung liên kết với khoản phí này bị thiếu hoặc không nhất quán. Không có gì được hủy."));
+
+        for (Case testCase : cases) {
+            when(chargeService.voidCharge(eq(chargeId), any())).thenThrow(new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT, testCase.messageKey(), "unused-english-reason"));
+
+            mockMvc.perform(post("/reservations/{reservationId}/folio/charges/{chargeId}/void", RESERVATION_ID, chargeId)
+                            .param("reason", "x")
+                            .with(user("manager").authorities(managePayment()))
+                            .with(csrf()))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(flash().attribute("errorMessage", testCase.english()));
+
+            mockMvc.perform(post("/reservations/{reservationId}/folio/charges/{chargeId}/void", RESERVATION_ID, chargeId)
+                            .param("reason", "x")
+                            .cookie(language("vi"))
+                            .with(user("manager").authorities(managePayment()))
+                            .with(csrf()))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(flash().attribute("errorMessage", testCase.vietnamese()));
+        }
+    }
+
+    /** Confirms both Charge statuses (ACTIVE and VOIDED) render through i18n, never the raw enum name. */
+    @Test
+    void shouldRenderLocalizedChargeStatusLabels() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay("CHECKED_IN"));
+        ChargeResponse voided = new ChargeResponse(
+                UUID.randomUUID(), STAY_ID, "MINIBAR", "cola", null, null,
+                new BigDecimal("100000"), Instant.parse("2026-09-11T10:00:00Z"), "VOIDED", "Duplicate entry");
+        when(chargeService.findByStayId(STAY_ID)).thenReturn(List.of(charge(), voided));
+        when(paymentService.findByStayId(STAY_ID)).thenReturn(List.of(payment("PENDING")));
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(new StayBalance(
+                new BigDecimal("100.00"), BigDecimal.ZERO, new BigDecimal("100.00")));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">Active<")))
+                .andExpect(content().string(containsString(">Voided<")))
+                .andExpect(content().string(not(containsString(">ACTIVE<"))))
+                .andExpect(content().string(not(containsString(">VOIDED<"))));
+
+        mockMvc.perform(get("/reservations/{reservationId}/folio", RESERVATION_ID)
+                        .cookie(language("vi"))
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">Đang hiệu lực<")))
+                .andExpect(content().string(containsString(">Đã hủy<")));
+    }
+
     /** Confirms the record-paid action calls the direct PAID recording operation and redirects on success. */
     @Test
     void shouldRecordPaymentAsPaidWithCsrfAndRedirectToFolio() throws Exception {
@@ -537,7 +666,9 @@ class FolioPageControllerTest {
                 new BigDecimal("1.500000"),
                 new BigDecimal("66.666667"),
                 new BigDecimal("100.00"),
-                Instant.parse("2026-09-11T10:00:00Z"));
+                Instant.parse("2026-09-11T10:00:00Z"),
+                "ACTIVE",
+                null);
     }
 
     /** Creates a fixed-amount Charge with absent optional quantity and unit price. */
@@ -550,7 +681,9 @@ class FolioPageControllerTest {
                 null,
                 null,
                 new BigDecimal("80000"),
-                Instant.parse("2026-09-11T10:00:00Z"));
+                Instant.parse("2026-09-11T10:00:00Z"),
+                "ACTIVE",
+                null);
     }
 
     /** Creates an itemized Charge whose quantity should render without trailing zeroes. */
@@ -563,7 +696,9 @@ class FolioPageControllerTest {
                 new BigDecimal("3.000000"),
                 new BigDecimal("30000"),
                 new BigDecimal("90000"),
-                Instant.parse("2026-09-11T10:00:00Z"));
+                Instant.parse("2026-09-11T10:00:00Z"),
+                "ACTIVE",
+                null);
     }
 
     /** Creates a representative Payment entry. */
@@ -584,7 +719,8 @@ class FolioPageControllerTest {
                 status,
                 "PAID".equals(status) ? Instant.parse("2026-09-11T11:00:00Z") : null,
                 null,
-                refundReason);
+                refundReason,
+                null);
     }
 
     /** Creates a cross-currency Payment entry: 120 USD received, applied as 3,000,000 VND. */
@@ -599,6 +735,7 @@ class FolioPageControllerTest {
                 "BANK_TRANSFER",
                 status,
                 "PAID".equals(status) ? Instant.parse("2026-09-11T11:00:00Z") : null,
+                null,
                 null,
                 null);
     }

@@ -2,6 +2,7 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.dto.booking.response.PrepaymentSummaryResponse;
 import com.example.hotel.entity.booking.Payment;
@@ -91,7 +92,8 @@ public class PrepaymentService {
                 request.amount(), request.currency(), reservationCurrency, request.exchangeRate());
         String reference = normalize(request.reference());
         if (reference != null && payments.existsLiveWithReference(
-                reservationId, request.method(), reference, List.of(PaymentStatus.FAILED, PaymentStatus.REFUNDED))) {
+                reservationId, request.method(), reference,
+                List.of(PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.VOIDED))) {
             throw localized(HttpStatus.CONFLICT, "payment.prepayment.error.duplicate",
                     "A payment with the same method and reference already exists for this reservation");
         }
@@ -147,6 +149,49 @@ public class PrepaymentService {
         audits.save(new AuditLog(user.id(), "REFUND_PAYMENT", reservationId,
                 "Payment " + payment.getId() + " status=PAID",
                 "Payment " + payment.getId() + " status=REFUNDED, reason=" + reason.trim()));
+        return paymentMapper.toResponse(saved);
+    }
+
+    /**
+     * Voids one prepayment recorded in error (wrong amount, wrong method, or a duplicate entry)
+     * before check-in. Distinct from {@link #refund(UUID, UUID, PaymentRefundRequest)}: voiding
+     * records that no money was actually received for this row, while refund records that money
+     * actually received was later handed back to the guest. A voided prepayment immediately stops
+     * counting toward the active prepayment cap and no longer blocks Cancel/No-show, exactly like a
+     * refunded one, and its method/reference immediately become available again for a corrected
+     * prepayment. The Reservation stays CONFIRMED.
+     *
+     * @param reservationId Reservation identifier
+     * @param paymentId prepayment identifier
+     * @param request client-supplied void reason
+     * @return the VOIDED payment
+     */
+    @Transactional
+    public PaymentResponse voidPrepayment(UUID reservationId, UUID paymentId, PaymentVoidRequest request) {
+        String reason = request == null ? null : request.reason();
+        if (reason == null || reason.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "reason is required");
+        }
+        Reservation reservation = lockConfirmedWithoutStay(reservationId);
+        Payment payment = payments.findByIdForUpdate(paymentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found"));
+        if (!payment.getReservation().getId().equals(reservation.getId())
+                || payment.getStay() != null
+                || payment.getStatus() != PaymentStatus.PAID) {
+            throw localized(HttpStatus.CONFLICT, "payment.prepayment.error.voidState",
+                    "Only an active prepayment of this reservation can be voided here");
+        }
+        try {
+            payment.voidPayment(reason.trim());
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, exception.getMessage());
+        }
+        CurrentUser user = currentUser();
+        payment.audit(user.id());
+        Payment saved = payments.save(payment);
+        audits.save(new AuditLog(user.id(), "VOID_PAYMENT", reservationId,
+                "Payment " + payment.getId() + " status=PAID",
+                "Payment " + payment.getId() + " status=VOIDED"));
         return paymentMapper.toResponse(saved);
     }
 

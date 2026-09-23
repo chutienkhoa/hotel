@@ -13,4 +13,6 @@ public record ChargeResponse(
         BigDecimal quantity,
         BigDecimal unitPrice,
         BigDecimal amount,
-        Instant chargedAt) {}
+        Instant chargedAt,
+        String status,
+        String voidReason) {}

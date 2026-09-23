@@ -1,8 +1,10 @@
 package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
+import com.example.hotel.dto.booking.request.ChargeVoidRequest;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.entity.booking.ChargeType;
@@ -122,6 +124,31 @@ public class FolioPageController {
             model.addAttribute("errorMessage", safeMessage(exception));
             return "stay/folio";
         }
+    }
+
+    /**
+     * Voids an ACTIVE, non-ROOM Charge through the existing Charge service and returns to the Folio.
+     *
+     * @param reservationId Reservation identifier used for the Folio redirect
+     * @param chargeId Charge identifier
+     * @param reason staff-supplied void reason
+     * @param redirectAttributes attributes used to display post-redirect feedback
+     * @return redirect to the Folio
+     */
+    @PostMapping("/reservations/{reservationId}/folio/charges/{chargeId}/void")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    public String voidCharge(
+            @PathVariable UUID reservationId,
+            @PathVariable UUID chargeId,
+            @RequestParam(required = false) String reason,
+            RedirectAttributes redirectAttributes) {
+        try {
+            chargeService.voidCharge(chargeId, new ChargeVoidRequest(reason));
+            redirectAttributes.addFlashAttribute("successMessage", messages.get("payment.folio.charge.void.success"));
+        } catch (ResponseStatusException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
+        }
+        return folioRedirect(reservationId);
     }
 
     /**
@@ -259,6 +286,30 @@ public class FolioPageController {
                 redirectAttributes,
                 "Payment refunded successfully.",
                 () -> paymentService.refund(paymentId, new PaymentRefundRequest(reason)));
+    }
+
+    /**
+     * Voids a paid Payment recorded in error through the existing Payment service. Distinct from
+     * {@link #refundPayment}: no money is claimed to have moved.
+     *
+     * @param reservationId Reservation identifier used for the Folio redirect
+     * @param paymentId Payment identifier
+     * @param reason staff-supplied void reason
+     * @param redirectAttributes attributes used to display post-redirect feedback
+     * @return redirect to the Folio
+     */
+    @PostMapping("/reservations/{reservationId}/folio/payments/{paymentId}/void")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    public String voidPayment(
+            @PathVariable UUID reservationId,
+            @PathVariable UUID paymentId,
+            @RequestParam(required = false) String reason,
+            RedirectAttributes redirectAttributes) {
+        return redirectAfterPaymentAction(
+                reservationId,
+                redirectAttributes,
+                messages.get("payment.folio.payment.void.success"),
+                () -> paymentService.voidPayment(paymentId, new PaymentVoidRequest(reason)));
     }
 
     /**

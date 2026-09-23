@@ -137,6 +137,42 @@ class PaymentAuthorizationTest {
                 .andExpect(jsonPath("$.paidAt").value(nullValue()));
     }
 
+    /** Confirms MANAGE_PAYMENT authorizes voiding a Payment, protected the same as the rest. */
+    @Test
+    void shouldAllowManagePaymentToVoidPayment() throws Exception {
+        when(paymentService.voidPayment(eq(PAYMENT_ID), any())).thenReturn(response("VOIDED"));
+
+        mockMvc.perform(post("/api/payments/{id}/void", PAYMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Duplicate entry\"}")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().isOk());
+    }
+
+    /** Confirms users without MANAGE_PAYMENT cannot void a Payment. */
+    @Test
+    void shouldRequireManagePaymentForVoid() throws Exception {
+        mockMvc.perform(post("/api/payments/{id}/void", PAYMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Duplicate entry\"}")
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+        verify(paymentService, org.mockito.Mockito.never()).voidPayment(any(), any());
+    }
+
+    /** Confirms a void request without a reason is rejected before reaching the service. */
+    @Test
+    void shouldRejectVoidWithoutReasonAtRestBoundary() throws Exception {
+        mockMvc.perform(post("/api/payments/{id}/void", PAYMENT_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}")
+                        .with(user("manager").authorities(managePayment()))
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
+    }
+
     /** Confirms generic Payment update and delete endpoints do not exist. */
     @Test
     void shouldNotExposeGenericPaymentUpdateOrDelete() throws Exception {
@@ -171,6 +207,7 @@ class PaymentAuthorizationTest {
                 BigDecimal.TEN,
                 "CASH",
                 status,
+                null,
                 null,
                 null,
                 null);

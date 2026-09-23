@@ -151,6 +151,32 @@ public class AdditionalRevenue extends AuditedEntity {
         voidedBy = by;
     }
 
+    /**
+     * Voids this system-managed revenue row as part of its originating Charge being voided. Unlike
+     * {@link #voidRevenue(String, Instant, UUID)} (the standalone, user-driven operation, which
+     * explicitly rejects a Charge-linked row), this method is reserved for the Charge void workflow
+     * and requires a Charge link. It intentionally does not relax {@link #voidRevenue(String, Instant,
+     * UUID)} or {@link #updateRecorded} for any other caller: a Charge-linked revenue row remains
+     * fully system-managed from every other caller's perspective.
+     *
+     * @param reason non-blank reason, propagated from the Charge void request
+     * @param at backend-authoritative void instant
+     * @param by acting user
+     * @throws IllegalStateException if this revenue is not Charge-linked or is not currently RECORDED
+     */
+    public void voidForChargeCorrection(String reason, Instant at, UUID by) {
+        if (charge == null) {
+            throw new IllegalStateException("Only a Charge-linked Additional Revenue can be voided through Charge correction");
+        }
+        if (status != AdditionalRevenueStatus.RECORDED) {
+            throw new IllegalStateException("Only recorded Additional Revenue can be voided");
+        }
+        status = AdditionalRevenueStatus.VOIDED;
+        voidReason = reason;
+        voidedAt = at;
+        voidedBy = by;
+    }
+
     public UUID getId() { return id; }
     public AdditionalRevenueCategory getCategory() { return category; }
     public BigDecimal getAmount() { return amount; }

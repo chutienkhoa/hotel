@@ -3,6 +3,7 @@ package com.example.hotel.controller.booking;
 import com.example.hotel.common.i18n.UiMessages;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
+import com.example.hotel.dto.booking.request.PaymentVoidRequest;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.entity.booking.PaymentCurrency;
 import com.example.hotel.entity.booking.PaymentMethod;
@@ -116,6 +117,32 @@ public class PrepaymentPageController {
         try {
             prepaymentService.refund(id, paymentId, new PaymentRefundRequest(reason));
             redirectAttributes.addFlashAttribute("successMessage", messages.get("payment.prepayment.refunded"));
+        } catch (ResponseStatusException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", messages.error(exception));
+        }
+        return "redirect:/reservations/" + id;
+    }
+
+    /**
+     * Voids one prepayment recorded in error and returns to the Reservation Detail. Distinct from
+     * {@link #refund}: no money is claimed to have moved.
+     *
+     * @param id reservation identifier
+     * @param paymentId prepayment identifier
+     * @param reason required void reason
+     * @param redirectAttributes post-redirect feedback
+     * @return redirect to the detail page
+     */
+    @PostMapping("/reservations/{id}/prepayments/{paymentId}/void")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
+    public String voidPrepayment(
+            @PathVariable UUID id,
+            @PathVariable UUID paymentId,
+            @RequestParam(required = false) String reason,
+            RedirectAttributes redirectAttributes) {
+        try {
+            prepaymentService.voidPrepayment(id, paymentId, new PaymentVoidRequest(reason));
+            redirectAttributes.addFlashAttribute("successMessage", messages.get("payment.prepayment.voided"));
         } catch (ResponseStatusException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", messages.error(exception));
         }
