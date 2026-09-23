@@ -1,6 +1,7 @@
 package com.example.hotel.service.common;
 
 import com.example.hotel.common.TableSorts;
+import com.example.hotel.common.SupportedCurrency;
 import com.example.hotel.dto.common.request.AdditionalRevenueCreateRequest;
 import com.example.hotel.dto.common.request.AdditionalRevenueSearchCriteria;
 import com.example.hotel.dto.common.request.AdditionalRevenueUpdateRequest;
@@ -185,6 +186,10 @@ public class AdditionalRevenueService {
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("amount must be greater than zero");
+        }
+        // Additional Revenue is VND-only, so a staff-entered amount must be a whole number of dong.
+        if (!SupportedCurrency.VND.hasValidPrecision(amount)) {
+            throw badRequest("amount exceeds VND currency precision");
         }
         if (revenueDate == null) {
             throw badRequest("revenueDate is required");

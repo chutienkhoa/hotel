@@ -26,6 +26,8 @@ public record WalkInRequest(
         @NotNull(message = "{validation.reservation.childCount.required}")
                 @Min(value = 0, message = "{validation.reservation.childCount.min}")
                 @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer childCount,
-        @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
+        @NotBlank(message = "{validation.reservation.currency.required}")
+                @Pattern(regexp = "VND|USD", message = "{validation.reservation.currency.supported}")
+                String currency,
         @Size(max = 5000) String notes,
         @NotEmpty List<@Valid RoomRequest> rooms) {}

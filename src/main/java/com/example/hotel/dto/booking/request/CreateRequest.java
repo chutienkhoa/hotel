@@ -29,7 +29,9 @@ public record CreateRequest(
                 @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer childCount,
         @NotNull BookingSource source,
         @Size(max = 255) String otaBookingReference,
-        @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
+        @NotBlank(message = "{validation.reservation.currency.required}")
+                @Pattern(regexp = "VND|USD", message = "{validation.reservation.currency.supported}")
+                String currency,
         @Size(max = 5000) String notes,
         @NotEmpty List<@Valid RoomRequest> rooms,
         List<UUID> accompanyingGuestIds,
@@ -50,7 +52,7 @@ public record CreateRequest(
      * @param childCount number of children, at least 0
      * @param source booking source
      * @param otaBookingReference staff-entered OTA reference, required for a non-DIRECT source
-     * @param currency three-letter currency code
+     * @param currency supported Reservation currency code, VND or USD
      * @param notes optional reservation notes
      * @param rooms requested room/rate assignments
      * @param accompanyingGuestIds optional Accompanying Guest identifiers

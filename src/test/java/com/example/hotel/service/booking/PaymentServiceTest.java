@@ -42,6 +42,7 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -125,9 +126,10 @@ class PaymentServiceTest {
     }
 
     /**
-     * Confirms a non-round exchange rate is applied via direct BigDecimal division and not via a
-     * scale-6-rounded reciprocal, which would silently lose precision (e.g. 1/25137 rounded to
-     * scale 6 and multiplied back would incorrectly yield exactly 120 instead of the true value).
+     * Confirms a non-round exchange rate is applied via one direct BigDecimal division into the
+     * Folio currency, and not via a rounded reciprocal, which would silently lose precision (e.g.
+     * 1/25137 rounded to scale 6 and multiplied back would incorrectly yield exactly 120, and
+     * rounding to scale 6 before rounding again to USD would round twice).
      */
     @Test
     void shouldDivideDirectlyForNonRoundExchangeRateWithoutReciprocalPrecisionLoss() {
@@ -135,10 +137,92 @@ class PaymentServiceTest {
                 new BigDecimal("3000000"), PaymentCurrency.VND, new BigDecimal("25137"), "USD");
 
         BigDecimal expected =
-                new BigDecimal("3000000").divide(new BigDecimal("25137"), 6, RoundingMode.HALF_UP);
+                new BigDecimal("3000000").divide(new BigDecimal("25137"), 2, RoundingMode.HALF_UP);
         assertEquals(0, expected.compareTo(response.appliedAmount()));
-        assertEquals(0, new BigDecimal("119.345984").compareTo(response.appliedAmount()));
+        assertEquals(0, new BigDecimal("119.35").compareTo(response.appliedAmount()));
         assertNotEquals(0, new BigDecimal("120").compareTo(response.appliedAmount()));
+    }
+
+    // ------------------------------------------------- tender and Folio precision
+
+    /** Confirms a tender amount is validated against the currency the guest actually paid in. */
+    @ParameterizedTest
+    @CsvSource({"VND, 1000000", "VND, 1000000.00", "USD, 20", "USD, 20.5", "USD, 20.50"})
+    void shouldAcceptTenderAmountThatFitsItsOwnCurrency(PaymentCurrency currency, BigDecimal amount) {
+        PaymentResponse response = createPayment(amount, currency, null, currency.name());
+
+        assertEquals(0, amount.compareTo(response.amount()));
+    }
+
+    /**
+     * Confirms a tender amount carrying more precision than its own currency is rejected rather than
+     * silently rounded: fractional dong and a third USD decimal are both data-entry errors.
+     */
+    @ParameterizedTest
+    @CsvSource({"VND, 1000.5", "VND, 0.5", "USD, 20.501", "USD, 39.999960"})
+    void shouldRejectTenderAmountExceedingItsOwnCurrencyPrecision(PaymentCurrency currency, BigDecimal amount) {
+        assertBadRequest(request(amount, currency, null, PaymentMethod.CASH, null));
+    }
+
+    /** Confirms a USD tender is validated as USD even when the Folio it settles is in VND. */
+    @Test
+    void shouldValidateTenderPrecisionAgainstTheTenderCurrencyNotTheFolio() {
+        assertBadRequest(request(
+                new BigDecimal("40.005"), PaymentCurrency.USD, new BigDecimal("25000"), PaymentMethod.CASH, null));
+    }
+
+    /** Confirms a USD tender applied to a VND Folio is normalized to whole dong. */
+    @Test
+    void shouldNormalizeUsdTenderAppliedToVndFolioToWholeDong() {
+        PaymentResponse response = createPayment(
+                new BigDecimal("40"), PaymentCurrency.USD, new BigDecimal("25000"), "VND");
+
+        assertEquals(new BigDecimal("1000000"), response.appliedAmount());
+        assertEquals(0, response.appliedAmount().scale());
+    }
+
+    /** Confirms a fractional dong result of a USD tender is rounded HALF_UP to whole dong. */
+    @Test
+    void shouldRoundUsdTenderAppliedToVndFolioHalfUp() {
+        PaymentResponse response = createPayment(
+                new BigDecimal("40.50"), PaymentCurrency.USD, new BigDecimal("24691.35"), "VND");
+
+        // 40.50 x 24,691.35 = 999,999.675 VND.
+        assertEquals(new BigDecimal("1000000"), response.appliedAmount());
+    }
+
+    /**
+     * Confirms a VND tender applied to a USD Folio is normalized to cents, so no sub-cent remainder
+     * can survive into the Folio balance. 999,999 / 25,000 is 39.99996 before normalization.
+     */
+    @Test
+    void shouldNormalizeVndTenderAppliedToUsdFolioToCents() {
+        PaymentResponse response = createPayment(
+                new BigDecimal("999999"), PaymentCurrency.VND, new BigDecimal("25000"), "USD");
+
+        assertEquals(new BigDecimal("40.00"), response.appliedAmount());
+        assertEquals(2, response.appliedAmount().scale());
+    }
+
+    /** Confirms a same-currency Payment's applied amount is carried at the Folio's own precision. */
+    @Test
+    void shouldCarrySameCurrencyAppliedAmountAtFolioPrecision() {
+        PaymentResponse usd = createPayment(new BigDecimal("20.5"), PaymentCurrency.USD, null, "USD");
+        assertEquals(new BigDecimal("20.50"), usd.appliedAmount());
+
+        PaymentResponse vnd = createPayment(new BigDecimal("1000000"), PaymentCurrency.VND, null, "VND");
+        assertEquals(new BigDecimal("1000000"), vnd.appliedAmount());
+    }
+
+    /**
+     * Confirms a cross-currency tender too small to register in the Folio currency is rejected rather
+     * than stored as a zero-value Payment: 1 VND is worth less than a cent.
+     */
+    @Test
+    void shouldRejectCrossCurrencyTenderTooSmallToRegisterInTheFolioCurrency() {
+        assertBadRequestForStay(
+                request(BigDecimal.ONE, PaymentCurrency.VND, new BigDecimal("25000"), PaymentMethod.CASH, null),
+                "USD");
     }
 
     /** Confirms a same-currency Payment must not supply an exchange rate. */

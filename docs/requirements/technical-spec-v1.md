@@ -596,6 +596,57 @@ check_out_date > check_in_date
 
 ---
 
+## 6.1a Currency and monetary precision (V1)
+
+Một Reservation có ĐÚNG MỘT currency có thẩm quyền. `ReservationRoom`, `Charge`, `StayExtensionRoom`
+và `Payment.appliedAmount` đều được định danh theo currency đó; các bảng này KHÔNG có cột currency
+riêng.
+
+Currency được hỗ trợ trong V1:
+
+```text
+VND
+USD
+```
+
+Không hỗ trợ bất kỳ mã ISO-4217 nào khác trong V1. Quy tắc này được enforce nhất quán tại UI, request
+validation, service/domain boundary và CHECK constraint của PostgreSQL (`reservation_currency_supported`).
+Currency là immutable sau khi Reservation rời trạng thái DRAFT, tức là trước khi bất kỳ khoản tiền nào
+có thể tồn tại.
+
+Số chữ số thập phân của từng currency:
+
+```text
+VND = 0
+USD = 2
+```
+
+Hai quy tắc khác nhau áp dụng cho hai loại giá trị tiền tệ:
+
+```text
+Giá trị do người dùng nhập (nightly rate, Payment amount, Charge amount/unitPrice,
+Additional Revenue amount, Expense amount):
+    vượt quá số chữ số thập phân của currency -> TỪ CHỐI (400)
+    KHÔNG được âm thầm làm tròn giá trị nhân viên đã nhập
+
+Giá trị do hệ thống tính (FX conversion, itemized quantity x unitPrice):
+    chuẩn hóa về số chữ số thập phân của currency đích
+    rounding = HALF_UP
+```
+
+`Payment.amount` được kiểm tra theo `Payment.currency` (currency khách thực trả), KHÔNG theo currency
+của Folio. `Payment.appliedAmount` được chuẩn hóa về currency của Reservation, nên Outstanding không
+bao giờ còn số dư lẻ dưới đơn vị nhỏ nhất và Check-out vẫn dùng `outstanding.compareTo(ZERO) == 0`
+không cần dung sai.
+
+`exchangeRate` KHÔNG phải là một giá trị tiền tệ định danh theo VND hay USD; nó giữ nguyên độ chính
+xác phân số và chỉ bắt buộc `exchangeRate > 0`.
+
+Additional Revenue và Expense là VND-only; báo cáo vẫn ở VND và KHÔNG dùng exchange rate của Payment
+để quy đổi doanh thu (xem 61.2).
+
+---
+
 ## 6.2 External Booking
 
 Đối với OTA booking:
@@ -1116,9 +1167,15 @@ Cross currency, USD tender -> VND Folio:
 Cross currency, VND tender -> USD Folio:
     appliedAmount = amount / exchangeRate
 
-scale = 6
+scale    = số chữ số thập phân của Reservation/Folio currency (VND = 0, USD = 2)
 rounding = HALF_UP
 ```
+
+`appliedAmount` được làm tròn ĐÚNG MỘT LẦN, trực tiếp về currency của Folio: không có scale trung
+gian, nên không tồn tại số dư lẻ dưới đơn vị nhỏ nhất (ví dụ 999.999 VND / 25.000 = 39,99996 được ghi
+nhận là 40,00 USD) và cũng không có double rounding. `Payment.amount` được kiểm tra độ chính xác theo
+`Payment.currency`, không theo currency của Folio (xem 6.1a). Một khoản cross-currency quá nhỏ để ghi
+nhận trong currency của Folio bị TỪ CHỐI thay vì lưu thành Payment giá trị 0.
 
 Một khi đã ghi nhận, `amount`/`currency`/`exchangeRate`/`appliedAmount` là snapshot tài chính bất
 biến. Thay đổi tỷ giá sau này không được tính lại các Payment lịch sử.

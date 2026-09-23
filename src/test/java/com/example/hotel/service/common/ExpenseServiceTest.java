@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -127,6 +128,37 @@ class ExpenseServiceTest {
                 fixture.categoryId(), BigDecimal.ZERO, LocalDate.now(), ExpensePaymentMethod.CASH, null)));
     }
 
+    /**
+     * Confirms an Expense amount carrying fractional dong is rejected rather than silently rounded.
+     * Expense is VND-only, and VND has no fraction digits.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"1000.5", "0.5", "100.123456"})
+    void shouldRejectAmountExceedingVndPrecision(String amount) {
+        Fixture fixture = fixture();
+        setCurrentUser(UUID.randomUUID());
+
+        assertBadRequest(() -> fixture.service().create(new ExpenseCreateRequest(
+                fixture.categoryId(), new BigDecimal(amount), LocalDate.now(), ExpensePaymentMethod.CASH, null)));
+    }
+
+    /** Confirms a whole-dong amount, including one written with trailing zeros, is accepted. */
+    @ParameterizedTest
+    @ValueSource(strings = {"1000", "1000.00", "2550000"})
+    void shouldAcceptWholeDongAmount(String amount) {
+        Fixture fixture = fixture();
+        setCurrentUser(UUID.randomUUID());
+        when(fixture.categoryRepository().findById(fixture.categoryId()))
+                .thenReturn(Optional.of(fixture.category()));
+        when(fixture.expenseRepository().save(any(Expense.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        ExpenseResponse response = fixture.service().create(new ExpenseCreateRequest(
+                fixture.categoryId(), new BigDecimal(amount), LocalDate.now(), ExpensePaymentMethod.CASH, null));
+
+        assertEquals(0, new BigDecimal(amount).compareTo(response.amount()));
+    }
+
     /** Confirms a new Expense can be created with an active category. */
     @Test
     void shouldAcceptActiveCategoryOnCreate() {
@@ -185,11 +217,11 @@ class ExpenseServiceTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         ExpenseResponse response = fixture.service().update(expense.getId(), new ExpenseUpdateRequest(
-                fixture.categoryId(), new BigDecimal("25.50"), LocalDate.of(2026, 9, 11),
+                fixture.categoryId(), new BigDecimal("2550000"), LocalDate.of(2026, 9, 11),
                 ExpensePaymentMethod.BANK_TRANSFER, "Updated"));
 
         assertEquals(ExpenseStatus.DRAFT, expense.getStatus());
-        assertEquals(0, new BigDecimal("25.50").compareTo(expense.getAmount()));
+        assertEquals(0, new BigDecimal("2550000").compareTo(expense.getAmount()));
         assertEquals(ExpensePaymentMethod.BANK_TRANSFER, expense.getPaymentMethod());
         assertEquals(creatorId, expense.getCreatedBy());
         assertEquals(updaterId, expense.getUpdatedBy());

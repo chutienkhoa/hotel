@@ -190,7 +190,7 @@ class ChargeServiceTest {
                 request(ChargeType.BREAKFAST, new BigDecimal("2"), new BigDecimal("150000"), null));
 
         assertAmount(new BigDecimal("300000"), response.amount());
-        assertEquals(6, response.amount().scale());
+        assertEquals(0, response.amount().scale());
     }
 
     /** Confirms whole-number quantities of 1 and 10 are accepted, matching quantity times unit price. */
@@ -203,17 +203,34 @@ class ChargeServiceTest {
         assertAmount(quantity.multiply(new BigDecimal("1000000")), response.amount());
     }
 
-    /** Confirms itemized calculation is explicitly normalized to the persisted amount scale. */
+    /**
+     * Confirms a staff-entered unit price carrying more precision than the Folio currency is rejected
+     * rather than silently rounded: VND has no fraction digits, so a fractional dong unit price is a
+     * data-entry error, not a value the Folio may quietly change.
+     */
     @Test
-    void shouldNormalizeItemizedAmountToScaleSixUsingHalfUp() {
-        ChargeResponse response = assertCreateSucceeds(request(
+    void shouldRejectUnitPriceExceedingFolioCurrencyPrecision() {
+        assertBadRequestForFolio(request(
                 ChargeType.LAUNDRY,
                 new BigDecimal("3"),
                 new BigDecimal("10.1234565"),
                 null));
+    }
 
-        assertEquals(new BigDecimal("30.370370"), response.amount());
-        assertEquals(6, response.amount().scale());
+    /** Confirms a staff-entered fixed amount with fractional dong is rejected on a VND Folio. */
+    @Test
+    void shouldRejectFixedAmountExceedingFolioCurrencyPrecision() {
+        assertBadRequestForFolio(request(ChargeType.SERVICE, null, null, new BigDecimal("100000.5")));
+    }
+
+    /** Confirms a fixed amount whose fraction digits are only trailing zeros is still accepted. */
+    @Test
+    void shouldAcceptFixedAmountWithInsignificantTrailingZeros() {
+        ChargeResponse response = assertCreateSucceeds(
+                request(ChargeType.SERVICE, null, null, new BigDecimal("100000.00")));
+
+        assertAmount(new BigDecimal("100000"), response.amount());
+        assertEquals(0, response.amount().scale());
     }
 
     /** Confirms a whole-number quantity with trailing zero scale (e.g. "2.000000") is still accepted. */
@@ -643,6 +660,29 @@ class ChargeServiceTest {
         when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         return chargeService(chargeRepository, stayRepository).create(stayId, request);
+    }
+
+    /**
+     * Confirms a request fails Charge v1 validation against a real CHECKED_IN VND Folio.
+     *
+     * <p>Used for rules that depend on the owning Reservation's currency, which is resolved only
+     * after the Stay row is locked.</p>
+     *
+     * @param request invalid Charge request
+     */
+    private void assertBadRequestForFolio(ChargeCreateRequest request) {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> chargeService(chargeRepository, stayRepository).create(stayId, request));
+
+        assertEquals(400, exception.getStatusCode().value());
     }
 
     /**

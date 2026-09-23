@@ -26,6 +26,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
@@ -72,6 +74,26 @@ class AdditionalRevenueServiceTest {
         Fixture activeFixture = fixture(true);
         assertThrows(ResponseStatusException.class, () -> activeFixture.service.create(new AdditionalRevenueCreateRequest(
                 CATEGORY_ID, BigDecimal.ZERO, LocalDate.of(2026, 9, 15), AdditionalRevenuePaymentMethod.CASH, null)));
+    }
+
+    /**
+     * Confirms an Additional Revenue amount carrying fractional dong is rejected rather than silently
+     * rounded: Additional Revenue is VND-only, so its amount must be a whole number of dong.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"150000.5", "0.5", "100.123456"})
+    void shouldRejectAmountExceedingVndPrecision(String amount) {
+        Fixture fixture = fixture(true);
+        setCurrentUser();
+        when(fixture.categoryRepository.findById(CATEGORY_ID)).thenReturn(Optional.of(fixture.category));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> fixture.service.create(new AdditionalRevenueCreateRequest(
+                        CATEGORY_ID, new BigDecimal(amount), LocalDate.of(2026, 9, 15),
+                        AdditionalRevenuePaymentMethod.CASH, null)));
+
+        assertEquals(400, exception.getStatusCode().value());
     }
 
     @Test

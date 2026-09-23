@@ -1,5 +1,6 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.common.SupportedCurrency;
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
 import com.example.hotel.dto.booking.request.ChargeVoidRequest;
 import com.example.hotel.dto.booking.response.ChargeResponse;
@@ -22,7 +23,6 @@ import com.example.hotel.repository.booking.StayRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -79,7 +79,7 @@ public class ChargeService {
      */
     @Transactional
     public ChargeResponse create(UUID stayId, ChargeCreateRequest request) {
-        BigDecimal amount = validateAndResolveAmount(request);
+        validatePricing(request);
         // Lock order shared with check-out, Stay Extension and Room Change: the Stay row first, then revalidate its
         // state, so a Charge can never commit after a check-out decided the folio was settled.
         Stay stay = stayRepository.findByIdForUpdate(stayId)
@@ -87,6 +87,8 @@ public class ChargeService {
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Charges can be created only for checked-in stays");
         }
+        // A Charge carries no currency of its own: it is denominated in the owning Reservation's.
+        BigDecimal amount = resolveAmount(request, folioCurrency(stay));
         AdditionalRevenueCategory category = null;
         if (request.type().isGuestServiceRevenue()) {
             category = resolveGuestServiceCategory(stay, request.type());
@@ -247,13 +249,12 @@ public class ChargeService {
     }
 
     /**
-     * Validates pricing rules and resolves the authoritative amount for a new Charge.
+     * Validates the currency-independent Charge v1 pricing rules before the owning Stay is resolved.
      *
      * @param request Charge data to validate
-     * @return fixed client amount or backend-calculated itemized amount
      * @throws ResponseStatusException if a Charge v1 rule is not satisfied
      */
-    private BigDecimal validateAndResolveAmount(ChargeCreateRequest request) {
+    private void validatePricing(ChargeCreateRequest request) {
         if (request.type() == null || !request.type().isSupportedInV1()) {
             throw badRequest("Unsupported Charge v1 type");
         }
@@ -267,7 +268,7 @@ public class ChargeService {
             if (request.amount() == null || request.amount().compareTo(BigDecimal.ZERO) <= 0) {
                 throw badRequest("fixed charge amount must be greater than zero");
             }
-            return request.amount();
+            return;
         }
         if (request.quantity().compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("quantity must be greater than zero");
@@ -281,13 +282,46 @@ public class ChargeService {
         if (request.amount() != null) {
             throw badRequest("itemized charges must not provide amount");
         }
-        BigDecimal amount = request.quantity()
-                .multiply(request.unitPrice())
-                .setScale(6, RoundingMode.HALF_UP);
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+        if (request.quantity().multiply(request.unitPrice()).compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("calculated itemized amount must be greater than zero");
         }
-        return amount;
+    }
+
+    /**
+     * Resolves the authoritative Charge amount in the Folio currency.
+     *
+     * <p>A staff-entered monetary value carrying more precision than the Folio currency has is
+     * rejected rather than silently rounded. The itemized calculation is normalized to that same
+     * currency, so a Charge amount is always expressible in real money.</p>
+     *
+     * @param request already structurally validated Charge data
+     * @param currency owning Reservation's currency
+     * @return fixed client amount or backend-calculated itemized amount, in {@code currency}
+     * @throws ResponseStatusException if a monetary value does not fit the Folio currency
+     */
+    private BigDecimal resolveAmount(ChargeCreateRequest request, SupportedCurrency currency) {
+        if (request.quantity() == null) {
+            if (!currency.hasValidPrecision(request.amount())) {
+                throw badRequest("amount exceeds " + currency + " currency precision");
+            }
+            return currency.normalize(request.amount());
+        }
+        if (!currency.hasValidPrecision(request.unitPrice())) {
+            throw badRequest("unitPrice exceeds " + currency + " currency precision");
+        }
+        return currency.normalize(request.quantity().multiply(request.unitPrice()));
+    }
+
+    /**
+     * Resolves the currency every Charge of a Stay is denominated in.
+     *
+     * @param stay owning Stay
+     * @return the owning Reservation's currency
+     * @throws ResponseStatusException if that currency is not supported in V1
+     */
+    private SupportedCurrency folioCurrency(Stay stay) {
+        return SupportedCurrency.find(stay.getReservation().getCurrency())
+                .orElseThrow(() -> conflict("Reservation currency is not supported for Charge"));
     }
 
     /**

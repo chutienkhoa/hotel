@@ -1,5 +1,6 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.common.SupportedCurrency;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
 import com.example.hotel.dto.booking.request.PaymentVoidRequest;
@@ -323,6 +324,10 @@ public class PaymentService {
         if (request.currency() == null) {
             throw badRequest("currency is required");
         }
+        // The tender amount is denominated in the tender currency, not the Folio currency.
+        if (!precisionOf(request.currency()).hasValidPrecision(request.amount())) {
+            throw badRequest("amount exceeds " + request.currency() + " currency precision");
+        }
         if (request.method() == null) {
             throw badRequest("method is required");
         }
@@ -380,22 +385,36 @@ public class PaymentService {
             PaymentCurrency paymentCurrency,
             PaymentCurrency reservationCurrency,
             BigDecimal exchangeRate) {
+        SupportedCurrency folioCurrency = precisionOf(reservationCurrency);
         if (paymentCurrency == reservationCurrency) {
             if (exchangeRate != null) {
                 throw badRequest("exchangeRate must not be supplied for a same-currency payment");
             }
-            return amount;
+            return folioCurrency.normalize(amount);
         }
         if (exchangeRate == null || exchangeRate.compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("exchangeRate must be greater than zero for a cross-currency payment");
         }
+        // Rounded exactly once, straight to the Folio currency, so no intermediate scale can leave a
+        // sub-minor-unit remainder behind and no value is rounded twice.
         BigDecimal appliedAmount = paymentCurrency == PaymentCurrency.USD
-                ? amount.multiply(exchangeRate).setScale(6, RoundingMode.HALF_UP)
-                : amount.divide(exchangeRate, 6, RoundingMode.HALF_UP);
+                ? folioCurrency.normalize(amount.multiply(exchangeRate))
+                : amount.divide(exchangeRate, folioCurrency.fractionDigits(), RoundingMode.HALF_UP);
         if (appliedAmount.compareTo(BigDecimal.ZERO) <= 0) {
             throw badRequest("calculated appliedAmount must be greater than zero");
         }
         return appliedAmount;
+    }
+
+    /**
+     * Resolves the monetary precision rules of a Payment currency, used for both the tender currency
+     * and the owning Reservation's Folio currency.
+     *
+     * @param currency Payment tender or Folio currency
+     * @return the matching supported currency
+     */
+    private static SupportedCurrency precisionOf(PaymentCurrency currency) {
+        return SupportedCurrency.valueOf(currency.name());
     }
 
     /**

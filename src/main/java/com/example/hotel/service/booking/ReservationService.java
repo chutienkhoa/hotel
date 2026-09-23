@@ -1,5 +1,6 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.common.SupportedCurrency;
 import com.example.hotel.dto.booking.request.BookingContactUpdateRequest;
 import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
@@ -42,13 +43,11 @@ import com.example.hotel.security.SessionUserPrincipal;
 import com.example.hotel.service.room.RoomAvailabilityService;
 import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Currency;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -160,7 +159,7 @@ public class ReservationService {
                         request.childCount(),
                         request.source(),
                         request.otaBookingReference(),
-                        draftData.currency().getCurrencyCode(),
+                        draftData.currency().name(),
                         request.notes());
         reservation.audit(user.id());
         createRoomSnapshots(reservation, request, draftData, user).forEach(reservation::addRoom);
@@ -227,7 +226,7 @@ public class ReservationService {
                     request.childCount(),
                     request.source(),
                     request.otaBookingReference(),
-                    draftData.currency().getCurrencyCode(),
+                    draftData.currency().name(),
                     request.notes(),
                     updatedRooms,
                     draftData.accompanyingGuests(),
@@ -258,12 +257,8 @@ public class ReservationService {
         if (request.childCount() == null || request.childCount() < 0) {
             throw bad("child_count must not be negative");
         }
-        Currency currency;
-        try {
-            currency = Currency.getInstance(request.currency());
-        } catch (IllegalArgumentException exception) {
-            throw bad("Unsupported currency");
-        }
+        SupportedCurrency currency = SupportedCurrency.find(request.currency())
+                .orElseThrow(() -> bad("Unsupported currency"));
         Guest guest = guests.findById(request.guestId()).orElseThrow(() -> notFound("Guest"));
         Set<UUID> roomIds = new HashSet<>();
         for (var roomRequest : request.rooms()) {
@@ -1050,12 +1045,11 @@ public class ReservationService {
      * @return giá đã chuẩn hóa
      * @throws ResponseStatusException nếu giá vượt độ chính xác tiền tệ
      */
-    private BigDecimal scale(BigDecimal value, Currency currency) {
-        try {
-            return value.setScale(currency.getDefaultFractionDigits(), RoundingMode.UNNECESSARY);
-        } catch (ArithmeticException exception) {
+    private BigDecimal scale(BigDecimal value, SupportedCurrency currency) {
+        if (!currency.hasValidPrecision(value)) {
             throw bad("Rate exceeds currency precision");
         }
+        return currency.normalize(value);
     }
 
     /**
@@ -1090,5 +1084,8 @@ public class ReservationService {
 
     /** Resolved request data shared by Reservation create and draft-update operations. */
     private record ReservationDraftData(
-            Guest guest, Currency currency, Map<UUID, Room> roomsById, List<Guest> accompanyingGuests) {}
+            Guest guest,
+            SupportedCurrency currency,
+            Map<UUID, Room> roomsById,
+            List<Guest> accompanyingGuests) {}
 }

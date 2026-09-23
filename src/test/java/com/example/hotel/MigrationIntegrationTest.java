@@ -65,7 +65,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(35, flyway.info().applied().length);
+        assertEquals(41, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */

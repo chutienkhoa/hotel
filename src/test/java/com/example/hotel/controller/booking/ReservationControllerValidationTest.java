@@ -41,7 +41,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsEmptyRoomList() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[]}";
         assertDoesNotThrow(
                 () ->
                         mvc.perform(
@@ -53,7 +53,7 @@ class ReservationControllerValidationTest {
     @Test
     void rejectsZeroNightlyRate() {
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":0}]}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":0}]}";
         assertDoesNotThrow(
                 () ->
                         mvc.perform(
@@ -116,9 +116,9 @@ class ReservationControllerValidationTest {
                                 "R20260911-000001",
                                 "DRAFT",
                                 BigDecimal.ONE,
-                                "JPY"));
+                                "VND"));
         String body =
-                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"JPY\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}],\"reservationNumber\":\"CLIENT-OVERRIDE\"}";
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"VND\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}],\"reservationNumber\":\"CLIENT-OVERRIDE\"}";
 
         mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
