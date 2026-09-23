@@ -1835,11 +1835,19 @@ AVAILABLE -> MAINTENANCE
 Operation: start-maintenance
 Permission: MANAGE_ROOM
 
+DIRTY -> MAINTENANCE
+Operation: start-maintenance
+Permission: MANAGE_ROOM
+
 MAINTENANCE -> AVAILABLE
 Operation: finish-maintenance
 Permission: MANAGE_ROOM
 
 AVAILABLE -> OUT_OF_ORDER
+Operation: mark-out-of-order
+Permission: MANAGE_ROOM
+
+DIRTY -> OUT_OF_ORDER
 Operation: mark-out-of-order
 Permission: MANAGE_ROOM
 
@@ -1851,6 +1859,26 @@ OCCUPIED -> DIRTY
 Operation: room-change-release
 Permission: CHANGE_ROOM
 ```
+
+`start-maintenance` và `mark-out-of-order` (V1 Hardening) chấp nhận cả hai trạng thái nguồn `AVAILABLE` và
+`DIRTY`: một phòng bị bỏ lại `DIRTY` sau check-out hoặc Room Change có thể vào thẳng `MAINTENANCE`/`OUT_OF_ORDER`
+mà không cần một chu trình housekeeping giả (phòng chưa từng dơ vẫn phải qua `start-cleaning`/`finish-cleaning`).
+`OCCUPIED` KHÔNG BAO GIỜ được chuyển trực tiếp sang `MAINTENANCE`/`OUT_OF_ORDER`; khách đang ở phải được chuyển đi
+qua Room Change (mục 8.3) trước, đúng chuỗi `OCCUPIED -> DIRTY -> MAINTENANCE/OUT_OF_ORDER`. `CLEANING` cũng
+không được vào thẳng `MAINTENANCE`/`OUT_OF_ORDER` trong V1.
+
+`start-maintenance` và `mark-out-of-order` yêu cầu một `reason` dạng free-text bắt buộc (trim, không rỗng, tối đa
+2000 ký tự, theo đúng quy ước `no_show_reason`/`cancellation_reason_detail` hiện có). `reason` được lưu trên
+`RoomInventoryPeriod` được mở cho giai đoạn không sellable đó (cột `reason`, mục 61.7), không lưu trên `Room`, nên
+vẫn còn sau khi phòng trở lại `AVAILABLE` — lịch sử không sellable không bị mất lý do. Một period sellable
+(`unavailable_reason IS NULL`) không bao giờ mang `reason`. `finish-maintenance` và `restore-to-service` không
+yêu cầu `reason`. Dữ liệu `BOOTSTRAP` hiện có hợp lệ không có `reason`.
+
+Khi `MANAGE_ROOM` chuyển một Room sang `MAINTENANCE`/`OUT_OF_ORDER`, hệ thống kiểm tra Reservation `CONFIRMED`
+còn hiệu lực (chưa kết thúc theo ngày khách sạn hiện tại) đang dùng phòng đó và hiển thị một cảnh báo thông tin
+(số reservation, ngày nhận/trả phòng) trên form MVC trước khi xác nhận; REST giữ nguyên hành vi xác định, không
+thêm bước xác nhận. Cảnh báo KHÔNG chặn transition, KHÔNG tự hủy Reservation, KHÔNG tự đổi phòng, và KHÔNG sửa
+`Reservation`/`ReservationRoom`. Reservation `CANCELLED`/`NO_SHOW`/`CHECKED_OUT` không tạo cảnh báo.
 
 Transition `OCCUPIED -> DIRTY` (room-change-release) chỉ được sử dụng bởi Room Change (xem mục 8.3)
 để giải phóng phòng cũ. Một phòng khách vừa rời đi không tự động sạch, nên vòng đời V1 thống nhất:
@@ -1871,7 +1899,20 @@ Phòng bị bỏ lại sau Room Change phải qua housekeeping (`start-cleaning`
 `AVAILABLE` và mới được coi là sẵn sàng cho khách khác; nó không được check-in hoặc chọn làm phòng thay thế trong
 khi còn `DIRTY`/`CLEANING`. `AVAILABLE` vẫn là trạng thái sẵn sàng đón khách duy nhất của V1 (không có `READY`).
 Room Change không tự động chuyển phòng cũ sang `OUT_OF_ORDER`; Maintenance/Room Management chịu trách nhiệm
-riêng cho việc đó.
+riêng cho việc đó. Danh sách candidate của Room Change (mục 8.3) loại `MAINTENANCE` và `OUT_OF_ORDER` giống nhau,
+cùng điều kiện `active` + `AVAILABLE` mà `changeRoom` dùng làm điều kiện phòng đích có thẩm quyền — không dùng một
+quy tắc loại trừ khác cho danh sách gợi ý.
+
+**Ý nghĩa V1 của MAINTENANCE và OUT_OF_ORDER**: `MAINTENANCE` = phòng tạm thời ngừng phục vụ để bảo trì, bảo
+dưỡng, hoặc sửa chữa theo kế hoạch. `OUT_OF_ORDER` = phòng hiện không vận hành được do hỏng hóc hoặc tình trạng
+khiến phòng không dùng được. Hai trạng thái có cùng hiệu ứng vận hành V1 (không sellable, không check-in-ready)
+và cùng thuật toán tính availability; đây là hai nhãn/lý do riêng biệt trên cùng một hiệu ứng, không phải hai
+thuật toán khác nhau.
+
+**Chưa hỗ trợ trong V1 (hoãn sang V2)**: lên lịch `MAINTENANCE`/`OUT_OF_ORDER` cho một khoảng ngày trong tương
+lai trong khi phòng vẫn sellable ở hiện tại (`RoomBlock`/`RoomUnavailability` với ngày bắt đầu/kết thúc), tự động
+phục hồi theo lịch, và tự động hủy/đổi phòng Reservation bị ảnh hưởng. `RoomInventoryPeriod` (mục 61.7) tiếp tục
+là sổ cái lịch sử của trạng thái tồn kho THỰC TẾ đã xảy ra, không phải nơi lên kế hoạch cho tương lai.
 
 Không được thêm Room status transition khác.
 
@@ -4176,8 +4217,11 @@ trong `room_inventory_period` (entity `RoomInventoryPeriod`). Task 30A CHỈ xâ
 Occupancy Report thuộc Task 30B.
 
 - **Nội dung một period**: `room`, `roomType` (RoomType hiệu lực), `unavailableReason` (null = sellable;
-  `MAINTENANCE` hoặc `OUT_OF_ORDER` = không sellable), `origin` (`BOOTSTRAP` | `RECORDED`), `effectiveFrom`,
-  `effectiveTo` (null = period đang mở). Không có cột `sellable`; sellable suy ra từ `unavailableReason`.
+  `MAINTENANCE` hoặc `OUT_OF_ORDER` = không sellable), `reason` (V1 Hardening: free-text mô tả lý do không
+  sellable, tối đa 2000 ký tự; luôn null khi `unavailableReason` null — một period sellable không bao giờ mang
+  `reason`; period `BOOTSTRAP` hợp lệ không có `reason`), `origin` (`BOOTSTRAP` | `RECORDED`), `effectiveFrom`,
+  `effectiveTo` (null = period đang mở). Không có cột `sellable`; sellable suy ra từ `unavailableReason`. `reason`
+  là metadata mô tả, không ảnh hưởng công thức booking hay occupancy nào (mục 61.8).
 - **Sellable inventory**: `AVAILABLE`, `OCCUPIED`, `DIRTY`, `CLEANING` thuộc tồn kho bán được; `MAINTENANCE` và
   `OUT_OF_ORDER` bị loại khỏi Sellable Room Nights.
 - **Lưu Instant thật**: `effectiveFrom/effectiveTo` là `TIMESTAMPTZ`, ghi đúng thời điểm chuyển đổi theo `Clock`

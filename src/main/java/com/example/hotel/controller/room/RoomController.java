@@ -1,6 +1,7 @@
 package com.example.hotel.controller.room;
 
 import com.example.hotel.dto.room.request.RoomCreateRequest;
+import com.example.hotel.dto.room.request.RoomUnavailabilityRequest;
 import com.example.hotel.dto.room.request.RoomUpdateRequest;
 import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.service.room.RoomService;
@@ -105,15 +106,16 @@ public class RoomController {
     }
 
     /**
-     * Starts maintenance for an available room.
+     * Starts maintenance for an available or dirty room, recording why it was taken out of service.
      *
      * @param id room identifier
+     * @param request the required reason
      * @return the transitioned room profile
      */
     @PostMapping("/{id}/start-maintenance")
     @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
-    RoomResponse startMaintenance(@PathVariable UUID id) {
-        return roomService.startMaintenance(id);
+    RoomResponse startMaintenance(@PathVariable UUID id, @Valid @RequestBody RoomUnavailabilityRequest request) {
+        return roomService.startMaintenance(id, request.reason());
     }
 
     /**
@@ -129,15 +131,16 @@ public class RoomController {
     }
 
     /**
-     * Marks an available room out of order.
+     * Marks an available or dirty room out of order, recording why it cannot currently be operated.
      *
      * @param id room identifier
+     * @param request the required reason
      * @return the transitioned room profile
      */
     @PostMapping("/{id}/mark-out-of-order")
     @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
-    RoomResponse markOutOfOrder(@PathVariable UUID id) {
-        return roomService.markOutOfOrder(id);
+    RoomResponse markOutOfOrder(@PathVariable UUID id, @Valid @RequestBody RoomUnavailabilityRequest request) {
+        return roomService.markOutOfOrder(id, request.reason());
     }
 
     /**

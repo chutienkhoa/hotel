@@ -106,6 +106,32 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
     long countByActiveTrue();
 
     /**
+     * Finds the CONFIRMED reservations still scheduled to use a Room from the hotel's current date
+     * onward, for the informational warning shown before a manager takes the Room into MAINTENANCE or
+     * OUT_OF_ORDER. Terminal Reservation statuses (DRAFT, CANCELLED, NO_SHOW, CHECKED_IN, CHECKED_OUT)
+     * are never included: CHECKED_IN reservations block through their actual {@code StayRoomAssignment}
+     * instead, and this warning is scoped to the booking-level {@code ReservationRoom} relevant to a
+     * Room that is not currently occupied.
+     *
+     * @param roomId Room identifier
+     * @param hotelToday the hotel's current date; reservations that ended on or before it are excluded
+     * @param confirmed the CONFIRMED Reservation status
+     * @return the affected reservations ordered by check-in date
+     */
+    @Query(
+            "SELECT new com.example.hotel.repository.room.AffectedReservationRow("
+                    + "rr.reservation.reservationNumber, rr.checkInDate, rr.checkOutDate) "
+                    + "FROM ReservationRoom rr "
+                    + "WHERE rr.room.id = :roomId "
+                    + "AND rr.reservation.status = :confirmed "
+                    + "AND rr.checkOutDate > :hotelToday "
+                    + "ORDER BY rr.checkInDate ASC")
+    List<AffectedReservationRow> findUpcomingConfirmedReservationRooms(
+            @Param("roomId") UUID roomId,
+            @Param("hotelToday") java.time.LocalDate hotelToday,
+            @Param("confirmed") com.example.hotel.entity.booking.ReservationStatus confirmed);
+
+    /**
      * Khóa các phòng theo thứ tự định danh để bảo vệ thao tác đồng thời.
      *
      * @param ids các định danh phòng cần khóa

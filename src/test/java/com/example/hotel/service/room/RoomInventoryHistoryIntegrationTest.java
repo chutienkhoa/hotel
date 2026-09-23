@@ -111,24 +111,59 @@ class RoomInventoryHistoryIntegrationTest {
         assertEquals(user, periods.get(0).get("created_by"));
     }
 
-    /** Confirms OUT_OF_ORDER and MAINTENANCE cycles each split into contiguous periods. */
+    /** Confirms OUT_OF_ORDER and MAINTENANCE cycles each split into contiguous periods and record the reason. */
     @Test
     void shouldSplitContiguouslyOnUnavailableAndRestore() {
         RoomResponse room = create();
 
-        roomService.markOutOfOrder(room.id());
+        roomService.markOutOfOrder(room.id(), "Plumbing leak");
         roomService.restoreToService(room.id());
-        roomService.startMaintenance(room.id());
+        roomService.startMaintenance(room.id(), "Annual AC service");
         roomService.finishMaintenance(room.id());
 
         List<Map<String, Object>> periods = periods(room.id());
         assertEquals(5, periods.size());
         assertEquals(List.of("OUT_OF_ORDER", "MAINTENANCE"),
                 periods.stream().map(p -> (String) p.get("unavailable_reason")).filter(r -> r != null).toList());
+        assertEquals(List.of("Plumbing leak", "Annual AC service"),
+                periods.stream().map(p -> (String) p.get("reason")).filter(r -> r != null).toList());
         for (int index = 0; index < periods.size() - 1; index++) {
             assertEquals(periods.get(index).get("effective_to"), periods.get(index + 1).get("effective_from"));
         }
         assertNull(periods.get(periods.size() - 1).get("effective_to"));
+        assertNull(periods.get(periods.size() - 1).get("reason"), "the final AVAILABLE period must be sellable and reasonless");
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM room_inventory_period WHERE room_id = ? AND effective_to IS NULL",
+                Integer.class, room.id()));
+    }
+
+    /** Confirms a Room vacated by check-out or Room Change (DIRTY) can go straight into maintenance or out-of-order. */
+    @Test
+    void shouldSplitFromDirtyIntoMaintenanceOrOutOfOrder() {
+        RoomResponse room = create();
+        jdbc.update("UPDATE room SET status = 'DIRTY' WHERE id = ?", room.id());
+
+        roomService.startMaintenance(room.id(), "AC compressor failure");
+
+        List<Map<String, Object>> periods = periods(room.id());
+        assertEquals(2, periods.size());
+        assertEquals("MAINTENANCE", periods.get(1).get("unavailable_reason"));
+        assertEquals("AC compressor failure", periods.get(1).get("reason"));
+        assertEquals(periods.get(0).get("effective_to"), periods.get(1).get("effective_from"));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM room_inventory_period WHERE room_id = ? AND effective_to IS NULL",
+                Integer.class, room.id()));
+
+        roomService.finishMaintenance(room.id());
+        jdbc.update("UPDATE room SET status = 'DIRTY' WHERE id = ?", room.id());
+
+        roomService.markOutOfOrder(room.id(), "Water damage");
+
+        periods = periods(room.id());
+        assertEquals(4, periods.size());
+        assertEquals("OUT_OF_ORDER", periods.get(3).get("unavailable_reason"));
+        assertEquals("Water damage", periods.get(3).get("reason"));
+        assertNull(periods.get(3).get("effective_to"));
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM room_inventory_period WHERE room_id = ? AND effective_to IS NULL",
                 Integer.class, room.id()));
@@ -169,7 +204,7 @@ class RoomInventoryHistoryIntegrationTest {
         RoomResponse room = create();
         jdbc.update("DELETE FROM room_inventory_period WHERE room_id = ?", room.id());
 
-        assertThrows(IllegalStateException.class, () -> roomService.markOutOfOrder(room.id()));
+        assertThrows(IllegalStateException.class, () -> roomService.markOutOfOrder(room.id(), "Plumbing leak"));
 
         assertEquals("AVAILABLE", jdbc.queryForObject("SELECT status FROM room WHERE id = ?", String.class, room.id()));
         assertEquals(0, periods(room.id()).size());
@@ -219,7 +254,7 @@ class RoomInventoryHistoryIntegrationTest {
 
     private List<Map<String, Object>> periods(UUID roomId) {
         return jdbc.queryForList(
-                "SELECT room_type_id, unavailable_reason, origin, effective_from, effective_to, created_by "
+                "SELECT room_type_id, unavailable_reason, reason, origin, effective_from, effective_to, created_by "
                         + "FROM room_inventory_period WHERE room_id = ? ORDER BY effective_from",
                 roomId);
     }

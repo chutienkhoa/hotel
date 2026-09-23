@@ -5,6 +5,7 @@ import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.common.i18n.UiMessages;
 import com.example.hotel.dto.room.request.RoomCreateRequest;
 import com.example.hotel.dto.room.request.RoomSearchCriteria;
+import com.example.hotel.dto.room.request.RoomUnavailabilityRequest;
 import com.example.hotel.dto.room.request.RoomUpdateRequest;
 import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.dto.room.response.RoomResponse;
@@ -121,6 +122,8 @@ public class RoomPageController {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("room", roomService.findById(id));
         model.addAttribute("roomImages", roomImageService.findByRoomId(id));
+        model.addAttribute("affectedReservations", roomService.findUpcomingAffectedReservations(id));
+        model.addAttribute("unavailabilityReason", roomService.findCurrentUnavailabilityReason(id));
         return "room/detail";
     }
 
@@ -252,17 +255,31 @@ public class RoomPageController {
     }
 
     /**
-     * Starts maintenance for an available room from a CSRF-protected browser form.
+     * Starts maintenance for an available or dirty room from a CSRF-protected browser form, requiring
+     * the submitted reason.
      *
      * @param id room identifier
+     * @param form submitted reason
+     * @param bindingResult structural validation result
      * @param redirectAttributes attributes used to show post-redirect feedback
      * @return a detail redirect after the operation result is recorded
      */
     @PostMapping("/rooms/{id}/start-maintenance")
     @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
-    public String startMaintenance(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
+    public String startMaintenance(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("maintenanceForm") RoomUnavailabilityRequest form,
+            BindingResult bindingResult,
+            RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("errorMessage", firstFieldError(bindingResult));
+            return "redirect:/rooms/" + id;
+        }
         return executeOperation(
-                id, roomService::startMaintenance, "Maintenance started successfully.", redirectAttributes);
+                id,
+                roomId -> roomService.startMaintenance(roomId, form.reason()),
+                "Maintenance started successfully.",
+                redirectAttributes);
     }
 
     /**
@@ -280,17 +297,31 @@ public class RoomPageController {
     }
 
     /**
-     * Marks an available room out of order from a CSRF-protected browser form.
+     * Marks an available or dirty room out of order from a CSRF-protected browser form, requiring the
+     * submitted reason.
      *
      * @param id room identifier
+     * @param form submitted reason
+     * @param bindingResult structural validation result
      * @param redirectAttributes attributes used to show post-redirect feedback
      * @return a detail redirect after the operation result is recorded
      */
     @PostMapping("/rooms/{id}/mark-out-of-order")
     @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
-    public String markOutOfOrder(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
+    public String markOutOfOrder(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("outOfOrderForm") RoomUnavailabilityRequest form,
+            BindingResult bindingResult,
+            RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("errorMessage", firstFieldError(bindingResult));
+            return "redirect:/rooms/" + id;
+        }
         return executeOperation(
-                id, roomService::markOutOfOrder, "Room marked out of order successfully.", redirectAttributes);
+                id,
+                roomId -> roomService.markOutOfOrder(roomId, form.reason()),
+                "Room marked out of order successfully.",
+                redirectAttributes);
     }
 
     /**
@@ -497,5 +528,20 @@ public class RoomPageController {
      */
     private String safeMessage(ResponseStatusException exception) {
         return messages.error(exception);
+    }
+
+    /**
+     * Returns the first field-level validation error message, already resolved in the request locale.
+     *
+     * @param bindingResult structural validation result containing at least one error
+     * @return the first field error message, or the global error message when there is no field error
+     */
+    private String firstFieldError(BindingResult bindingResult) {
+        return bindingResult.getFieldErrors().stream()
+                .findFirst()
+                .map(org.springframework.validation.FieldError::getDefaultMessage)
+                .orElse(bindingResult.getGlobalError() == null
+                        ? "Invalid request"
+                        : bindingResult.getGlobalError().getDefaultMessage());
     }
 }

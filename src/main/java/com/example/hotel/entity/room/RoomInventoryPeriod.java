@@ -43,6 +43,9 @@ public class RoomInventoryPeriod extends AuditedEntity {
     @Column(name = "unavailable_reason", length = 32)
     private RoomUnavailableReason unavailableReason;
 
+    @Column(name = "reason")
+    private String reason;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private RoomInventoryOrigin origin;
@@ -56,11 +59,15 @@ public class RoomInventoryPeriod extends AuditedEntity {
     protected RoomInventoryPeriod() {}
 
     /**
-     * Opens a RECORDED period for a Room.
+     * Opens a RECORDED period for a Room. A sellable period (no unavailable reason) never carries a
+     * human-readable reason, regardless of what the caller passes, so the invariant enforced by the
+     * database also holds in memory.
      *
      * @param room Room the period describes
      * @param roomType RoomType effective during the period
      * @param unavailableReason reason the Room is not sellable, or {@code null} when sellable
+     * @param reason human-readable explanation for the unavailability, or {@code null}; ignored when
+     *     {@code unavailableReason} is {@code null}
      * @param effectiveFrom real Instant the state became effective
      * @param user authenticated user recorded as creator
      */
@@ -68,12 +75,14 @@ public class RoomInventoryPeriod extends AuditedEntity {
             Room room,
             RoomType roomType,
             RoomUnavailableReason unavailableReason,
+            String reason,
             Instant effectiveFrom,
             UUID user) {
         id = UUID.randomUUID();
         this.room = room;
         this.roomType = roomType;
         this.unavailableReason = unavailableReason;
+        this.reason = unavailableReason == null ? null : reason;
         this.origin = RoomInventoryOrigin.RECORDED;
         this.effectiveFrom = effectiveFrom;
         this.effectiveTo = null;
@@ -94,6 +103,16 @@ public class RoomInventoryPeriod extends AuditedEntity {
 
     public RoomUnavailableReason getUnavailableReason() {
         return unavailableReason;
+    }
+
+    /**
+     * Returns the human-readable explanation recorded for this period's unavailability.
+     *
+     * @return the reason, or {@code null} when the period is sellable or none was recorded (for
+     *     example a BOOTSTRAP period)
+     */
+    public String getReason() {
+        return reason;
     }
 
     public RoomInventoryOrigin getOrigin() {

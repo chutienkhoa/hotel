@@ -1,6 +1,7 @@
 package com.example.hotel.service.booking;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -16,6 +17,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.booking.request.RoomChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.RoomChangeReason;
@@ -105,6 +107,26 @@ class RoomChangeServiceTest {
         assertEquals(originalCheckOut, fixture.reservationRoom201.getCheckOutDate());
         assertEquals(0, fixture.reservation.getTotalAmount().compareTo(
                 fixture.reservationRoom201.getTotalAmount().add(fixture.reservationRoom202.getTotalAmount())));
+    }
+
+    /**
+     * Confirms MAINTENANCE and OUT_OF_ORDER rooms are excluded from Room Change candidates the same way,
+     * aligned with the authoritative target-room eligibility check in {@code changeRoom}.
+     */
+    @Test
+    void shouldExcludeMaintenanceAndOutOfOrderRoomsFromCandidates() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+        fixture.room402.startMaintenance();
+        fixture.room305.markOutOfOrder();
+        when(fixture.roomRepository.findByActiveTrue())
+                .thenReturn(List.of(fixture.room202, fixture.room305, fixture.room402));
+
+        List<UUID> candidateIds = fixture.service.candidateRooms(fixture.reservationId, fixture.room201.getId())
+                .stream().map(RoomLookupResponse::id).toList();
+
+        assertFalse(candidateIds.contains(fixture.room402.getId()), "MAINTENANCE rooms must be excluded");
+        assertFalse(candidateIds.contains(fixture.room305.getId()), "OUT_OF_ORDER rooms must be excluded");
+        assertFalse(candidateIds.contains(fixture.room201.getId()), "the current room must never be its own candidate");
     }
 
     /** Confirms the same room cannot be submitted as both current and replacement. */

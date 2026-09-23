@@ -107,6 +107,89 @@ class RoomInventoryHistoryServiceTest {
     }
 
     /**
+     * Confirms a Room vacated by check-out or Room Change (DIRTY) also splits sellable history when
+     * it goes straight into maintenance or out-of-order, without first passing through housekeeping.
+     *
+     * @param status target status that removes the Room from sellable inventory
+     */
+    @ParameterizedTest
+    @EnumSource(value = RoomStatus.class, names = {"MAINTENANCE", "OUT_OF_ORDER"})
+    void shouldSplitFromDirtyWhenRoomBecomesUnavailable(RoomStatus status) {
+        RoomType type = type();
+        Room room = room(type, RoomStatus.DIRTY);
+        RoomInventoryPeriod sellable = open(room, type, null, T0);
+        when(periods.findOpenByRoomId(room.getId())).thenReturn(List.of(sellable));
+        ReflectionTestUtils.setField(room, "status", status);
+
+        service.sync(room, T1, USER, "Air conditioner compressor failure");
+
+        RoomInventoryPeriod unavailable = savedPeriods(1).get(0);
+        assertEquals(T1, sellable.getEffectiveTo());
+        assertEquals(RoomUnavailableReason.valueOf(status.name()), unavailable.getUnavailableReason());
+        assertEquals("Air conditioner compressor failure", unavailable.getReason());
+        assertFalse(unavailable.isSellable());
+    }
+
+    /** Confirms the human-readable reason is recorded on the new unavailable period and preserved after it closes. */
+    @Test
+    void shouldRecordAndPreserveReasonAcrossRestoration() {
+        RoomType type = type();
+        Room room = room(type, RoomStatus.AVAILABLE);
+        RoomInventoryPeriod sellable = open(room, type, null, T0);
+        when(periods.findOpenByRoomId(room.getId())).thenReturn(List.of(sellable));
+        ReflectionTestUtils.setField(room, "status", RoomStatus.OUT_OF_ORDER);
+
+        service.sync(room, T1, USER, "Plumbing leak in bathroom");
+
+        RoomInventoryPeriod unavailable = savedPeriods(1).get(0);
+        assertEquals("Plumbing leak in bathroom", unavailable.getReason());
+
+        when(periods.findOpenByRoomId(room.getId())).thenReturn(List.of(unavailable));
+        ReflectionTestUtils.setField(room, "status", RoomStatus.AVAILABLE);
+        Instant t2 = T1.plusSeconds(3600);
+
+        service.sync(room, t2, USER, null);
+
+        ArgumentCaptor<RoomInventoryPeriod> saved = ArgumentCaptor.forClass(RoomInventoryPeriod.class);
+        verify(periods, org.mockito.Mockito.times(2)).save(saved.capture());
+        RoomInventoryPeriod restored = saved.getAllValues().get(1);
+        assertNull(restored.getReason(), "a sellable period never carries a reason");
+        assertEquals(
+                "Plumbing leak in bathroom",
+                unavailable.getReason(),
+                "closing the unavailable period must not erase its recorded reason");
+    }
+
+    /** Confirms a reason is never persisted on a sellable period, even if one is mistakenly supplied. */
+    @Test
+    void shouldIgnoreReasonWhenTargetStatusIsSellable() {
+        RoomType type = type();
+        Room room = room(type, RoomStatus.AVAILABLE);
+        RoomInventoryPeriod unavailable = open(room, type, RoomUnavailableReason.MAINTENANCE, T0);
+        when(periods.findOpenByRoomId(room.getId())).thenReturn(List.of(unavailable));
+
+        service.sync(room, T1, USER, "should never be stored");
+
+        RoomInventoryPeriod restored = savedPeriods(1).get(0);
+        assertNull(restored.getUnavailableReason());
+        assertNull(restored.getReason());
+    }
+
+    /** Confirms a BOOTSTRAP period legitimately has no reason and stays that way once closed. */
+    @Test
+    void shouldAllowBootstrapPeriodWithoutReason() {
+        RoomType type = type();
+        Room room = room(type, RoomStatus.OUT_OF_ORDER);
+        RoomInventoryPeriod bootstrap = open(room, type, RoomUnavailableReason.OUT_OF_ORDER, T0);
+        ReflectionTestUtils.setField(bootstrap, "origin", RoomInventoryOrigin.BOOTSTRAP);
+        ReflectionTestUtils.setField(bootstrap, "createdBy", null);
+
+        assertNull(bootstrap.getReason());
+        bootstrap.close(T1, USER);
+        assertNull(bootstrap.getReason());
+    }
+
+    /**
      * Confirms status changes inside sellable inventory create no history.
      *
      * @param status sellable target status
@@ -322,7 +405,7 @@ class RoomInventoryHistoryServiceTest {
     }
 
     private RoomInventoryPeriod open(Room room, RoomType type, RoomUnavailableReason reason, Instant from) {
-        return new RoomInventoryPeriod(room, type, reason, from, USER);
+        return new RoomInventoryPeriod(room, type, reason, null, from, USER);
     }
 
     private Room room(RoomType type, RoomStatus status) {

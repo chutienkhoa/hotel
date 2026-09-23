@@ -2,9 +2,12 @@ package com.example.hotel.service.room;
 
 import com.example.hotel.dto.room.request.RoomCreateRequest;
 import com.example.hotel.dto.room.request.RoomUpdateRequest;
+import com.example.hotel.dto.room.response.AffectedReservationResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
+import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomType;
+import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.mapper.room.RoomMapper;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.repository.room.RoomTypeRepository;
@@ -12,6 +15,7 @@ import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -139,14 +143,16 @@ public class RoomService {
     }
 
     /**
-     * Starts maintenance for an available room.
+     * Starts maintenance for an available or dirty room, recording why it was taken out of service.
      *
      * @param id room identifier
+     * @param reason required free-text explanation, trimmed before it is stored
      * @return the transitioned room response
+     * @throws LocalizedResponseStatusException if the reason is missing or blank after trimming
      */
     @Transactional
-    public RoomResponse startMaintenance(UUID id) {
-        return transition(id, Room::startMaintenance);
+    public RoomResponse startMaintenance(UUID id, String reason) {
+        return transition(id, Room::startMaintenance, requireReason(reason));
     }
 
     /**
@@ -161,14 +167,16 @@ public class RoomService {
     }
 
     /**
-     * Marks an available room out of order.
+     * Marks an available or dirty room out of order, recording why it cannot currently be operated.
      *
      * @param id room identifier
+     * @param reason required free-text explanation, trimmed before it is stored
      * @return the transitioned room response
+     * @throws LocalizedResponseStatusException if the reason is missing or blank after trimming
      */
     @Transactional
-    public RoomResponse markOutOfOrder(UUID id) {
-        return transition(id, Room::markOutOfOrder);
+    public RoomResponse markOutOfOrder(UUID id, String reason) {
+        return transition(id, Room::markOutOfOrder, requireReason(reason));
     }
 
     /**
@@ -183,6 +191,37 @@ public class RoomService {
     }
 
     /**
+     * Finds the CONFIRMED reservations still scheduled to use a Room from today onward, so a manager
+     * can see the operational impact before taking that Room into MAINTENANCE or OUT_OF_ORDER. This is
+     * purely informational: it never blocks a transition and never changes a Reservation.
+     *
+     * @param roomId room identifier
+     * @return the affected reservations ordered by check-in date, or an empty list when none exist
+     */
+    @Transactional(readOnly = true)
+    public List<AffectedReservationResponse> findUpcomingAffectedReservations(UUID roomId) {
+        LocalDate hotelToday = LocalDate.now(clock);
+        return roomRepository
+                .findUpcomingConfirmedReservationRooms(roomId, hotelToday, ReservationStatus.CONFIRMED)
+                .stream()
+                .map(row -> new AffectedReservationResponse(
+                        row.reservationNumber(), row.checkInDate(), row.checkOutDate()))
+                .toList();
+    }
+
+    /**
+     * Returns the human-readable reason currently recorded for a Room's unavailability, for display on
+     * the Room detail page.
+     *
+     * @param id room identifier
+     * @return the reason, or {@code null} when the Room is sellable or none was recorded
+     */
+    @Transactional(readOnly = true)
+    public String findCurrentUnavailabilityReason(UUID id) {
+        return inventoryHistory.currentReason(id);
+    }
+
+    /**
      * Applies one explicit Room operation while holding the same pessimistic Room lock used by check-in,
      * then aligns inventory history so only sellability-changing operations create a period.
      *
@@ -192,6 +231,21 @@ public class RoomService {
      * @throws ResponseStatusException if the Room does not exist or its current status does not allow the operation
      */
     private RoomResponse transition(UUID id, Consumer<Room> operation) {
+        return transition(id, operation, null);
+    }
+
+    /**
+     * Applies one explicit Room operation while holding the same pessimistic Room lock used by check-in,
+     * then aligns inventory history so only sellability-changing operations create a period, carrying
+     * the given reason when the operation takes the Room into an unavailable status.
+     *
+     * @param id room identifier
+     * @param operation exactly one approved Room domain operation
+     * @param reason human-readable explanation for an unavailable target status, or {@code null}
+     * @return the transitioned room response
+     * @throws ResponseStatusException if the Room does not exist or its current status does not allow the operation
+     */
+    private RoomResponse transition(UUID id, Consumer<Room> operation, String reason) {
         Room room = lockRoom(id);
         try {
             operation.accept(room);
@@ -201,8 +255,34 @@ public class RoomService {
         UUID userId = currentUser().id();
         room.audit(userId);
         Room saved = roomRepository.save(room);
-        inventoryHistory.sync(saved, Instant.now(clock), userId);
+        inventoryHistory.sync(saved, Instant.now(clock), userId, reason);
         return roomMapper.toResponse(saved);
+    }
+
+    /**
+     * Validates and normalizes the required free-text reason for taking a Room into MAINTENANCE or
+     * OUT_OF_ORDER.
+     *
+     * @param reason the submitted reason
+     * @return the trimmed, non-blank reason
+     * @throws LocalizedResponseStatusException if the reason is missing or blank after trimming
+     */
+    private String requireReason(String reason) {
+        String trimmed = trimToNull(reason);
+        if (trimmed == null) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "room.unavailability.error.reasonRequired", "Reason is required");
+        }
+        return trimmed;
+    }
+
+    /** Trims a submitted reason value; blank and {@code null} both become {@code null}. */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

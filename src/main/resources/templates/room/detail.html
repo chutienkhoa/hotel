@@ -19,6 +19,20 @@
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
+        <div class="card" th:if="${(room.status == 'AVAILABLE' or room.status == 'DIRTY') and not #lists.isEmpty(affectedReservations)}">
+            <p class="message message-warning" th:text="#{room.unavailability.warning.message(${#lists.size(affectedReservations)})}">
+                This room has upcoming confirmed reservations that will be affected.
+            </p>
+            <ul>
+                <li th:each="affected : ${affectedReservations}">
+                    <span th:text="${affected.reservationNumber}">R20261010-000001</span>
+                    (<span th:replace="~{layout/datetime :: date(${affected.checkInDate})}">—</span>
+                    &rarr;
+                    <span th:replace="~{layout/datetime :: date(${affected.checkOutDate})}">—</span>)
+                </li>
+            </ul>
+        </div>
+
         <section class="card actions" aria-label="Room operations">
             <form data-confirm-label="Start cleaning" data-confirm-message="Start cleaning this room?"
                   data-confirm-severity="NORMAL" data-confirm-title="Start cleaning" method="post"
@@ -32,16 +46,24 @@
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <button class="button button-primary" type="submit">Finish Cleaning</button>
             </form>
-            <form data-confirm-label="Start maintenance" data-confirm-message="Start maintenance for this room?"
+            <form class="reservation-reason-form" data-confirm-label="Start maintenance" data-confirm-message="Start maintenance for this room?"
                   data-confirm-severity="WARNING" data-confirm-title="Start maintenance" method="post"
-                  th:action="@{/rooms/{id}/start-maintenance(id=${room.id})}" th:if="${room.status == 'AVAILABLE'}">
+                  th:action="@{/rooms/{id}/start-maintenance(id=${room.id})}" th:if="${room.status == 'AVAILABLE' or room.status == 'DIRTY'}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <div class="form-field">
+                    <label for="startMaintenanceReason" th:text="#{room.unavailability.reason.label}">Reason</label>
+                    <textarea id="startMaintenanceReason" maxlength="2000" name="reason" required></textarea>
+                </div>
                 <button class="button button-secondary" type="submit">Start Maintenance</button>
             </form>
-            <form data-confirm-label="Mark out of order" data-confirm-message="Mark this room out of order?"
+            <form class="reservation-reason-form" data-confirm-label="Mark out of order" data-confirm-message="Mark this room out of order?"
                   data-confirm-severity="WARNING" data-confirm-title="Mark room out of order" method="post"
-                  th:action="@{/rooms/{id}/mark-out-of-order(id=${room.id})}" th:if="${room.status == 'AVAILABLE'}">
+                  th:action="@{/rooms/{id}/mark-out-of-order(id=${room.id})}" th:if="${room.status == 'AVAILABLE' or room.status == 'DIRTY'}">
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <div class="form-field">
+                    <label for="markOutOfOrderReason" th:text="#{room.unavailability.reason.label}">Reason</label>
+                    <textarea id="markOutOfOrderReason" maxlength="2000" name="reason" required></textarea>
+                </div>
                 <button class="button button-secondary" type="submit">Mark Out Of Order</button>
             </form>
             <form data-confirm-label="Finish maintenance" data-confirm-message="Finish maintenance for this room?"
@@ -65,6 +87,10 @@
             <dd th:text="${room.floor}">1</dd>
             <dt>Status</dt>
             <dd><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></dd>
+            <th:block th:if="${(room.status == 'MAINTENANCE' or room.status == 'OUT_OF_ORDER') and unavailabilityReason != null}">
+                <dt th:text="#{room.unavailability.reason.label}">Reason</dt>
+                <dd th:text="${unavailabilityReason}">Air conditioner compressor failure</dd>
+            </th:block>
             <dt>Active inventory</dt>
             <dd th:text="${room.active}">true</dd>
         </dl>

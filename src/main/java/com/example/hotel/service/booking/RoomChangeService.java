@@ -102,8 +102,10 @@ public class RoomChangeService {
         LocalDate today = LocalDate.now(clock);
         // CURRENT planned departure (moves with Stay Extension); the original booking dates are not used here.
         LocalDate plannedCheckOutDate = openAssignment.getStay().getReservation().getCheckOutDate();
+        // Aligned with the authoritative target-room check in changeRoom (active + AVAILABLE) so
+        // MAINTENANCE and OUT_OF_ORDER rooms are excluded the same way instead of only one of them.
         List<Room> candidates = rooms.findByActiveTrue().stream()
-                .filter(room -> room.getStatus() != RoomStatus.OUT_OF_ORDER)
+                .filter(Room::isReadyForCheckIn)
                 .filter(room -> !room.getId().equals(currentRoomId))
                 .toList();
         Set<UUID> conflicted = roomAvailability.conflictedRoomIds(

@@ -24,6 +24,7 @@ import com.example.hotel.repository.room.RoomTypeRepository;
 import com.example.hotel.security.CurrentUser;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
@@ -149,7 +150,7 @@ class RoomServiceTest {
         verify(history).sync(room, NOW, updaterId);
     }
 
-    /** Confirms a status transition synchronises inventory history with the hotel clock Instant. */
+    /** Confirms a status transition synchronises inventory history with the hotel clock Instant and the reason. */
     @Test
     void shouldSyncInventoryHistoryAfterStatusTransition() {
         RoomRepository roomRepository = mock(RoomRepository.class);
@@ -162,10 +163,11 @@ class RoomServiceTest {
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
         setCurrentUser(updaterId);
 
-        roomService(roomRepository, roomTypeRepository, history).markOutOfOrder(roomId);
+        roomService(roomRepository, roomTypeRepository, history)
+                .markOutOfOrder(roomId, "Air conditioner compressor failure");
 
         assertEquals(RoomStatus.OUT_OF_ORDER, room.getStatus());
-        verify(history).sync(room, NOW, updaterId);
+        verify(history).sync(room, NOW, updaterId, "Air conditioner compressor failure");
     }
 
     /** Confirms a history failure propagates, so the surrounding transaction rolls the Room change back. */
@@ -178,12 +180,101 @@ class RoomServiceTest {
         Room room = roomWithStatus(roomId, roomType(), RoomStatus.AVAILABLE);
         when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
         when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        doThrow(new IllegalStateException("no open period")).when(history).sync(any(), any(), any());
+        doThrow(new IllegalStateException("no open period")).when(history).sync(any(), any(), any(), any());
         setCurrentUser(UUID.randomUUID());
 
         assertThrows(
                 IllegalStateException.class,
-                () -> roomService(roomRepository, roomTypeRepository, history).markOutOfOrder(roomId));
+                () -> roomService(roomRepository, roomTypeRepository, history)
+                        .markOutOfOrder(roomId, "Air conditioner compressor failure"));
+    }
+
+    /** Confirms a missing reason is rejected before the Room is even locked. */
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"", "   "})
+    void shouldRejectBlankReasonForStartMaintenance(String blankReason) {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        setCurrentUser(UUID.randomUUID());
+
+        assertThrows(
+                com.example.hotel.exception.LocalizedResponseStatusException.class,
+                () -> roomService(roomRepository, roomTypeRepository).startMaintenance(UUID.randomUUID(), blankReason));
+        verify(roomRepository, never()).lockAllByIdIn(any());
+    }
+
+    /** Confirms a {@code null} reason is rejected the same way as a blank one. */
+    @Test
+    void shouldRejectNullReasonForMarkOutOfOrder() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        setCurrentUser(UUID.randomUUID());
+
+        assertThrows(
+                com.example.hotel.exception.LocalizedResponseStatusException.class,
+                () -> roomService(roomRepository, roomTypeRepository).markOutOfOrder(UUID.randomUUID(), null));
+        verify(roomRepository, never()).lockAllByIdIn(any());
+    }
+
+    /** Confirms surrounding whitespace is trimmed before the reason reaches inventory history. */
+    @Test
+    void shouldTrimReasonBeforeSyncingHistory() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        RoomInventoryHistoryService history = mock(RoomInventoryHistoryService.class);
+        UUID roomId = UUID.randomUUID();
+        Room room = roomWithStatus(roomId, roomType(), RoomStatus.AVAILABLE);
+        when(roomRepository.lockAllByIdIn(List.of(roomId))).thenReturn(List.of(room));
+        when(roomRepository.save(any(Room.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        setCurrentUser(UUID.randomUUID());
+
+        roomService(roomRepository, roomTypeRepository, history)
+                .startMaintenance(roomId, "  AC compressor failure  ");
+
+        verify(history).sync(
+                org.mockito.ArgumentMatchers.eq(room),
+                any(),
+                any(),
+                org.mockito.ArgumentMatchers.eq("AC compressor failure"));
+    }
+
+    /**
+     * Confirms the affected-reservations warning queries the repository with the hotel clock's current
+     * date and the CONFIRMED status, and maps each row without altering its data.
+     */
+    @Test
+    void shouldFindUpcomingAffectedReservationsUsingHotelClockAndConfirmedStatus() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        UUID roomId = UUID.randomUUID();
+        LocalDate checkIn = LocalDate.of(2026, 10, 10);
+        LocalDate checkOut = LocalDate.of(2026, 10, 12);
+        when(roomRepository.findUpcomingConfirmedReservationRooms(
+                        roomId, LocalDate.now(CLOCK), com.example.hotel.entity.booking.ReservationStatus.CONFIRMED))
+                .thenReturn(List.of(new com.example.hotel.repository.room.AffectedReservationRow(
+                        "R20261010-000001", checkIn, checkOut)));
+
+        List<com.example.hotel.dto.room.response.AffectedReservationResponse> affected =
+                roomService(roomRepository, roomTypeRepository).findUpcomingAffectedReservations(roomId);
+
+        assertEquals(1, affected.size());
+        assertEquals("R20261010-000001", affected.get(0).reservationNumber());
+        assertEquals(checkIn, affected.get(0).checkInDate());
+        assertEquals(checkOut, affected.get(0).checkOutDate());
+    }
+
+    /** Confirms a Room with no upcoming CONFIRMED reservations returns an empty warning list. */
+    @Test
+    void shouldReturnEmptyAffectedReservationsWhenNoneExist() {
+        RoomRepository roomRepository = mock(RoomRepository.class);
+        RoomTypeRepository roomTypeRepository = mock(RoomTypeRepository.class);
+        UUID roomId = UUID.randomUUID();
+        when(roomRepository.findUpcomingConfirmedReservationRooms(any(), any(), any())).thenReturn(List.of());
+
+        List<com.example.hotel.dto.room.response.AffectedReservationResponse> affected =
+                roomService(roomRepository, roomTypeRepository).findUpcomingAffectedReservations(roomId);
+
+        assertTrue(affected.isEmpty());
     }
 
     /** Confirms client write contracts do not expose server-controlled Room fields. */
@@ -341,9 +432,13 @@ class RoomServiceTest {
                 Arguments.of(
                         RoomStatus.AVAILABLE, RoomStatus.MAINTENANCE, (Consumer<Room>) Room::startMaintenance),
                 Arguments.of(
+                        RoomStatus.DIRTY, RoomStatus.MAINTENANCE, (Consumer<Room>) Room::startMaintenance),
+                Arguments.of(
                         RoomStatus.MAINTENANCE, RoomStatus.AVAILABLE, (Consumer<Room>) Room::finishMaintenance),
                 Arguments.of(
                         RoomStatus.AVAILABLE, RoomStatus.OUT_OF_ORDER, (Consumer<Room>) Room::markOutOfOrder),
+                Arguments.of(
+                        RoomStatus.DIRTY, RoomStatus.OUT_OF_ORDER, (Consumer<Room>) Room::markOutOfOrder),
                 Arguments.of(
                         RoomStatus.OUT_OF_ORDER, RoomStatus.AVAILABLE, (Consumer<Room>) Room::restoreToService));
     }
@@ -357,9 +452,15 @@ class RoomServiceTest {
         return Stream.of(
                 Arguments.of(RoomStatus.AVAILABLE, (Consumer<Room>) Room::startCleaning),
                 Arguments.of(RoomStatus.DIRTY, (Consumer<Room>) Room::finishCleaning),
+                Arguments.of(RoomStatus.OCCUPIED, (Consumer<Room>) Room::startMaintenance),
                 Arguments.of(RoomStatus.CLEANING, (Consumer<Room>) Room::startMaintenance),
+                Arguments.of(RoomStatus.MAINTENANCE, (Consumer<Room>) Room::startMaintenance),
+                Arguments.of(RoomStatus.OUT_OF_ORDER, (Consumer<Room>) Room::startMaintenance),
                 Arguments.of(RoomStatus.AVAILABLE, (Consumer<Room>) Room::finishMaintenance),
+                Arguments.of(RoomStatus.OCCUPIED, (Consumer<Room>) Room::markOutOfOrder),
+                Arguments.of(RoomStatus.CLEANING, (Consumer<Room>) Room::markOutOfOrder),
                 Arguments.of(RoomStatus.MAINTENANCE, (Consumer<Room>) Room::markOutOfOrder),
+                Arguments.of(RoomStatus.OUT_OF_ORDER, (Consumer<Room>) Room::markOutOfOrder),
                 Arguments.of(RoomStatus.AVAILABLE, (Consumer<Room>) Room::restoreToService));
     }
 
@@ -373,8 +474,10 @@ class RoomServiceTest {
                 Arguments.of("startCleaning", RoomStatus.DIRTY, RoomStatus.CLEANING),
                 Arguments.of("finishCleaning", RoomStatus.CLEANING, RoomStatus.AVAILABLE),
                 Arguments.of("startMaintenance", RoomStatus.AVAILABLE, RoomStatus.MAINTENANCE),
+                Arguments.of("startMaintenance", RoomStatus.DIRTY, RoomStatus.MAINTENANCE),
                 Arguments.of("finishMaintenance", RoomStatus.MAINTENANCE, RoomStatus.AVAILABLE),
                 Arguments.of("markOutOfOrder", RoomStatus.AVAILABLE, RoomStatus.OUT_OF_ORDER),
+                Arguments.of("markOutOfOrder", RoomStatus.DIRTY, RoomStatus.OUT_OF_ORDER),
                 Arguments.of("restoreToService", RoomStatus.OUT_OF_ORDER, RoomStatus.AVAILABLE));
     }
 
@@ -387,8 +490,11 @@ class RoomServiceTest {
         return Stream.of(
                 Arguments.of("startCleaning", RoomStatus.AVAILABLE),
                 Arguments.of("finishCleaning", RoomStatus.DIRTY),
+                Arguments.of("startMaintenance", RoomStatus.OCCUPIED),
                 Arguments.of("startMaintenance", RoomStatus.CLEANING),
                 Arguments.of("finishMaintenance", RoomStatus.AVAILABLE),
+                Arguments.of("markOutOfOrder", RoomStatus.OCCUPIED),
+                Arguments.of("markOutOfOrder", RoomStatus.CLEANING),
                 Arguments.of("markOutOfOrder", RoomStatus.MAINTENANCE),
                 Arguments.of("restoreToService", RoomStatus.AVAILABLE));
     }
@@ -434,9 +540,9 @@ class RoomServiceTest {
         return switch (operationName) {
             case "startCleaning" -> roomService.startCleaning(roomId);
             case "finishCleaning" -> roomService.finishCleaning(roomId);
-            case "startMaintenance" -> roomService.startMaintenance(roomId);
+            case "startMaintenance" -> roomService.startMaintenance(roomId, "Air conditioner compressor failure");
             case "finishMaintenance" -> roomService.finishMaintenance(roomId);
-            case "markOutOfOrder" -> roomService.markOutOfOrder(roomId);
+            case "markOutOfOrder" -> roomService.markOutOfOrder(roomId, "Air conditioner compressor failure");
             case "restoreToService" -> roomService.restoreToService(roomId);
             default -> throw new IllegalArgumentException("Unexpected Room operation: " + operationName);
         };

@@ -9,12 +9,23 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.UUID;
 
 /** Đại diện cho một phòng vật lý và trạng thái vận hành của phòng. */
 @Entity
 @Table(name = "room")
 public class Room extends AuditedEntity {
+
+    /**
+     * Approved sources for entering MAINTENANCE or OUT_OF_ORDER: an available room, or a dirty room
+     * vacated by check-out or Room Change. An occupied room must go through Room Change first, since
+     * only Room Change may vacate a guest.
+     */
+    private static final Set<RoomStatus> MAINTENANCE_SOURCE_STATUSES =
+            EnumSet.of(RoomStatus.AVAILABLE, RoomStatus.DIRTY);
+
     @Id
     private UUID id;
 
@@ -187,9 +198,14 @@ public class Room extends AuditedEntity {
         transition(RoomStatus.CLEANING, RoomStatus.AVAILABLE, "finish cleaning");
     }
 
-    /** Transitions an available room into maintenance. */
+    /**
+     * Transitions an available or dirty room into maintenance. A dirty room (vacated by check-out or
+     * Room Change) can go directly into maintenance without a fictitious housekeeping cycle first.
+     *
+     * @throws IllegalStateException if the room is occupied, cleaning, in maintenance, or out of order
+     */
     public void startMaintenance() {
-        transition(RoomStatus.AVAILABLE, RoomStatus.MAINTENANCE, "start maintenance");
+        transition(MAINTENANCE_SOURCE_STATUSES, RoomStatus.MAINTENANCE, "start maintenance");
     }
 
     /** Transitions a room in maintenance back to available. */
@@ -197,9 +213,14 @@ public class Room extends AuditedEntity {
         transition(RoomStatus.MAINTENANCE, RoomStatus.AVAILABLE, "finish maintenance");
     }
 
-    /** Transitions an available room out of service. */
+    /**
+     * Transitions an available or dirty room out of service. A dirty room (vacated by check-out or
+     * Room Change) can go directly out of service without a fictitious housekeeping cycle first.
+     *
+     * @throws IllegalStateException if the room is occupied, cleaning, in maintenance, or out of order
+     */
     public void markOutOfOrder() {
-        transition(RoomStatus.AVAILABLE, RoomStatus.OUT_OF_ORDER, "mark out of order");
+        transition(MAINTENANCE_SOURCE_STATUSES, RoomStatus.OUT_OF_ORDER, "mark out of order");
     }
 
     /** Restores an out-of-order room to available service. */
@@ -216,7 +237,20 @@ public class Room extends AuditedEntity {
      * @throws IllegalStateException if the Room is not in the permitted current status
      */
     private void transition(RoomStatus expectedStatus, RoomStatus targetStatus, String operationName) {
-        if (status != expectedStatus) {
+        transition(EnumSet.of(expectedStatus), targetStatus, operationName);
+    }
+
+    /**
+     * Applies one approved Room status transition from any of several permitted current statuses,
+     * without changing Room profile, type, active, or audit data.
+     *
+     * @param expectedStatuses the permitted current statuses
+     * @param targetStatus the approved status after the operation
+     * @param operationName human-readable operation name used in the rejection message
+     * @throws IllegalStateException if the Room is not in one of the permitted current statuses
+     */
+    private void transition(Set<RoomStatus> expectedStatuses, RoomStatus targetStatus, String operationName) {
+        if (!expectedStatuses.contains(status)) {
             throw new IllegalStateException(
                     "Room cannot " + operationName + " from status " + status);
         }

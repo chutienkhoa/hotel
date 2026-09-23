@@ -48,13 +48,14 @@ public class RoomInventoryHistoryService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void initialize(Room room, Instant at, UUID user) {
         periods.save(new RoomInventoryPeriod(
-                room, room.getRoomType(), RoomUnavailableReason.fromStatus(room.getStatus()), at, user));
+                room, room.getRoomType(), RoomUnavailableReason.fromStatus(room.getStatus()), null, at, user));
     }
 
     /**
-     * Idempotently aligns the open period with the Room's current RoomType and sellability. Nothing
-     * happens when both are unchanged, so status changes within sellable inventory create no history.
-     * Otherwise the open period is closed and a replacement opened at the same Instant.
+     * Idempotently aligns the open period with the Room's current RoomType and sellability, recording
+     * no human-readable reason. Equivalent to {@link #sync(Room, Instant, UUID, String)} with a
+     * {@code null} reason, used by operations that never take one (RoomType edits, cleaning, check-in,
+     * check-out, Room Change).
      *
      * @param room Room whose write lock the caller holds
      * @param at real Instant of the change, used as both the old {@code effectiveTo} and new {@code effectiveFrom}
@@ -63,6 +64,24 @@ public class RoomInventoryHistoryService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void sync(Room room, Instant at, UUID user) {
+        sync(room, at, user, null);
+    }
+
+    /**
+     * Idempotently aligns the open period with the Room's current RoomType and sellability. Nothing
+     * happens when both are unchanged, so status changes within sellable inventory create no history.
+     * Otherwise the open period is closed and a replacement opened at the same Instant, carrying
+     * {@code reason} only when the new period is itself unavailable; a sellable replacement never
+     * records one, regardless of what is passed.
+     *
+     * @param room Room whose write lock the caller holds
+     * @param at real Instant of the change, used as both the old {@code effectiveTo} and new {@code effectiveFrom}
+     * @param user authenticated user recorded as updater/creator
+     * @param reason human-readable explanation for the new period's unavailability, or {@code null}
+     * @throws IllegalStateException if the Room has no single open period; history is never repaired silently
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void sync(Room room, Instant at, UUID user, String reason) {
         List<RoomInventoryPeriod> open = periods.findOpenByRoomId(room.getId());
         if (open.size() != 1) {
             throw new IllegalStateException(
@@ -70,15 +89,30 @@ public class RoomInventoryHistoryService {
                             + open.size());
         }
         RoomInventoryPeriod current = open.get(0);
-        RoomUnavailableReason reason = RoomUnavailableReason.fromStatus(room.getStatus());
+        RoomUnavailableReason unavailableReason = RoomUnavailableReason.fromStatus(room.getStatus());
         boolean sameType = current.getRoomType().getId().equals(room.getRoomType().getId());
-        if (sameType && current.getUnavailableReason() == reason) {
+        if (sameType && current.getUnavailableReason() == unavailableReason) {
             return;
         }
         current.close(at, user);
         // Hibernate flushes inserts before updates; closing first keeps the one-open-period index satisfied.
         periods.saveAndFlush(current);
-        periods.save(new RoomInventoryPeriod(room, room.getRoomType(), reason, at, user));
+        periods.save(new RoomInventoryPeriod(room, room.getRoomType(), unavailableReason, reason, at, user));
+    }
+
+    /**
+     * Returns the human-readable reason recorded for a Room's current (open) inventory period.
+     *
+     * @param roomId Room identifier
+     * @return the reason, or {@code null} when the Room is sellable or none was recorded (for
+     *     example a BOOTSTRAP period)
+     */
+    @Transactional(readOnly = true)
+    public String currentReason(UUID roomId) {
+        return periods.findOpenByRoomId(roomId).stream()
+                .findFirst()
+                .map(RoomInventoryPeriod::getReason)
+                .orElse(null);
     }
 
     /**

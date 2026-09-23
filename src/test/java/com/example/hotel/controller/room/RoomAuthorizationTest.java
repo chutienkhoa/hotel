@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.example.hotel.controller.common.NavigationModelAdvice;
+import com.example.hotel.dto.room.response.AffectedReservationResponse;
 import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
@@ -24,6 +25,7 @@ import com.example.hotel.service.room.RoomImageService;
 import com.example.hotel.service.room.RoomQueryService;
 import com.example.hotel.service.room.RoomService;
 import com.example.hotel.service.room.RoomTypeQueryService;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -99,6 +101,86 @@ class RoomAuthorizationTest {
                 .andExpect(view().name("room/list"))
                 .andExpect(model().attribute("canManageRoom", true))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("href=\"/rooms\"")));
+    }
+
+    /**
+     * Confirms the Room Detail page renders the future-reservation warning with operationally
+     * sufficient information (reservation number, check-in date, check-out date) and exposes no guest
+     * information, since {@link AffectedReservationResponse} itself carries none.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldRenderFutureReservationWarningWithoutGuestPii() throws Exception {
+        when(roomService.findById(ROOM_ID)).thenReturn(roomResponse());
+        when(roomImageService.findByRoomId(ROOM_ID)).thenReturn(List.of());
+        when(roomService.findUpcomingAffectedReservations(ROOM_ID)).thenReturn(List.of(
+                new AffectedReservationResponse(
+                        "R20261010-000001", LocalDate.of(2026, 10, 10), LocalDate.of(2026, 10, 12))));
+        when(roomService.findCurrentUnavailabilityReason(ROOM_ID)).thenReturn(null);
+
+        mockMvc.perform(get("/rooms/{id}", ROOM_ID).with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("R20261010-000001")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("10/10/2026")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("12/10/2026")));
+    }
+
+    /**
+     * Confirms a Room with no upcoming affected reservations renders the detail page without the
+     * warning block.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldNotRenderFutureReservationWarningWhenNoneAreAffected() throws Exception {
+        when(roomService.findById(ROOM_ID)).thenReturn(roomResponse());
+        when(roomImageService.findByRoomId(ROOM_ID)).thenReturn(List.of());
+        when(roomService.findUpcomingAffectedReservations(ROOM_ID)).thenReturn(List.of());
+        when(roomService.findCurrentUnavailabilityReason(ROOM_ID)).thenReturn(null);
+
+        mockMvc.perform(get("/rooms/{id}", ROOM_ID).with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("R20261010-000001"))));
+    }
+
+    /**
+     * Confirms start-maintenance rejects a blank reason through MVC binding and never performs the
+     * Room transition.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldRejectBlankReasonForStartMaintenanceMvcFormAndNotTransitionTheRoom() throws Exception {
+        mockMvc.perform(post("/rooms/{id}/start-maintenance", ROOM_ID)
+                        .param("reason", "")
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/rooms/" + ROOM_ID));
+
+        verify(roomService, org.mockito.Mockito.never())
+                .startMaintenance(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    /**
+     * Confirms mark-out-of-order rejects a blank reason through the same MVC binding flow and never
+     * performs the Room transition.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldRejectBlankReasonForMarkOutOfOrderMvcFormAndNotTransitionTheRoom() throws Exception {
+        mockMvc.perform(post("/rooms/{id}/mark-out-of-order", ROOM_ID)
+                        .param("reason", "   ")
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/rooms/" + ROOM_ID));
+
+        verify(roomService, org.mockito.Mockito.never())
+                .markOutOfOrder(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     /** Confirms the Room list renders all four filters and reuses the shared pagination markup. */
@@ -390,10 +472,28 @@ class RoomAuthorizationTest {
     @MethodSource("roomManagerOperations")
     void shouldAllowAdministrativeRolesToInvokeRoomOperations(String username, String operationPath)
             throws Exception {
-        mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+        mockMvc.perform(withReasonIfRequired(post("/api/rooms/{id}/" + operationPath, ROOM_ID), operationPath)
                         .with(user(username).authorities(manageRoomAuthority().get(0), manageHousekeepingAuthority().get(0)))
                         .with(csrf()))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * Confirms start-maintenance and mark-out-of-order reject a blank reason with 400 before ever
+     * reaching the service, independent of authorization.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectBlankReasonForMaintenanceRestOperations() throws Exception {
+        for (String operationPath : List.of("start-maintenance", "mark-out-of-order")) {
+            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+                            .with(user("admin").authorities(manageRoomAuthority()))
+                            .with(csrf())
+                            .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                            .content("{\"reason\":\"   \"}"))
+                    .andExpect(status().isBadRequest());
+        }
     }
 
     /**
@@ -404,7 +504,7 @@ class RoomAuthorizationTest {
     @Test
     void shouldRejectStaffFromRoomOperations() throws Exception {
         for (String operationPath : roomOperationPaths().toList()) {
-            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+            mockMvc.perform(withReasonIfRequired(post("/api/rooms/{id}/" + operationPath, ROOM_ID), operationPath)
                             .with(user("staff").authorities(staffAuthorities()))
                             .with(csrf()))
                     .andExpect(status().isForbidden());
@@ -458,7 +558,7 @@ class RoomAuthorizationTest {
     void shouldNotLetHousekeepingPermissionAdministerRooms() throws Exception {
         for (String operationPath : List.of(
                 "start-maintenance", "finish-maintenance", "mark-out-of-order", "restore-to-service")) {
-            mockMvc.perform(post("/api/rooms/{id}/" + operationPath, ROOM_ID)
+            mockMvc.perform(withReasonIfRequired(post("/api/rooms/{id}/" + operationPath, ROOM_ID), operationPath)
                             .with(user("housekeeper").authorities(manageHousekeepingAuthority()))
                             .with(csrf()))
                     .andExpect(status().isForbidden());
@@ -566,6 +666,25 @@ class RoomAuthorizationTest {
                 "finish-maintenance",
                 "mark-out-of-order",
                 "restore-to-service");
+    }
+
+    /**
+     * Attaches a valid JSON reason body to a REST request when the operation path requires one
+     * (start-maintenance, mark-out-of-order), so the request reaches the authorization check
+     * instead of failing request-body validation first.
+     *
+     * @param request request builder to complete
+     * @param operationPath approved Room Operations B path suffix
+     * @return the request builder, with a JSON reason body attached when required
+     */
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder withReasonIfRequired(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,
+            String operationPath) {
+        if ("start-maintenance".equals(operationPath) || "mark-out-of-order".equals(operationPath)) {
+            return request.contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Air conditioner compressor failure\"}");
+        }
+        return request;
     }
 
     /**

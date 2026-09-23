@@ -62,6 +62,9 @@ class RoomChangeInventoryIntegrationTest {
     private RoomChangeService roomChangeService;
 
     @Autowired
+    private com.example.hotel.service.room.RoomService roomService;
+
+    @Autowired
     private RoomAvailabilityService availability;
 
     @Autowired
@@ -178,6 +181,8 @@ class RoomChangeInventoryIntegrationTest {
         UUID free = room("IV-CFREE", "AVAILABLE");
         UUID confirmedElsewhere = room("IV-CCONF", "AVAILABLE");
         UUID heldByOtherStay = room("IV-CSTAY", "OCCUPIED");
+        UUID underMaintenance = room("IV-CMAINT", "MAINTENANCE");
+        UUID outOfOrder = room("IV-COOO", "OUT_OF_ORDER");
         UUID stay = checkedIn(a, today, today.plusDays(3));
         UUID other = confirmed(confirmedElsewhere, today.plusDays(1), today.plusDays(2));
         checkedIn(heldByOtherStay, today, today.plusDays(2));
@@ -188,7 +193,32 @@ class RoomChangeInventoryIntegrationTest {
         assertTrue(candidates.contains(free));
         assertFalse(candidates.contains(confirmedElsewhere));
         assertFalse(candidates.contains(heldByOtherStay));
+        assertFalse(candidates.contains(underMaintenance), "MAINTENANCE rooms must be excluded like OUT_OF_ORDER");
+        assertFalse(candidates.contains(outOfOrder));
         assertEquals("CONFIRMED", statusOf(other));
+    }
+
+    /**
+     * Confirms the maintenance/out-of-order warning surfaces only upcoming CONFIRMED reservations for the
+     * Room, excluding DRAFT and CANCELLED, and never touches Reservation/ReservationRoom.
+     */
+    @Test
+    void shouldWarnOnlyAboutUpcomingConfirmedReservationsForTheRoom() {
+        UUID a = room("IV-WA", "AVAILABLE");
+        UUID upcoming = confirmed(a, today.plusDays(5), today.plusDays(7));
+        draft(a, today.plusDays(10), today.plusDays(12));
+        reservation("CANCELLED", a, today.plusDays(1), today.plusDays(2));
+        String upcomingNumber = jdbc.queryForObject(
+                "SELECT reservation_number FROM reservation WHERE id = ?", String.class, upcoming);
+
+        List<com.example.hotel.dto.room.response.AffectedReservationResponse> affected =
+                roomService.findUpcomingAffectedReservations(a);
+
+        assertEquals(1, affected.size());
+        assertEquals(upcomingNumber, affected.get(0).reservationNumber());
+        assertEquals(today.plusDays(5), affected.get(0).checkInDate());
+        assertEquals(today.plusDays(7), affected.get(0).checkOutDate());
+        assertEquals("CONFIRMED", statusOf(upcoming), "the warning must never change the Reservation");
     }
 
     /** Confirms a CONFIRMED reservation blocks overlapping dates but not adjacent ones (half-open intervals). */
