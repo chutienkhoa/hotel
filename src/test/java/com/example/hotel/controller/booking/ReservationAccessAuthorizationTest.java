@@ -17,7 +17,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
+import com.example.hotel.dto.booking.request.NoShowReservationRequest;
+import com.example.hotel.entity.booking.CancellationReasonCode;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
@@ -52,6 +55,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -216,6 +220,121 @@ class ReservationAccessAuthorizationTest {
                         .with(user("staff").authorities(checkOutAuthority()))
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    /**
+     * Confirms cancel and no-show require MANAGE_BOOKING on both REST and CSRF-protected browser paths, unchanged
+     * by the addition of the required reason.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRequireManageBookingAndCsrfForCancelAndNoShow() throws Exception {
+        when(reservationService.cancel(eq(RESERVATION_ID), any(CancelReservationRequest.class)))
+                .thenReturn(new Response(RESERVATION_ID, "R20260911-000001", "CANCELLED", BigDecimal.ONE, "JPY"));
+        when(reservationService.noShow(eq(RESERVATION_ID), any(NoShowReservationRequest.class)))
+                .thenReturn(new Response(RESERVATION_ID, "R20260911-000001", "NO_SHOW", BigDecimal.ONE, "JPY"));
+        String cancelBody = "{\"cancellationReasonCode\":\"GUEST_REQUEST\"}";
+        String noShowBody = "{\"noShowReason\":\"Guest did not arrive.\"}";
+
+        mockMvc.perform(post("/api/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(user("admin").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelBody))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/reservations/{id}/no-show", RESERVATION_ID)
+                        .with(user("admin").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(noShowBody))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(user("staff").authorities(viewBookingAuthority()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cancelBody))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/reservations/{id}/no-show", RESERVATION_ID)
+                        .with(user("staff").authorities(viewBookingAuthority()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(noShowBody))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(user("admin").authorities(manageBookingAndViewAuthorities()))
+                        .param("cancellationReasonCode", "GUEST_REQUEST"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(user("admin").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf())
+                        .param("cancellationReasonCode", "GUEST_REQUEST"))
+                .andExpect(status().is3xxRedirection());
+    }
+
+    /**
+     * Confirms REST cancel and no-show reject a request missing the now-required reason with 400, before reaching
+     * the service.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectCancelAndNoShowWithoutReason() throws Exception {
+        mockMvc.perform(post("/api/reservations/{id}/cancel", RESERVATION_ID)
+                        .with(user("admin").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/reservations/{id}/no-show", RESERVATION_ID)
+                        .with(user("admin").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(reservationService);
+    }
+
+    /**
+     * Confirms VIEW_BOOKING alone can see the stored cancellation reason on Reservation Detail, without needing
+     * MANAGE_BOOKING.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldShowCancellationReasonToViewBookingUser() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
+                RESERVATION_ID,
+                "R20260911-000001",
+                UUID.randomUUID(),
+                "GUEST-001",
+                "CANCELLED",
+                com.example.hotel.entity.booking.BookingSource.DIRECT,
+                null,
+                LocalDate.of(2026, 9, 11),
+                LocalDate.of(2026, 9, 12),
+                1,
+                0,
+                BigDecimal.TEN,
+                "VND",
+                null,
+                List.of(),
+                List.of(),
+                null,
+                null,
+                null,
+                false,
+                CancellationReasonCode.PAYMENT_ISSUE,
+                "Card declined twice",
+                null));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("staff").authorities(viewBookingAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Card declined twice")))
+                .andExpect(content().string(containsString("Payment issue")));
     }
 
     /** Confirms a payment manager can discover the Folio link for a Reservation with a Stay. */

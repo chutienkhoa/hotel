@@ -88,6 +88,16 @@ public class Reservation extends AuditedEntity {
     @Column(name = "booking_contact_email")
     private String bookingContactEmail;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancellation_reason_code")
+    private CancellationReasonCode cancellationReasonCode;
+
+    @Column(name = "cancellation_reason_detail")
+    private String cancellationReasonDetail;
+
+    @Column(name = "no_show_reason")
+    private String noShowReason;
+
     @OneToMany(mappedBy = "reservation", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ReservationRoom> rooms = new ArrayList<>();
 
@@ -690,6 +700,37 @@ public class Reservation extends AuditedEntity {
         return bookingContactEmail;
     }
 
+    /**
+     * Returns the structured reason this Reservation was cancelled, set exactly once at cancellation.
+     *
+     * @return the cancellation reason code, or {@code null} for a Reservation that is not CANCELLED, or a
+     *     historical CANCELLED Reservation recorded before this feature existed
+     */
+    public CancellationReasonCode getCancellationReasonCode() {
+        return cancellationReasonCode;
+    }
+
+    /**
+     * Returns the optional free-text detail supplied with the cancellation reason, set exactly once at
+     * cancellation.
+     *
+     * @return the cancellation reason detail, or {@code null} when none was supplied or recorded
+     */
+    public String getCancellationReasonDetail() {
+        return cancellationReasonDetail;
+    }
+
+    /**
+     * Returns the required free-text operational explanation recorded when this Reservation was marked
+     * NO_SHOW, set exactly once at that transition.
+     *
+     * @return the no-show reason, or {@code null} for a Reservation that is not NO_SHOW, or a historical
+     *     NO_SHOW Reservation recorded before this feature existed
+     */
+    public String getNoShowReason() {
+        return noShowReason;
+    }
+
     /** Tính lại tổng số tiền từ các dòng phòng đã lưu snapshot. */
     public void calculateTotal() {
         totalAmount =
@@ -833,14 +874,33 @@ public class Reservation extends AuditedEntity {
         return rooms.stream().filter(line -> line.getRoom().getId().equals(roomId)).findFirst().orElse(null);
     }
 
-    /** Hủy reservation đã xác nhận. */
-    public void cancel() {
+    /**
+     * Hủy reservation đã xác nhận và ghi nhận lý do hủy. The reason is set exactly once: this method only
+     * ever succeeds from CONFIRMED, and CANCELLED is terminal, so the reason can never be overwritten. The
+     * caller is expected to have already validated the reason (required code; non-blank detail when the code
+     * is OTHER).
+     *
+     * @param reasonCode the required structured cancellation reason
+     * @param reasonDetail the optional free-text detail, or {@code null}
+     * @throws IllegalStateException if this Reservation is not CONFIRMED
+     */
+    public void cancel(CancellationReasonCode reasonCode, String reasonDetail) {
         transition(ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED);
+        cancellationReasonCode = reasonCode;
+        cancellationReasonDetail = reasonDetail;
     }
 
-    /** Đánh dấu reservation đã xác nhận là khách không đến. */
-    public void noShow() {
+    /**
+     * Đánh dấu reservation đã xác nhận là khách không đến và ghi nhận lý do. The reason is set exactly once:
+     * this method only ever succeeds from CONFIRMED, and NO_SHOW is terminal, so the reason can never be
+     * overwritten. The caller is expected to have already validated the reason (required, non-blank).
+     *
+     * @param reason the required free-text operational explanation
+     * @throws IllegalStateException if this Reservation is not CONFIRMED
+     */
+    public void noShow(String reason) {
         transition(ReservationStatus.CONFIRMED, ReservationStatus.NO_SHOW);
+        noShowReason = reason;
     }
 
     /** Chuyển reservation đã xác nhận sang trạng thái nhận phòng. */

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.hotel.entity.booking.CancellationReasonCode;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.PaymentStatus;
@@ -169,7 +170,7 @@ class ReservationCheckInRoomChargeTest {
     @Test
     void shouldNotCreateRoomChargesForInvalidReservationState() {
         Fixture fixture = fixture("VND", new BigDecimal("1000000.00"), new BigDecimal("1200000.00"));
-        fixture.reservation().cancel();
+        fixture.reservation().cancel(CancellationReasonCode.GUEST_REQUEST, null);
 
         assertThrows(
                 ResponseStatusException.class,

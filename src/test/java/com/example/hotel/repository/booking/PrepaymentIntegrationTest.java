@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.ChargeCreateRequest;
+import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.PaymentRefundRequest;
 import com.example.hotel.dto.booking.response.FolioReconciliationResponse;
+import com.example.hotel.entity.booking.CancellationReasonCode;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.service.booking.ChargeService;
 import com.example.hotel.service.booking.PrepaymentService;
@@ -158,6 +161,23 @@ class PrepaymentIntegrationTest {
         return confirmed(today, today.plusDays(2), new Line(room, "2000000"));
     }
 
+    /**
+     * Creates a CONFIRMED reservation of 4,000,000 VND (2 nights x 2,000,000) with a check-in date already in
+     * the past, so it is eligible for No-show under the temporal guard (late check-in is still allowed).
+     */
+    private UUID fourMillionOverdue() {
+        UUID room = room("PO-" + UUID.randomUUID().toString().substring(0, 6), "AVAILABLE");
+        return confirmed(today.minusDays(1), today.plusDays(1), new Line(room, "2000000"));
+    }
+
+    private static CancelReservationRequest cancelRequest() {
+        return new CancelReservationRequest(CancellationReasonCode.GUEST_REQUEST, null);
+    }
+
+    private static NoShowReservationRequest noShowRequest() {
+        return new NoShowReservationRequest("Guest did not arrive and could not be contacted.");
+    }
+
     /** Confirms a VND prepayment is PAID with no stay, adds no revenue, and multiple prepayments accumulate. */
     @Test
     void shouldRecordMultiplePaidPrepaymentsWithoutRevenue() {
@@ -273,12 +293,12 @@ class PrepaymentIntegrationTest {
     @Test
     void shouldBlockCancelAndNoShowUntilPrepaymentsAreRefunded() {
         UUID toCancel = fourMillion();
-        UUID toNoShow = fourMillion();
+        UUID toNoShow = fourMillionOverdue();
         prepayments.record(toCancel, vnd("1000000", "C1"));
         prepayments.record(toNoShow, vnd("1000000", "N1"));
 
-        assertThrows(ResponseStatusException.class, () -> reservationService.cancel(toCancel));
-        assertThrows(ResponseStatusException.class, () -> reservationService.noShow(toNoShow));
+        assertThrows(ResponseStatusException.class, () -> reservationService.cancel(toCancel, cancelRequest()));
+        assertThrows(ResponseStatusException.class, () -> reservationService.noShow(toNoShow, noShowRequest()));
         assertEquals("CONFIRMED", statusOf(toCancel));
         assertEquals("PAID", jdbc.queryForObject("SELECT status FROM payment WHERE reservation_id = ?", String.class, toCancel));
 
@@ -286,14 +306,28 @@ class PrepaymentIntegrationTest {
             UUID payment = jdbc.queryForObject("SELECT id FROM payment WHERE reservation_id = ?", UUID.class, reservation);
             prepayments.refund(reservation, payment, new PaymentRefundRequest("refund first"));
         }
-        reservationService.cancel(toCancel);
-        reservationService.noShow(toNoShow);
+        reservationService.cancel(toCancel, cancelRequest());
+        reservationService.noShow(toNoShow, noShowRequest());
 
         assertEquals("CANCELLED", statusOf(toCancel));
         assertEquals("NO_SHOW", statusOf(toNoShow));
         assertEquals(0, count("SELECT COUNT(*) FROM charge"));
         assertEquals(0, count("SELECT COUNT(*) FROM additional_revenue WHERE charge_id IS NOT NULL"));
         assertEquals(2, count("SELECT COUNT(*) FROM payment WHERE status = 'REFUNDED'"));
+        assertEquals("GUEST_REQUEST", jdbc.queryForObject(
+                "SELECT cancellation_reason_code FROM reservation WHERE id = ?", String.class, toCancel));
+        assertEquals("Guest did not arrive and could not be contacted.", jdbc.queryForObject(
+                "SELECT no_show_reason FROM reservation WHERE id = ?", String.class, toNoShow));
+        String cancelOldValue = jdbc.queryForObject(
+                "SELECT old_value FROM audit_log WHERE action = 'CANCEL' AND entity_id = ?", String.class, toCancel);
+        String cancelNewValue = jdbc.queryForObject(
+                "SELECT new_value FROM audit_log WHERE action = 'CANCEL' AND entity_id = ?", String.class, toCancel);
+        assertEquals("CONFIRMED", cancelOldValue);
+        assertEquals("CANCELLED", cancelNewValue);
+        String noShowNewValue = jdbc.queryForObject(
+                "SELECT new_value FROM audit_log WHERE action = 'NO_SHOW' AND entity_id = ?", String.class, toNoShow);
+        assertEquals("NO_SHOW", noShowNewValue);
+        assertFalse(noShowNewValue.contains("did not arrive"), "AuditLog must not duplicate the raw no-show reason text");
     }
 
     /** Confirms check-in attaches the SAME rows (no copies, unchanged snapshot), skips refunded ones, and the folio adds up. */
@@ -413,10 +447,12 @@ class PrepaymentIntegrationTest {
     void shouldSerializeCheckInWithCancelAndNoShow() throws Exception {
         for (int i = 0; i < 12; i++) {
             setUp();
-            UUID reservation = fourMillion();
+            // An overdue check-in date is used for both branches: Cancel is unaffected by it, late check-in is
+            // still allowed, and it keeps No-show eligible under the temporal guard so the race is exercised.
+            UUID reservation = fourMillionOverdue();
             boolean cancel = i % 2 == 0;
             List<Object> results = race(() -> reservationService.checkIn(reservation),
-                    () -> { if (cancel) { reservationService.cancel(reservation); } else { reservationService.noShow(reservation); } });
+                    () -> { if (cancel) { reservationService.cancel(reservation, cancelRequest()); } else { reservationService.noShow(reservation, noShowRequest()); } });
 
             assertEquals(1, results.stream().filter(r -> !(r instanceof RuntimeException)).count(), results.toString());
             String status = statusOf(reservation);
@@ -430,10 +466,10 @@ class PrepaymentIntegrationTest {
     void shouldSerializePrepaymentWithCancelAndNoShow() throws Exception {
         for (int i = 0; i < 12; i++) {
             setUp();
-            UUID reservation = fourMillion();
+            UUID reservation = fourMillionOverdue();
             boolean cancel = i % 2 == 0;
             List<Object> results = race(() -> prepayments.record(reservation, vnd("100000", "CN")),
-                    () -> { if (cancel) { reservationService.cancel(reservation); } else { reservationService.noShow(reservation); } });
+                    () -> { if (cancel) { reservationService.cancel(reservation, cancelRequest()); } else { reservationService.noShow(reservation, noShowRequest()); } });
 
             assertEquals(1, results.stream().filter(r -> !(r instanceof RuntimeException)).count(), results.toString());
             int active = count("SELECT COUNT(*) FROM payment WHERE reservation_id = ? AND stay_id IS NULL AND status = 'PAID'", reservation);

@@ -1,8 +1,10 @@
 package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.BookingContactUpdateRequest;
+import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
+import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.NotesUpdateRequest;
 import com.example.hotel.dto.booking.request.OtaReferenceCorrectionRequest;
 import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
@@ -158,27 +160,29 @@ public class ReservationController {
     }
 
     /**
-     * Hủy reservation đã xác nhận.
+     * Hủy reservation đã xác nhận, yêu cầu một lý do hủy hợp lệ.
      *
      * @param id định danh reservation
+     * @param request the required cancellation reason
      * @return reservation sau khi hủy
      */
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
-    Response cancel(@PathVariable UUID id) {
-        return service.cancel(id);
+    Response cancel(@PathVariable UUID id, @Valid @RequestBody CancelReservationRequest request) {
+        return service.cancel(id, request);
     }
 
     /**
-     * Đánh dấu reservation đã xác nhận là no-show.
+     * Đánh dấu reservation đã xác nhận là no-show, yêu cầu một lý do bắt buộc.
      *
      * @param id định danh reservation
+     * @param request the required no-show reason
      * @return reservation sau khi cập nhật
      */
     @PostMapping("/{id}/no-show")
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
-    Response noShow(@PathVariable UUID id) {
-        return service.noShow(id);
+    Response noShow(@PathVariable UUID id, @Valid @RequestBody NoShowReservationRequest request) {
+        return service.noShow(id, request);
     }
 
     /**

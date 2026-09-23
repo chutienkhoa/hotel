@@ -2,7 +2,10 @@ package com.example.hotel.controller.booking;
 
 import com.example.hotel.common.TableSorts;
 import com.example.hotel.common.PaginationSupport;
+import com.example.hotel.common.i18n.UiMessages;
+import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
+import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.response.Response;
@@ -59,6 +62,7 @@ public class ReservationPageController {
     private final StayExtensionService stayExtensionService;
     private final com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
     private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
+    private final UiMessages messages;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -74,6 +78,7 @@ public class ReservationPageController {
      * @param stayExtensionService service used to supply the extension history and derived accommodation totals
      * @param folioReconciliationService read-only financial integrity diagnostic
      * @param prepaymentService prepayment summary of a CONFIRMED Reservation (MANAGE_PAYMENT only)
+     * @param messageSource localized UI message source
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
@@ -85,7 +90,8 @@ public class ReservationPageController {
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
             StayExtensionService stayExtensionService,
             com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService,
-            com.example.hotel.service.booking.PrepaymentService prepaymentService) {
+            com.example.hotel.service.booking.PrepaymentService prepaymentService,
+            org.springframework.context.MessageSource messageSource) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
@@ -96,6 +102,7 @@ public class ReservationPageController {
         this.stayExtensionService = stayExtensionService;
         this.folioReconciliationService = folioReconciliationService;
         this.prepaymentService = prepaymentService;
+        this.messages = new UiMessages(messageSource);
     }
 
     /**
@@ -330,31 +337,62 @@ public class ReservationPageController {
     }
 
     /**
-     * Cancels a confirmed reservation through the existing reservation service operation.
+     * Cancels a confirmed reservation through the existing reservation service operation, requiring the
+     * submitted structured cancellation reason.
      *
      * @param id reservation identifier
+     * @param form submitted cancellation reason
+     * @param bindingResult structural validation result
      * @param redirectAttributes attributes used to show post-redirect feedback
      * @return a redirect to the reservation detail page
      */
     @PostMapping("/reservations/{id}/cancel")
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
-    public String cancel(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
-        return redirectAfterAction(id, redirectAttributes, "Reservation cancelled successfully.",
-                () -> reservationService.cancel(id));
+    public String cancel(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("cancelForm") CancelReservationRequest form,
+            BindingResult bindingResult,
+            RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("errorMessage", firstFieldError(bindingResult));
+            return "redirect:/reservations/" + id;
+        }
+        return redirectAfterAction(id, redirectAttributes, messages.get("reservation.cancel.success"),
+                () -> reservationService.cancel(id, form));
     }
 
     /**
-     * Marks a confirmed reservation as no-show through the existing service operation.
+     * Marks a confirmed reservation as no-show through the existing service operation, requiring the
+     * submitted no-show reason.
      *
      * @param id reservation identifier
+     * @param form submitted no-show reason
+     * @param bindingResult structural validation result
      * @param redirectAttributes attributes used to show post-redirect feedback
      * @return a redirect to the reservation detail page
      */
     @PostMapping("/reservations/{id}/no-show")
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
-    public String noShow(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
-        return redirectAfterAction(id, redirectAttributes, "Reservation marked as no-show.",
-                () -> reservationService.noShow(id));
+    public String noShow(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("noShowForm") NoShowReservationRequest form,
+            BindingResult bindingResult,
+            RedirectAttributes redirectAttributes) {
+        if (bindingResult.hasErrors()) {
+            redirectAttributes.addFlashAttribute("errorMessage", firstFieldError(bindingResult));
+            return "redirect:/reservations/" + id;
+        }
+        return redirectAfterAction(id, redirectAttributes, messages.get("reservation.noShow.success"),
+                () -> reservationService.noShow(id, form));
+    }
+
+    /** Returns the first field-level validation error message, already resolved in the request locale. */
+    private String firstFieldError(BindingResult bindingResult) {
+        var fieldError = bindingResult.getFieldErrors().stream().findFirst();
+        return fieldError.map(org.springframework.validation.FieldError::getDefaultMessage)
+                .orElse(bindingResult.getGlobalError() == null
+                        ? "Invalid request"
+                        : bindingResult.getGlobalError().getDefaultMessage());
     }
 
     /**
@@ -594,9 +632,7 @@ public class ReservationPageController {
      * @return a safe message for the browser
      */
     private String safeMessage(ResponseStatusException exception) {
-        return exception.getReason() == null
-                ? HttpStatus.valueOf(exception.getStatusCode().value()).getReasonPhrase()
-                : exception.getReason();
+        return messages.error(exception);
     }
 
     /**

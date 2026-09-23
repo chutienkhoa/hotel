@@ -4764,4 +4764,60 @@ phải lịch sử nhiều phiên bản, và không phải CRM.
   không CRM, không company/travel-agent profile, không channel manager, không messaging/email/SMS, không nhiều
   Booking Contact trên một Reservation.
 
+## 75. Cancellation Reason + No-show Guard/Reason (V1)
+
+Reservation có thêm ba trường mới: `cancellationReasonCode`, `cancellationReasonDetail` (khi hủy), và
+`noShowReason` (khi đánh dấu no-show). Đây KHÔNG phải cancellation fee engine, KHÔNG tự động tịch thu tiền, KHÔNG
+tự động chuyển NO_SHOW theo lịch, và KHÔNG có bảng lịch sử/entity lý do riêng.
+
+- **State machine không đổi**: `Cancel` (CONFIRMED → CANCELLED) và `No-show` (CONFIRMED → NO_SHOW) vẫn chỉ khả
+  dụng từ CONFIRMED; mọi trạng thái khác tiếp tục bị từ chối với lỗi 409 hiện có. Không thêm transition, không
+  bypass state validation.
+- **Cancellation Reason — bắt buộc**: mọi lần `Cancel` mới phải cung cấp `cancellationReasonCode` (enum
+  `CancellationReasonCode`: `GUEST_REQUEST`, `CHANGE_OF_PLANS`, `DUPLICATE_BOOKING`, `PAYMENT_ISSUE`,
+  `HOTEL_OPERATIONAL`, `OTA_CANCELLATION`, `OTHER`). `cancellationReasonDetail` là tùy chọn, TRỪ khi
+  `cancellationReasonCode = OTHER` thì bắt buộc không rỗng (kiểm tra ở Bean Validation, service, và một
+  DB CHECK constraint). `OTA_CANCELLATION` chỉ có nghĩa "PMS ghi nhận hủy vì OTA đã hủy đặt phòng" — KHÔNG kéo
+  theo OTA synchronization, channel manager, hay tích hợp API nào.
+- **No-show Reason — bắt buộc**: mọi lần `No-show` mới phải cung cấp `noShowReason` (free text bắt buộc, không
+  category/enum). Không đại diện cho việc biết chắc lý do thật của khách; chỉ là lời giải thích vận hành của
+  nhân viên (ví dụ "Guest did not arrive and could not be contacted.").
+- **No-show Temporal Guard — bất biến nghiệp vụ bắt buộc**: chỉ được đánh dấu NO_SHOW khi
+  `reservation.checkInDate < hotelToday` (hotel Clock hiện có, KHÔNG dùng `LocalDate.now()` trần). Arrival hôm
+  nay (`checkInDate == hotelToday`) và arrival tương lai (`checkInDate > hotelToday`) đều bị từ chối (409, message
+  key `reservation.noShow.error.notEligible`). Không có check-in cutoff giờ trong ngày (không có 18:00, 22:00,
+  23:59, midnight, hay giờ đến dự kiến) — repository chỉ có ngữ nghĩa `LocalDate`.
+- **Quyền không đổi**: cả hai thao tác tiếp tục yêu cầu `MANAGE_BOOKING` (ADMIN/MANAGER), giống hệt trước khi có
+  tính năng này. STAFF KHÔNG có quyền Cancel hay No-show trước đây và vẫn không có sau tính năng này — không
+  permission mới được tạo.
+- **Prepayment không đổi**: active PAID prepayment (chưa gắn Stay) tiếp tục chặn cả Cancel và No-show; nhân viên
+  phải hoàn tiền trước ("refund first" giữ nguyên). Không có forfeiture, không có phí hủy/no-show tự động.
+- **Bất biến sau khi chuyển trạng thái**: lý do được ghi đúng một lần tại thời điểm transition (CANCELLED/NO_SHOW
+  là trạng thái cuối, không có transition quay lại nên không có đường sửa lại lý do); không có API sửa lý do
+  riêng, không có entity lịch sử lý do.
+- **Dữ liệu lịch sử**: ba cột mới NULLABLE. Reservation CANCELLED/NO_SHOW đã tồn tại trước migration V37 giữ
+  NULL vĩnh viễn — không backfill, không suy đoán giá trị UNKNOWN/OTHER/legacy. Reservation Detail hiển thị
+  trạng thái "No reason recorded" trung tính cho các dòng lịch sử này thay vì bịa lý do.
+- **AuditLog — quy tắc riêng tư giữ nguyên**: `CANCEL` và `NO_SHOW` tiếp tục chỉ ghi state transition
+  (`oldValue`/`newValue` là tên trạng thái trước/sau), giống mọi action hiện có. `cancellationReasonDetail` và
+  `noShowReason` KHÔNG BAO GIỜ được sao chép vào AuditLog, theo đúng nguyên tắc riêng tư đã áp dụng cho Booking
+  Contact/Notes (mục 74) và Room Change (mục 8.3).
+- **Tồn kho không đổi**: `ReservationRoom` tiếp tục được giữ nguyên làm snapshot lịch sử; không xóa, không đổi
+  `Room.status`. Availability tiếp tục tự do vì conflict query chỉ tính Reservation `CONFIRMED`, không cần dọn
+  dẹp thủ công.
+- **Khóa/transaction không đổi**: Cancel/No-show tiếp tục chỉ khóa Reservation (`PESSIMISTIC_WRITE`), không khóa
+  Room, cùng transaction với việc ghi lý do — không có lock mới, không đổi thứ tự khóa hiện có với Check-in,
+  Prepayment/refund, Date Change, Guest Composition, Room Reassignment, Booking Contact/Notes.
+- **Giao diện — tối thiểu**: form Cancel trên Reservation Detail thêm dropdown lý do (bắt buộc) và ô chi tiết
+  (bắt buộc khi OTHER); form No-show thêm ô lý do bắt buộc. Reservation Detail hiển thị lý do đã lưu cho
+  Reservation CANCELLED/NO_SHOW. Không có màn hình mới, không đổi Front Desk, không đổi báo cáo
+  (Monthly Financial/Occupancy/Performance Excel/PDF) — cancellation/no-show reason analytics là V2.
+
+## 76. V2 / Out of Scope (Cancellation Reason + No-show)
+
+Hoãn tới V2, không triển khai trong mục 75: cancellation fee engine, automatic prepayment forfeiture, automatic
+no-show scheduler/night audit, configurable check-in cutoff, same-day no-show override, OTA cancellation
+synchronization, channel manager, cancellation/no-show analytics dashboard, generalized lifecycle-event/reason
+framework dùng chung nhiều thao tác, reservation reinstatement.
+
 **End of Specification v1.0**

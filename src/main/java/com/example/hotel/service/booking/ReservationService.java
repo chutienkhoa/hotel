@@ -1,13 +1,16 @@
 package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.BookingContactUpdateRequest;
+import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.GuestCompositionUpdateRequest;
+import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.NotesUpdateRequest;
 import com.example.hotel.dto.booking.request.OtaReferenceCorrectionRequest;
 import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ArrivalIssueCode;
+import com.example.hotel.entity.booking.CancellationReasonCode;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.BookingSource;
@@ -660,22 +663,27 @@ public class ReservationService {
     }
 
     /**
-     * Hủy reservation đã xác nhận.
+     * Hủy reservation đã xác nhận, yêu cầu một lý do hủy hợp lệ. The reason is stored on the Reservation and
+     * is never duplicated into {@link AuditLog}; only the state transition is audited.
      *
      * @param id định danh reservation
+     * @param request the required cancellation reason
      * @return reservation sau khi hủy
      */
     @Transactional
-    public Response cancel(UUID id) {
+    public Response cancel(UUID id, CancelReservationRequest request) {
         CurrentUser user = currentUser();
         Reservation reservation = loadForUpdate(id);
         ReservationStatus previousStatus = reservation.getStatus();
+        CancellationReasonCode reasonCode = request == null ? null : request.cancellationReasonCode();
+        String reasonDetail = trimToNull(request == null ? null : request.cancellationReasonDetail());
         if (previousStatus == ReservationStatus.CONFIRMED) {
+            requireValidCancellationReason(reasonCode, reasonDetail);
             prepayments.requireNoActivePrepayments(id, "payment.prepayment.error.blocksCancel",
                     "This reservation has active prepayments. Refund them before cancellation.");
         }
         try {
-            reservation.cancel();
+            reservation.cancel(reasonCode, reasonDetail);
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
         }
@@ -684,29 +692,65 @@ public class ReservationService {
         return response(reservation);
     }
 
+    /** Re-validates the cancellation reason server-side, independent of DTO-level Bean Validation. */
+    private void requireValidCancellationReason(CancellationReasonCode reasonCode, String trimmedDetail) {
+        if (reasonCode == null) {
+            throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "reservation.cancel.error.reasonRequired", "Cancellation reason is required");
+        }
+        if (reasonCode == CancellationReasonCode.OTHER && trimmedDetail == null) {
+            throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "reservation.cancel.error.detailRequiredForOther",
+                    "Cancellation reason detail is required when reason is OTHER");
+        }
+    }
+
     /**
-     * Đánh dấu reservation đã xác nhận là no-show.
+     * Đánh dấu reservation đã xác nhận là no-show, yêu cầu một lý do bắt buộc và chỉ khi ngày nhận phòng đã
+     * qua (theo hotel Clock): a same-day or future arrival cannot be marked NO_SHOW. The reason is stored on
+     * the Reservation and is never duplicated into {@link AuditLog}; only the state transition is audited.
      *
      * @param id định danh reservation
+     * @param request the required no-show reason
      * @return reservation sau khi cập nhật
      */
     @Transactional
-    public Response noShow(UUID id) {
+    public Response noShow(UUID id, NoShowReservationRequest request) {
         CurrentUser user = currentUser();
         Reservation reservation = loadForUpdate(id);
         ReservationStatus previousStatus = reservation.getStatus();
+        String trimmedReason = trimToNull(request == null ? null : request.noShowReason());
         if (previousStatus == ReservationStatus.CONFIRMED) {
+            if (trimmedReason == null) {
+                throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reservation.noShow.error.reasonRequired", "No-show reason is required");
+            }
+            LocalDate hotelToday = LocalDate.now(clock);
+            if (!reservation.getCheckInDate().isBefore(hotelToday)) {
+                throw new LocalizedResponseStatusException(HttpStatus.CONFLICT,
+                        "reservation.noShow.error.notEligible",
+                        "No-show is only allowed once the check-in date has passed");
+            }
             prepayments.requireNoActivePrepayments(id, "payment.prepayment.error.blocksNoShow",
                     "This reservation has active prepayments. Refund them before marking no-show.");
         }
         try {
-            reservation.noShow();
+            reservation.noShow(trimmedReason);
         } catch (IllegalStateException exception) {
             throw conflict(exception.getMessage());
         }
         reservation.audit(user.id());
         audit(user, "NO_SHOW", reservation, previousStatus.name(), reservation.getStatus().name());
         return response(reservation);
+    }
+
+    /** Trims a submitted reason value; blank and {@code null} both become {@code null}. */
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

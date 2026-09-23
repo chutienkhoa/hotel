@@ -3,6 +3,7 @@ package com.example.hotel.booking;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.example.hotel.entity.booking.CancellationReasonCode;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
@@ -48,9 +49,43 @@ class ReservationTest {
     void confirmedCanCancelOrNoShowButTerminalStatesCannotTransition() {
         Reservation reservation = reservation();
         reservation.confirm();
-        reservation.cancel();
+        reservation.cancel(CancellationReasonCode.GUEST_REQUEST, null);
         assertEquals(ReservationStatus.CANCELLED, reservation.getStatus());
         assertThrows(IllegalStateException.class, reservation::checkIn);
+    }
+
+    /** Confirms cancellation persists the structured reason and optional detail. */
+    @Test
+    void cancelPersistsReasonCodeAndDetail() {
+        Reservation reservation = reservation();
+        reservation.confirm();
+        reservation.cancel(CancellationReasonCode.OTHER, "Guest called to cancel by phone");
+
+        assertEquals(CancellationReasonCode.OTHER, reservation.getCancellationReasonCode());
+        assertEquals("Guest called to cancel by phone", reservation.getCancellationReasonDetail());
+    }
+
+    /** Confirms no-show persists the required free-text reason. */
+    @Test
+    void noShowPersistsReason() {
+        Reservation reservation = reservation();
+        reservation.confirm();
+        reservation.noShow("Guest did not arrive and could not be contacted.");
+
+        assertEquals(ReservationStatus.NO_SHOW, reservation.getStatus());
+        assertEquals("Guest did not arrive and could not be contacted.", reservation.getNoShowReason());
+    }
+
+    /** Confirms cancelling an already-terminal reservation cannot overwrite its recorded reason. */
+    @Test
+    void cancelReasonIsImmutableOnceCancelled() {
+        Reservation reservation = reservation();
+        reservation.confirm();
+        reservation.cancel(CancellationReasonCode.GUEST_REQUEST, null);
+
+        assertThrows(IllegalStateException.class,
+                () -> reservation.cancel(CancellationReasonCode.OTHER, "different reason"));
+        assertEquals(CancellationReasonCode.GUEST_REQUEST, reservation.getCancellationReasonCode());
     }
 
     /** Xác nhận chỉ reservation đã confirm mới được check-in. */
@@ -98,7 +133,7 @@ class ReservationTest {
         Reservation reservation = reservation();
 
         reservation.confirm();
-        reservation.cancel();
+        reservation.cancel(CancellationReasonCode.GUEST_REQUEST, null);
 
         assertEquals(RESERVATION_NUMBER, reservation.getReservationNumber());
     }
@@ -285,9 +320,9 @@ class ReservationTest {
         Reservation reservation = reservation();
         reservation.confirm();
         if (status == ReservationStatus.CANCELLED) {
-            reservation.cancel();
+            reservation.cancel(CancellationReasonCode.GUEST_REQUEST, null);
         } else if (status == ReservationStatus.NO_SHOW) {
-            reservation.noShow();
+            reservation.noShow("Guest did not arrive and could not be contacted.");
         } else if (status == ReservationStatus.CHECKED_IN || status == ReservationStatus.CHECKED_OUT) {
             reservation.checkIn();
             if (status == ReservationStatus.CHECKED_OUT) {

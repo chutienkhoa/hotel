@@ -613,6 +613,14 @@ fieldset,
   display: flex;
   justify-content: flex-end;
 }
+.actions form.reservation-reason-form {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+}
+.reservation-reason-form .form-field {
+  margin-bottom: 0;
+}
 
 .confirmation-dialog {
   background: var(--color-surface);

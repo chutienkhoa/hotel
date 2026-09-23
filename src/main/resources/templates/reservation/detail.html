@@ -178,6 +178,39 @@
                         </div>
                     </div>
 
+                    <div class="reservation-info-item" id="cancellation-reason-item" th:if="${reservation.status == 'CANCELLED'}">
+                        <span class="reservation-info-icon reservation-info-icon--amber">
+                            <svg th:replace="~{layout/icons :: minusCircle}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.cancel.reason.title}">Cancellation reason</p>
+                            <p class="reservation-info-value" id="cancellation-reason-code"
+                               th:if="${reservation.cancellationReasonCode != null}"
+                               th:text="${reservation.cancellationReasonCode.displayName}">Guest request</p>
+                            <p class="reservation-info-secondary" id="cancellation-reason-detail"
+                               th:if="${reservation.cancellationReasonDetail != null}"
+                               th:text="${reservation.cancellationReasonDetail}">Detail</p>
+                            <p class="reservation-info-value" id="cancellation-reason-missing"
+                               th:if="${reservation.cancellationReasonCode == null}"
+                               th:text="#{reservation.cancel.reason.notRecorded}">No reason recorded</p>
+                        </div>
+                    </div>
+
+                    <div class="reservation-info-item" id="no-show-reason-item" th:if="${reservation.status == 'NO_SHOW'}">
+                        <span class="reservation-info-icon reservation-info-icon--amber">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                        </span>
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.noShow.reason.title}">No-show reason</p>
+                            <p class="reservation-info-value" id="no-show-reason-text"
+                               th:if="${reservation.noShowReason != null}"
+                               th:text="${reservation.noShowReason}">Reason</p>
+                            <p class="reservation-info-value" id="no-show-reason-missing"
+                               th:if="${reservation.noShowReason == null}"
+                               th:text="#{reservation.noShow.reason.notRecorded}">No reason recorded</p>
+                        </div>
+                    </div>
+
                     <th:block th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
                         <div class="reservation-info-item" id="original-booking-total">
                             <div class="reservation-info-content">
@@ -474,21 +507,37 @@
                     <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${reservation.id})}"
                        th:if="${reservation.status == 'CONFIRMED' and canCheckIn}">Check-in</a>
 
-                    <form data-confirm-label="Cancel reservation" data-confirm-severity="DANGER"
+                    <form class="reservation-reason-form" data-confirm-label="Cancel reservation" data-confirm-severity="DANGER"
                           data-confirm-title="Cancel reservation" method="post"
                           th:action="@{/reservations/{id}/cancel(id=${reservation.id})}"
                           th:attr="data-confirm-message=|Cancel reservation ${reservation.reservationNumber}?|"
                           th:if="${reservation.status == 'CONFIRMED' and canManageBooking}">
                         <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        <div class="form-field">
+                            <label for="cancellationReasonCode" th:text="#{reservation.cancel.reasonCode.label}">Cancellation reason</label>
+                            <select id="cancellationReasonCode" name="cancellationReasonCode" required>
+                                <option th:text="#{reservation.cancel.reasonCode.placeholder}" value="">Select a reason</option>
+                                <option th:each="code : ${T(com.example.hotel.entity.booking.CancellationReasonCode).values()}"
+                                        th:text="${code.displayName}" th:value="${code}">Guest request</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label for="cancellationReasonDetail" th:text="#{reservation.cancel.reasonDetail.label}">Detail (required for Other)</label>
+                            <textarea id="cancellationReasonDetail" maxlength="2000" name="cancellationReasonDetail"></textarea>
+                        </div>
                         <button class="button button-danger" type="submit">Cancel reservation</button>
                     </form>
 
-                    <form data-confirm-label="Mark no-show" data-confirm-severity="DANGER"
+                    <form class="reservation-reason-form" data-confirm-label="Mark no-show" data-confirm-severity="DANGER"
                           data-confirm-title="Mark reservation as no-show" method="post"
                           th:action="@{/reservations/{id}/no-show(id=${reservation.id})}"
                           th:attr="data-confirm-message=|Mark reservation ${reservation.reservationNumber} as no-show?|"
                           th:if="${reservation.status == 'CONFIRMED' and canManageBooking}">
                         <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        <div class="form-field">
+                            <label for="noShowReason" th:text="#{reservation.noShow.reason.label}">No-show reason</label>
+                            <textarea id="noShowReason" maxlength="2000" name="noShowReason" required></textarea>
+                        </div>
                         <button class="button button-secondary" type="submit">Mark no-show</button>
                     </form>
 

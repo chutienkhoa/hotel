@@ -100,7 +100,10 @@ public class ReservationMapper {
                 effectiveContactName,
                 effectiveContactPhone,
                 effectiveContactEmail,
-                bookingContactFromPrimaryGuest);
+                bookingContactFromPrimaryGuest,
+                reservation.getCancellationReasonCode(),
+                reservation.getCancellationReasonDetail(),
+                reservation.getNoShowReason());
     }
 
     /**
