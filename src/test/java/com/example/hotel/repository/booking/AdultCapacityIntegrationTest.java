@@ -16,6 +16,7 @@ import com.example.hotel.service.booking.ReservationRoomReassignmentService;
 import com.example.hotel.service.booking.ReservationService;
 import jakarta.persistence.EntityManagerFactory;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -70,6 +71,9 @@ class AdultCapacityIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private Clock clock;
 
     private UUID user;
     private UUID guest;
@@ -141,7 +145,7 @@ class AdultCapacityIntegrationTest {
     @Test
     void shouldBlockCheckInWhenCapacityDropsAfterConfirmation() {
         UUID room = room("C", DOUBLE_TYPE);
-        LocalDate in = LocalDate.now();
+        LocalDate in = LocalDate.now(clock);
         Response draft = service.create(request(in, 2, 0, room));
         service.confirm(draft.id());
         jdbc.update("UPDATE room_type SET capacity = 1 WHERE id = ?", DOUBLE_TYPE);

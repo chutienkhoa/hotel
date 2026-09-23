@@ -7,6 +7,7 @@ import com.example.hotel.dto.room.request.RoomSearchCriteria;
 import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.service.room.RoomQueryService;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -234,8 +235,8 @@ class RoomRepositorySearchIntegrationTest {
                 userId,
                 "room-search-" + userId,
                 "not-used-in-test",
-                Instant.now(),
-                Instant.now());
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now()));
         return userId;
     }
 
@@ -251,9 +252,9 @@ class RoomRepositorySearchIntegrationTest {
                 roomTypeId,
                 floor,
                 status.name(),
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 userId,
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 userId);
     }
 }

@@ -78,16 +78,18 @@ class MonthlyFinancialReportIntegrationTest {
     /** Confirms only CHECKED_IN and CHECKED_OUT reservations count, allocated by night across months. */
     @Test
     void shouldCountOnlyEligibleStatusesAndAllocateAcrossMonths() {
+        // Dates are safely in the past so a CHECKED_IN row is not capped by the real hotel clock (spec 61.6):
+        // recognizedEnd only limits a CHECKED_IN interval to nights that have already started.
         for (String status : List.of("DRAFT", "CONFIRMED", "CANCELLED", "NO_SHOW")) {
-            reservationRoom(status, "VND", "2026-09-30", "2026-10-03", "1000000");
+            reservationRoom(status, "VND", "2020-09-30", "2020-10-03", "1000000");
         }
-        reservationRoom("CHECKED_IN", "VND", "2026-09-30", "2026-10-03", "1000000");
-        reservationRoom("CHECKED_OUT", "VND", "2026-09-30", "2026-10-03", "1000000");
+        reservationRoom("CHECKED_IN", "VND", "2020-09-30", "2020-10-03", "1000000");
+        reservationRoom("CHECKED_OUT", "VND", "2020-09-30", "2020-10-03", "1000000");
 
-        assertMoney("2000000", service.report(YearMonth.of(2026, 9)).roomRevenue());
-        assertMoney("4000000", service.report(YearMonth.of(2026, 10)).roomRevenue());
-        assertMoney("0", service.report(YearMonth.of(2026, 8)).roomRevenue());
-        assertMoney("0", service.report(YearMonth.of(2026, 11)).roomRevenue());
+        assertMoney("2000000", service.report(YearMonth.of(2020, 9)).roomRevenue());
+        assertMoney("4000000", service.report(YearMonth.of(2020, 10)).roomRevenue());
+        assertMoney("0", service.report(YearMonth.of(2020, 8)).roomRevenue());
+        assertMoney("0", service.report(YearMonth.of(2020, 11)).roomRevenue());
     }
 
     /** Confirms the overlap boundaries: a stay ending on the 1st and one starting on the last day. */

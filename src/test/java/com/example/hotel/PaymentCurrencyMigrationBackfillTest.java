@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
@@ -36,6 +37,7 @@ class PaymentCurrencyMigrationBackfillTest {
     @Test
     void shouldBackfillVndReservationPaymentAsVnd() {
         DataSource dataSource = dataSource();
+        clean(dataSource);
         migrate(dataSource, "12");
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         UUID userId = insertUser(jdbcTemplate);
@@ -53,6 +55,7 @@ class PaymentCurrencyMigrationBackfillTest {
     @Test
     void shouldBackfillUsdReservationPaymentAsUsd() {
         DataSource dataSource = dataSource();
+        clean(dataSource);
         migrate(dataSource, "12");
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         UUID userId = insertUser(jdbcTemplate);
@@ -101,13 +104,18 @@ class PaymentCurrencyMigrationBackfillTest {
         configuration.load().migrate();
     }
 
+    /** Resets the shared Testcontainers database so each test starts from an empty schema. */
+    private void clean(DataSource dataSource) {
+        Flyway.configure().dataSource(dataSource).cleanDisabled(false).load().clean();
+    }
+
     /** Inserts one authenticated audit user required by fixture rows. */
     private UUID insertUser(JdbcTemplate jdbcTemplate) {
         UUID userId = UUID.randomUUID();
         jdbcTemplate.update(
                 "INSERT INTO app_user (id, username, password_hash, active, created_at, updated_at) "
                         + "VALUES (?, ?, ?, TRUE, ?, ?)",
-                userId, "migration-test-" + userId, "not-used-in-test", Instant.now(), Instant.now());
+                userId, "migration-test-" + userId, "not-used-in-test", Timestamp.from(Instant.now()), Timestamp.from(Instant.now()));
         return userId;
     }
 
@@ -117,7 +125,7 @@ class PaymentCurrencyMigrationBackfillTest {
         jdbcTemplate.update(
                 "INSERT INTO guest (id, guest_code, created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, ?, ?, ?)",
-                guestId, "G" + guestId.toString().substring(0, 8), Instant.now(), userId, Instant.now(), userId);
+                guestId, "G" + guestId.toString().substring(0, 8), Timestamp.from(Instant.now()), userId, Timestamp.from(Instant.now()), userId);
         return guestId;
     }
 
@@ -131,16 +139,16 @@ class PaymentCurrencyMigrationBackfillTest {
                         + "created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, 'DIRECT', NULL, 'CHECKED_IN', ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)",
                 reservationId,
-                "R-BACKFILL-" + reservationId,
+                "R-BACKFILL-" + reservationId.toString().substring(0, 8),
                 guestId,
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 checkIn,
                 checkIn.plusDays(1),
                 currency,
                 new BigDecimal("100.000000"),
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 userId,
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 userId);
         return reservationId;
     }
@@ -152,7 +160,7 @@ class PaymentCurrencyMigrationBackfillTest {
                 "INSERT INTO stay (id, reservation_id, status, actual_check_in_at, actual_check_out_at, "
                         + "created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, 'CHECKED_IN', ?, NULL, ?, ?, ?, ?)",
-                stayId, reservationId, Instant.now(), Instant.now(), userId, Instant.now(), userId);
+                stayId, reservationId, Timestamp.from(Instant.now()), Timestamp.from(Instant.now()), userId, Timestamp.from(Instant.now()), userId);
         return stayId;
     }
 
@@ -163,7 +171,7 @@ class PaymentCurrencyMigrationBackfillTest {
                 "INSERT INTO payment (id, stay_id, amount, method, status, paid_at, reference, "
                         + "created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, 'CASH', 'PENDING', NULL, NULL, ?, ?, ?, ?)",
-                paymentId, stayId, amount, Instant.now(), userId, Instant.now(), userId);
+                paymentId, stayId, amount, Timestamp.from(Instant.now()), userId, Timestamp.from(Instant.now()), userId);
         return paymentId;
     }
 }

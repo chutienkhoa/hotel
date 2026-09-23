@@ -10,6 +10,7 @@ import com.example.hotel.service.room.RoomImageService;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -158,7 +159,8 @@ class RoomImageIntegrationTest {
                 "INSERT INTO room_image (id, room_id, storage_key, original_filename, content_type, file_size, "
                         + "is_primary, created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, 'x.jpg', 'image/jpeg', 100, ?, ?, ?, ?, ?)",
-                UUID.randomUUID(), roomId, UUID.randomUUID() + ".jpg", primary, Instant.now(), user, Instant.now(), user);
+                UUID.randomUUID(), roomId, UUID.randomUUID() + ".jpg", primary, Timestamp.from(Instant.now()), user,
+                Timestamp.from(Instant.now()), user);
     }
 
     private int count(String sql, Object... args) {

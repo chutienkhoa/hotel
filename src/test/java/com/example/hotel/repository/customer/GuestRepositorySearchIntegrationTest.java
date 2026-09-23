@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.example.hotel.dto.customer.request.GuestSearchCriteria;
 import com.example.hotel.dto.customer.response.GuestListResponse;
 import com.example.hotel.service.customer.GuestQueryService;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -261,8 +262,8 @@ class GuestRepositorySearchIntegrationTest {
                 userId,
                 "guest-search-" + userId,
                 "not-used-in-test",
-                Instant.now(),
-                Instant.now());
+                Timestamp.from(Instant.now()),
+                Timestamp.from(Instant.now()));
         return userId;
     }
 
@@ -284,9 +285,9 @@ class GuestRepositorySearchIntegrationTest {
                 lastName,
                 email,
                 nationality,
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 userId,
-                Instant.now(),
+                Timestamp.from(Instant.now()),
                 userId);
     }
 }

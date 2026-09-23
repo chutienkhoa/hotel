@@ -235,28 +235,44 @@ class PrepaymentIntegrationTest {
     /**
      * Confirms voiding an erroneous PAID prepayment (e.g. wrong amount) is distinct from refunding
      * one: it becomes VOIDED (not REFUNDED), stops counting toward the active/cap total, and no
-     * longer blocks Cancel/No-show, exactly like a refunded prepayment would.
+     * longer blocks Cancel/No-show, exactly like a refunded prepayment would. Each step below proves
+     * exactly one invariant, in an order that never itself collides with the reservation-total cap:
+     * the erroneous row must fill the cap alone (so the $1 probe below proves it is really active),
+     * so proving the reference-reuse guard needs the cap freed again first, which the refund of the
+     * unrelated CORRECT prepayment (a different reference) provides without reopening the void.
      */
     @Test
     void shouldVoidErroneousPrepaymentAndFreeTheCapAndCancelGuard() {
         UUID reservation = fourMillion();
-        prepayments.record(reservation, vnd("5000000", "WRONG"));
-        // Overpayment cap already exceeded by the erroneous 5,000,000 row alone would reject a second
-        // record; assert it here to show the erroneous row really is active before it is voided.
+        prepayments.record(reservation, vnd("4000000", "WRONG"));
+        // The erroneous row alone already fills the cap and would reject a second record;
+        // assert it here to show the erroneous row really is active before it is voided.
         assertThrows(ResponseStatusException.class, () -> prepayments.record(reservation, vnd("1", "X")));
         UUID wrong = jdbc.queryForObject("SELECT id FROM payment WHERE reference = 'WRONG'", UUID.class);
 
+        // A: an erroneous PAID prepayment can be voided.
         prepayments.voidPrepayment(reservation, wrong, new PaymentVoidRequest("Wrong amount entered"));
-
         assertEquals(1, count("SELECT COUNT(*) FROM payment WHERE id = ? AND status = 'VOIDED'", wrong), "row remains, now VOIDED");
+
+        // B: voiding frees the cap entirely.
         assertEquals(0, BigDecimal.ZERO.compareTo(prepayments.summary(reservation).activeTotal()), "voided no longer active");
-        // The corrected amount can now be recorded under the cap.
+
+        // E: a correct replacement prepayment can now be recorded under the freed cap.
         prepayments.record(reservation, vnd("4000000", "CORRECT"));
         assertEquals(0, new BigDecimal("4000000").compareTo(prepayments.summary(reservation).activeTotal()));
-        // The reference is free again for reuse since VOIDED is ignored by the duplicate guard.
+        UUID correct = jdbc.queryForObject("SELECT id FROM payment WHERE reference = 'CORRECT'", UUID.class);
+
+        // Refund CORRECT (an ordinary, unrelated prepayment) to free the cap again before proving D:
+        // this is refund, not void, and its reference is 'CORRECT', so it cannot be what makes 'WRONG'
+        // reusable below — only the earlier void of the WRONG row does that.
+        prepayments.refund(reservation, correct, new PaymentRefundRequest("cleanup"));
+
+        // D: the 'WRONG' method+reference pair is free again for reuse, because VOIDED (unlike PAID)
+        // is ignored by the duplicate guard.
         prepayments.record(reservation, new PaymentCreateRequest(BigDecimal.ONE, PaymentCurrency.VND, null, PaymentMethod.BANK_TRANSFER, "WRONG"));
-        // Cancel is no longer blocked by the voided row (only the still-active CORRECT/WRONG-reused prepayments matter);
-        // refund the actives first to demonstrate the voided one truly does not participate in that guard.
+
+        // C: Cancel is no longer blocked by the voided row; refund the one still-active (reused)
+        // prepayment first to demonstrate the voided one truly does not participate in that guard.
         for (UUID id : jdbc.queryForList("SELECT id FROM payment WHERE reservation_id = ? AND status = 'PAID'", UUID.class, reservation)) {
             prepayments.refund(reservation, id, new PaymentRefundRequest("cleanup"));
         }

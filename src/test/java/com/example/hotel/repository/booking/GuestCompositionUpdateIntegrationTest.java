@@ -19,6 +19,7 @@ import com.example.hotel.service.booking.CheckInService;
 import com.example.hotel.service.booking.ReservationRoomReassignmentService;
 import com.example.hotel.service.booking.ReservationService;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,6 +70,9 @@ class GuestCompositionUpdateIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private Clock clock;
 
     private UUID user;
     private UUID primary;
@@ -184,7 +188,7 @@ class GuestCompositionUpdateIntegrationTest {
     /** Confirms the composition is frozen once checked in, and readiness/check-in derive from the updated count. */
     @Test
     void shouldFreezeAfterCheckInAndDeriveReadinessFromTheCurrentCount() {
-        Response reservation = confirmedReservation(2, 0, LocalDate.now(), room(DOUBLE_TYPE), room(SINGLE_TYPE));
+        Response reservation = confirmedReservation(2, 0, LocalDate.now(clock), room(DOUBLE_TYPE), room(SINGLE_TYPE));
         UUID id = reservation.id();
         service.updateConfirmedGuestComposition(id, request(3, 0));
 

@@ -29,13 +29,18 @@ class DemoDataSeederAdditionalRevenueIntegrationTest {
         assertEquals(12, count(jdbcTemplate,
                 "SELECT COUNT(DISTINCT EXTRACT(MONTH FROM revenue_date)) FROM additional_revenue WHERE EXTRACT(YEAR FROM revenue_date) = 2026"));
         assertEquals(0, count(jdbcTemplate,
-                "SELECT COUNT(*) FROM (SELECT EXTRACT(MONTH FROM revenue_date) month, COUNT(*) count FROM additional_revenue GROUP BY EXTRACT(MONTH FROM revenue_date)) grouped WHERE count <> 3"));
+                "SELECT COUNT(*) FROM (SELECT EXTRACT(MONTH FROM revenue_date) AS month, COUNT(*) AS count FROM additional_revenue GROUP BY EXTRACT(MONTH FROM revenue_date)) grouped WHERE count <> 3"));
         assertEquals(0, count(jdbcTemplate,
                 "SELECT COUNT(*) FROM additional_revenue WHERE EXTRACT(YEAR FROM revenue_date) <> 2026"));
 
         assertEquals(28, count(jdbcTemplate, "SELECT COUNT(*) FROM additional_revenue r JOIN additional_revenue_category c ON c.id = r.category_id WHERE c.code = 'ELECTRIC_CART_RENTAL'"));
         assertEquals(8, count(jdbcTemplate, "SELECT COUNT(*) FROM additional_revenue r JOIN additional_revenue_category c ON c.id = r.category_id WHERE c.code = 'OTHER'"));
-        assertEquals(0, count(jdbcTemplate, "SELECT COUNT(*) FROM additional_revenue_category WHERE code NOT IN ('ELECTRIC_CART_RENTAL', 'OTHER')"));
+        // V33 (folio revenue reconciliation) seeds 6 additional system categories for guest-folio-charge
+        // linking, independent of DemoDataSeeder; the demo distribution above already proves DemoDataSeeder's
+        // own rows only ever use the two demo categories (28 + 8 = 36 = total).
+        assertEquals(0, count(jdbcTemplate, "SELECT COUNT(*) FROM additional_revenue_category WHERE code NOT IN "
+                + "('ELECTRIC_CART_RENTAL', 'OTHER', 'GUEST_BREAKFAST', 'GUEST_EXTRA_BED', 'GUEST_LAUNDRY', "
+                + "'GUEST_MINIBAR', 'GUEST_SERVICE', 'GUEST_OTHER')"));
 
         assertEquals(32, count(jdbcTemplate, "SELECT COUNT(*) FROM additional_revenue WHERE status = 'RECORDED'"));
         assertEquals(4, count(jdbcTemplate, "SELECT COUNT(*) FROM additional_revenue WHERE status = 'VOIDED'"));
