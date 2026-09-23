@@ -65,6 +65,7 @@ class GuestServiceRevenueChargeTest {
         when(categories.findByCode(anyString())).thenAnswer(invocation ->
                 Optional.of(AdditionalRevenueCategory.create(invocation.getArgument(0), "n", null)));
         return new ChargeService(charges, stays, new ChargeMapper(), revenues, categories,
+                mock(com.example.hotel.repository.common.AuditLogRepository.class),
                 Clock.fixed(Instant.parse("2026-09-20T03:00:00Z"), ZONE));
     }
 

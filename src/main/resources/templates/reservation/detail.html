@@ -486,6 +486,33 @@
                 </ul>
             </section>
 
+            <section aria-labelledby="activity-heading" class="card reservation-detail-section" id="activity">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="activity-heading" th:text="#{reservation.activity.section.title}">Activity</h2>
+                    </div>
+                </div>
+                <p th:if="${#lists.isEmpty(activity)}" th:text="#{reservation.activity.empty}">No activity recorded yet.</p>
+                <div class="table-wrap" th:if="${!#lists.isEmpty(activity)}">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col" th:text="#{reservation.activity.column.time}">Time</th>
+                            <th scope="col" th:text="#{reservation.activity.column.actor}">By</th>
+                            <th scope="col" th:text="#{reservation.activity.column.action}">Activity</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="item : ${activity}">
+                            <td class="text-muted"><span th:replace="~{layout/datetime :: dateTime(${item.occurredAt})}">—</span></td>
+                            <td class="text-muted" th:text="${item.actorDisplay}">staff01</td>
+                            <td th:text="${item.label}">Reservation created</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <section aria-labelledby="actions-heading" class="card reservation-detail-section actions"
                      th:if="${reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN'}">
                 <div class="reservation-detail-section-header">

@@ -106,6 +106,9 @@ class ReservationContactAndNotesPageTest {
     private PrepaymentService prepaymentService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms both actions appear for MANAGE_BOOKING in DRAFT, CONFIRMED and CHECKED_IN, never for a viewer. */

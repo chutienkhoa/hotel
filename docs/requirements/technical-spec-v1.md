@@ -4871,4 +4871,49 @@ RoomType marketing imagery, đồng bộ ảnh với OTA, channel manager, video
 cross-room media management, sửa lỗi actual-content-validation cho Passport Image, AuditLog riêng cho thao
 tác Room Image.
 
+## 79. Operational Timeline / Activity (V1)
+
+Reservation Detail có thêm mục "Activity": danh sách hoạt động của một Reservation theo thứ tự thời gian, trả
+lời "chuyện gì / khi nào / ai làm". KHÔNG phải sổ kế toán, KHÔNG phải event sourcing, KHÔNG phải audit log
+console chung, KHÔNG phải event bus tích hợp hệ thống khác.
+
+- **Nguồn dữ liệu**: đọc trực tiếp từ bảng `audit_log` hiện có, lọc `entity_type='RESERVATION' AND
+  entity_id=:reservationId`, sắp theo `created_at ASC, id ASC`. KHÔNG thêm bảng timeline/event riêng, KHÔNG
+  thêm cột `journeyId`/`correlationId`/`reservationId` vào `audit_log`, KHÔNG cần migration: mọi hành động đã
+  ghi audit trong vòng đời Reservation/Stay/Room Change/Stay Extension/Prepayment/Payment đều đã ghi
+  `entity_type='RESERVATION'` với `entity_id` là chính Reservation, nên một truy vấn theo Reservation là đủ.
+- **Hai audit event nghiệp vụ mới**: `RECORD_CHARGE` (ghi khi tạo Charge thủ công qua `ChargeService.create`,
+  KHÔNG ghi cho ROOM charge tự động tạo bởi Check-in hay Stay Extension — hai luồng đó đã có sự kiện
+  `CHECK_IN`/`EXTEND_STAY` riêng, tránh trùng lặp) và `RECORD_PAYMENT` (ghi khi một Payment thường trở thành
+  PAID qua `PaymentService.recordPaid` hoặc `PaymentService.markPaid`; KHÔNG ghi khi tạo Payment còn PENDING).
+  `RECORD_PREPAYMENT`, `APPLY_PREPAYMENT`, `REFUND_PAYMENT` giữ nguyên, không trùng với `RECORD_PAYMENT` cho
+  cùng một thao tác. Ghi AuditLog trong CÙNG transaction với thao tác nghiệp vụ; rollback thao tác thì AuditLog
+  cũng rollback.
+- **AuditLog KHÔNG phải nguồn sự thật tài chính**: số tiền/trạng thái tài chính hiện tại luôn đọc từ bảng
+  `charge`/`payment`, KHÔNG parse `AuditLog.oldValue`/`newValue` để tính toán.
+- **Không hiển thị giá trị thô**: `AuditLog.oldValue`/`newValue` KHÔNG bao giờ đưa thẳng ra giao diện. Mỗi hành
+  động được ánh xạ sang một nhãn đã dịch (message key `reservation.activity.action.*`), hành động không xác
+  định (tương lai hoặc dữ liệu cũ) rơi về nhãn chung an toàn, không làm hỏng trang.
+- **Quyền xem**: theo quyền xem Reservation Detail hiện có (`VIEW_BOOKING`). Không tạo permission mới. Người
+  dùng chỉ có `VIEW_BOOKING` (không có `MANAGE_PAYMENT`) thấy được một hoạt động tài chính đã xảy ra (ví dụ
+  "Payment recorded") nhưng KHÔNG thấy số tiền/phương thức/tham chiếu thanh toán kèm theo trong V1.
+- **i18n**: nhãn dịch tại thời điểm hiển thị (render-time) qua hạ tầng EN/VI hiện có, giống mọi nhãn khác
+  trong hệ thống; AuditLog tiếp tục lưu mã hành động ổn định (`CONFIRM`, `CHECK_IN`, `RECORD_PAYMENT`, …).
+- **Không backfill lịch sử**: chỉ hiển thị các dòng AuditLog thực sự tồn tại; Reservation không có hoạt động
+  nào được ghi thì hiển thị danh sách rỗng, không tự suy diễn/tạo sự kiện giả cho lịch sử trước khi tính năng
+  này tồn tại.
+- **Không phân trang trong V1**: tải toàn bộ lịch sử của một Reservation cho trang chi tiết (quy mô 10-20
+  phòng), không có truy vấn timeline toàn cục.
+- **Không phải event bus tích hợp**: `AuditLog`/Activity Timeline vẫn là dữ liệu nội bộ vận hành. Nếu tương lai
+  cần tích hợp hệ thống khác (RMS, Booking Engine, Channel Manager), phải thiết kế cơ chế outbox/event/API
+  riêng, không tái sử dụng bảng này.
+
+## 80. V2 / Out of Scope (Operational Timeline)
+
+Hoãn tới V2, không triển khai trong mục 79: màn hình Audit Log toàn cục, bộ lọc/tìm kiếm/export hoạt động,
+phân trang, chính sách lưu trữ/retention, hiển thị số tiền/phương thức thanh toán chi tiết cho người chỉ có
+`VIEW_BOOKING`, actor SYSTEM cho hành động tự động, snapshot tên người dùng trên AuditLog, ghi AuditLog cho
+Guest/Room/Housekeeping/Room Image/Staff/User/Role/Expense/AdditionalRevenue, cơ chế event/outbox tích hợp hệ
+thống khác.
+
 **End of Specification v1.0**

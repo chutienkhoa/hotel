@@ -468,6 +468,68 @@ class PaymentServiceTest {
         verify(paymentRepository, org.mockito.Mockito.times(1)).save(any(Payment.class));
     }
 
+    /** Confirms record-paid writes exactly one RECORD_PAYMENT audit entry targeting the Reservation. */
+    @Test
+    void shouldWriteRecordPaymentAuditLogOnRecordPaid() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        setCurrentUser(userId);
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("100"));
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service(paymentRepository, stayRepository, chargeRepository, auditLogRepository, Clock.systemDefaultZone())
+                .recordPaid(stayId, request(BigDecimal.TEN, PaymentMethod.CASH, null));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository, org.mockito.Mockito.times(1)).save(captor.capture());
+        AuditLog audit = captor.getValue();
+        assertEquals("RECORD_PAYMENT", audit.getAction());
+        assertEquals(stay.getReservation().getId(), audit.getEntityId());
+        assertEquals(userId, audit.getUserId());
+    }
+
+    /** Confirms mark-paid (the two-step confirmation flow) also writes exactly one RECORD_PAYMENT entry. */
+    @Test
+    void shouldWriteRecordPaymentAuditLogOnMarkPaid() {
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        Fixture fixture = transitionFixture(
+                BigDecimal.TEN, new BigDecimal("100"), new BigDecimal("90"), auditLogRepository);
+
+        fixture.service().markPaid(fixture.payment().getId());
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository, org.mockito.Mockito.times(1)).save(captor.capture());
+        assertEquals("RECORD_PAYMENT", captor.getValue().getAction());
+    }
+
+    /** Confirms creating a still-PENDING Payment writes no RECORD_PAYMENT entry: it is not yet recorded as paid. */
+    @Test
+    void shouldNotWriteRecordPaymentAuditLogForPendingCreation() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId, StayStatus.CHECKED_IN);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findById(stayId)).thenReturn(Optional.of(stay));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service(paymentRepository, stayRepository, chargeRepository, auditLogRepository, Clock.systemDefaultZone())
+                .create(stayId, request(BigDecimal.TEN, PaymentMethod.CASH, null));
+
+        verify(auditLogRepository, org.mockito.Mockito.never()).save(any(AuditLog.class));
+    }
+
     /** Confirms record-paid derives paidAt from the injected authoritative Clock, not wall-clock time. */
     @Test
     void shouldRecordPaidUsingAuthoritativeClock() {
@@ -672,8 +734,9 @@ class PaymentServiceTest {
                 .refund(payment.getId(), new PaymentRefundRequest("Guest cancelled"));
 
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
-        verify(auditLogRepository).save(captor.capture());
-        assertNotNull(captor.getValue());
+        // Exactly one audit row: refund must never also write a RECORD_PAYMENT entry.
+        verify(auditLogRepository, org.mockito.Mockito.times(1)).save(captor.capture());
+        assertEquals("REFUND_PAYMENT", captor.getValue().getAction());
     }
 
     /** Confirms invalid record-paid input returns the standard bad-request response. */
@@ -774,6 +837,12 @@ class PaymentServiceTest {
 
     /** Builds a fixture for a state-transition test using a same-currency VND Payment. */
     private Fixture transitionFixture(BigDecimal paymentAmount, BigDecimal totalCharges, BigDecimal totalPaid) {
+        return transitionFixture(paymentAmount, totalCharges, totalPaid, mock(AuditLogRepository.class));
+    }
+
+    /** Builds a fixture for a state-transition test with an explicit AuditLogRepository to inspect. */
+    private Fixture transitionFixture(
+            BigDecimal paymentAmount, BigDecimal totalCharges, BigDecimal totalPaid, AuditLogRepository auditLogRepository) {
         PaymentRepository paymentRepository = mock(PaymentRepository.class);
         StayRepository stayRepository = mock(StayRepository.class);
         ChargeRepository chargeRepository = mock(ChargeRepository.class);
@@ -789,7 +858,9 @@ class PaymentServiceTest {
         when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
                 .thenReturn(totalPaid);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        return new Fixture(service(paymentRepository, stayRepository, chargeRepository), paymentRepository, stayRepository, stay, payment);
+        PaymentService service = service(
+                paymentRepository, stayRepository, chargeRepository, auditLogRepository, Clock.systemDefaultZone());
+        return new Fixture(service, paymentRepository, stayRepository, stay, payment);
     }
 
     /** Creates a client-controlled, same-currency (VND) Payment request fixture. */

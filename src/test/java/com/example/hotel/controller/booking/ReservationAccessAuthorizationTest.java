@@ -103,6 +103,9 @@ class ReservationAccessAuthorizationTest {
     private com.example.hotel.service.booking.PrepaymentService prepaymentService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /**

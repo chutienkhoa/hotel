@@ -80,6 +80,9 @@ class ReservationDetailLifecycleTest {
     private com.example.hotel.service.booking.PrepaymentService prepaymentService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms a DRAFT reservation still shows the booked-room presentation. */

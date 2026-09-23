@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,9 +16,11 @@ import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.mapper.booking.ChargeMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.security.CurrentUser;
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -69,6 +72,48 @@ class ChargeServiceTest {
         assertEquals(userId, saved.getUpdatedBy());
         assertEquals(saved.getId(), response.id());
         assertEquals(stayId, response.stayId());
+    }
+
+    /** Confirms manual Charge creation writes exactly one RECORD_CHARGE row targeting the owning Reservation. */
+    @Test
+    void shouldWriteRecordChargeAuditEntryTargetingReservation() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        setCurrentUser(userId);
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        chargeService(chargeRepository, stayRepository, auditLogRepository)
+                .create(stayId, request(ChargeType.SERVICE, null, null, new BigDecimal("100.00")));
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        AuditLog audit = captor.getValue();
+        assertEquals("RECORD_CHARGE", audit.getAction());
+        assertEquals(stay.getReservation().getId(), audit.getEntityId());
+        assertEquals(userId, audit.getUserId());
+    }
+
+    /** Confirms a rejected Charge (e.g. checked-out Stay) never writes a RECORD_CHARGE row. */
+    @Test
+    void shouldNotWriteRecordChargeAuditEntryWhenCreationIsRejected() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        when(stay.getStatus()).thenReturn(StayStatus.CHECKED_OUT);
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        setCurrentUser(UUID.randomUUID());
+
+        assertThrows(ResponseStatusException.class, () -> chargeService(chargeRepository, stayRepository, auditLogRepository)
+                .create(stayId, request(ChargeType.SERVICE, null, null, BigDecimal.ONE)));
+
+        verify(auditLogRepository, never()).save(any(AuditLog.class));
     }
 
     /** Confirms all approved Charge v1 types can be recorded. */
@@ -435,12 +480,18 @@ class ChargeServiceTest {
      * @return configured Charge service
      */
     private ChargeService chargeService(ChargeRepository chargeRepository, StayRepository stayRepository) {
+        return chargeService(chargeRepository, stayRepository, mock(AuditLogRepository.class));
+    }
+
+    private ChargeService chargeService(
+            ChargeRepository chargeRepository, StayRepository stayRepository, AuditLogRepository auditLogRepository) {
         com.example.hotel.repository.common.AdditionalRevenueCategoryRepository categories =
                 mock(com.example.hotel.repository.common.AdditionalRevenueCategoryRepository.class);
         when(categories.findByCode(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation ->
                 Optional.of(com.example.hotel.entity.common.AdditionalRevenueCategory.create(invocation.getArgument(0), "x", null)));
         return new ChargeService(chargeRepository, stayRepository, new ChargeMapper(),
                 mock(com.example.hotel.repository.common.AdditionalRevenueRepository.class), categories,
+                auditLogRepository,
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-20T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 

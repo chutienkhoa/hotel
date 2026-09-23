@@ -8,7 +8,9 @@ import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
+import com.example.hotel.dto.booking.response.ActivityTimelineItem;
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.booking.response.ReservationActivityEntry;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
@@ -16,6 +18,7 @@ import com.example.hotel.dto.customer.response.GuestLookupResponse;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.ReservationStatus;
+import com.example.hotel.service.booking.ReservationActivityQueryService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalance;
@@ -62,6 +65,7 @@ public class ReservationPageController {
     private final StayExtensionService stayExtensionService;
     private final com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
     private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
+    private final ReservationActivityQueryService reservationActivityQueryService;
     private final UiMessages messages;
 
     /**
@@ -78,6 +82,7 @@ public class ReservationPageController {
      * @param stayExtensionService service used to supply the extension history and derived accommodation totals
      * @param folioReconciliationService read-only financial integrity diagnostic
      * @param prepaymentService prepayment summary of a CONFIRMED Reservation (MANAGE_PAYMENT only)
+     * @param reservationActivityQueryService read-only Reservation Operational Timeline (VIEW_BOOKING baseline)
      * @param messageSource localized UI message source
      */
     public ReservationPageController(
@@ -91,6 +96,7 @@ public class ReservationPageController {
             StayExtensionService stayExtensionService,
             com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService,
             com.example.hotel.service.booking.PrepaymentService prepaymentService,
+            ReservationActivityQueryService reservationActivityQueryService,
             org.springframework.context.MessageSource messageSource) {
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
@@ -102,6 +108,7 @@ public class ReservationPageController {
         this.stayExtensionService = stayExtensionService;
         this.folioReconciliationService = folioReconciliationService;
         this.prepaymentService = prepaymentService;
+        this.reservationActivityQueryService = reservationActivityQueryService;
         this.messages = new UiMessages(messageSource);
     }
 
@@ -179,7 +186,36 @@ public class ReservationPageController {
                 "CONFIRMED".equals(reservation.status())
                         && hasAuthority(authentication, "PERM_MANAGE_PAYMENT")
                         ? prepaymentService.summary(id) : null);
+        model.addAttribute("activity", resolveActivity(reservationActivityQueryService.findByReservationId(id)));
         return "reservation/detail";
+    }
+
+    /**
+     * Resolves each raw Operational Timeline entry to a safe, localized presentation row. Never
+     * exposes a raw AuditLog action string or financial detail; an action with no known mapping
+     * falls back to a generic localized label instead of failing the page.
+     *
+     * @param entries raw Reservation Operational Timeline entries
+     * @return presentation-ready Activity Timeline items, same order as supplied
+     */
+    private List<ActivityTimelineItem> resolveActivity(List<ReservationActivityEntry> entries) {
+        return entries.stream()
+                .map(entry -> new ActivityTimelineItem(
+                        entry.occurredAt(), entry.actorDisplay(), activityLabel(entry.action())))
+                .toList();
+    }
+
+    /**
+     * Resolves one audited action to its localized Activity label, falling back to a generic
+     * localized label for an action with no known mapping (forward/backward compatibility).
+     *
+     * @param action stable AuditLog action identifier
+     * @return the localized label to display
+     */
+    private String activityLabel(String action) {
+        String key = "reservation.activity.action." + action;
+        String resolved = messages.get(key);
+        return resolved.equals(key) ? messages.get("reservation.activity.action.unknown") : resolved;
     }
 
     private com.example.hotel.dto.booking.response.FolioReconciliationResponse integrityFor(UUID reservationId) {

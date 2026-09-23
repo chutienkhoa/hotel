@@ -74,4 +74,40 @@ public class AuditLog {
         this.newValue = newValue;
         createdAt = Instant.now();
     }
+
+    /**
+     * Returns the identifier of the user who performed the audited action.
+     *
+     * @return the actor's user identifier
+     */
+    public UUID getUserId() {
+        return userId;
+    }
+
+    /**
+     * Returns the stable action identifier recorded for this audit row.
+     *
+     * @return the audited action, e.g. {@code CHECK_IN}
+     */
+    public String getAction() {
+        return action;
+    }
+
+    /**
+     * Returns the identifier of the entity this audit row was recorded against.
+     *
+     * @return the audited entity identifier
+     */
+    public UUID getEntityId() {
+        return entityId;
+    }
+
+    /**
+     * Returns the instant this audit row was recorded.
+     *
+     * @return the audit timestamp
+     */
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
 }

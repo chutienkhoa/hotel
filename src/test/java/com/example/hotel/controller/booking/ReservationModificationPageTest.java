@@ -110,6 +110,9 @@ class ReservationModificationPageTest {
     private PrepaymentService prepaymentService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms detail actions obey status, Stay, source and MANAGE_BOOKING visibility rules. */

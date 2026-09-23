@@ -5,9 +5,11 @@ import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.common.AdditionalRevenue;
 import com.example.hotel.entity.common.AdditionalRevenueCategory;
+import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.repository.common.AdditionalRevenueCategoryRepository;
 import com.example.hotel.repository.common.AdditionalRevenueRepository;
+import com.example.hotel.repository.common.AuditLogRepository;
 import java.time.Clock;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Stay;
@@ -37,6 +39,7 @@ public class ChargeService {
     private final ChargeMapper chargeMapper;
     private final AdditionalRevenueRepository additionalRevenues;
     private final AdditionalRevenueCategoryRepository additionalRevenueCategories;
+    private final AuditLogRepository auditLogRepository;
     private final Clock clock;
 
     /**
@@ -45,6 +48,7 @@ public class ChargeService {
      * @param chargeRepository repository used to persist Charges
      * @param stayRepository repository used to resolve owning Stays
      * @param chargeMapper mapper used to return client-safe responses
+     * @param auditLogRepository repository used to write the approved RECORD_CHARGE audit entry
      */
     public ChargeService(
             ChargeRepository chargeRepository,
@@ -52,12 +56,14 @@ public class ChargeService {
             ChargeMapper chargeMapper,
             AdditionalRevenueRepository additionalRevenues,
             AdditionalRevenueCategoryRepository additionalRevenueCategories,
+            AuditLogRepository auditLogRepository,
             Clock clock) {
         this.chargeRepository = chargeRepository;
         this.stayRepository = stayRepository;
         this.chargeMapper = chargeMapper;
         this.additionalRevenues = additionalRevenues;
         this.additionalRevenueCategories = additionalRevenueCategories;
+        this.auditLogRepository = auditLogRepository;
         this.clock = clock;
 }
 
@@ -93,6 +99,12 @@ public class ChargeService {
         CurrentUser user = currentUser();
         charge.audit(user.id());
         Charge saved = chargeRepository.save(charge);
+        auditLogRepository.save(new AuditLog(
+                user.id(),
+                "RECORD_CHARGE",
+                stay.getReservation().getId(),
+                null,
+                "Charge " + saved.getId() + " type=" + saved.getType() + ", amount=" + saved.getAmount().toPlainString()));
         if (category != null) {
             // Guest service revenue: exactly one linked, system-managed Additional Revenue in the same transaction.
             AdditionalRevenue revenue = AdditionalRevenue.createFromCharge(

@@ -106,6 +106,9 @@ class ReservationAccompanyingGuestsPageTest {
     private com.example.hotel.service.booking.PrepaymentService prepaymentService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the create form offers the optional Accompanying Guests area (EN and VI) without inline guest creation. */

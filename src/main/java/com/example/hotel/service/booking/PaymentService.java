@@ -133,8 +133,11 @@ public class PaymentService {
                 request.method(),
                 request.reference());
         payment.markPaid(Instant.now(clock));
-        payment.audit(currentUser().id());
-        return paymentMapper.toResponse(paymentRepository.save(payment));
+        CurrentUser user = currentUser();
+        payment.audit(user.id());
+        Payment saved = paymentRepository.save(payment);
+        recordPaymentAudit(user, stay, saved);
+        return paymentMapper.toResponse(saved);
     }
 
     /**
@@ -172,8 +175,11 @@ public class PaymentService {
             throw conflict("Payment would exceed total charges");
         }
         payment.markPaid(Instant.now(clock));
-        payment.audit(currentUser().id());
-        return paymentMapper.toResponse(paymentRepository.save(payment));
+        CurrentUser user = currentUser();
+        payment.audit(user.id());
+        Payment saved = paymentRepository.save(payment);
+        recordPaymentAudit(user, stay, saved);
+        return paymentMapper.toResponse(saved);
     }
 
     /**
@@ -226,6 +232,28 @@ public class PaymentService {
                 "Payment " + payment.getId() + " status=PAID",
                 "Payment " + payment.getId() + " status=REFUNDED, reason=" + trimmedReason));
         return paymentMapper.toResponse(saved);
+    }
+
+    /**
+     * Writes the approved {@code RECORD_PAYMENT} audit entry for an ordinary Payment that just
+     * became PAID (the one-step shortcut in {@link #recordPaid} or the two-step confirmation in
+     * {@link #markPaid}). Never used for a prepayment, an applied prepayment, or a refund, which
+     * keep their own distinct {@code RECORD_PREPAYMENT}/{@code APPLY_PREPAYMENT}/{@code
+     * REFUND_PAYMENT} audit entries.
+     *
+     * @param user actor who recorded the payment
+     * @param stay owning Stay, used to resolve the Reservation audit target
+     * @param payment the newly PAID Payment
+     */
+    private void recordPaymentAudit(CurrentUser user, Stay stay, Payment payment) {
+        auditLogRepository.save(new AuditLog(
+                user.id(),
+                "RECORD_PAYMENT",
+                stay.getReservation().getId(),
+                null,
+                "Payment " + payment.getId() + " amount=" + payment.getAmount().toPlainString() + " "
+                        + payment.getCurrency() + ", applied=" + payment.getAppliedAmount().toPlainString()
+                        + ", method=" + payment.getMethod()));
     }
 
     /**
