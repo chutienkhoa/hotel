@@ -1384,7 +1384,29 @@ legend {
   margin: 0;
 }
 .passport-document-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin-top: var(--space-2);
+}
+.passport-document-actions form {
+  display: inline-flex;
+}
+.room-image-thumb {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  flex: none;
+  height: 5.5rem;
+  overflow: hidden;
+  width: 5.5rem;
+}
+.room-image-thumb img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
 }
 .passport-document-actions .button {
   gap: var(--space-2);

@@ -2,21 +2,31 @@ package com.example.hotel.controller.room;
 
 import com.example.hotel.common.TableSorts;
 import com.example.hotel.common.PaginationSupport;
+import com.example.hotel.common.i18n.UiMessages;
 import com.example.hotel.dto.room.request.RoomCreateRequest;
 import com.example.hotel.dto.room.request.RoomSearchCriteria;
 import com.example.hotel.dto.room.request.RoomUpdateRequest;
+import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.entity.room.RoomStatus;
+import com.example.hotel.exception.RoomImageValidationException;
+import com.example.hotel.service.room.RoomImageService;
 import com.example.hotel.service.room.RoomQueryService;
 import com.example.hotel.service.room.RoomService;
 import com.example.hotel.service.room.RoomTypeQueryService;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import org.springframework.data.domain.Page;
-import org.springframework.http.HttpStatus;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
@@ -27,6 +37,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
@@ -37,6 +48,8 @@ public class RoomPageController {
     private final RoomService roomService;
     private final RoomQueryService roomQueryService;
     private final RoomTypeQueryService roomTypeQueryService;
+    private final RoomImageService roomImageService;
+    private final UiMessages messages;
 
     /**
      * Creates the page controller with services used to manage rooms and load read-only RoomTypes.
@@ -44,12 +57,20 @@ public class RoomPageController {
      * @param roomService service used to load and update room profiles
      * @param roomQueryService service used to load paginated, filtered Room list data
      * @param roomTypeQueryService service used to load RoomType selections
+     * @param roomImageService service used to manage a Room's privately stored photos
+     * @param messageSource localized UI message source
      */
     public RoomPageController(
-            RoomService roomService, RoomQueryService roomQueryService, RoomTypeQueryService roomTypeQueryService) {
+            RoomService roomService,
+            RoomQueryService roomQueryService,
+            RoomTypeQueryService roomTypeQueryService,
+            RoomImageService roomImageService,
+            org.springframework.context.MessageSource messageSource) {
         this.roomService = roomService;
         this.roomQueryService = roomQueryService;
         this.roomTypeQueryService = roomTypeQueryService;
+        this.roomImageService = roomImageService;
+        this.messages = new UiMessages(messageSource);
     }
 
     /**
@@ -99,6 +120,7 @@ public class RoomPageController {
     public String detail(@PathVariable UUID id, Model model, Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
         model.addAttribute("room", roomService.findById(id));
+        model.addAttribute("roomImages", roomImageService.findByRoomId(id));
         return "room/detail";
     }
 
@@ -286,6 +308,100 @@ public class RoomPageController {
     }
 
     /**
+     * Appends one or more selected images to a Room from a CSRF-protected browser form and
+     * redirects back to its detail page. Every selected file, and the resulting total image
+     * count, is validated before any file is stored, so one invalid file rejects the whole batch.
+     *
+     * @param id room identifier
+     * @param images selected image files; an untouched optional file input is a no-op
+     * @param redirectAttributes attributes used to show post-redirect feedback
+     * @return a detail redirect after the operation result is recorded
+     */
+    @PostMapping("/rooms/{id}/images")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    public String addImages(
+            @PathVariable UUID id,
+            @RequestParam(name = "images", required = false) List<MultipartFile> images,
+            RedirectAttributes redirectAttributes) {
+        try {
+            roomImageService.addImages(id, images);
+            redirectAttributes.addFlashAttribute("successMessage", messages.get("room.image.upload.success"));
+        } catch (RoomImageValidationException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", messages.get(exception.getMessageKey()));
+        } catch (ResponseStatusException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
+        }
+        return "redirect:/rooms/" + id;
+    }
+
+    /**
+     * Returns one specific authorized Room image for inline browser viewing. The requested image
+     * must belong to the requested Room, so a Room A URL combined with a Room B image identifier
+     * can never resolve.
+     *
+     * @param id room identifier the image must belong to
+     * @param imageId requested image identifier
+     * @return the private image with its validated content type and safe inline header
+     */
+    @GetMapping("/rooms/{id}/images/{imageId}/file")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    public ResponseEntity<Resource> image(@PathVariable UUID id, @PathVariable UUID imageId) {
+        RoomImageFile image = roomImageService.loadImage(id, imageId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename(image.originalFilename(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .body(image.resource());
+    }
+
+    /**
+     * Removes one specific image belonging to a Room from a CSRF-protected browser form and
+     * redirects back to its detail page.
+     *
+     * @param id room identifier the image must belong to
+     * @param imageId image identifier to remove
+     * @param redirectAttributes attributes used to show post-redirect feedback
+     * @return a detail redirect after the operation result is recorded
+     */
+    @PostMapping("/rooms/{id}/images/{imageId}/remove")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    public String removeImage(@PathVariable UUID id, @PathVariable UUID imageId, RedirectAttributes redirectAttributes) {
+        try {
+            roomImageService.removeImage(id, imageId);
+            redirectAttributes.addFlashAttribute("successMessage", messages.get("room.image.remove.success"));
+        } catch (ResponseStatusException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
+        }
+        return "redirect:/rooms/" + id;
+    }
+
+    /**
+     * Sets one specific image as a Room's primary image from a CSRF-protected browser form and
+     * redirects back to its detail page.
+     *
+     * @param id room identifier the image must belong to
+     * @param imageId image identifier to promote
+     * @param redirectAttributes attributes used to show post-redirect feedback
+     * @return a detail redirect after the operation result is recorded
+     */
+    @PostMapping("/rooms/{id}/images/{imageId}/primary")
+    @PreAuthorize("hasAuthority('PERM_MANAGE_ROOM')")
+    public String setPrimaryImage(
+            @PathVariable UUID id, @PathVariable UUID imageId, RedirectAttributes redirectAttributes) {
+        try {
+            roomImageService.setPrimary(id, imageId);
+            redirectAttributes.addFlashAttribute("successMessage", messages.get("room.image.primary.success"));
+        } catch (ResponseStatusException exception) {
+            redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
+        }
+        return "redirect:/rooms/" + id;
+    }
+
+    /**
      * Executes one explicit Room status operation and redirects to the Room detail page after success.
      *
      * @param id room identifier
@@ -380,8 +496,6 @@ public class RoomPageController {
      * @return a safe message for the browser
      */
     private String safeMessage(ResponseStatusException exception) {
-        return exception.getReason() == null
-                ? HttpStatus.valueOf(exception.getStatusCode().value()).getReasonPhrase()
-                : exception.getReason();
+        return messages.error(exception);
     }
 }

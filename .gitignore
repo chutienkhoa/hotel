@@ -22,3 +22,6 @@ Thumbs.db
 
 # Private Guest passport image storage
 var/guest-documents/
+
+# Private Room image storage
+var/room-images/

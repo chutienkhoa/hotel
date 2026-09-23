@@ -4820,4 +4820,55 @@ no-show scheduler/night audit, configurable check-in cutoff, same-day no-show ov
 synchronization, channel manager, cancellation/no-show analytics dashboard, generalized lifecycle-event/reason
 framework dùng chung nhiều thao tác, reservation reinstatement.
 
+## 77. Room Images (V1)
+
+Ảnh gắn với phòng vật lý (`Room`), KHÔNG gắn với `RoomType`: hai phòng cùng RoomType (ví dụ hai phòng DOUBLE)
+có thể có ảnh khác nhau. Đây KHÔNG phải marketing gallery công khai, KHÔNG phải RoomType imagery, và KHÔNG
+đồng bộ với website khách sạn hay OTA trong V1.
+
+- **Cardinality**: một Room có 0..10 ảnh. Room không có ảnh là hợp lệ (không bắt buộc). Upload nhiều ảnh một
+  lúc được hỗ trợ; tổng số ảnh sau khi upload (số hiện có + số file mới) không được vượt quá 10, kiểm tra
+  TRƯỚC khi lưu bất kỳ file nào — vượt giới hạn thì từ chối toàn bộ batch, không lưu một phần.
+- **Primary image**: khi Room có 0 ảnh thì có 0 ảnh primary; khi có từ 1 ảnh trở lên thì có ĐÚNG MỘT ảnh
+  primary. Ảnh đầu tiên upload thành công cho một Room tự động là primary; các ảnh sau đó (kể cả trong cùng
+  một batch) không tự động là primary. Nhân viên có thể đổi ảnh primary bất kỳ lúc nào. Xóa ảnh primary tự
+  động thăng ảnh CÒN LẠI CŨ NHẤT (theo `createdAt`, rồi `id`) lên làm primary; nếu không còn ảnh nào, Room có 0
+  ảnh primary. Bất biến "tối đa một primary mỗi Room" được thực thi bằng partial unique index PostgreSQL trên
+  `room_image (room_id) WHERE is_primary`, cùng mẫu với `ux_stay_room_assignment_open_room` (mục 22). Không có
+  `display_order`/sắp xếp thủ công trong V1.
+- **Validation**: định dạng JPG/JPEG/PNG; tối đa 5 MB mỗi file (giống Passport Image); tên file tối đa 255 ký
+  tự; từ chối file rỗng (0 byte). Khác với Passport Image hiện có (chỉ tin đuôi file và Content-Type do trình
+  duyệt khai báo), Room Image V1 giải mã và xác minh NỘI DUNG THỰC của file bằng bộ đọc ảnh JDK có sẵn
+  (`javax.imageio`), từ chối file không thực sự là JPEG/PNG hợp lệ dù tên file và Content-Type khai báo đúng
+  định dạng. Đây là cải tiến bảo mật chỉ áp dụng cho Room Image; Passport Image giữ nguyên hành vi hiện có,
+  không thay đổi trong phạm vi mục này.
+- **Lưu trữ**: KHÔNG lưu nhị phân trong PostgreSQL. Ảnh lưu trên một thư mục riêng, cấu hình qua
+  `hotel.storage.room-images.path`, TÁCH BIỆT hoàn toàn với thư mục Passport Image
+  (`hotel.storage.guest-documents.path`) — hai domain không bao giờ chia sẻ thư mục hay storage key. Storage
+  key do server sinh (UUID + đuôi file đã xác thực), không bao giờ dùng tên file của client làm đường dẫn.
+  Serving qua endpoint riêng, xác thực (KHÔNG public/static, KHÔNG unauthenticated), xác minh lại
+  Room-sở-hữu-ảnh mỗi lần đọc (không có IDOR: URL Room A kết hợp id ảnh của Room B không bao giờ trả về ảnh).
+- **Xử lý ảnh**: chỉ lưu ảnh gốc. V1 KHÔNG resize, KHÔNG nén, KHÔNG tạo thumbnail file riêng, KHÔNG WebP,
+  KHÔNG xử lý EXIF/orientation. Giao diện có thể hiển thị ảnh gốc ở kích thước nhỏ bằng CSS/HTML thông thường.
+- **Quyền**: `MANAGE_ROOM` (permission Room Management hiện có) bảo vệ xem/upload/xóa/đổi primary trong Room
+  Management. Không tạo permission mới; không có `VIEW_ROOM`. Không mở rộng quyền của STAFF.
+- **Vòng đời Room**: ảnh độc lập với `Room.status` — giữ nguyên ảnh khi Room ở AVAILABLE, OCCUPIED, DIRTY,
+  CLEANING, MAINTENANCE, hoặc OUT_OF_ORDER. Room hiện chưa có thao tác xóa (hard delete); V1 không định nghĩa
+  hành vi dọn ảnh khi xóa Room vì thao tác đó chưa tồn tại.
+- **Audit**: `RoomImage` dùng audit fields chuẩn (`createdAt/By`, `updatedAt/By`) như mọi entity khác. Upload/
+  xóa/đổi primary KHÔNG ghi `AuditLog` riêng trong V1 (giống cách Passport Image hiện có không ghi AuditLog
+  cho upload/remove).
+- **Giao diện**: chỉ thêm mục Images tối thiểu trên Room Detail (xem danh sách, đánh dấu ảnh primary, upload,
+  đổi primary, xóa). Không có ảnh trên Room List, không đổi Reservation room picker, Pre-check-in Room
+  Reassignment, Check-in Review, Stay Room Change, Front Desk, Housekeeping, hay báo cáo — trình bày ở các màn
+  hình đó thuộc phạm vi Task33 (nếu được duyệt sau này), không triển khai ở đây.
+
+## 78. V2 / Out of Scope (Room Images)
+
+Hoãn tới V2, không triển khai trong mục 77: public hotel-website media serving, CDN, S3/object storage,
+thumbnail/resize/compression pipeline, WebP conversion, xử lý EXIF, sắp xếp ảnh thủ công (display order),
+RoomType marketing imagery, đồng bộ ảnh với OTA, channel manager, video upload, caption/tag ảnh, bulk
+cross-room media management, sửa lỗi actual-content-validation cho Passport Image, AuditLog riêng cho thao
+tác Room Image.
+
 **End of Specification v1.0**

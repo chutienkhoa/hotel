@@ -1,6 +1,7 @@
 package com.example.hotel.controller.room;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -9,14 +10,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.example.hotel.controller.common.NavigationModelAdvice;
+import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.dto.room.response.RoomTypeResponse;
 import com.example.hotel.security.JwtService;
+import com.example.hotel.service.room.RoomImageService;
 import com.example.hotel.service.room.RoomQueryService;
 import com.example.hotel.service.room.RoomService;
 import com.example.hotel.service.room.RoomTypeQueryService;
@@ -60,6 +64,9 @@ class RoomAuthorizationTest {
 
     @MockitoBean
     private RoomTypeQueryService roomTypeQueryService;
+
+    @MockitoBean
+    private RoomImageService roomImageService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -169,6 +176,107 @@ class RoomAuthorizationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/rooms").with(user("staff").authorities(staffAuthorities())))
                 .andExpect(status().isForbidden());
+    }
+
+    private static final UUID ROOM_IMAGE_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
+
+    /**
+     * Confirms MANAGE_ROOM can upload, view, remove, and set-primary Room images.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldAllowManageRoomToManageRoomImages() throws Exception {
+        when(roomImageService.loadImage(ROOM_ID, ROOM_IMAGE_ID)).thenReturn(new RoomImageFile(
+                new org.springframework.core.io.ByteArrayResource("data".getBytes()), "image/jpeg", "room.jpg"));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/rooms/{id}/images", ROOM_ID)
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "images", "room.jpg", "image/jpeg", "data".getBytes()))
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/rooms/" + ROOM_ID));
+
+        mockMvc.perform(get("/rooms/{id}/images/{imageId}/file", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType("image/jpeg"));
+
+        mockMvc.perform(post("/rooms/{id}/images/{imageId}/primary", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/rooms/" + ROOM_ID));
+
+        mockMvc.perform(post("/rooms/{id}/images/{imageId}/remove", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("admin").authorities(manageRoomAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/rooms/" + ROOM_ID));
+
+        verify(roomImageService).setPrimary(ROOM_ID, ROOM_IMAGE_ID);
+        verify(roomImageService).removeImage(ROOM_ID, ROOM_IMAGE_ID);
+    }
+
+    /**
+     * Confirms STAFF (no MANAGE_ROOM) is rejected from every Room image operation.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectStaffFromRoomImageOperations() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/rooms/{id}/images", ROOM_ID)
+                        .file(new org.springframework.mock.web.MockMultipartFile(
+                                "images", "room.jpg", "image/jpeg", "data".getBytes()))
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/rooms/{id}/images/{imageId}/file", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("staff").authorities(staffAuthorities())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/rooms/{id}/images/{imageId}/primary", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/rooms/{id}/images/{imageId}/remove", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("staff").authorities(staffAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms every Room image mutation is CSRF-protected: rejected without a token, redirected with one.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRequireCsrfForRoomImageMutations() throws Exception {
+        mockMvc.perform(post("/rooms/{id}/images/{imageId}/primary", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/rooms/{id}/images/{imageId}/remove", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms an image belonging to a different Room can never be retrieved through this Room's URL: the
+     * service's ownership check (not the controller) is the source of truth, and its rejection propagates.
+     *
+     * @throws Exception if MockMvc cannot perform the request
+     */
+    @Test
+    void shouldPropagateNotFoundForCrossRoomImageAccess() throws Exception {
+        when(roomImageService.loadImage(ROOM_ID, ROOM_IMAGE_ID))
+                .thenThrow(new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Room image not found."));
+
+        mockMvc.perform(get("/rooms/{id}/images/{imageId}/file", ROOM_ID, ROOM_IMAGE_ID)
+                        .with(user("admin").authorities(manageRoomAuthority())))
+                .andExpect(status().isNotFound());
     }
 
     /** Confirms navigation hides the Rooms link for users without Room Management permission. */

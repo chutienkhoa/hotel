@@ -4,23 +4,29 @@ import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.config.I18nConfig;
 import com.example.hotel.config.SecurityConfig;
 import com.example.hotel.controller.room.RoomPageController;
+import com.example.hotel.dto.room.response.RoomImageResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.dto.room.response.RoomTypeResponse;
+import com.example.hotel.exception.RoomImageValidationException;
 import com.example.hotel.repository.common.AppUserRepository;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.security.SessionUserDetailsService;
 import com.example.hotel.service.common.AuthenticationService;
+import com.example.hotel.service.room.RoomImageService;
 import com.example.hotel.service.room.RoomQueryService;
 import com.example.hotel.service.room.RoomService;
 import com.example.hotel.service.room.RoomTypeQueryService;
@@ -28,6 +34,7 @@ import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -56,6 +63,9 @@ class TableAndApiI18nTest {
 
     @MockitoBean
     private RoomTypeQueryService roomTypeQueryService;
+
+    @MockitoBean
+    private RoomImageService roomImageService;
 
     @MockitoBean
     private AuthenticationService authenticationService;
@@ -147,5 +157,62 @@ class TableAndApiI18nTest {
         org.junit.jupiter.api.Assertions.assertNull(mockMvc.perform(post("/api/auth/login?lang=vi")
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andReturn().getResponse().getHeader("Set-Cookie"));
+    }
+
+    /** Confirms the new Room Images section's static text comes from the EN/VI bundles, not hardcoded English. */
+    @Test
+    void shouldTranslateRoomImagesEmptyState() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        when(roomService.findById(roomId)).thenReturn(room());
+        when(roomImageService.findByRoomId(roomId)).thenReturn(List.of());
+
+        mockMvc.perform(get("/rooms/{id}", roomId).cookie(language("vi")).with(manager()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Hình ảnh")))
+                .andExpect(content().string(containsString("Chưa có ảnh nào được tải lên cho phòng này.")))
+                .andExpect(content().string(containsString("Tải lên")));
+        mockMvc.perform(get("/rooms/{id}", roomId).cookie(language("en")).with(manager()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">Images<")))
+                .andExpect(content().string(containsString("No images uploaded for this room.")))
+                .andExpect(content().string(containsString(">Upload<")));
+    }
+
+    /** Confirms per-image action/badge text (Primary, View, Set Primary, Remove) is translated. */
+    @Test
+    void shouldTranslateRoomImageCardActions() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        UUID imageId = UUID.randomUUID();
+        when(roomService.findById(roomId)).thenReturn(room());
+        when(roomImageService.findByRoomId(roomId)).thenReturn(List.of(new RoomImageResponse(imageId, "a.jpg", true)));
+
+        mockMvc.perform(get("/rooms/{id}", roomId).cookie(language("vi")).with(manager()))
+                .andExpect(content().string(containsString(">Chính<")))
+                .andExpect(content().string(containsString("Xem")))
+                .andExpect(content().string(containsString("Xóa ảnh phòng này?")));
+        mockMvc.perform(get("/rooms/{id}", roomId).cookie(language("en")).with(manager()))
+                .andExpect(content().string(containsString(">Primary<")))
+                .andExpect(content().string(containsString("View")))
+                .andExpect(content().string(containsString("Remove this room image?")));
+    }
+
+    /** Confirms a Room Image validation failure's flash message is resolved in the active UI language. */
+    @Test
+    void shouldTranslateRoomImageValidationErrorMessage() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        doThrow(new RoomImageValidationException(
+                        "room.image.error.unsupportedType", "Room image must be a JPG or PNG file."))
+                .when(roomImageService)
+                .addImages(org.mockito.ArgumentMatchers.eq(roomId), any());
+        MockMultipartFile file = new MockMultipartFile("images", "x.pdf", "application/pdf", "data".getBytes());
+
+        mockMvc.perform(multipart("/rooms/{id}/images", roomId)
+                        .file(file).cookie(language("vi")).with(manager()).with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("errorMessage", "Ảnh phòng phải là file JPG hoặc PNG."));
+        mockMvc.perform(multipart("/rooms/{id}/images", roomId)
+                        .file(file).cookie(language("en")).with(manager()).with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute("errorMessage", "Room image must be a JPG or PNG file."));
     }
 }

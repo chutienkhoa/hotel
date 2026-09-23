@@ -24,6 +24,7 @@ import com.example.hotel.dto.room.response.HousekeepingWorkspaceResponse;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.room.HousekeepingQueryService;
 import com.example.hotel.service.room.RoomAvailabilityService;
+import com.example.hotel.service.room.RoomImageService;
 import com.example.hotel.service.room.RoomQueryService;
 import com.example.hotel.service.room.RoomService;
 import com.example.hotel.service.room.RoomTypeQueryService;
@@ -68,6 +69,9 @@ class HousekeepingPageControllerTest {
 
     @MockitoBean
     private RoomTypeQueryService roomTypeQueryService;
+
+    @MockitoBean
+    private RoomImageService roomImageService;
 
     @MockitoBean
     private JwtService jwtService;

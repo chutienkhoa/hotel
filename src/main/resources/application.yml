@@ -26,5 +26,7 @@ hotel:
   storage:
     guest-documents:
       path: ${GUEST_DOCUMENTS_PATH:var/guest-documents}
+    room-images:
+      path: ${ROOM_IMAGES_PATH:var/room-images}
   i18n:
     cookie-secure: ${HOTEL_I18N_COOKIE_SECURE:false}
