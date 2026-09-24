@@ -221,6 +221,76 @@ class ReservationDetailLifecycleTest {
                 .andExpect(content().string(not(containsString("No state-changing actions are available."))));
     }
 
+    /** Confirms an eligible DRAFT exposes Confirm and the existing Cancel form (with its reason fields), but never No-show. */
+    @Test
+    void shouldOfferCancelForDraftWithManageBooking() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("DRAFT"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(allAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/reservations/" + RESERVATION_ID + "/confirm")))
+                .andExpect(content().string(containsString("/reservations/" + RESERVATION_ID + "/cancel")))
+                .andExpect(content().string(containsString("id=\"cancellationReasonCode\"")))
+                .andExpect(content().string(containsString("id=\"cancellationReasonDetail\"")))
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/no-show"))));
+    }
+
+    /** Confirms hiding is permission-aware: a DRAFT viewer without MANAGE_BOOKING sees neither Confirm nor Cancel. */
+    @Test
+    void shouldHideCancelForDraftWithoutManageBooking() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("DRAFT"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("viewer").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/cancel"))))
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/confirm"))));
+    }
+
+    /** Confirms CONFIRMED still offers Cancel and No-show exactly as before. */
+    @Test
+    void shouldStillOfferCancelAndNoShowForConfirmed() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(allAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/reservations/" + RESERVATION_ID + "/cancel")))
+                .andExpect(content().string(containsString("/reservations/" + RESERVATION_ID + "/no-show")))
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/confirm"))));
+    }
+
+    /**
+     * Confirms a cancelled DRAFT (and every other state that cannot be cancelled) presents no Confirm, Cancel,
+     * No-show, Check-out or edit lifecycle action that would violate the state machine.
+     */
+    @Test
+    void shouldOfferNoCancelOrConfirmActionsOnceCancelledOrOtherwiseNotCancellable() throws Exception {
+        for (String status : List.of("CANCELLED", "NO_SHOW", "CHECKED_OUT")) {
+            when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation(status));
+
+            mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                            .with(user("manager").authorities(allAuthorities())))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(not(containsString("id=\"actions-heading\""))))
+                    .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/cancel"))))
+                    .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/confirm"))))
+                    .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/no-show"))))
+                    .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/edit"))));
+        }
+        UUID stayId = UUID.randomUUID();
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(
+                new StayResponse(stayId, "CHECKED_IN", Instant.parse("2026-09-16T14:00:00Z"), null));
+        when(stayBalanceService.calculate(stayId)).thenReturn(
+                new com.example.hotel.service.booking.StayBalance(BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("manager").authorities(allAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/cancel"))));
+    }
+
     /** Builds a Reservation Detail response for one lifecycle status with one booked room. */
     private ReservationDetailResponse reservation(String status) {
         return new ReservationDetailResponse(

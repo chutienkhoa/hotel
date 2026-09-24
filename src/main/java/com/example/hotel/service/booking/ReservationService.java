@@ -307,6 +307,13 @@ public class ReservationService {
         }
         SupportedCurrency currency = SupportedCurrency.find(request.currency())
                 .orElseThrow(() -> bad("Unsupported currency"));
+        // V1 Reservation/Folio currency is VND only (USD stays a Payment tender currency). Enforced here so every
+        // creation path (MVC, REST, Walk-in, OTA entry, draft edit) is covered, not just the form and DTO validation.
+        if (currency != SupportedCurrency.VND) {
+            throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "reservation.currency.error.vndOnly",
+                    "Reservation currency must be VND");
+        }
         Guest guest = guests.findById(request.guestId()).orElseThrow(() -> notFound("Guest"));
         Set<UUID> roomIds = new HashSet<>();
         for (var roomRequest : request.rooms()) {
@@ -709,8 +716,9 @@ public class ReservationService {
     }
 
     /**
-     * Hủy reservation đã xác nhận, yêu cầu một lý do hủy hợp lệ. The reason is stored on the Reservation and
-     * is never duplicated into {@link AuditLog}; only the state transition is audited.
+     * Hủy reservation nháp (DRAFT, an abandoned/invalid draft) hoặc đã xác nhận, yêu cầu một lý do hủy hợp lệ.
+     * The reason is stored on the Reservation and is never duplicated into {@link AuditLog}; only the state
+     * transition is audited. Any other source state is rejected by the entity with the existing 409.
      *
      * @param id định danh reservation
      * @param request the required cancellation reason
@@ -723,7 +731,7 @@ public class ReservationService {
         ReservationStatus previousStatus = reservation.getStatus();
         CancellationReasonCode reasonCode = request == null ? null : request.cancellationReasonCode();
         String reasonDetail = trimToNull(request == null ? null : request.cancellationReasonDetail());
-        if (previousStatus == ReservationStatus.CONFIRMED) {
+        if (previousStatus == ReservationStatus.DRAFT || previousStatus == ReservationStatus.CONFIRMED) {
             requireValidCancellationReason(reasonCode, reasonDetail);
             prepayments.requireNoActivePrepayments(id, "payment.prepayment.error.blocksCancel",
                     "This reservation has active prepayments. Refund them before cancellation.");

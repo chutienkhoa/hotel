@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.RoomRequest;
+import com.example.hotel.dto.booking.request.WalkInRequest;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.Reservation;
@@ -17,6 +18,7 @@ import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomType;
 import com.example.hotel.mapper.booking.ReservationMapper;
+import com.example.hotel.mapper.customer.GuestMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
@@ -25,6 +27,7 @@ import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.customer.GuestRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
+import com.example.hotel.service.customer.GuestDocumentService;
 import com.example.hotel.service.room.RoomAvailabilityService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -37,7 +40,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -45,9 +47,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * Verifies the two approved V1 Reservation money rules at the authoritative service boundary: the
- * Reservation currency is VND or USD and nothing else, and a staff-entered nightly rate carrying more
- * precision than that currency has is rejected rather than silently rounded.
+ * Verifies the approved V1 Reservation money rules at the authoritative service boundary: a Reservation
+ * is denominated in VND only (USD remains a Payment tender currency, never a Reservation currency), and a
+ * staff-entered nightly rate carrying more precision than the currency has is rejected rather than silently
+ * rounded.
  *
  * <p>Nothing may be persisted when either rule fails, so each rejection also asserts that no
  * Reservation was saved.</p>
@@ -81,6 +84,18 @@ class ReservationCurrencyPrecisionServiceTest {
             Guest.create(UUID.randomUUID(), "G-1", "Ann", "Lee", null, null, "Vietnam", null, null);
     private final Room room = room("101");
 
+    private final CheckInService checkIn = new CheckInService(
+            reservations,
+            mock(ReservationQueryService.class),
+            service,
+            rooms,
+            mock(RoomAvailabilityService.class),
+            mock(StayRepository.class),
+            guests,
+            mock(GuestMapper.class),
+            mock(GuestDocumentService.class),
+            Clock.fixed(CHECK_IN.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+
     /** Authenticates and stubs the lookups every creation needs. */
     @BeforeEach
     void setUp() {
@@ -97,13 +112,66 @@ class ReservationCurrencyPrecisionServiceTest {
         SecurityContextHolder.clearContext();
     }
 
-    /** Confirms both approved V1 currencies are accepted and recorded on the Reservation. */
-    @ParameterizedTest
-    @CsvSource({"VND, 1000000", "USD, 120.50"})
-    void shouldAcceptSupportedCurrency(String currency, BigDecimal nightlyRate) {
-        Response response = service.create(request(currency, nightlyRate));
+    /** Confirms the V1 Reservation currency, VND, is accepted and recorded on the Reservation. */
+    @Test
+    void shouldAcceptVndReservationCurrency() {
+        Response response = service.create(request("VND", new BigDecimal("1000000")));
 
-        assertEquals(currency, response.currency());
+        assertEquals("VND", response.currency());
+    }
+
+    /**
+     * Confirms a USD Reservation is rejected at the service boundary whatever the rate, so a crafted REST or form
+     * request cannot bypass the UI dropdown or the DTO validation. USD stays valid only as a Payment currency.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"20", "20.50", "20.501", "1000000"})
+    void shouldRejectUsdReservationCurrency(String nightlyRate) {
+        assertRejected(request("USD", new BigDecimal(nightlyRate)), "Reservation currency must be VND");
+    }
+
+    /** Confirms editing a DRAFT cannot switch it to (or keep it in) USD either. */
+    @Test
+    void shouldRejectUsdWhenEditingDraft() {
+        Reservation draft = new Reservation(
+                UUID.randomUUID(), "R20261010-000001", guest, CHECK_IN, CHECK_OUT, "USD", null);
+        when(reservations.findById(draft.getId())).thenReturn(Optional.of(draft));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.updateDraft(draft.getId(), request("USD", new BigDecimal("20"))));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Reservation currency must be VND", exception.getReason());
+        assertEquals("USD", draft.getCurrency());
+    }
+
+    /** Confirms Walk-in cannot create a USD Reservation; nothing is persisted. */
+    @Test
+    void walkInShouldRejectUsdReservationCurrency() {
+        WalkInRequest walkIn = new WalkInRequest(guest.getId(), CHECK_OUT, 2, 0, "USD", null,
+                List.of(new RoomRequest(room.getId(), new BigDecimal("20"))));
+
+        ResponseStatusException exception =
+                assertThrows(ResponseStatusException.class, () -> checkIn.confirmWalkIn(walkIn));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Reservation currency must be VND", exception.getReason());
+        verify(reservations, never()).save(any(Reservation.class));
+    }
+
+    /** Confirms OTA Booking Not Entered cannot create a USD Reservation; nothing is persisted. */
+    @Test
+    void otaEntryShouldRejectUsdReservationCurrency() {
+        CreateRequest otaEntry = new CreateRequest(
+                guest.getId(), CHECK_IN, CHECK_OUT, 2, 0, BookingSource.AGODA, "AG-1", "USD", null,
+                List.of(new RoomRequest(room.getId(), new BigDecimal("20"))), List.of());
+
+        ResponseStatusException exception =
+                assertThrows(ResponseStatusException.class, () -> checkIn.createOtaEntry(otaEntry));
+
+        assertEquals(HttpStatus.BAD_REQUEST, exception.getStatusCode());
+        assertEquals("Reservation currency must be VND", exception.getReason());
+        verify(reservations, never()).save(any(Reservation.class));
     }
 
     /**
@@ -139,22 +207,6 @@ class ReservationCurrencyPrecisionServiceTest {
         assertRejected(request("VND", new BigDecimal("1000.5")), "Rate exceeds currency precision");
     }
 
-    /** Confirms USD accepts up to two fraction digits and rejects a third. */
-    @ParameterizedTest
-    @ValueSource(strings = {"20", "20.5", "20.50"})
-    void shouldAcceptUsdNightlyRateWithinTwoFractionDigits(String nightlyRate) {
-        Response response = service.create(request("USD", new BigDecimal(nightlyRate)));
-
-        assertEquals(0, new BigDecimal(nightlyRate).multiply(BigDecimal.valueOf(2))
-                .compareTo(response.totalAmount()));
-    }
-
-    /** Confirms a USD rate carrying a third fraction digit is rejected rather than rounded. */
-    @Test
-    void shouldRejectUsdNightlyRateBeyondTwoFractionDigits() {
-        assertRejected(request("USD", new BigDecimal("20.501")), "Rate exceeds currency precision");
-    }
-
     /**
      * Confirms the Reservation total stays the exact sum of its room lines once each rate has been
      * normalized, so no rounding is introduced between a room line and the Reservation total.
@@ -164,15 +216,15 @@ class ReservationCurrencyPrecisionServiceTest {
         Room second = room("102");
         when(rooms.findAllById(any())).thenReturn(List.of(room, second));
         CreateRequest request = new CreateRequest(
-                guest.getId(), CHECK_IN, CHECK_OUT, 2, 0, BookingSource.DIRECT, null, "USD", null,
-                List.of(new RoomRequest(room.getId(), new BigDecimal("20.50")),
-                        new RoomRequest(second.getId(), new BigDecimal("30.05"))),
+                guest.getId(), CHECK_IN, CHECK_OUT, 2, 0, BookingSource.DIRECT, null, "VND", null,
+                List.of(new RoomRequest(room.getId(), new BigDecimal("500000")),
+                        new RoomRequest(second.getId(), new BigDecimal("750000"))),
                 List.of());
 
         Response response = service.create(request);
 
-        // Two nights of 20.50 plus two nights of 30.05.
-        assertEquals(0, new BigDecimal("101.10").compareTo(response.totalAmount()));
+        // Two nights of 500,000 plus two nights of 750,000.
+        assertEquals(0, new BigDecimal("2500000").compareTo(response.totalAmount()));
     }
 
     /**

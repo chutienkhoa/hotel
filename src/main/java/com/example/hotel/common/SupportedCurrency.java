@@ -5,8 +5,11 @@ import java.math.RoundingMode;
 import java.util.Optional;
 
 /**
- * Defines the currencies a Reservation may be denominated in for V1 and the monetary precision that
- * follows from each one.
+ * Defines the currencies supported in V1 and the monetary precision that follows from each one.
+ *
+ * <p>The set covers both Reservation/Folio amounts and Payment tender currencies. A new Reservation is
+ * VND only in V1 (enforced by {@code ReservationService}); USD remains supported as a Payment tender
+ * currency and for historical Reservations.</p>
  *
  * <p>This is the single place that knows the supported currency set and its fraction digits, so
  * request validation, the Reservation/Payment/Charge services and the database CHECK constraint

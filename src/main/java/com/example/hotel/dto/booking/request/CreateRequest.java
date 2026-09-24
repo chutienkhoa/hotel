@@ -30,7 +30,7 @@ public record CreateRequest(
         @NotNull BookingSource source,
         @Size(max = 255) String otaBookingReference,
         @NotBlank(message = "{validation.reservation.currency.required}")
-                @Pattern(regexp = "VND|USD", message = "{validation.reservation.currency.supported}")
+                @Pattern(regexp = "VND", message = "{validation.reservation.currency.supported}")
                 String currency,
         @Size(max = 5000) String notes,
         @NotEmpty List<@Valid RoomRequest> rooms,
@@ -52,7 +52,7 @@ public record CreateRequest(
      * @param childCount number of children, at least 0
      * @param source booking source
      * @param otaBookingReference staff-entered OTA reference, required for a non-DIRECT source
-     * @param currency supported Reservation currency code, VND or USD
+     * @param currency Reservation currency code; V1 Reservations are VND only
      * @param notes optional reservation notes
      * @param rooms requested room/rate assignments
      * @param accompanyingGuestIds optional Accompanying Guest identifiers

@@ -609,10 +609,37 @@ VND
 USD
 ```
 
-Không hỗ trợ bất kỳ mã ISO-4217 nào khác trong V1. Quy tắc này được enforce nhất quán tại UI, request
-validation, service/domain boundary và CHECK constraint của PostgreSQL (`reservation_currency_supported`).
+Không hỗ trợ bất kỳ mã ISO-4217 nào khác trong V1. `VND` và `USD` là tập currency được hỗ trợ cho
+TIỀN KHÁCH TRẢ (`Payment.currency`, xem mục 10.1) và cho phép tính độ chính xác thập phân bên dưới.
 Currency là immutable sau khi Reservation rời trạng thái DRAFT, tức là trước khi bất kỳ khoản tiền nào
 có thể tồn tại.
+
+### Reservation / Folio currency V1 = VND only (approved)
+
+Currency của Reservation / Folio trong V1 CHỈ là `VND`. Đây là quyết định sản phẩm đã được duyệt:
+
+```text
+Reservation.currency (và do đó currency của Folio, Charge, ReservationRoom, StayExtensionRoom) = VND
+Payment.currency (tiền khách thực trả)                                                         = VND hoặc USD
+```
+
+- **Mọi đường tạo/lưu Reservation** — tạo Reservation thường (MVC và `POST /api/reservations`), Walk-in,
+  OTA Booking Not Entered, và sửa DRAFT — từ chối `currency` khác `VND`. Kiểm tra có thẩm quyền nằm ở
+  service (`ReservationService`), không chỉ ở Bean Validation hay việc ẩn tùy chọn USD trên UI; request thủ công
+  gửi `USD` bị từ chối (400).
+- **USD vẫn được hỗ trợ là Payment tender currency** thông qua cơ chế tỷ giá nhập tay hiện có và
+  `appliedAmount` (mục 10.1): khách trả USD cho một Reservation VND được quy đổi một lần về VND theo
+  `exchangeRate` ("1 USD = exchangeRate VND"). Ngữ nghĩa `exchangeRate`, `appliedAmount`, làm tròn và
+  snapshot bất biến của Payment KHÔNG thay đổi.
+- **Lý do**: doanh thu dịch vụ của Charge là VND (mục 69) và báo cáo tài chính là VND (mục 61.2); V1 không
+  có FX ghi nhận doanh thu. Một Reservation USD trước đây không thể phát sinh Charge dịch vụ và bị loại khỏi
+  tổng doanh thu VND.
+- **Dữ liệu lịch sử**: các Reservation `USD` đã tồn tại KHÔNG bị sửa, xóa hay migrate; CHECK constraint
+  `reservation_currency_supported` (`VND`/`USD`) được giữ nguyên để không phá dữ liệu lịch sử. Các nhánh xử lý
+  Reservation non-VND hiện có (từ chối Charge dịch vụ, cảnh báo `nonVndWarning` ở báo cáo) tiếp tục áp dụng cho
+  dữ liệu lịch sử đó. Việc sửa DRAFT `USD` lịch sử yêu cầu chọn lại `VND`.
+- **Hoãn (deferred) ngoài V1**: Reservation / Folio đa tiền tệ, ghi nhận doanh thu theo FX (revenue-recognition
+  FX snapshot), và tỷ giá ngoài (external FX).
 
 Số chữ số thập phân của từng currency:
 
@@ -1871,6 +1898,19 @@ DRAFT
 CONFIRMED
 ```
 
+Từ DRAFT:
+
+```text
+DRAFT
+ ├── Confirm → CONFIRMED
+ └── Cancel  → CANCELLED
+```
+
+`DRAFT → CANCELLED` (V1, approved) biểu diễn một draft bị bỏ dở / không hợp lệ / không còn tiến hành. Không có
+trạng thái `DISCARDED` và không có thao tác xóa: thao tác dùng lại đúng `Cancel` hiện có (`MANAGE_BOOKING`,
+`CancellationReasonCode` bắt buộc + chi tiết, audit `CANCEL`; xem mục 75). Draft chưa có Room lock, Stay hay
+Payment nên việc hủy không đụng tới tồn kho hay tiền. `NO_SHOW` KHÔNG khả dụng từ DRAFT.
+
 Từ CONFIRMED:
 
 ```text
@@ -2405,6 +2445,9 @@ có `CHECK_OUT`). Thứ tự nhóm OPERATIONS: Check-in, Check-out, Reservations
 ---
 
 # 25. Cancellation Flow
+
+Cancel khả dụng từ `DRAFT` và `CONFIRMED` (mục 19). Với `DRAFT`, các bước phí hủy/hoàn tiền không phát sinh
+vì draft không thể có khoản thanh toán trước.
 
 ```text
 CONFIRMED
@@ -4990,9 +5033,13 @@ Reservation có thêm ba trường mới: `cancellationReasonCode`, `cancellatio
 `noShowReason` (khi đánh dấu no-show). Đây KHÔNG phải cancellation fee engine, KHÔNG tự động tịch thu tiền, KHÔNG
 tự động chuyển NO_SHOW theo lịch, và KHÔNG có bảng lịch sử/entity lý do riêng.
 
-- **State machine không đổi**: `Cancel` (CONFIRMED → CANCELLED) và `No-show` (CONFIRMED → NO_SHOW) vẫn chỉ khả
-  dụng từ CONFIRMED; mọi trạng thái khác tiếp tục bị từ chối với lỗi 409 hiện có. Không thêm transition, không
-  bypass state validation.
+- **State machine**: `Cancel` khả dụng từ `CONFIRMED` và (V1, approved, mục 19) từ `DRAFT` → CANCELLED;
+  `No-show` (CONFIRMED → NO_SHOW) vẫn chỉ khả dụng từ CONFIRMED. Mọi trạng thái khác tiếp tục bị từ chối với
+  lỗi 409 hiện có. Cancel từ `DRAFT` dùng cùng lý do bắt buộc (`cancellationReasonCode`, và detail bắt buộc khi
+  `OTHER`), cùng quyền `MANAGE_BOOKING`, cùng audit `CANCEL` (`DRAFT` → `CANCELLED`). Không bypass state validation.
+- **Định danh OTA sau khi hủy DRAFT**: một DRAFT non-DIRECT bị hủy vẫn giữ `otaBookingReference` như mọi
+  Reservation `CANCELLED` (mục 6.2, trạng thái cuối KHÔNG giải phóng định danh). Nếu reference của một DRAFT còn
+  đúng, nhân viên nên sửa DRAFT thay vì hủy.
 - **Cancellation Reason — bắt buộc**: mọi lần `Cancel` mới phải cung cấp `cancellationReasonCode` (enum
   `CancellationReasonCode`: `GUEST_REQUEST`, `CHANGE_OF_PLANS`, `DUPLICATE_BOOKING`, `PAYMENT_ISSUE`,
   `HOTEL_OPERATIONAL`, `OTA_CANCELLATION`, `OTHER`). `cancellationReasonDetail` là tùy chọn, TRỪ khi

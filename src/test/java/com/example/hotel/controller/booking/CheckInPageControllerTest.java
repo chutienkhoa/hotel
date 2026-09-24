@@ -2,7 +2,11 @@ package com.example.hotel.controller.booking;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -177,6 +181,93 @@ class CheckInPageControllerTest {
         mockMvc.perform(get("/check-in").with(user("staff").authorities(checkInAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-in\"")));
+    }
+
+    /** Confirms the Walk-in and OTA entry forms offer VND as the only Reservation currency. */
+    @Test
+    void shouldOfferOnlyVndAsReservationCurrencyOnWalkInAndOtaEntry() throws Exception {
+        for (String path : List.of("/check-in/walk-in", "/check-in/ota-entry")) {
+            mockMvc.perform(get(path).with(user("staff").authorities(checkInAuthority())))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("value=\"VND\">VND")))
+                    .andExpect(content().string(not(containsString("value=\"USD\""))));
+        }
+    }
+
+    /** Confirms a crafted USD Walk-in review/confirm is rejected by validation and never reaches the service. */
+    @Test
+    void shouldRejectUsdWalkInBeforeReachingTheService() throws Exception {
+        for (String path : List.of("/check-in/walk-in/review", "/check-in/walk-in/confirm")) {
+            mockMvc.perform(walkInPost(path, "USD"))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("Reservation currency must be VND.")));
+        }
+        verify(checkInService, never()).reviewWalkIn(any());
+        verify(checkInService, never()).confirmWalkIn(any());
+    }
+
+    /** Confirms a VND Walk-in passes validation and is handed to the service. */
+    @Test
+    void shouldAcceptVndWalkIn() throws Exception {
+        UUID reservationId = UUID.randomUUID();
+        when(checkInService.confirmWalkIn(any())).thenReturn(
+                new com.example.hotel.dto.booking.response.Response(
+                        reservationId, "R1", "CHECKED_IN", java.math.BigDecimal.TEN, "VND"));
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/confirm", "VND"))
+                .andExpect(status().is3xxRedirection());
+        verify(checkInService).confirmWalkIn(any());
+    }
+
+    /** Confirms a crafted USD OTA entry is rejected by validation and never reaches the service. */
+    @Test
+    void shouldRejectUsdOtaEntryBeforeReachingTheService() throws Exception {
+        mockMvc.perform(otaEntryPost("USD"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Reservation currency must be VND.")));
+        verify(checkInService, never()).createOtaEntry(any());
+    }
+
+    /** Confirms a VND OTA entry passes validation and is handed to the service. */
+    @Test
+    void shouldAcceptVndOtaEntry() throws Exception {
+        when(checkInService.createOtaEntry(any())).thenReturn(
+                new com.example.hotel.dto.booking.response.Response(
+                        UUID.randomUUID(), "R1", "CONFIRMED", java.math.BigDecimal.TEN, "VND"));
+
+        mockMvc.perform(otaEntryPost("VND")).andExpect(status().is3xxRedirection());
+        verify(checkInService).createOtaEntry(any());
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder walkInPost(
+            String path, String currency) {
+        return post(path)
+                .param("guestId", GUEST_ID.toString())
+                .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                .param("adultCount", "2")
+                .param("childCount", "0")
+                .param("currency", currency)
+                .param("rooms[0].roomId", UUID.randomUUID().toString())
+                .param("rooms[0].nightlyRate", "1000000")
+                .with(user("staff").authorities(checkInAuthority()))
+                .with(csrf());
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder otaEntryPost(
+            String currency) {
+        return post("/check-in/ota-entry")
+                .param("guestId", GUEST_ID.toString())
+                .param("checkInDate", LocalDate.now().toString())
+                .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                .param("adultCount", "2")
+                .param("childCount", "0")
+                .param("source", "AGODA")
+                .param("otaBookingReference", "AG-1")
+                .param("currency", currency)
+                .param("rooms[0].roomId", UUID.randomUUID().toString())
+                .param("rooms[0].nightlyRate", "1000000")
+                .with(user("staff").authorities(checkInAuthority()))
+                .with(csrf());
     }
 
     /** Builds a representative Check-in Review response. */

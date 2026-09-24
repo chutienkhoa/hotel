@@ -3,6 +3,8 @@ package com.example.hotel.controller.booking;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -92,6 +94,18 @@ class ReservationControllerValidationTest {
         assertDoesNotThrow(
                 () -> mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
                         .andExpect(status().isBadRequest()));
+    }
+
+    /** Confirms a crafted USD Reservation currency is rejected by request validation before reaching the service. */
+    @Test
+    void rejectsUsdReservationCurrency() throws Exception {
+        String body =
+                "{\"guestId\":\"11111111-1111-1111-1111-111111111111\",\"checkInDate\":\"2027-01-10\",\"checkOutDate\":\"2027-01-12\",\"adultCount\":2,\"childCount\":1,\"source\":\"DIRECT\",\"currency\":\"USD\",\"rooms\":[{\"roomId\":\"22222222-2222-2222-2222-222222222222\",\"nightlyRate\":100}]}";
+
+        mvc.perform(post("/api/reservations").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+
+        verify(reservationService, never()).create(any());
     }
 
     /** Confirms a DIRECT reservation is accepted without an OTA booking reference. */

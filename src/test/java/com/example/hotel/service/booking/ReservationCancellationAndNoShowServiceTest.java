@@ -160,10 +160,70 @@ class ReservationCancellationAndNoShowServiceTest {
         verify(audits, never()).save(any());
     }
 
-    /** Confirms every non-CONFIRMED starting status is still rejected exactly as before this feature. */
+    /** Confirms a DRAFT (abandoned/invalid draft) can be cancelled, persisting the reason and auditing DRAFT to CANCELLED. */
+    @Test
+    void cancelFromDraftPersistsReasonAndAuditsTheTransition() {
+        Reservation reservation = draft(TODAY, TODAY.plusDays(2));
+
+        service.cancel(reservation.getId(),
+                new CancelReservationRequest(CancellationReasonCode.CHANGE_OF_PLANS, "  Guest never called back  "));
+
+        assertEquals(ReservationStatus.CANCELLED, reservation.getStatus());
+        assertEquals(CancellationReasonCode.CHANGE_OF_PLANS, reservation.getCancellationReasonCode());
+        assertEquals("Guest never called back", reservation.getCancellationReasonDetail());
+        AuditLog audit = capturedAudit();
+        assertEquals("CANCEL", field(audit, "action"));
+        assertEquals("DRAFT", field(audit, "oldValue"));
+        assertEquals("CANCELLED", field(audit, "newValue"));
+    }
+
+    /** Confirms cancelling a DRAFT still requires a reason code, before any mutation or audit. */
+    @Test
+    void cancelFromDraftRejectsMissingReasonCode() {
+        Reservation reservation = draft(TODAY, TODAY.plusDays(2));
+
+        LocalizedResponseStatusException exception = assertThrows(LocalizedResponseStatusException.class,
+                () -> service.cancel(reservation.getId(), new CancelReservationRequest(null, null)));
+
+        assertEquals("reservation.cancel.error.reasonRequired", exception.getMessageKey());
+        assertEquals(ReservationStatus.DRAFT, reservation.getStatus());
+        verify(audits, never()).save(any());
+    }
+
+    /** Confirms cancelling a DRAFT with reason OTHER still requires a non-blank detail. */
+    @Test
+    void cancelFromDraftRejectsOtherWithBlankDetail() {
+        Reservation reservation = draft(TODAY, TODAY.plusDays(2));
+
+        LocalizedResponseStatusException exception = assertThrows(LocalizedResponseStatusException.class,
+                () -> service.cancel(reservation.getId(),
+                        new CancelReservationRequest(CancellationReasonCode.OTHER, "  ")));
+
+        assertEquals("reservation.cancel.error.detailRequiredForOther", exception.getMessageKey());
+        assertEquals(ReservationStatus.DRAFT, reservation.getStatus());
+        verify(audits, never()).save(any());
+    }
+
+    /** Confirms a cancelled DRAFT is terminal: it cannot be cancelled again or confirmed afterwards. */
+    @Test
+    void cancelledDraftIsTerminal() {
+        Reservation reservation = draft(TODAY, TODAY.plusDays(2));
+        service.cancel(reservation.getId(),
+                new CancelReservationRequest(CancellationReasonCode.DUPLICATE_BOOKING, null));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> service.cancel(reservation.getId(),
+                        new CancelReservationRequest(CancellationReasonCode.DUPLICATE_BOOKING, null)));
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+        assertThrows(IllegalStateException.class, reservation::confirm);
+        assertEquals(ReservationStatus.CANCELLED, reservation.getStatus());
+    }
+
+    /** Confirms every starting status other than DRAFT and CONFIRMED is still rejected with the existing 409. */
     @ParameterizedTest
     @EnumSource(value = ReservationStatus.class,
-            names = {"DRAFT", "CANCELLED", "NO_SHOW", "CHECKED_IN", "CHECKED_OUT"})
+            names = {"CANCELLED", "NO_SHOW", "CHECKED_IN", "CHECKED_OUT"})
     void cancelRejectsInvalidStartingStatuses(ReservationStatus status) {
         Reservation reservation = confirmed(TODAY, TODAY.plusDays(2));
         ReflectionTestUtils.setField(reservation, "status", status);
@@ -339,6 +399,14 @@ class ReservationCancellationAndNoShowServiceTest {
     // ---------------------------------------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------------------------------------
+
+    private Reservation draft(LocalDate checkIn, LocalDate checkOut) {
+        Guest guest = mock(Guest.class);
+        Reservation reservation =
+                new Reservation(UUID.randomUUID(), "R-1", guest, checkIn, checkOut, "VND", null);
+        when(reservations.findByIdForUpdate(reservation.getId())).thenReturn(Optional.of(reservation));
+        return reservation;
+    }
 
     private Reservation confirmed(LocalDate checkIn, LocalDate checkOut) {
         Guest guest = mock(Guest.class);

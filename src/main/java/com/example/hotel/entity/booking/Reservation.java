@@ -875,17 +875,20 @@ public class Reservation extends AuditedEntity {
     }
 
     /**
-     * Hủy reservation đã xác nhận và ghi nhận lý do hủy. The reason is set exactly once: this method only
-     * ever succeeds from CONFIRMED, and CANCELLED is terminal, so the reason can never be overwritten. The
-     * caller is expected to have already validated the reason (required code; non-blank detail when the code
-     * is OTHER).
+     * Hủy reservation nháp (abandoned draft) hoặc đã xác nhận và ghi nhận lý do hủy. The reason is set exactly
+     * once: this method only ever succeeds from DRAFT or CONFIRMED, and CANCELLED is terminal, so the reason can
+     * never be overwritten. The caller is expected to have already validated the reason (required code; non-blank
+     * detail when the code is OTHER).
      *
      * @param reasonCode the required structured cancellation reason
      * @param reasonDetail the optional free-text detail, or {@code null}
-     * @throws IllegalStateException if this Reservation is not CONFIRMED
+     * @throws IllegalStateException if this Reservation is neither DRAFT nor CONFIRMED
      */
     public void cancel(CancellationReasonCode reasonCode, String reasonDetail) {
-        transition(ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED);
+        if (status != ReservationStatus.DRAFT && status != ReservationStatus.CONFIRMED) {
+            throw new IllegalStateException("Invalid reservation state transition");
+        }
+        status = ReservationStatus.CANCELLED;
         cancellationReasonCode = reasonCode;
         cancellationReasonDetail = reasonDetail;
     }

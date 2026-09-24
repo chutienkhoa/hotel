@@ -544,7 +544,7 @@
                           data-confirm-title="Cancel reservation" method="post"
                           th:action="@{/reservations/{id}/cancel(id=${reservation.id})}"
                           th:attr="data-confirm-message=|Cancel reservation ${reservation.reservationNumber}?|"
-                          th:if="${reservation.status == 'CONFIRMED' and canManageBooking}">
+                          th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED') and canManageBooking}">
                         <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                         <div class="form-field">
                             <label for="cancellationReasonCode" th:text="#{reservation.cancel.reasonCode.label}">Cancellation reason</label>

@@ -458,7 +458,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(not(containsString("Identity document"))));
     }
 
-    /** Confirms the Reservation Create page limits currency selection to VND and USD. */
+    /** Confirms the Reservation Create page limits currency selection to VND and rejects a crafted USD submission. */
     @Test
     void shouldRenderCurrencySelectAndPreserveSelectedCurrencyAfterValidationFailure() throws Exception {
         when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
@@ -469,16 +469,24 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("<select id=\"currency\"")))
                 .andExpect(content().string(containsString("value=\"VND\">VND")))
-                .andExpect(content().string(containsString("value=\"USD\">USD")))
+                .andExpect(content().string(not(containsString("value=\"USD\""))))
                 .andExpect(content().string(not(containsString("<input id=\"currency\""))))
                 .andExpect(content().string(containsString("class=\"button button-danger remove-room\"")));
+
+        mockMvc.perform(post("/reservations")
+                        .param("currency", "VND")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"VND\" selected=\"selected\"")));
 
         mockMvc.perform(post("/reservations")
                         .param("currency", "USD")
                         .with(user("manager").authorities(manageBookingAndViewAuthorities()))
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("value=\"USD\" selected=\"selected\"")));
+                .andExpect(content().string(containsString("Reservation currency must be VND.")))
+                .andExpect(content().string(not(containsString("value=\"USD\""))));
     }
 
     /** Confirms Reservation date fields opt in to the shared non-native date picker assets. */
