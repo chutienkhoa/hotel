@@ -154,9 +154,13 @@ class ReservationCheckOutServiceTest {
         }
     }
 
-    /** Confirms the Stay is locked before the Reservation is read (lock order) and before the overdue rule is applied. */
+    /**
+     * Confirms the lock order Stay → Reservation → current Rooms, that the Reservation is loaded under its OWN
+     * pessimistic-write lock rather than merely read (so a concurrently committed Booking Contact/Notes edit cannot
+     * be overwritten by check-out's older snapshot), and that all of it happens before the overdue rule is applied.
+     */
     @Test
-    void shouldLockTheStayBeforeReadingTheReservation() {
+    void shouldLockTheStayThenTheReservationRowBeforeLockingRooms() {
         Fixture fixture = overdueFixture("2026-09-22");
         when(fixture.stayBalanceService().calculate(fixture.stay().getId())).thenReturn(balance(BigDecimal.TEN, BigDecimal.TEN));
 
@@ -164,8 +168,9 @@ class ReservationCheckOutServiceTest {
 
         var order = org.mockito.Mockito.inOrder(fixture.stayRepository(), fixture.reservationRepository(), fixture.roomRepository());
         order.verify(fixture.stayRepository()).findByReservationIdForUpdate(fixture.reservation().getId());
-        order.verify(fixture.reservationRepository()).findById(fixture.reservation().getId());
+        order.verify(fixture.reservationRepository()).findByIdForUpdate(fixture.reservation().getId());
         order.verify(fixture.roomRepository()).lockAllByIdIn(any());
+        verify(fixture.reservationRepository(), never()).findById(fixture.reservation().getId());
     }
 
     /** Confirms a Reservation outside CHECKED_IN cannot be checked out. */

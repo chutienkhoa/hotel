@@ -1,5 +1,6 @@
 package com.example.hotel.service.customer;
 
+import com.example.hotel.common.validation.ImageContentFormat;
 import com.example.hotel.dto.customer.response.GuestDocumentResponse;
 import com.example.hotel.dto.customer.response.GuestPassportImage;
 import com.example.hotel.entity.customer.Guest;
@@ -7,6 +8,7 @@ import com.example.hotel.entity.customer.GuestDocument;
 import com.example.hotel.entity.customer.GuestDocumentType;
 import com.example.hotel.exception.GuestDocumentValidationException;
 import com.example.hotel.repository.customer.GuestDocumentRepository;
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -165,7 +167,12 @@ public class GuestDocumentService {
     }
 
     /**
-     * Validates the permitted passport image size, MIME type, and extension before storage.
+     * Validates the permitted passport image size, filename, declared MIME type/extension, and the
+     * ACTUAL decoded image content before storage. The client-declared extension and
+     * {@code Content-Type} are never the last word: the bytes are decoded through the shared
+     * {@link ImageContentFormat} primitive (the same one the Room image upload uses) and the real
+     * format must agree with the declared one, so arbitrary bytes renamed {@code passport.jpg} and
+     * submitted as {@code image/jpeg} are rejected rather than stored as a passport image.
      *
      * @param upload selected multipart upload
      * @return normalized safe metadata for the upload
@@ -191,11 +198,38 @@ public class GuestDocumentService {
         if (!("image/jpeg".equals(contentType) || "image/png".equals(contentType))) {
             throw new GuestDocumentValidationException("Passport image must be a JPEG or PNG image.");
         }
-        if (("png".equals(extension) && !"image/png".equals(contentType))
+        boolean declaredPng = "png".equals(extension);
+        if ((declaredPng && !"image/png".equals(contentType))
                 || (("jpg".equals(extension) || "jpeg".equals(extension)) && !"image/jpeg".equals(contentType))) {
             throw new GuestDocumentValidationException("Passport image file type does not match its extension.");
         }
+
+        Optional<ImageContentFormat> actualFormat = ImageContentFormat.detect(readBytes(upload));
+        if (actualFormat.isEmpty()) {
+            throw new GuestDocumentValidationException(
+                    "Passport image file content is not a valid JPEG or PNG image.");
+        }
+        if ((actualFormat.get() == ImageContentFormat.PNG) != declaredPng) {
+            throw new GuestDocumentValidationException(
+                    "Passport image file content does not match its declared type.");
+        }
         return new ValidatedUpload(originalName, contentType, upload.getSize(), extension);
+    }
+
+    /**
+     * Reads the full upload into memory so its actual bytes can be decoded; already bounded by the
+     * 5 MB size check enforced above.
+     *
+     * @param upload selected multipart upload
+     * @return the upload's raw bytes
+     * @throws GuestDocumentValidationException if the upload cannot be read
+     */
+    private byte[] readBytes(MultipartFile upload) {
+        try {
+            return upload.getBytes();
+        } catch (IOException exception) {
+            throw new GuestDocumentValidationException("Passport image could not be read.");
+        }
     }
 
     /**

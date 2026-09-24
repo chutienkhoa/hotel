@@ -1,5 +1,6 @@
 package com.example.hotel.service.room;
 
+import com.example.hotel.common.validation.ImageContentFormat;
 import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.dto.room.response.RoomImageResponse;
 import com.example.hotel.entity.room.Room;
@@ -10,16 +11,11 @@ import com.example.hotel.repository.room.RoomImageRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageReader;
-import javax.imageio.stream.ImageInputStream;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -270,10 +266,11 @@ public class RoomImageService {
 
     /**
      * Validates the permitted Room image size, filename, declared MIME type/extension, and the
-     * ACTUAL decoded image content before storage. Unlike the existing Guest passport upload, this
-     * does not stop at the client-declared extension and Content-Type: the bytes are decoded and
-     * their real format is verified, so a non-image file (or an image of an unsupported format)
-     * renamed with a spoofed filename and Content-Type is rejected.
+     * ACTUAL decoded image content before storage. It does not stop at the client-declared
+     * extension and Content-Type: the bytes are decoded through the shared
+     * {@link ImageContentFormat} primitive (also used by the Guest passport upload) and their real
+     * format is verified, so a non-image file (or an image of an unsupported format) renamed with a
+     * spoofed filename and Content-Type is rejected.
      *
      * @param upload selected multipart upload
      * @return normalized safe metadata for the upload
@@ -308,13 +305,12 @@ public class RoomImageService {
                     "room.image.error.typeMismatch", "Room image file type does not match its extension.");
         }
 
-        byte[] bytes = readBytes(upload);
-        String actualFormat = probeSupportedImageFormat(bytes);
-        if (actualFormat == null) {
+        Optional<ImageContentFormat> actualFormat = ImageContentFormat.detect(readBytes(upload));
+        if (actualFormat.isEmpty()) {
             throw new RoomImageValidationException(
                     "room.image.error.invalidContent", "Room image file content is not a valid JPEG or PNG image.");
         }
-        boolean actualPng = "PNG".equals(actualFormat);
+        boolean actualPng = actualFormat.get() == ImageContentFormat.PNG;
         if (actualPng != declaredPng) {
             throw new RoomImageValidationException(
                     "room.image.error.contentMismatch", "Room image file content does not match its declared type.");
@@ -336,63 +332,6 @@ public class RoomImageService {
         } catch (IOException exception) {
             throw new RoomImageValidationException("room.image.error.unreadable", "Room image could not be read.");
         }
-    }
-
-    /**
-     * Decodes the uploaded bytes with the JDK's built-in image I/O readers and returns the actual
-     * detected format, never trusting the client-declared extension or Content-Type. A file that
-     * fails to decode or decodes to an unsupported format is rejected. There is no maximum
-     * width/height: no such limit is approved, so a genuine supported JPEG/PNG is never rejected
-     * merely for its dimensions.
-     *
-     * @param bytes the uploaded file's raw bytes
-     * @return {@code "JPEG"} or {@code "PNG"}, or {@code null} when the content is not a
-     *     supported, decodable image
-     */
-    private String probeSupportedImageFormat(byte[] bytes) {
-        try (ImageInputStream inputStream = ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
-            if (inputStream == null) {
-                return null;
-            }
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(inputStream);
-            if (!readers.hasNext()) {
-                return null;
-            }
-            ImageReader reader = readers.next();
-            try {
-                reader.setInput(inputStream, true, true);
-                String normalizedFormat = normalizeFormat(reader.getFormatName());
-                if (normalizedFormat == null) {
-                    return null;
-                }
-                BufferedImage decoded = reader.read(0);
-                return decoded == null ? null : normalizedFormat;
-            } finally {
-                reader.dispose();
-            }
-        } catch (IOException exception) {
-            return null;
-        }
-    }
-
-    /**
-     * Normalizes an ImageIO reader format name to {@code "JPEG"} or {@code "PNG"}.
-     *
-     * @param formatName raw reader-supplied format name
-     * @return the normalized format, or {@code null} when it is neither supported format
-     */
-    private String normalizeFormat(String formatName) {
-        if (formatName == null) {
-            return null;
-        }
-        String upper = formatName.toUpperCase(Locale.ROOT);
-        if (upper.contains("JPEG") || upper.contains("JPG")) {
-            return "JPEG";
-        }
-        if (upper.contains("PNG")) {
-            return "PNG";
-        }
-        return null;
     }
 
     /**

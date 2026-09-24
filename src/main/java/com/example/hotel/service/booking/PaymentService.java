@@ -12,6 +12,7 @@ import com.example.hotel.entity.booking.PaymentStatus;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.entity.common.AuditLog;
+import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.mapper.booking.PaymentMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.PaymentRepository;
@@ -83,6 +84,7 @@ public class PaymentService {
         if (stay.getStatus() != StayStatus.CHECKED_IN) {
             throw conflict("Payments can be created only for checked-in stays");
         }
+        requireNoLiveDuplicateReference(stay, request);
         PaymentCurrency reservationCurrency = resolveReservationCurrency(stay);
         BigDecimal appliedAmount = calculateAppliedAmount(
                 request.amount(), request.currency(), reservationCurrency, request.exchangeRate());
@@ -106,7 +108,8 @@ public class PaymentService {
      * PENDING Payment is ever persisted, and any failure leaves nothing persisted since every step
      * runs inside this one transaction. The existing {@link #create} + {@link #markPaid} flow
      * remains fully available and unchanged for Payments that must stay PENDING (e.g. awaiting
-     * bank/gateway/OTA confirmation).
+     * bank/gateway/OTA confirmation). It also shares the duplicate-reference guard described in
+     * {@link #requireNoLiveDuplicateReference}.
      *
      * @param stayId owning Stay identifier from the URL path
      * @param request client-controlled Payment data
@@ -117,6 +120,7 @@ public class PaymentService {
         validateCreationRequest(request);
         Stay stay = findStayForUpdate(stayId);
         requireCheckedIn(stay);
+        requireNoLiveDuplicateReference(stay, request);
         PaymentCurrency reservationCurrency = resolveReservationCurrency(stay);
         BigDecimal appliedAmount = calculateAppliedAmount(
                 request.amount(), request.currency(), reservationCurrency, request.exchangeRate());
@@ -274,6 +278,68 @@ public class PaymentService {
                 "Payment " + payment.getId() + " status=PAID",
                 "Payment " + payment.getId() + " status=VOIDED"));
         return paymentMapper.toResponse(saved);
+    }
+
+    /**
+     * Rejects recording the same real-world Payment twice for one Reservation. A Payment is a
+     * duplicate when its owning Reservation already has a LIVE Payment with the SAME method and the
+     * SAME trimmed, non-blank reference — exactly the tuple, and exactly the
+     * {@link PaymentRepository#existsLiveWithReference} definition of "live" (anything other than
+     * FAILED, REFUNDED or VOIDED), that the pre-check-in prepayment guard already uses. Extending
+     * that one rule to the Stay-level boundaries means one reference cannot be recorded once before
+     * check-in and again on the folio.
+     *
+     * <p>Its purpose is operational: it stops a manual retry or a double-submitted form from
+     * recording one bank transfer or card transaction twice. It is not payment-gateway idempotency.</p>
+     *
+     * <p>Deliberate boundaries of the rule, so it never rejects a legitimately distinct Payment:</p>
+     * <ul>
+     *   <li>a blank or absent reference never collides — several cash payments are normal;</li>
+     *   <li>the method is part of the tuple, so the same text under a different method is allowed;</li>
+     *   <li>a corrected Payment (VOIDED/REFUNDED, or FAILED) releases its reference immediately, so
+     *       the corrected entry can be recorded with the same real-world reference.</li>
+     * </ul>
+     *
+     * <p>Concurrency: every caller already holds the Stay's {@code PESSIMISTIC_WRITE} lock, so two
+     * concurrent requests for the same Stay are serialized and the second one's check runs only
+     * after the first one's Payment is visible.</p>
+     *
+     * @param stay the locked owning Stay
+     * @param request client-controlled Payment data
+     * @throws LocalizedResponseStatusException if an identical live Payment already exists
+     */
+    private void requireNoLiveDuplicateReference(Stay stay, PaymentCreateRequest request) {
+        String reference = normalizeReference(request.reference());
+        if (reference == null) {
+            return;
+        }
+        boolean duplicate = paymentRepository.existsLiveWithReference(
+                stay.getReservation().getId(),
+                request.method(),
+                reference,
+                List.of(PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.VOIDED));
+        if (duplicate) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "payment.folio.payment.error.duplicateReference",
+                    "A payment with the same method and reference already exists for this reservation");
+        }
+    }
+
+    /**
+     * Normalizes a submitted reference for the duplicate guard the same way the prepayment guard
+     * does: surrounding whitespace is ignored and a blank reference counts as no reference. What is
+     * persisted is unchanged.
+     *
+     * @param reference client-supplied reference, possibly {@code null}
+     * @return the trimmed reference, or {@code null} when absent or blank
+     */
+    private static String normalizeReference(String reference) {
+        if (reference == null) {
+            return null;
+        }
+        String trimmed = reference.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

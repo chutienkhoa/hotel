@@ -2,6 +2,19 @@
 
 Project for hotel management
 
+## Documentation
+
+- Business source of truth: [docs/requirements/technical-spec-v1.md](docs/requirements/technical-spec-v1.md)
+- Coding and architecture rules: [docs/coding-rules/](docs/coding-rules/)
+- Running it in production:
+  - [docs/operations/configuration-and-secrets.md](docs/operations/configuration-and-secrets.md) —
+    required environment variables, startup behavior when they are missing, credential rotation
+  - [docs/operations/storage-and-backup.md](docs/operations/storage-and-backup.md) — persistent
+    file-storage requirement, and the database + files backup/restore runbook
+
+Local development needs a `.env`; copy [.env.example](.env.example) and replace every value. `.env`
+is git-ignored and must never be committed.
+
 ## Running the tests
 
 There are two developer modes.
@@ -49,18 +62,30 @@ details. This class is never picked up by plain `mvn test` (Surefire's default i
 Requirements for this mode:
 
 - **A working Docker environment that Testcontainers can resolve on its own** (no repository configuration
-  hardcodes a socket path, and none should). On most machines this just works. On some Docker Desktop for macOS
-  installs, Testcontainers' default `UnixSocketClientProviderStrategy` negotiates a stale Docker API version
-  against the CLI-compatibility socket and fails with `client version ... is too old`; if you hit that, point
-  Testcontainers at Docker Desktop's raw API socket for your user account instead, for example:
+  hardcodes a socket path or an API version, and none should). On most machines this just works. On some Docker
+  Desktop for macOS installs, Testcontainers' bundled docker-java client negotiates a stale Docker API version
+  and every PostgreSQL test stands down with `client version ... is too old. Minimum supported API version is
+  ...`. If you hit that, pin the client API version for the test JVM on the command line:
 
   ```bash
-  DOCKER_HOST=unix://$HOME/Library/Containers/com.docker.docker/Data/docker.raw.sock \
-  TESTCONTAINERS_DOCKER_CLIENT_STRATEGY=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
-  mvn verify -Pintegration
+  mvn verify -Pintegration -DargLine="-Dapi.version=1.44"
   ```
 
-  This is a workaround for that specific local Docker Desktop behavior, not a repository requirement; do not add
-  it to `~/.testcontainers.properties`, `pom.xml`, or any committed configuration. On Linux CI runners with a
-  standard Docker daemon this is normally unnecessary.
+  Any version the daemon supports works (`docker version` prints its API version). If the daemon socket itself
+  cannot be reached, additionally point Testcontainers at Docker Desktop's socket for your user account, for
+  example:
+
+  ```bash
+  DOCKER_HOST=unix://$HOME/.docker/run/docker.sock \
+  TESTCONTAINERS_DOCKER_CLIENT_STRATEGY=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
+  mvn verify -Pintegration -DargLine="-Dapi.version=1.44"
+  ```
+
+  Note that Docker Desktop's *raw* socket (`.../Data/docker.raw.sock`) cannot be bind-mounted into a container,
+  so Testcontainers' resource reaper fails to start with it; use the standard socket above.
+
+  These are workarounds for specific local Docker Desktop behavior, not repository requirements; do not add them
+  to `~/.testcontainers.properties`, `pom.xml`, or any committed configuration, and do not upgrade Testcontainers
+  or docker-java to work around a local Docker installation. On Linux CI runners with a standard Docker daemon
+  this is normally unnecessary.
 - No other environment variables are required beyond what fast mode already needs (see above).

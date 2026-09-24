@@ -921,6 +921,15 @@ public class ReservationService {
     /**
      * Checks out every room assigned to a checked-in reservation in one transaction.
      *
+     * <p>Concurrency: the Stay is locked first (the post-check-in serialization boundary shared with Stay Extension,
+     * Room Change, Charge and Payment), and the Reservation row is then locked and loaded with
+     * {@link #loadForUpdate(UUID)} — not merely read. Check-out writes the whole Reservation row, while Booking
+     * Contact and Reservation Notes stay editable through CHECKED_IN and serialize on that same row lock; loading the
+     * Reservation without the lock would let check-out overwrite a concurrently committed Booking Contact or Notes
+     * edit with its own older snapshot. Holding the lock makes the two orders the only possible outcomes: the edit
+     * commits first and check-out sees it, or check-out commits first and the edit is rejected because the
+     * Reservation is CHECKED_OUT.</p>
+     *
      * @param id reservation identifier
      * @return reservation after its completed check-out
      * @throws ResponseStatusException if the reservation, Stay, balance, or Room states prevent check-out
@@ -928,10 +937,11 @@ public class ReservationService {
     @Transactional
     public Response checkOut(UUID id) {
         CurrentUser user = currentUser();
-        // The Stay is locked first (post-check-in serialization boundary shared with Stay Extension and Room Change);
-        // the Reservation is read AFTER the lock so its status and planned check-out are never older than the lock.
+        // Lock order: the Stay first (shared post-check-in boundary), then the Reservation row, then the current
+        // Rooms. The Reservation is loaded only AFTER its own lock, so its status, planned check-out and editable
+        // Booking Contact/Notes are never older than the lock and cannot be written back stale.
         Optional<Stay> lockedStay = stays.findByReservationIdForUpdate(id);
-        Reservation reservation = load(id);
+        Reservation reservation = loadForUpdate(id);
         if (reservation.getStatus() != ReservationStatus.CHECKED_IN) {
             throw conflict("Invalid reservation state transition");
         }

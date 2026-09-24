@@ -747,6 +747,144 @@ class PaymentServiceTest {
                 .recordPaid(stayId, request(new BigDecimal("1000000"), PaymentMethod.CASH, null)));
     }
 
+    /**
+     * Confirms the approved Stay-level duplicate guard: the first record-paid with a non-blank
+     * method+reference succeeds, and a second identical live Payment for the same Reservation is
+     * rejected with a conflict and never persisted.
+     */
+    @Test
+    void shouldRejectSecondLivePaymentWithTheSameMethodAndReference() {
+        DuplicateFixture fixture = duplicateFixture();
+
+        PaymentResponse first = fixture.service().recordPaid(
+                fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "FT123"));
+        assertEquals(PaymentStatus.PAID.name(), first.status());
+        fixture.markReferenceLive(PaymentMethod.BANK_TRANSFER, "FT123");
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> fixture.service().recordPaid(
+                        fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "FT123")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals(
+                "A payment with the same method and reference already exists for this reservation",
+                exception.getReason());
+        verify(fixture.paymentRepository(), org.mockito.Mockito.times(1)).save(any(Payment.class));
+    }
+
+    /**
+     * Confirms the duplicate rejection does not depend on amounts: it still applies while the
+     * aggregate would stay far below Total Charges, so it can never be mistaken for the
+     * overpayment guard.
+     */
+    @Test
+    void shouldRejectDuplicateReferenceEvenWhenTotalChargesWouldStillCoverIt() {
+        DuplicateFixture fixture = duplicateFixture();
+        fixture.markReferenceLive(PaymentMethod.BANK_TRANSFER, "FT123");
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> fixture.service().recordPaid(
+                        fixture.stayId(), request(new BigDecimal("1"), PaymentMethod.BANK_TRANSFER, "FT123")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        verify(fixture.paymentRepository(), org.mockito.Mockito.never()).save(any(Payment.class));
+    }
+
+    /** Confirms surrounding whitespace never lets the same real-world reference through twice. */
+    @Test
+    void shouldTreatSurroundingWhitespaceAsTheSameReference() {
+        DuplicateFixture fixture = duplicateFixture();
+        fixture.markReferenceLive(PaymentMethod.BANK_TRANSFER, "FT123");
+
+        assertConflict(() -> fixture.service().recordPaid(
+                fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "  FT123  ")));
+    }
+
+    /**
+     * Confirms the guard is scoped to the approved tuple: the SAME reference text under a DIFFERENT
+     * method is a different real-world payment and stays allowed.
+     */
+    @Test
+    void shouldAllowTheSameReferenceTextUnderADifferentMethod() {
+        DuplicateFixture fixture = duplicateFixture();
+        fixture.markReferenceLive(PaymentMethod.BANK_TRANSFER, "FT123");
+
+        PaymentResponse response = fixture.service().recordPaid(
+                fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.CREDIT_CARD, "FT123"));
+
+        assertEquals(PaymentStatus.PAID.name(), response.status());
+        assertEquals("FT123", response.reference());
+    }
+
+    /** Confirms blank and absent references never collide, so repeated cash payments stay possible. */
+    @Test
+    void shouldAllowRepeatedPaymentsWithABlankOrAbsentReference() {
+        DuplicateFixture fixture = duplicateFixture();
+
+        assertEquals(PaymentStatus.PAID.name(), fixture.service()
+                .recordPaid(fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.CASH, null)).status());
+        assertEquals(PaymentStatus.PAID.name(), fixture.service()
+                .recordPaid(fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.CASH, "   ")).status());
+        assertEquals(PaymentStatus.PAID.name(), fixture.service()
+                .recordPaid(fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.CASH, null)).status());
+
+        verify(fixture.paymentRepository(), org.mockito.Mockito.times(3)).save(any(Payment.class));
+        verify(fixture.paymentRepository(), org.mockito.Mockito.never())
+                .existsLiveWithReference(any(), any(), any(), any());
+    }
+
+    /**
+     * Confirms a corrected Payment behaves consistently with the existing
+     * {@code existsLiveWithReference} semantics: a VOIDED, REFUNDED or FAILED Payment is not live,
+     * so the corrected entry may reuse the same real-world method and reference.
+     */
+    @Test
+    void shouldAllowReusingTheReferenceOfACorrectedNonLivePayment() {
+        DuplicateFixture fixture = duplicateFixture();
+
+        PaymentResponse corrected = fixture.service().recordPaid(
+                fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "FT999"));
+
+        assertEquals(PaymentStatus.PAID.name(), corrected.status());
+        // The repository's live definition excludes FAILED/REFUNDED/VOIDED, so after the erroneous row is
+        // voided or refunded it no longer reports a live duplicate and the corrected entry is accepted.
+        assertEquals(PaymentStatus.PAID.name(), fixture.service().recordPaid(
+                fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "FT999")).status());
+        verify(fixture.paymentRepository(), org.mockito.Mockito.times(2)).existsLiveWithReference(
+                fixture.reservationId(),
+                PaymentMethod.BANK_TRANSFER,
+                "FT999",
+                List.of(PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.VOIDED));
+    }
+
+    /** Confirms the PENDING creation boundary applies the same duplicate guard as record-paid. */
+    @Test
+    void shouldRejectDuplicateReferenceWhenCreatingAPendingPayment() {
+        DuplicateFixture fixture = duplicateFixture();
+        fixture.markReferenceLive(PaymentMethod.BANK_TRANSFER, "FT500");
+
+        assertConflict(() -> fixture.service()
+                .create(fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "FT500")));
+        verify(fixture.paymentRepository(), org.mockito.Mockito.never()).save(any(Payment.class));
+    }
+
+    /** Confirms the duplicate check happens only under the Stay lock the folio boundary already takes. */
+    @Test
+    void shouldCheckForDuplicatesOnlyAfterLockingTheStay() {
+        DuplicateFixture fixture = duplicateFixture();
+
+        fixture.service().recordPaid(
+                fixture.stayId(), request(new BigDecimal("100"), PaymentMethod.BANK_TRANSFER, "FT777"));
+
+        var order = org.mockito.Mockito.inOrder(fixture.stayRepository(), fixture.paymentRepository());
+        order.verify(fixture.stayRepository()).findByIdForUpdate(fixture.stayId());
+        order.verify(fixture.paymentRepository())
+                .existsLiveWithReference(any(), any(), any(), any());
+        order.verify(fixture.paymentRepository()).save(any(Payment.class));
+    }
+
     /** Confirms refund rejects a blank reason. */
     @Test
     void shouldRejectRefundWithBlankReason() {
@@ -1147,6 +1285,59 @@ class PaymentServiceTest {
     private void setCurrentUser(UUID id) {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(new CurrentUser(id, "payment-manager"), null));
+    }
+
+    /**
+     * Creates a checked-in Stay fixture with generous Total Charges and no live duplicate reference
+     * yet, used by the duplicate-reference guard tests. The Reservation identifier is stable so the
+     * guard can be observed against the exact tuple it queries.
+     */
+    private DuplicateFixture duplicateFixture() {
+        PaymentRepository paymentRepository = mock(PaymentRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        UUID stayId = UUID.randomUUID();
+        UUID reservationId = UUID.randomUUID();
+        Stay stay = mock(Stay.class);
+        when(stay.getId()).thenReturn(stayId);
+        when(stay.getStatus()).thenReturn(StayStatus.CHECKED_IN);
+        Reservation reservation = mock(Reservation.class);
+        when(reservation.getCurrency()).thenReturn("VND");
+        when(reservation.getId()).thenReturn(reservationId);
+        when(stay.getReservation()).thenReturn(reservation);
+        setCurrentUser(UUID.randomUUID());
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(chargeRepository.sumAmountByStayId(stayId)).thenReturn(new BigDecimal("999999999"));
+        when(paymentRepository.sumAppliedAmountByStayIdAndStatus(stayId, PaymentStatus.PAID))
+                .thenReturn(BigDecimal.ZERO);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        PaymentService service = service(paymentRepository, stayRepository, chargeRepository);
+        return new DuplicateFixture(service, paymentRepository, stayRepository, stayId, reservationId);
+    }
+
+    /** Holds one duplicate-reference scenario and can declare a tuple already live. */
+    private record DuplicateFixture(
+            PaymentService service,
+            PaymentRepository paymentRepository,
+            StayRepository stayRepository,
+            UUID stayId,
+            UUID reservationId) {
+
+        /**
+         * Declares that the Reservation already holds a live Payment for the given tuple, which is
+         * what the second attempt observes once the Stay lock has serialized the two requests.
+         *
+         * @param method the payment method of the already recorded Payment
+         * @param reference the trimmed non-blank reference of the already recorded Payment
+         */
+        void markReferenceLive(PaymentMethod method, String reference) {
+            when(paymentRepository.existsLiveWithReference(
+                            reservationId,
+                            method,
+                            reference,
+                            List.of(PaymentStatus.FAILED, PaymentStatus.REFUNDED, PaymentStatus.VOIDED)))
+                    .thenReturn(true);
+        }
     }
 
     /** Holds one mocked Payment-transition scenario. */

@@ -870,6 +870,57 @@ Stay.status = CHECKED_OUT
 
 Folio closed và read-only trong v1.
 
+### CHECKED_OUT Folio immutability (V1 — approved)
+
+Đây là quy tắc V1 đã được duyệt, phát biểu đầy đủ ở một chỗ.
+
+**Trước check-out** (`Stay.status = CHECKED_IN`)
+
+Mọi điều chỉnh tài chính đi qua đúng các workflow đã duyệt hiện có, không có đường nào khác:
+
+```text
+Charge  : tạo Charge mới; void một ACTIVE non-ROOM Charge (mục 9)
+Payment : create + mark-paid, record-paid, mark-failed, refund, void (mục 10, 11)
+```
+
+**Điều kiện check-out**
+
+```text
+Outstanding == 0
+```
+
+Không có override permission (mục 20, mục 47 invariant 7). Vì vậy một Folio đã đóng
+luôn là một Folio đã cân bằng tại thời điểm đóng.
+
+**Sau check-out** (`Stay.status = CHECKED_OUT`)
+
+Folio là dữ liệu lịch sử bất biến:
+
+```text
+- KHÔNG mở lại Stay. Không tồn tại operation reopen-Stay.
+- KHÔNG tạo, sửa hoặc void Charge.
+- KHÔNG tạo, sửa Payment.
+- KHÔNG refund hoặc void Payment.
+- KHÔNG ghi đè bất kỳ dữ liệu Folio lịch sử nào (Charge, Payment, amount, appliedAmount,
+  exchangeRate, price snapshot, audit fields).
+```
+
+Backend từ chối các thao tác này; ẩn nút trên UI không phải là cơ chế bảo vệ.
+
+**Sửa sai sau check-out (V1)**
+
+Nếu phát hiện sai sót tài chính SAU khi check-out, V1 xử lý điều chỉnh kế toán bên ngoài
+Folio đã đóng, theo quy trình kế toán của khách sạn. Hệ thống không cung cấp đường sửa
+Folio lịch sử, và người vận hành không được dùng bất kỳ thao tác nào khác để đạt hiệu quả
+tương đương.
+
+**V2 — deferred**
+
+Một nghiệp vụ **Post-checkout Financial Adjustment / Correction** hạng nhất, có audit đầy
+đủ, được HOÃN sang V2. Khi thiết kế, nó phải là **additive**: một bản ghi kế toán mới,
+được audit, tham chiếu tới Stay/Folio gốc — KHÔNG được ghi lại (rewrite) dữ liệu tài
+chính lịch sử. V1 không implement nghiệp vụ này và không thêm bảng cho nó.
+
 ## 8.3 StayRoomAssignment — Room Change (V1)
 
 `StayRoomAssignment` đại diện cho ACTUAL PHYSICAL OCCUPANCY của một Stay, khác với `ReservationRoom`
@@ -3553,6 +3604,13 @@ nếu chưa có requirement riêng.
 > Không tự suy diễn business rule mới từ các tên field hoặc domain.
 
 Nếu implementation gặp requirement chưa được định nghĩa, phải giữ thiết kế mở và không tự quyết định business behavior.
+
+Các nghiệp vụ đã được duyệt là HOÃN (deferred), không phải "chưa quyết định", nên cũng
+không được tự implement trong V1:
+
+```text
+Post-checkout Financial Adjustment / Correction  -> V2 (xem mục 8.2)
+```
 
 ---
 

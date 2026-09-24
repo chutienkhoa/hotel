@@ -1,5 +1,6 @@
 package com.example.hotel.service.common;
 
+import com.example.hotel.common.validation.PasswordPolicy;
 import com.example.hotel.dto.common.request.UserCreateRequest;
 import com.example.hotel.dto.common.request.UserPasswordResetRequest;
 import com.example.hotel.dto.common.request.UserSearchCriteria;
@@ -18,7 +19,6 @@ import com.example.hotel.repository.common.StaffRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import jakarta.persistence.criteria.Predicate;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -55,8 +55,6 @@ public class UserService {
     private static final String ADMIN_ROLE = "ADMIN";
     private static final String ENTITY_TYPE = "APP_USER";
     private static final Pattern USERNAME_PATTERN = Pattern.compile("^[a-z0-9._-]{3,50}$");
-    private static final int PASSWORD_MIN_LENGTH = 8;
-    private static final int PASSWORD_MAX_LENGTH = 72;
 
     private final AppUserRepository appUserRepository;
     private final RoleRepository roleRepository;
@@ -412,12 +410,8 @@ public class UserService {
      * @param errors accumulator for validation messages
      */
     private void validatePassword(String password, String confirmation, List<String> errors) {
-        if (password == null
-                || password.length() < PASSWORD_MIN_LENGTH
-                || password.length() > PASSWORD_MAX_LENGTH
-                || password.getBytes(StandardCharsets.UTF_8).length > PASSWORD_MAX_LENGTH) {
-            errors.add("Password must be between " + PASSWORD_MIN_LENGTH + " and " + PASSWORD_MAX_LENGTH
-                    + " characters.");
+        if (!PasswordPolicy.isAcceptable(password)) {
+            errors.add(PasswordPolicy.requirementDescription());
         } else if (!password.equals(confirmation)) {
             errors.add("Password and confirmation do not match.");
         }
