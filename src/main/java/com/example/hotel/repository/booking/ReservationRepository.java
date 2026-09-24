@@ -270,4 +270,29 @@ public interface ReservationRepository
      */
     @Query("SELECT rr.room.id FROM ReservationRoom rr WHERE rr.reservation.id = :reservationId")
     List<UUID> findRoomIdsByReservationId(@Param("reservationId") UUID reservationId);
+
+    /**
+     * Tells whether another Reservation already claims an OTA external booking identity. The identity is the pair
+     * {@code (source, otaBookingReference)} for a non-DIRECT Reservation, it is matched exactly as stored (V1 keeps a
+     * staff-entered reference verbatim), and it is NOT released by a terminal state: a CANCELLED, NO_SHOW or
+     * CHECKED_OUT Reservation still holds its reference, because a genuinely new OTA booking always carries a new one.
+     *
+     * <p>This is the friendly application-level check only. The authoritative race barrier is the partial unique index
+     * {@code ux_reservation_ota_identity} (migration V42); this query must never be treated as the concurrency
+     * guarantee on its own.</p>
+     *
+     * @param source the non-DIRECT booking source
+     * @param otaBookingReference the external booking reference, compared verbatim
+     * @param excludedReservationId Reservation to ignore (its own identity when correcting a reference), or a
+     *     sentinel that matches nothing when creating
+     * @return {@code true} when another Reservation already holds that external identity
+     */
+    @Query("SELECT COUNT(r) > 0 FROM Reservation r "
+            + "WHERE r.source = :source "
+            + "AND r.otaBookingReference = :otaBookingReference "
+            + "AND r.id <> :excludedReservationId")
+    boolean existsByOtaIdentity(
+            @Param("source") com.example.hotel.entity.booking.BookingSource source,
+            @Param("otaBookingReference") String otaBookingReference,
+            @Param("excludedReservationId") UUID excludedReservationId);
 }

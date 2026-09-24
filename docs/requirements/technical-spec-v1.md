@@ -666,6 +666,41 @@ UNIQUE(source, external_booking_id)
 
 `external_booking_id` có thể NULL đối với booking DIRECT.
 
+### OTA External Identity (V1, bắt buộc)
+
+Với Reservation KHÔNG phải `DIRECT`, cặp:
+
+```text
+(source, otaBookingReference)
+```
+
+là **định danh đặt phòng bên ngoài duy nhất và vĩnh viễn**. Hai Reservation không bao giờ được cùng nhận một
+booking OTA.
+
+```text
+AGODA + ABC123, rồi AGODA + ABC123        -> TRÙNG -> CHẶN
+AGODA + ABC123, rồi BOOKING_COM + ABC123  -> hợp lệ (khác source)
+```
+
+- **Trạng thái cuối KHÔNG giải phóng định danh**: một Reservation `CANCELLED`, `NO_SHOW` hoặc `CHECKED_OUT`
+  vẫn giữ `otaBookingReference` của nó, nên không thể tạo Reservation mới với cùng cặp đó. Một booking OTA
+  thực sự mới luôn mang một reference mới.
+- **DIRECT nằm ngoài quy tắc này** vì không có OTA booking reference (domain luôn set `null` cho DIRECT).
+- **So khớp đúng như đã lưu**: V1 lưu reference nhân viên nhập verbatim (mục 73), nên KHÔNG có so khớp
+  case-insensitive, KHÔNG bỏ dấu câu và KHÔNG thêm biến đổi whitespace nào ngoài hành vi hiện có.
+- **Yêu cầu hiện có giữ nguyên**: Reservation không phải DIRECT vẫn bắt buộc có reference không rỗng; quy tắc
+  này được kiểm tra lại ở service, không chỉ ở Bean Validation.
+- **Hai tầng thực thi**: service/application trả lỗi 409 dễ hiểu cho người dùng
+  (`reservation.ota.error.duplicateIdentity`), còn PostgreSQL là ranh giới an toàn có thẩm quyền qua partial
+  unique index `ux_reservation_ota_identity` (migration V42, chỉ áp dụng cho dòng non-DIRECT có reference). Hai
+  thao tác tạo đồng thời cùng một định danh chỉ một thao tác được commit; KHÔNG dùng "exists rồi insert" ở tầng
+  ứng dụng làm bảo đảm đồng thời cuối cùng.
+- **Correct OTA Booking Reference** (mục 73) cũng phải tuân thủ: không được sửa reference thành một định danh
+  Reservation khác đang giữ; sửa về đúng giá trị hiện tại của chính nó là no-op hợp lệ.
+- **Không mở rộng**: đây KHÔNG phải Channel Manager, KHÔNG phải OTA synchronization. Cột legacy
+  `external_booking_id` và ràng buộc `UNIQUE(source, external_booking_id)` của nó giữ nguyên, không bị xóa hay
+  tái sử dụng trong phạm vi này.
+
 ---
 
 # 7. ReservationRoom
@@ -2159,6 +2194,32 @@ passport Guest (secure per-document passport-image endpoint, xem mục 4.3) khi 
 Passport image vẫn là optional; Guest có 0, 1, hay nhiều ảnh passport đều KHÔNG chặn check-in
 — "đủ điều kiện passport" (khi được hiển thị) nghĩa là `passportImages.size() >= 1`, không phải
 `== 1`, và Check-in không yêu cầu số ảnh passport khớp số người lưu trú.
+
+### Operational Guest Creation (V1, thu hẹp)
+
+Một luồng vận hành đã được ủy quyền KHÔNG được đi vào ngõ cụt chỉ vì Guest chưa tồn tại. Theo đúng mẫu đã
+duyệt ở Passport Authorization bên trên (permission vận hành nhận một lát cắt hẹp của Guest), thao tác **tạo
+bản ghi Guest** được cho phép với permission vận hành sở hữu luồng đang thực hiện:
+
+```text
+GET  /guests/new   -> MANAGE_GUEST hoặc MANAGE_BOOKING hoặc CHECK_IN
+POST /guests       -> MANAGE_GUEST hoặc MANAGE_BOOKING hoặc CHECK_IN
+```
+
+Lý do: Create Reservation chạy dưới `MANAGE_BOOKING`, còn Walk-in và "OTA Booking Not Entered" chạy dưới
+`CHECK_IN` (mục 23.1 B và C, cả hai đều yêu cầu Staff "chọn Guest hiện có hoặc tạo Guest mới"). KHÔNG tạo
+permission mới.
+
+- **Chỉ tạo, không gì khác**: Guest list, Guest detail, Guest edit và quản trị passport-document tiếp tục CHỈ
+  thuộc `MANAGE_GUEST`. REST `POST /api/guests` cũng giữ nguyên `MANAGE_GUEST`.
+- **STAFF vẫn KHÔNG có `MANAGE_GUEST`**: không thêm permission nào vào role mapping mục 28.
+- **Passport khi tạo**: người dùng chỉ có permission vận hành KHÔNG thấy ô upload passport và file gửi kèm bị
+  bỏ qua; ảnh passport vẫn là địa hạt `MANAGE_GUEST`.
+- **Quay lại luồng gốc**: Guest creation nhận tham số `returnTo` thuộc danh sách trắng cố định
+  (`/reservations/new`, `/check-in/walk-in`, `/check-in/ota-entry`) để đưa người dùng vận hành trở lại đúng
+  luồng thay vì trang Guest detail mà họ có thể không được mở. Giá trị không thuộc danh sách trắng bị bỏ qua
+  (không có open redirect), và khi không có `returnTo` thì hành vi Guest Management hiện có giữ nguyên.
+- **Ủy quyền ở server**: việc ẩn/hiện liên kết trên giao diện chỉ là tiện dụng, không phải cơ chế ủy quyền.
 
 ### Sidebar
 
@@ -5054,6 +5115,16 @@ KHÔNG mở rộng phạm vi ngoài Charge/Payment thủ công của một Stay 
   không cần đổi công thức Payment). Bộ lọc `ACTIVE` áp dụng tập trung tại tầng truy vấn dùng chung bởi
   `StayBalanceService`, không cài đặt lại rải rác ở controller/query service khác. Doanh thu phòng (mục 69)
   không đổi.
+- **Void Charge KHÔNG được tạo ra Outstanding âm (bất biến bắt buộc)**: trước khi void, backend tính
+  `Outstanding sau khi void = SUM(ACTIVE Charge.amount) − SUM(PAID Payment.appliedAmount) − Charge.amount`.
+  `= 0` và `> 0` đều được phép; `< 0` bị TỪ CHỐI (409, `payment.folio.charge.error.voidWouldOverpay`). Ví dụ:
+  ACTIVE Charges 1.200.000 và PAID Payments 1.200.000, void một Charge 200.000 sẽ cho −200.000 nên bị từ chối.
+  Thứ tự sửa sai nghiệp vụ là: sửa/hoàn/void khoản Payment sai TRƯỚC, rồi mới void Charge sai. V1 KHÔNG có
+  trạng thái folio OVERPAID, không có dung sai quyết toán, không tự hoàn tiền, không tự void Payment, không có
+  Charge âm và không ghi đè số dư. Kiểm tra được thực hiện tại service/domain (không chỉ ở UI) trong cùng
+  transaction và dưới đúng khóa Stay mà mọi thao tác Payment cũng phải lấy, nên một Payment đồng thời không thể
+  chen vào giữa lúc kiểm tra và lúc commit. Thao tác bị từ chối không thay đổi gì: Charge giữ `ACTIVE`,
+  Additional Revenue liên kết giữ nguyên, số dư không đổi và KHÔNG ghi AuditLog `VOID_CHARGE` thành công.
 - **Sau CHECKED_OUT**: không được void Charge, không được void Payment, không mở lại Folio, không thay đổi
   hành vi Refund hiện có. Ranh giới bất biến tài chính sau check-out (mục 8.2, 12) giữ nguyên.
 - **Quyền**: dùng lại `MANAGE_PAYMENT` cho void Charge, void Payment, và void prepayment lỗi — không có

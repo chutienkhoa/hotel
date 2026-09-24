@@ -44,6 +44,27 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 public class GuestPageController {
 
+    /**
+     * Authorization for creating a Guest record, which is deliberately wider than the rest of Guest Management.
+     *
+     * <p>An authorized operational workflow must not dead-end because the Guest does not exist yet: Reservation
+     * creation runs under {@code MANAGE_BOOKING}, and Walk-in / "OTA Booking Not Entered" run under
+     * {@code CHECK_IN} (spec 23.1 B and C, which both require Staff to "select an existing Guest or create a new
+     * one"). Those operational permissions therefore authorize creating the Guest record itself. This follows the
+     * boundary already approved for passport image reads, which {@code CHECK_IN} may perform without being granted
+     * Guest management.</p>
+     *
+     * <p>It grants nothing else: the Guest list, detail, edit and passport-document administration all remain
+     * {@code MANAGE_GUEST}-only, and the create endpoint drops submitted passport files for a caller without
+     * {@code MANAGE_GUEST}.</p>
+     */
+    private static final String OPERATIONAL_GUEST_CREATION =
+            "hasAnyAuthority('PERM_MANAGE_GUEST', 'PERM_MANAGE_BOOKING', 'PERM_CHECK_IN')";
+
+    /** The operational workflows that may send a user to Guest creation and receive them back afterwards. */
+    private static final List<String> OPERATIONAL_RETURN_TARGETS =
+            List.of("/reservations/new", "/check-in/walk-in", "/check-in/ota-entry");
+
     private final GuestService guestService;
     private final GuestQueryService guestQueryService;
     private final GuestDocumentService guestDocumentService;
@@ -167,10 +188,14 @@ public class GuestPageController {
      * @return the customer form template
      */
     @GetMapping("/guests/new")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
-    public String createForm(Model model, Authentication authentication) {
+    @PreAuthorize(OPERATIONAL_GUEST_CREATION)
+    public String createForm(
+            @RequestParam(name = "returnTo", required = false) String returnTo,
+            Model model,
+            Authentication authentication) {
         addFormAttributes(
                 model, new GuestCreateRequest(null, null, null, null, null, null, null), authentication, null);
+        model.addAttribute("returnTo", allowedReturnTarget(returnTo));
         return "customer/form";
     }
 
@@ -185,28 +210,42 @@ public class GuestPageController {
      * @return a detail redirect or the form template after validation failure
      */
     @PostMapping("/guests")
-    @PreAuthorize("hasAuthority('PERM_MANAGE_GUEST')")
+    @PreAuthorize(OPERATIONAL_GUEST_CREATION)
     public String create(
             @Valid @ModelAttribute("guestForm") GuestCreateRequest guestForm,
             BindingResult bindingResult,
             @RequestParam(name = "passportImages", required = false) List<MultipartFile> passportImages,
+            @RequestParam(name = "returnTo", required = false) String returnTo,
             Model model,
             Authentication authentication,
         RedirectAttributes redirectAttributes) {
+        String returnTarget = allowedReturnTarget(returnTo);
+        // Passport documents stay Guest Management territory: a user holding only an operational booking/check-in
+        // permission may create the Guest record itself, but never administers its passport documents. Submitted
+        // files are dropped rather than silently accepted, and the form hides the upload control for that user.
+        List<MultipartFile> acceptedPassportImages =
+                hasAuthority(authentication, "PERM_MANAGE_GUEST") ? passportImages : null;
         if (bindingResult.hasErrors()) {
             addFormAttributes(model, guestForm, authentication, unmappedSubmittedNationality(guestForm));
+            model.addAttribute("returnTo", returnTarget);
             return "customer/form";
         }
         try {
-            GuestResponse guest = guestService.create(guestForm, passportImages);
+            GuestResponse guest = guestService.create(guestForm, acceptedPassportImages);
             redirectAttributes.addFlashAttribute("successMessage", "Guest created successfully.");
+            if (returnTarget != null) {
+                redirectAttributes.addFlashAttribute("createdGuestId", guest.id());
+                return "redirect:" + returnTarget;
+            }
             return "redirect:/guests/" + guest.id();
         } catch (GuestDocumentValidationException exception) {
             addFormAttributes(model, guestForm, authentication, null);
+            model.addAttribute("returnTo", returnTarget);
             model.addAttribute("passportError", exception.getMessage());
             return "customer/form";
         } catch (ResponseStatusException exception) {
             addFormAttributes(model, guestForm, authentication, null);
+            model.addAttribute("returnTo", returnTarget);
             model.addAttribute("errorMessage", safeMessage(exception));
             return "customer/form";
         }
@@ -288,12 +327,37 @@ public class GuestPageController {
      * @param authentication current browser authentication
      */
     private void addAuthorizationAttributes(Model model, Authentication authentication) {
-        model.addAttribute("canManageBooking", authentication.getAuthorities().stream()
-                .anyMatch(authority -> "PERM_MANAGE_BOOKING".equals(authority.getAuthority())));
-        model.addAttribute("canManageGuest", authentication.getAuthorities().stream()
-                .anyMatch(authority -> "PERM_MANAGE_GUEST".equals(authority.getAuthority())));
-        model.addAttribute("canViewReport", authentication.getAuthorities().stream()
-                .anyMatch(authority -> "PERM_VIEW_REPORT".equals(authority.getAuthority())));
+        model.addAttribute("canManageBooking", hasAuthority(authentication, "PERM_MANAGE_BOOKING"));
+        model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
+        model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
+    }
+
+    /**
+     * Tells whether the current authentication carries a backend authority.
+     *
+     * @param authentication current browser authentication
+     * @param authority the required authority
+     * @return {@code true} when present
+     */
+    private boolean hasAuthority(Authentication authentication, String authority) {
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(granted -> authority.equals(granted.getAuthority()));
+    }
+
+    /**
+     * Resolves the operational workflow a Guest creation was started from, so an operational user is returned to it
+     * instead of the {@code MANAGE_GUEST}-only Guest detail page they may not open.
+     *
+     * <p>Only the known operational origins are accepted. An unknown, absent or externally-supplied value resolves to
+     * {@code null}, which restores the default Guest Management behavior; the target is never echoed back from the
+     * request, so this cannot be used as an open redirect.</p>
+     *
+     * @param returnTo the submitted return target
+     * @return the matching allowed target, or {@code null}
+     */
+    private String allowedReturnTarget(String returnTo) {
+        // List.of(...) rejects a null argument to contains(), and no return target is the normal Guest Management case.
+        return returnTo != null && OPERATIONAL_RETURN_TARGETS.contains(returnTo) ? returnTo : null;
     }
 
     /**

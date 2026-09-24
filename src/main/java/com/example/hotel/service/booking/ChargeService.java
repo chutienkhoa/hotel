@@ -42,6 +42,7 @@ public class ChargeService {
     private final AdditionalRevenueRepository additionalRevenues;
     private final AdditionalRevenueCategoryRepository additionalRevenueCategories;
     private final AuditLogRepository auditLogRepository;
+    private final StayBalanceService stayBalanceService;
     private final Clock clock;
 
     /**
@@ -51,6 +52,8 @@ public class ChargeService {
      * @param stayRepository repository used to resolve owning Stays
      * @param chargeMapper mapper used to return client-safe responses
      * @param auditLogRepository repository used to write the approved RECORD_CHARGE audit entry
+     * @param stayBalanceService the single authoritative Outstanding calculation, used by the Charge void
+     *     negative-balance guard so the folio invariant is never re-implemented here
      */
     public ChargeService(
             ChargeRepository chargeRepository,
@@ -59,6 +62,7 @@ public class ChargeService {
             AdditionalRevenueRepository additionalRevenues,
             AdditionalRevenueCategoryRepository additionalRevenueCategories,
             AuditLogRepository auditLogRepository,
+            StayBalanceService stayBalanceService,
             Clock clock) {
         this.chargeRepository = chargeRepository;
         this.stayRepository = stayRepository;
@@ -66,6 +70,7 @@ public class ChargeService {
         this.additionalRevenues = additionalRevenues;
         this.additionalRevenueCategories = additionalRevenueCategories;
         this.auditLogRepository = auditLogRepository;
+        this.stayBalanceService = stayBalanceService;
         this.clock = clock;
 }
 
@@ -185,6 +190,22 @@ public class ChargeService {
         if (charge.getStatus() != ChargeStatus.ACTIVE) {
             throw new LocalizedResponseStatusException(
                     HttpStatus.CONFLICT, "payment.folio.charge.error.voidNotActive", "Only an active charge can be voided");
+        }
+        // Approved V1 invariant: a void may never leave the folio overpaid. Outstanding is read from the single
+        // authoritative calculation (ACTIVE Charges minus PAID Payment appliedAmount) BEFORE anything is mutated,
+        // so the arithmetic never depends on Hibernate flush ordering. The read happens while this transaction
+        // already holds the Stay row lock taken above, and every Payment mutation (create, record-paid, mark-paid,
+        // mark-failed, refund, void) takes that same Stay row lock first, so a concurrent payment change cannot
+        // slip between this check and the commit. V1 has no OVERPAID folio state: staff correct or void the
+        // erroneous Payment first, then void the erroneous Charge.
+        BigDecimal outstandingAfterVoid = stayBalanceService.calculate(stay.getId())
+                .outstanding()
+                .subtract(charge.getAmount());
+        if (outstandingAfterVoid.signum() < 0) {
+            throw new LocalizedResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "payment.folio.charge.error.voidWouldOverpay",
+                    "Voiding this charge would leave the folio overpaid; correct the payment first");
         }
         try {
             charge.voidCharge(reason);

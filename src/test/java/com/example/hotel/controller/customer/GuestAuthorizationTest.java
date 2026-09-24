@@ -1,7 +1,11 @@
 package com.example.hotel.controller.customer;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -12,6 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.controller.common.NavigationModelAdvice;
@@ -101,6 +106,152 @@ class GuestAuthorizationTest {
         mockMvc.perform(get("/api/guests/{id}", GUEST_ID)
                         .with(user("staff").authorities(staffAuthorities())))
                 .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms the approved narrow operational boundary: a user holding only an operational booking/check-in
+     * permission may open and submit Guest creation, so an authorized Walk-in / OTA-entry / Reservation-create
+     * workflow no longer dead-ends on a missing Guest.
+     *
+     * @param username representative operational user
+     * @param authority the operational permission that owns the workflow
+     * @param returnTo the workflow the user came from
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @ParameterizedTest
+    @MethodSource("operationalGuestCreators")
+    void shouldAllowOperationalGuestCreation(String username, String authority, String returnTo) throws Exception {
+        when(guestService.create(any(), any())).thenReturn(guestResponse());
+
+        mockMvc.perform(get("/guests/new").param("returnTo", returnTo)
+                        .with(user(username).authorities(new SimpleGrantedAuthority(authority))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/guests")
+                        .with(user(username).authorities(new SimpleGrantedAuthority(authority)))
+                        .with(csrf())
+                        .param("firstName", "Ann")
+                        .param("lastName", "Lee")
+                        .param("nationality", "Vietnam")
+                        .param("returnTo", returnTo))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl(returnTo));
+    }
+
+    /**
+     * Confirms the operational boundary grants creation ONLY: Guest list, detail, edit and passport-document
+     * administration all stay {@code MANAGE_GUEST}-only.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldNotGrantAnyOtherGuestCapabilityToOperationalUsers() throws Exception {
+        var checkIn = List.of(new SimpleGrantedAuthority("PERM_CHECK_IN"));
+
+        mockMvc.perform(get("/guests").with(user("staff").authorities(checkIn)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/guests/{id}", GUEST_ID).with(user("staff").authorities(checkIn)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/guests/{id}/edit", GUEST_ID).with(user("staff").authorities(checkIn)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/guests/{id}", GUEST_ID).with(user("staff").authorities(checkIn)).with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/guests/{guestId}/documents/{documentId}/remove", GUEST_ID, DOCUMENT_ID)
+                        .with(user("staff").authorities(checkIn)).with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/guests").with(user("staff").authorities(checkIn)).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"firstName\":\"Ann\",\"lastName\":\"Lee\",\"nationality\":\"Vietnam\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms a user with neither an operational booking/check-in permission nor {@code MANAGE_GUEST} still cannot
+     * create a Guest.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldRejectGuestCreationWithoutAnyAuthorizingPermission() throws Exception {
+        mockMvc.perform(get("/guests/new").with(user("viewer").authorities(unrelatedAuthorities())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/guests").with(user("viewer").authorities(unrelatedAuthorities())).with(csrf())
+                        .param("firstName", "Ann")
+                        .param("lastName", "Lee")
+                        .param("nationality", "Vietnam"))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms passport documents remain Guest Management territory: an operational creator never sees the upload
+     * control, and any submitted file is dropped rather than stored.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldNotAcceptPassportUploadsFromAnOperationalGuestCreator() throws Exception {
+        when(guestService.create(any(), any())).thenReturn(guestResponse());
+        var checkIn = List.of(new SimpleGrantedAuthority("PERM_CHECK_IN"));
+
+        mockMvc.perform(get("/guests/new").param("returnTo", "/check-in/walk-in")
+                        .with(user("staff").authorities(checkIn)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("id=\"passportImages\""))));
+
+        mockMvc.perform(multipart("/guests")
+                        .file(new MockMultipartFile("passportImages", "p.jpg", MediaType.IMAGE_JPEG_VALUE, new byte[] {1}))
+                        .with(user("staff").authorities(checkIn))
+                        .with(csrf())
+                        .param("firstName", "Ann")
+                        .param("lastName", "Lee")
+                        .param("nationality", "Vietnam")
+                        .param("returnTo", "/check-in/walk-in"))
+                .andExpect(status().is3xxRedirection());
+
+        verify(guestService).create(any(), isNull());
+    }
+
+    /**
+     * Confirms the default Guest Management behavior is untouched for {@code MANAGE_GUEST}: creation without an
+     * operational origin still lands on the Guest detail page, and the upload control is still rendered.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldPreserveGuestManagementCreationBehaviourForManageGuest() throws Exception {
+        when(guestService.create(any(), any())).thenReturn(guestResponse());
+
+        mockMvc.perform(get("/guests/new").with(user("admin").authorities(manageGuestAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"passportImages\"")));
+        mockMvc.perform(post("/guests")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf())
+                        .param("firstName", "Ann")
+                        .param("lastName", "Lee")
+                        .param("nationality", "Vietnam"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/guests/" + GUEST_ID));
+    }
+
+    /**
+     * Confirms an unknown return target cannot be used as an open redirect: it is ignored and the default Guest
+     * Management destination is used instead.
+     *
+     * @throws Exception if MockMvc cannot perform the requests
+     */
+    @Test
+    void shouldIgnoreAnUnknownReturnTarget() throws Exception {
+        when(guestService.create(any(), any())).thenReturn(guestResponse());
+
+        mockMvc.perform(post("/guests")
+                        .with(user("admin").authorities(manageGuestAuthority()))
+                        .with(csrf())
+                        .param("firstName", "Ann")
+                        .param("lastName", "Lee")
+                        .param("nationality", "Vietnam")
+                        .param("returnTo", "https://evil.example.com/steal"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/guests/" + GUEST_ID));
     }
 
     /** Confirms the shared Guest form grid is used for both creation and editing. */
@@ -884,6 +1035,21 @@ class GuestAuthorizationTest {
      */
     private static Stream<Arguments> guestManagers() {
         return Stream.of(Arguments.of("admin"), Arguments.of("manager"));
+    }
+
+    /** Builds the operational permissions that authorize creating the Guest a booking/check-in workflow needs. */
+    private static Stream<Arguments> operationalGuestCreators() {
+        return Stream.of(
+                Arguments.of("staff-check-in", "PERM_CHECK_IN", "/check-in/walk-in"),
+                Arguments.of("booking-agent", "PERM_MANAGE_BOOKING", "/reservations/new"));
+    }
+
+    /** Builds authorities that grant no Guest creation capability at all. */
+    private static List<SimpleGrantedAuthority> unrelatedAuthorities() {
+        return List.of(
+                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                new SimpleGrantedAuthority("PERM_CHECK_OUT"),
+                new SimpleGrantedAuthority("PERM_MANAGE_PAYMENT"));
     }
 
     /**

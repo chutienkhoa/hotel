@@ -65,7 +65,7 @@ class MigrationIntegrationTest {
     @Test
     void migrationIsCurrent() {
         assertEquals(0, flyway.info().pending().length);
-        assertEquals(41, flyway.info().applied().length);
+        assertEquals(42, flyway.info().applied().length);
     }
 
     /** Verifies the exact role-permission mappings required by the approved operational flow. */
@@ -428,9 +428,13 @@ class MigrationIntegrationTest {
         assertEquals(2, passportCount);
     }
 
-    /** Verifies V19 adds a nullable, unconstrained OTA booking reference column to reservation. */
+    /**
+     * Verifies the OTA booking reference column stays nullable (V19) and carries no table-level UNIQUE constraint,
+     * because the approved external identity rule applies only to non-DIRECT rows and is therefore enforced by the
+     * partial unique index from V42 instead (see {@link #reservationOtaIdentityIsEnforcedByAPartialUniqueIndex()}).
+     */
     @Test
-    void reservationOtaBookingReferenceColumnIsNullableAndUnconstrained() {
+    void reservationOtaBookingReferenceColumnIsNullableAndHasNoTableConstraint() {
         Boolean columnIsNullable = jdbcTemplate.queryForObject(
                 "SELECT is_nullable = 'YES' FROM information_schema.columns "
                         + "WHERE table_name = 'reservation' AND column_name = 'ota_booking_reference'",
@@ -444,6 +448,24 @@ class MigrationIntegrationTest {
 
         assertTrue(Boolean.TRUE.equals(columnIsNullable));
         assertEquals(0, uniqueConstraintCount);
+    }
+
+    /**
+     * Verifies V42 adds the approved OTA external identity barrier as a PARTIAL unique index: unique on
+     * {@code (source, ota_booking_reference)}, restricted to non-DIRECT rows that actually carry a reference.
+     */
+    @Test
+    void reservationOtaIdentityIsEnforcedByAPartialUniqueIndex() {
+        String indexDefinition = jdbcTemplate.queryForObject(
+                "SELECT indexdef FROM pg_indexes "
+                        + "WHERE tablename = 'reservation' AND indexname = 'ux_reservation_ota_identity'",
+                String.class);
+
+        assertTrue(indexDefinition != null && indexDefinition.contains("UNIQUE"), indexDefinition);
+        assertTrue(indexDefinition.contains("source") && indexDefinition.contains("ota_booking_reference"),
+                indexDefinition);
+        assertTrue(indexDefinition.contains("WHERE"), "the identity rule must not apply to DIRECT rows: "
+                + indexDefinition);
     }
 
     /** Verifies that PostgreSQL allocates distinct, correctly formatted reservation numbers. */

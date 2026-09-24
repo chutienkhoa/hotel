@@ -64,8 +64,14 @@ class GuestServiceRevenueChargeTest {
         when(charges.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(categories.findByCode(anyString())).thenAnswer(invocation ->
                 Optional.of(AdditionalRevenueCategory.create(invocation.getArgument(0), "n", null)));
+        // This class covers guest-service Charge creation only; the Charge void negative-balance guard never runs
+        // here, so the balance is a permissive stub rather than a scenario under test.
+        StayBalanceService balances = mock(StayBalanceService.class);
+        when(balances.calculate(any())).thenReturn(
+                new StayBalance(new BigDecimal("100000000"), BigDecimal.ZERO, new BigDecimal("100000000")));
         return new ChargeService(charges, stays, new ChargeMapper(), revenues, categories,
                 mock(com.example.hotel.repository.common.AuditLogRepository.class),
+                balances,
                 Clock.fixed(Instant.parse("2026-09-20T03:00:00Z"), ZONE));
     }
 

@@ -131,6 +131,114 @@ class ChargePaymentVoidIntegrationTest {
         assertEquals(1, count("SELECT COUNT(*) FROM charge WHERE id = ? AND status = 'VOIDED'", charge.id()), "row remains, now VOIDED");
     }
 
+    /**
+     * Confirms the approved negative-balance guard against real PostgreSQL: with the folio fully settled, voiding a
+     * Charge would drive Outstanding below zero, so it is rejected and NOTHING changes -- the Charge stays ACTIVE, its
+     * linked Additional Revenue stays RECORDED, the balance is untouched and no VOID_CHARGE audit row is written.
+     * V1 has no OVERPAID folio state.
+     */
+    @Test
+    void shouldRejectChargeVoidThatWouldMakeOutstandingNegative() {
+        UUID stay = checkedInStay();
+        var charge = chargeService.create(stay, new ChargeCreateRequest(
+                ChargeType.MINIBAR, "cola", null, null, new BigDecimal("200000")));
+        paymentService.recordPaid(stay, new PaymentCreateRequest(
+                new BigDecimal("4200000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null));
+        assertEquals(0, balances.calculate(stay).outstanding().signum(), "folio is fully settled");
+
+        ResponseStatusException rejected = assertThrows(ResponseStatusException.class,
+                () -> chargeService.voidCharge(charge.id(), new ChargeVoidRequest("Entered by mistake")));
+
+        assertEquals(409, rejected.getStatusCode().value());
+        assertEquals(1, count("SELECT COUNT(*) FROM charge WHERE id = ? AND status = 'ACTIVE'", charge.id()),
+                "the Charge is still ACTIVE");
+        assertEquals(1, count("SELECT COUNT(*) FROM additional_revenue WHERE charge_id = ? AND status = 'RECORDED'", charge.id()),
+                "the linked Additional Revenue is untouched");
+        assertEquals(0, balances.calculate(stay).outstanding().signum(), "the balance is unchanged");
+        assertEquals(0, count("SELECT COUNT(*) FROM audit_log WHERE action = 'VOID_CHARGE' AND entity_id = ?",
+                reservationOf(stay)), "a rejected void writes no success audit record");
+    }
+
+    /** Confirms a void landing exactly on Outstanding zero is allowed: Charges 4,200,000, PAID 4,000,000, void 200,000. */
+    @Test
+    void shouldAllowChargeVoidThatLeavesOutstandingExactlyZero() {
+        UUID stay = checkedInStay();
+        var charge = chargeService.create(stay, new ChargeCreateRequest(
+                ChargeType.MINIBAR, "cola", null, null, new BigDecimal("200000")));
+        paymentService.recordPaid(stay, new PaymentCreateRequest(
+                new BigDecimal("4000000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null));
+
+        chargeService.voidCharge(charge.id(), new ChargeVoidRequest("Entered by mistake"));
+
+        assertEquals(0, balances.calculate(stay).outstanding().signum(), "Outstanding lands exactly on zero");
+        assertEquals(1, count("SELECT COUNT(*) FROM charge WHERE id = ? AND status = 'VOIDED'", charge.id()));
+    }
+
+    /** Confirms a void leaving positive Outstanding is allowed: Charges 4,200,000, PAID 3,800,000, void 200,000. */
+    @Test
+    void shouldAllowChargeVoidThatLeavesOutstandingPositive() {
+        UUID stay = checkedInStay();
+        var charge = chargeService.create(stay, new ChargeCreateRequest(
+                ChargeType.MINIBAR, "cola", null, null, new BigDecimal("200000")));
+        paymentService.recordPaid(stay, new PaymentCreateRequest(
+                new BigDecimal("3800000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null));
+
+        chargeService.voidCharge(charge.id(), new ChargeVoidRequest("Entered by mistake"));
+
+        assertEquals(0, new BigDecimal("200000").compareTo(balances.calculate(stay).outstanding()));
+        assertEquals(1, count("SELECT COUNT(*) FROM charge WHERE id = ? AND status = 'VOIDED'", charge.id()));
+    }
+
+    /**
+     * Confirms the approved operational correction order works end to end: void the erroneous Payment first, then the
+     * erroneous Charge, and the guest can still check out. This is the documented recovery from the rejection above.
+     */
+    @Test
+    void shouldAllowChargeVoidAfterTheErroneousPaymentIsVoidedFirst() {
+        UUID stay = checkedInStay();
+        var charge = chargeService.create(stay, new ChargeCreateRequest(
+                ChargeType.MINIBAR, "cola", null, null, new BigDecimal("200000")));
+        var payment = paymentService.recordPaid(stay, new PaymentCreateRequest(
+                new BigDecimal("4200000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null));
+        assertThrows(ResponseStatusException.class,
+                () -> chargeService.voidCharge(charge.id(), new ChargeVoidRequest("Entered by mistake")));
+
+        paymentService.voidPayment(payment.id(), new PaymentVoidRequest("Wrong amount entered"));
+        chargeService.voidCharge(charge.id(), new ChargeVoidRequest("Entered by mistake"));
+        paymentService.recordPaid(stay, new PaymentCreateRequest(
+                new BigDecimal("4000000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null));
+
+        assertEquals(0, balances.calculate(stay).outstanding().signum());
+        reservationService.checkOut(reservationOf(stay));
+        assertEquals("CHECKED_OUT", statusOf(reservationOf(stay)), "the corrected folio checks out normally");
+    }
+
+    /**
+     * Confirms Charge void and Payment recording are serialized by the shared Stay row lock, so the negative-balance
+     * invariant cannot be defeated by concurrency. Outstanding starts at 200,000; voiding the 200,000 Charge and
+     * recording a 200,000 Payment are each individually valid, but together they would leave Outstanding at -200,000.
+     * Exactly one may commit, and the folio never ends up overpaid.
+     */
+    @Test
+    void shouldSerializeChargeVoidWithPaymentRecordingSoOutstandingNeverGoesNegative() throws Exception {
+        UUID stay = checkedInStay();
+        var charge = chargeService.create(stay, new ChargeCreateRequest(
+                ChargeType.MINIBAR, "cola", null, null, new BigDecimal("200000")));
+        paymentService.recordPaid(stay, new PaymentCreateRequest(
+                new BigDecimal("4000000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null));
+        assertEquals(0, new BigDecimal("200000").compareTo(balances.calculate(stay).outstanding()));
+
+        List<Object> results = race(
+                () -> chargeService.voidCharge(charge.id(), new ChargeVoidRequest("Entered by mistake")),
+                () -> paymentService.recordPaid(stay, new PaymentCreateRequest(
+                        new BigDecimal("200000"), PaymentCurrency.VND, null, PaymentMethod.CASH, null)));
+
+        long winners = results.stream().filter(result -> !(result instanceof RuntimeException)).count();
+        assertEquals(1, winners, "exactly one of void/payment may commit: " + results);
+        assertTrue(balances.calculate(stay).outstanding().signum() >= 0,
+                "Outstanding is never negative: " + balances.calculate(stay).outstanding());
+    }
+
     /** Confirms voiding a manual guest-service Charge atomically voids its linked Additional Revenue, and reports drop it. */
     @Test
     void shouldAtomicallyVoidLinkedAdditionalRevenueAndExcludeFromReports() {
@@ -264,6 +372,34 @@ class ChargePaymentVoidIntegrationTest {
                         + "created_at, created_by, updated_at, updated_by) "
                         + "VALUES (?, ?, ?, 1, 'VND', 1, 'CASH', 'VOIDED', now(), ?, now(), ?)",
                 UUID.randomUUID(), stay, reservation, user, user));
+    }
+
+    /** Runs two folio operations simultaneously and returns each outcome or the exception it threw. */
+    private List<Object> race(java.util.concurrent.Callable<Object> first,
+            java.util.concurrent.Callable<Object> second) throws Exception {
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            java.util.concurrent.CyclicBarrier barrier = new java.util.concurrent.CyclicBarrier(2);
+            List<java.util.concurrent.Future<Object>> futures = new java.util.ArrayList<>();
+            for (java.util.concurrent.Callable<Object> operation : List.of(first, second)) {
+                futures.add(pool.submit(() -> {
+                    authenticate();
+                    barrier.await();
+                    try {
+                        return operation.call();
+                    } catch (RuntimeException exception) {
+                        return exception;
+                    }
+                }));
+            }
+            List<Object> results = new java.util.ArrayList<>();
+            for (java.util.concurrent.Future<Object> future : futures) {
+                results.add(future.get());
+            }
+            return results;
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     private void authenticate() {

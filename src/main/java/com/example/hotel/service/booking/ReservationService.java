@@ -77,6 +77,9 @@ public class ReservationService {
     /** Audit action for the controlled Reservation Notes update. */
     public static final String UPDATE_NOTES_AUDIT_ACTION = "UPDATE_RESERVATION_NOTES";
 
+    /** Sentinel meaning "exclude no Reservation" (a real Reservation identifier is never all zeros). */
+    private static final UUID NO_RESERVATION = new UUID(0L, 0L);
+
     private final ReservationRepository reservations;
     private final GuestRepository guests;
     private final RoomRepository rooms;
@@ -146,7 +149,7 @@ public class ReservationService {
      */
     @Transactional
     public Response create(CreateRequest request) {
-        ReservationDraftData draftData = validateDraftData(request);
+        ReservationDraftData draftData = validateDraftData(request, NO_RESERVATION);
         CurrentUser user = currentUser();
         Reservation reservation =
                 new Reservation(
@@ -202,6 +205,43 @@ public class ReservationService {
     }
 
     /**
+     * Enforces the approved OTA external booking identity: for a non-DIRECT Reservation the pair
+     * {@code (source, otaBookingReference)} is permanently unique. The reference is compared exactly as stored,
+     * because V1 keeps a staff-entered reference verbatim; no case folding, trimming or punctuation normalization is
+     * applied here, since inventing one would silently change which existing bookings are considered the same.
+     *
+     * <p>A terminal state does NOT release the identity: a CANCELLED, NO_SHOW or CHECKED_OUT Reservation still holds
+     * its reference, because a genuinely new OTA booking always carries a new one. DIRECT Reservations never
+     * participate, since the domain nulls their reference on construction.</p>
+     *
+     * <p>This check exists to produce a useful, localized message. It is NOT the concurrency guarantee: the partial
+     * unique index {@code ux_reservation_ota_identity} (migration V42) is the authoritative barrier, so two
+     * concurrent creations of the same identity can never both commit even though both may pass this check.</p>
+     *
+     * @param source submitted booking source
+     * @param otaBookingReference submitted external booking reference
+     * @param excludedReservationId the Reservation whose own identity must not count as a duplicate of itself, or
+     *     {@link #NO_RESERVATION} when creating
+     */
+    private void requireAvailableOtaIdentity(
+            BookingSource source, String otaBookingReference, UUID excludedReservationId) {
+        if (source == null || source == BookingSource.DIRECT) {
+            return;
+        }
+        if (otaBookingReference == null || otaBookingReference.isBlank()) {
+            throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "reservation.ota.error.referenceRequired",
+                    "OTA Booking Reference is required for this source");
+        }
+        if (reservations.existsByOtaIdentity(source, otaBookingReference, excludedReservationId)) {
+            throw new LocalizedResponseStatusException(HttpStatus.CONFLICT,
+                    "reservation.ota.error.duplicateIdentity",
+                    "This OTA booking reference is already used by another reservation for this source",
+                    source.name(), otaBookingReference);
+        }
+    }
+
+    /**
      * Replaces all editable data and room snapshots for a draft Reservation.
      *
      * @param id Reservation identifier
@@ -214,7 +254,7 @@ public class ReservationService {
         if (reservation.getStatus() != ReservationStatus.DRAFT) {
             throw conflict("Only draft reservations can be edited");
         }
-        ReservationDraftData draftData = validateDraftData(request);
+        ReservationDraftData draftData = validateDraftData(request, id);
         CurrentUser user = currentUser();
         List<ReservationRoom> updatedRooms = createRoomSnapshots(reservation, request, draftData, user);
         try {
@@ -246,11 +286,19 @@ public class ReservationService {
         return response(reservation);
     }
 
-    /** Validates and resolves the request data shared by create and draft editing. */
-    private ReservationDraftData validateDraftData(CreateRequest request) {
+    /**
+     * Validates and resolves the request data shared by create and draft editing.
+     *
+     * @param request submitted draft data
+     * @param excludedReservationId the Reservation being edited, whose own OTA external identity must not count as a
+     *     duplicate of itself, or {@link #NO_RESERVATION} when creating
+     * @return the resolved draft data
+     */
+    private ReservationDraftData validateDraftData(CreateRequest request, UUID excludedReservationId) {
         if (!request.checkOutDate().isAfter(request.checkInDate())) {
             throw bad("check_out_date must be after check_in_date");
         }
+        requireAvailableOtaIdentity(request.source(), request.otaBookingReference(), excludedReservationId);
         if (request.adultCount() == null || request.adultCount() < 1) {
             throw bad("adult_count must be at least 1");
         }
@@ -504,6 +552,9 @@ public class ReservationService {
             throw modification(Reason.OTA_REFERENCE_TOO_LONG,
                     "OTA Booking Reference must not exceed 255 characters", 255);
         }
+        // Correcting a reference must not let this Reservation take over an identity another Reservation already
+        // holds; the Reservation's own current identity is excluded so re-submitting the same value is a no-op.
+        requireAvailableOtaIdentity(reservation.getSource(), correctedReference, id);
 
         String previousReference = reservation.getOtaBookingReference();
         reservation.correctOtaBookingReference(correctedReference);

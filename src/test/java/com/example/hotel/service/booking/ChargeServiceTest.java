@@ -391,6 +391,78 @@ class ChargeServiceTest {
         verify(additionalRevenues).save(revenue);
     }
 
+    /**
+     * Confirms the approved guard: a void that would leave the folio overpaid is rejected. Charges 1,200 and PAID
+     * Payments 1,200 leave Outstanding 0, so voiding a 200 Charge would produce Outstanding -200. V1 has no OVERPAID
+     * folio state, so staff must correct the Payment first.
+     */
+    @Test
+    void shouldRejectVoidThatWouldMakeOutstandingNegative() {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AdditionalRevenueRepository additionalRevenues = mock(AdditionalRevenueRepository.class);
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, "Minibar", null, null, new BigDecimal("200"));
+        AdditionalRevenue revenue = linkedRevenue(charge);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(additionalRevenues.findByChargeIdForUpdate(charge.getId())).thenReturn(Optional.of(revenue));
+
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> chargeService(chargeRepository, stayRepository, auditLogRepository, additionalRevenues,
+                                new StayBalance(new BigDecimal("1200"), new BigDecimal("1200"), BigDecimal.ZERO))
+                        .voidCharge(charge.getId(), new ChargeVoidRequest("Entered by mistake")));
+
+        assertEquals(409, exception.getStatusCode().value());
+        assertEquals(ChargeStatus.ACTIVE, charge.getStatus(), "rejected void leaves the Charge ACTIVE");
+        assertEquals(null, charge.getVoidReason());
+        assertEquals(com.example.hotel.entity.common.AdditionalRevenueStatus.RECORDED, revenue.getStatus(),
+                "rejected void leaves the linked Additional Revenue untouched");
+        verify(chargeRepository, never()).save(any(Charge.class));
+        verify(additionalRevenues, never()).save(any(AdditionalRevenue.class));
+        verify(auditLogRepository, never()).save(any(AuditLog.class));
+    }
+
+    /** Confirms a void landing exactly on Outstanding zero is allowed (Charges 1,200, Payments 1,000, void 200). */
+    @Test
+    void shouldAllowVoidThatLeavesOutstandingExactlyZero() {
+        assertVoidAllowedForBalance(new StayBalance(new BigDecimal("1200"), new BigDecimal("1000"), new BigDecimal("200")));
+    }
+
+    /** Confirms a void leaving positive Outstanding is allowed (Charges 1,200, Payments 800, void 200). */
+    @Test
+    void shouldAllowVoidThatLeavesOutstandingPositive() {
+        assertVoidAllowedForBalance(new StayBalance(new BigDecimal("1200"), new BigDecimal("800"), new BigDecimal("400")));
+    }
+
+    /** Voids a 200 Charge against the supplied balance and asserts the void completed. */
+    private void assertVoidAllowedForBalance(StayBalance balance) {
+        ChargeRepository chargeRepository = mock(ChargeRepository.class);
+        StayRepository stayRepository = mock(StayRepository.class);
+        AdditionalRevenueRepository additionalRevenues = mock(AdditionalRevenueRepository.class);
+        UUID stayId = UUID.randomUUID();
+        Stay stay = stay(stayId);
+        Charge charge = Charge.create(stay, ChargeType.SERVICE, "Minibar", null, null, new BigDecimal("200"));
+        AdditionalRevenue revenue = linkedRevenue(charge);
+        setCurrentUser(UUID.randomUUID());
+        when(chargeRepository.findByIdForUpdate(charge.getId())).thenReturn(Optional.of(charge));
+        when(stayRepository.findByIdForUpdate(stayId)).thenReturn(Optional.of(stay));
+        when(additionalRevenues.findByChargeIdForUpdate(charge.getId())).thenReturn(Optional.of(revenue));
+        when(chargeRepository.save(any(Charge.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(additionalRevenues.save(any(AdditionalRevenue.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ChargeResponse response = chargeService(chargeRepository, stayRepository, mock(AuditLogRepository.class),
+                        additionalRevenues, balance)
+                .voidCharge(charge.getId(), new ChargeVoidRequest("Entered by mistake"));
+
+        assertEquals("VOIDED", response.status());
+        assertEquals(ChargeStatus.VOIDED, charge.getStatus());
+        assertEquals(com.example.hotel.entity.common.AdditionalRevenueStatus.VOIDED, revenue.getStatus());
+    }
+
     /** Confirms a missing/inconsistent linked Additional Revenue rejects the whole void, rather than diverging silently. */
     @Test
     void shouldRejectVoidWhenLinkedAdditionalRevenueIsMissing() {
@@ -755,13 +827,29 @@ class ChargeServiceTest {
             StayRepository stayRepository,
             AuditLogRepository auditLogRepository,
             AdditionalRevenueRepository additionalRevenues) {
+        // Default balance leaves plenty of Outstanding, so tests that are not about the negative-balance guard are
+        // unaffected by it. Tests that exercise the guard supply their own balance.
+        return chargeService(chargeRepository, stayRepository, auditLogRepository, additionalRevenues,
+                new StayBalance(new BigDecimal("100000000"), BigDecimal.ZERO, new BigDecimal("100000000")));
+    }
+
+    /** Creates a Charge service whose Stay balance is fixed, for the Charge void negative-balance guard. */
+    private ChargeService chargeService(
+            ChargeRepository chargeRepository,
+            StayRepository stayRepository,
+            AuditLogRepository auditLogRepository,
+            AdditionalRevenueRepository additionalRevenues,
+            StayBalance balance) {
         com.example.hotel.repository.common.AdditionalRevenueCategoryRepository categories =
                 mock(com.example.hotel.repository.common.AdditionalRevenueCategoryRepository.class);
         when(categories.findByCode(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation ->
                 Optional.of(com.example.hotel.entity.common.AdditionalRevenueCategory.create(invocation.getArgument(0), "x", null)));
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(stayBalanceService.calculate(org.mockito.ArgumentMatchers.any())).thenReturn(balance);
         return new ChargeService(chargeRepository, stayRepository, new ChargeMapper(),
                 additionalRevenues, categories,
                 auditLogRepository,
+                stayBalanceService,
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-20T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 

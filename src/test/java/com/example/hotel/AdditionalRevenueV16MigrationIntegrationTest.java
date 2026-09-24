@@ -51,7 +51,7 @@ class AdditionalRevenueV16MigrationIntegrationTest {
                 "SELECT COUNT(DISTINCT id) FROM additional_revenue_category", Integer.class));
 
         migrate(dataSource, null);
-        assertEquals(41, jdbcTemplate.queryForObject(
+        assertEquals(42, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success", Integer.class));
         assertEquals("character varying", jdbcTemplate.queryForObject(
                 "SELECT data_type FROM information_schema.columns "

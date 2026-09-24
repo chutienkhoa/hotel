@@ -7,7 +7,8 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/guests}">Back to guests</a>
+        <a class="back-link" th:href="${returnTo} ?: @{/guests}"
+           th:text="${returnTo} != null ? 'Back to booking' : 'Back to guests'">Back to guests</a>
         <div class="page-header"><div>
             <h1 th:text="${guest == null} ? 'Create guest' : 'Edit guest'">Guest form</h1>
             <p th:if="${guest == null}">The guest code is generated automatically after creation.</p>
@@ -23,6 +24,7 @@
               th:attr="data-confirm-title=${guest == null} ? 'Create guest' : 'Update guest',data-confirm-label=${guest == null} ? 'Create guest' : 'Update guest'" method="post"
               th:action="${guest == null} ? @{/guests} : @{/guests/{id}(id=${guest.id})}"
               th:object="${guestForm}">
+            <input th:if="${returnTo}" type="hidden" name="returnTo" th:value="${returnTo}" />
             <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
                 Please correct the highlighted fields.
             </p>
@@ -75,7 +77,8 @@
                     <p class="field-error" th:errors="*{address}"></p>
                 </div>
 
-                <section aria-labelledby="passport-heading" class="guest-passport-section guest-form-address">
+                <section aria-labelledby="passport-heading" class="guest-passport-section guest-form-address"
+                         th:if="${canManageGuest}">
                     <h2 id="passport-heading">Passport Images</h2>
                     <p>Upload passport images for the guest and accompanying travelers.</p>
 
@@ -112,7 +115,7 @@
             </div>
 
             <div class="form-actions">
-                <a class="button button-secondary" th:href="@{/guests}">Cancel</a>
+                <a class="button button-secondary" th:href="${returnTo} ?: @{/guests}">Cancel</a>
                 <button class="button button-primary" th:text="${guest == null} ? 'Create Guest' : 'Update Guest'" type="submit">
                     Save Guest
                 </button>
