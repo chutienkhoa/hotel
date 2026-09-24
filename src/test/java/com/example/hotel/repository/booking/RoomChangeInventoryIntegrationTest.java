@@ -288,6 +288,34 @@ class RoomChangeInventoryIntegrationTest {
         assertFalse(fixed.hasInventoryConflict(a, d20.minusDays(2), d20));
     }
 
+    /**
+     * Regression coverage for the {@code checkedIn} fixture's time-of-day defect: a same-day check-in must be
+     * closeable at any hour of that same day, not merely whatever real wall-clock hour the suite happens to run
+     * at. This proves the fixture with two EXPLICIT deterministic closing instants, one well before 14:00
+     * Asia/Ho_Chi_Minh and one well after, rather than relying on the actual execution time. If the fixture ever
+     * regresses to a fixed hour (e.g. {@code atTime(14, 0)}) instead of {@code atStartOfDay(ZONE)}, the morning
+     * assertion below fails exactly as the original bug did: {@code assigned_to (08:00) < assigned_from (14:00)}
+     * violates {@code stay_room_assignment_interval}.
+     */
+    @Test
+    void shouldCloseASameDayAssignmentAtAnyHourOfTheCheckInDay() {
+        UUID morningRoom = room("IV-AM", "AVAILABLE");
+        UUID morningStay = checkedIn(morningRoom, today, today.plusDays(2));
+        Instant morningClose = today.atTime(8, 0).atZone(ZONE).toInstant();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> jdbc.update("UPDATE stay_room_assignment SET assigned_to = ? WHERE stay_id = ?",
+                        java.sql.Timestamp.from(morningClose), morningStay),
+                "a same-day assignment must close cleanly even before 14:00 ICT");
+
+        UUID afternoonRoom = room("IV-PM", "AVAILABLE");
+        UUID afternoonStay = checkedIn(afternoonRoom, today, today.plusDays(2));
+        Instant afternoonClose = today.atTime(16, 0).atZone(ZONE).toInstant();
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                () -> jdbc.update("UPDATE stay_room_assignment SET assigned_to = ? WHERE stay_id = ?",
+                        java.sql.Timestamp.from(afternoonClose), afternoonStay),
+                "and just as cleanly in the afternoon");
+    }
+
     /** Confirms Confirm and Room Change never both win for the same room and dates (repeated race). */
     @Test
     void shouldNeverCreateAConflictWhenConfirmRacesRoomChange() throws Exception {
@@ -390,7 +418,10 @@ class RoomChangeInventoryIntegrationTest {
     private UUID checkedIn(UUID room, LocalDate in, LocalDate out) {
         UUID reservation = reservation("CHECKED_IN", room, in, out);
         UUID stay = UUID.randomUUID();
-        Instant from = in.atTime(14, 0).atZone(ZONE).toInstant();
+        // Midnight of the check-in day, never a fixed wall-clock hour: every caller passes in <= today, so this is
+        // always <= any later real Instant.now(clock) a production close (Room Change, checkout) computes the same
+        // day - unlike a fixed hour such as 14:00, which is in the future whenever the suite runs before it.
+        Instant from = in.atStartOfDay(ZONE).toInstant();
         jdbc.update("INSERT INTO stay (id, reservation_id, status, actual_check_in_at, created_at, created_by, updated_at, updated_by) "
                 + "VALUES (?, ?, 'CHECKED_IN', ?, now(), ?, now(), ?)", stay, reservation, java.sql.Timestamp.from(from), user, user);
         UUID line = jdbc.queryForObject("SELECT id FROM reservation_room WHERE reservation_id = ?", UUID.class, reservation);

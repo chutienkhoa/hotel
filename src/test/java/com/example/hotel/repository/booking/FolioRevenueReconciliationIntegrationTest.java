@@ -541,7 +541,10 @@ class FolioRevenueReconciliationIntegrationTest {
     private UUID seededCheckedIn(UUID room, LocalDate in, LocalDate out) {
         UUID reservation = reservation("CHECKED_IN", in, out, new Line(room, "1000000"));
         UUID stay = UUID.randomUUID();
-        Instant from = in.atTime(14, 0).atZone(ZONE).toInstant();
+        // Midnight of the check-in day, never a fixed wall-clock hour: every caller passes in <= today, so this is
+        // always <= any later real Instant.now(clock) a production close (Room Change, checkout) computes the same
+        // day - unlike a fixed hour such as 14:00, which is in the future whenever the suite runs before it.
+        Instant from = in.atStartOfDay(ZONE).toInstant();
         jdbc.update("INSERT INTO stay (id, reservation_id, status, actual_check_in_at, created_at, created_by, updated_at, updated_by) "
                 + "VALUES (?, ?, 'CHECKED_IN', ?, now(), ?, now(), ?)", stay, reservation, Timestamp.from(from), user, user);
         UUID lineId = jdbc.queryForObject("SELECT id FROM reservation_room WHERE reservation_id = ?", UUID.class, reservation);

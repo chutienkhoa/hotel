@@ -24,4 +24,29 @@
     <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
   </dependencies>
   <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
+  <profiles>
+    <!--
+      FULL VERIFICATION mode: `mvn verify -Pintegration`.
+
+      Fast/default local development (`mvn test`, no profile) is completely unaffected by this profile: it is
+      inert unless explicitly activated. Activating it binds Maven Failsafe's `integration-test`/`verify` goals
+      (version managed by spring-boot-starter-parent), which run PostgresIntegrationSuiteCompletenessIT strictly
+      after the `test` phase's Surefire reports already exist. That guard fails the build loudly if any test was
+      skipped (Docker unreachable, or any other reason a `@Testcontainers(disabledWithoutDocker = true)` class
+      silently stood down) instead of allowing a `BUILD SUCCESS` with a silently-skipped PostgreSQL safety net.
+      See PostgresIntegrationSuiteCompletenessIT's Javadoc and README.md ("Running the tests") for the required
+      environment.
+    -->
+    <profile>
+      <id>integration</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-failsafe-plugin</artifactId>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
