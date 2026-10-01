@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Expense detail')}"></head>
+<body>
+<div class="app-shell page-expenses">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/expenses}">Back to expenses</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="${expense.category.code}">ELECTRICITY</h1>
+                <p><span th:replace="~{layout/datetime :: date(${expense.expenseDate})}">—</span></p>
+            </div>
+            <a class="button button-primary" th:if="${expense.status == 'DRAFT' and canManageExpense}"
+               th:href="@{/expenses/{id}/edit(id=${expense.id})}">Edit Expense</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list">
+            <dt>Category</dt>
+            <dd th:text="${expense.category.code}">ELECTRICITY</dd>
+            <dt>Amount</dt>
+            <dd><span th:replace="~{layout/money :: amount(${expense.amount}, ${expense.currency})}">0 VND</span></dd>
+            <dt>Expense date</dt>
+            <dd><span th:replace="~{layout/datetime :: date(${expense.expenseDate})}">—</span></dd>
+            <dt>Payment method</dt>
+            <dd th:text="${expense.paymentMethod}">CASH</dd>
+            <dt>Status</dt>
+            <dd><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(expense.status)}" th:text="${expense.status}">DRAFT</span></dd>
+            <dt th:if="${expense.description}">Description</dt>
+            <dd th:if="${expense.description}" th:text="${expense.description}">Description</dd>
+        </dl>
+
+        <section aria-labelledby="actions-heading" class="card actions">
+            <h2 id="actions-heading">Available actions</h2>
+            <form data-confirm-label="Submit expense" data-confirm-message="Submit this expense for approval?"
+                  data-confirm-severity="WARNING" data-confirm-title="Submit expense" method="post"
+                  th:action="@{/expenses/{id}/submit(id=${expense.id})}"
+                  th:if="${expense.status == 'DRAFT' and canManageExpense}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Submit</button>
+            </form>
+            <div class="action-row" th:if="${expense.status == 'SUBMITTED' and canManageExpense}">
+                <form data-confirm-label="Approve expense" data-confirm-message="Approve this expense?"
+                      data-confirm-severity="WARNING" data-confirm-title="Approve expense" method="post"
+                      th:action="@{/expenses/{id}/approve(id=${expense.id})}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-primary" type="submit">Approve</button>
+                </form>
+                <form data-confirm-label="Reject expense" data-confirm-message="Reject this expense?"
+                      data-confirm-severity="DANGER" data-confirm-title="Reject expense" method="post"
+                      th:action="@{/expenses/{id}/reject(id=${expense.id})}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="button button-danger" type="submit">Reject</button>
+                </form>
+            </div>
+            <form data-confirm-label="Post expense" data-confirm-message="Post this expense?"
+                  data-confirm-severity="DANGER" data-confirm-title="Post expense" method="post"
+                  th:action="@{/expenses/{id}/post(id=${expense.id})}"
+                  th:if="${expense.status == 'APPROVED' and canManageExpense}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Post</button>
+            </form>
+            <p th:if="${expense.status == 'REJECTED' or expense.status == 'POSTED'}">
+                No state-changing actions are available.
+            </p>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

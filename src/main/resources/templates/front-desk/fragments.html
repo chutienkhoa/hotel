@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Fragment-only template for the Front Desk workspace; rendered only through th:replace. -->
+<th:block th:fragment="guest(row)">
+    <strong th:if="${row.guestName != null}" th:text="${row.guestName}">Nguyen Van An</strong>
+    <span th:classappend="${row.guestName != null} ? 'front-desk-secondary'" th:text="${row.guestCode}">G-000123</span>
+</th:block>
+
+<th:block th:fragment="rooms(rooms)">
+    <div th:each="room : ${rooms}">
+        <span th:text="${room.roomNumber + ' ' + room.roomTypeName}">101 Double</span>
+        <span class="front-desk-room-issue" th:if="${room.issue != null}"
+              th:text="#{'checkin.readiness.issue.' + ${room.issue.name()}(${room.roomNumber})}">Room 101 needs cleaning</span>
+    </div>
+</th:block>
+
+<th:block th:fragment="plannedDeparture(row)">
+    <span th:replace="~{layout/datetime :: date(${row.plannedCheckOutDate})}">—</span>
+    <span class="status-badge housekeeping-urgent" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueDeparture}">Overdue Departure</span>
+    <span class="overdue-days" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueDays(${row.overdueDays})}">Overdue 1 day</span>
+    <span class="status-badge" th:if="${!row.overdue and row.plannedCheckOutDate == hotelToday}" th:text="#{reservation.frontDesk.today}">Today</span>
+</th:block>
+
+<th:block th:fragment="arrivalTable(rows)">
+    <div class="table-wrap" th:unless="${#lists.isEmpty(rows)}">
+        <table>
+            <thead>
+            <tr>
+                <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.arrival}">Arrival</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${rows}" th:classappend="${row.overdue} ? 'housekeeping-row-urgent'">
+                <td th:text="${row.reservationNumber}">R-1</td>
+                <td>
+                    <th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block>
+                    <span class="front-desk-secondary" id="arrival-contact-phone" th:if="${row.contactPhone}"
+                          th:text="${row.contactPhone}">0900000000</span>
+                </td>
+                <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+                <td>
+                    <span th:text="${row.source.displayName}">Direct</span>
+                    <span class="front-desk-secondary" th:if="${row.otaBookingReference}" th:text="${row.otaBookingReference}">BK-1</span>
+                </td>
+                <td>
+                    <span th:replace="~{layout/datetime :: date(${row.checkInDate})}">—</span>
+                    <span class="status-badge housekeeping-urgent" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueArrival}">Overdue Arrival</span>
+                    <span class="status-badge" th:unless="${row.overdue}" th:text="#{reservation.frontDesk.today}">Today</span>
+                </td>
+                <td>
+                    <span class="status-badge"
+                          th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'"
+                          th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
+                    <div th:each="issue : ${row.readiness.blockers()}">
+                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.messageArgument(0)},${issue.messageArgument(1)})}">Room 101 needs cleaning</span>
+                    </div>
+                </td>
+                <td>
+                    <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                       th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkIn}">Review</a>
+                    <a class="button button-secondary" th:href="@{/housekeeping}"
+                       th:if="${row.housekeepingRelated and canManageHousekeeping}" th:text="#{reservation.frontDesk.action.housekeeping}">Housekeeping</a>
+                    <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
+                       th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</th:block>
+
+<th:block th:fragment="departureTable(rows)">
+    <div class="table-wrap" th:unless="${#lists.isEmpty(rows)}">
+        <table>
+            <thead>
+            <tr>
+                <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.plannedCheckout}">Planned Checkout</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
+                <th scope="col" th:if="${canManagePayment}" th:text="#{reservation.frontDesk.column.balance}">Balance</th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${rows}" th:classappend="${row.overdue} ? 'housekeeping-row-urgent'">
+                <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+                <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                <td th:text="${row.reservationNumber}">R-1</td>
+                <td><th:block th:replace="~{front-desk/fragments :: plannedDeparture(${row})}"></th:block></td>
+                <td>
+                    <span class="status-badge"
+                          th:classappend="${row.paymentRequired} ? 'status-badge--out_of_order' : 'status-badge--available'"
+                          th:text="${row.paymentRequired} ? #{reservation.frontDesk.paymentRequired} : #{reservation.frontDesk.readyForCheckout}">Ready</span>
+                </td>
+                <td th:if="${canManagePayment}">
+                    <span th:replace="~{layout/money :: amount(${row.outstanding}, ${row.currency})}">0 VND</span>
+                </td>
+                <td>
+                    <a class="button button-primary" th:href="@{/check-out/{id}(id=${row.reservationId})}"
+                       th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkOut}">Review</a>
+                    <a class="button button-secondary" th:href="@{/reservations/{id}/folio(id=${row.reservationId})}"
+                       th:if="${canManagePayment}" th:text="#{reservation.frontDesk.action.folio}">Folio</a>
+                    <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
+                       th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
+                    <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
+                       th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</th:block>
+</body>
+</html>

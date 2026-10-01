@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{room.housekeeping.title})}"></head>
+<body>
+<div class="app-shell page-housekeeping">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{room.housekeeping.title}">Housekeeping</h1>
+                <p th:text="#{room.housekeeping.description}">Rooms to clean, rooms being cleaned and rooms ready for guests.</p>
+            </div>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <div class="card-grid housekeeping-summary" id="housekeeping-summary">
+            <div class="card summary-card"><a href="#needs-cleaning">
+                <dl><dt th:text="#{room.housekeeping.summary.dirty}">Needs Cleaning</dt>
+                    <dd id="count-dirty" th:text="${#lists.size(workspace.needsCleaning)}">0</dd></dl></a></div>
+            <div class="card summary-card"><a href="#cleaning">
+                <dl><dt th:text="#{room.housekeeping.summary.cleaning}">Cleaning</dt>
+                    <dd id="count-cleaning" th:text="${#lists.size(workspace.cleaning)}">0</dd></dl></a></div>
+            <div class="card summary-card"><a href="#ready">
+                <dl><dt th:text="#{room.housekeeping.summary.ready}">Ready</dt>
+                    <dd id="count-ready" th:text="${#lists.size(workspace.ready)}">0</dd></dl></a></div>
+            <div class="card summary-card"><a href="#issues">
+                <dl><dt th:text="#{room.housekeeping.summary.issues}">Issues</dt>
+                    <dd id="count-issues" th:text="${#lists.size(workspace.issues)}">0</dd></dl></a></div>
+        </div>
+
+        <section class="card housekeeping-group" id="needs-cleaning" th:aria-label="#{room.housekeeping.group.dirty}">
+            <h2 th:text="#{room.housekeeping.group.dirty}">Needs Cleaning</h2>
+            <th:block th:replace="~{:: roomTable(${workspace.needsCleaning}, 'start')}"></th:block>
+        </section>
+        <section class="card housekeeping-group" id="cleaning" th:aria-label="#{room.housekeeping.group.cleaning}">
+            <h2 th:text="#{room.housekeeping.group.cleaning}">Cleaning</h2>
+            <th:block th:replace="~{:: roomTable(${workspace.cleaning}, 'finish')}"></th:block>
+        </section>
+        <section class="card housekeeping-group" id="issues" th:aria-label="#{room.housekeeping.group.issues}">
+            <h2 th:text="#{room.housekeeping.group.issues}">Issues</h2>
+            <th:block th:replace="~{:: roomTable(${workspace.issues}, 'none')}"></th:block>
+        </section>
+        <section class="card housekeeping-group" id="ready" th:aria-label="#{room.housekeeping.group.ready}">
+            <h2 th:text="#{room.housekeeping.group.ready}">Ready</h2>
+            <th:block th:replace="~{:: roomTable(${workspace.ready}, 'none')}"></th:block>
+        </section>
+    </main>
+</div>
+
+<th:block th:fragment="roomTable(rooms, action)">
+    <p class="empty-state" th:if="${#lists.isEmpty(rooms)}" th:text="#{room.housekeeping.empty}">No rooms in this group.</p>
+    <div class="table-wrap" th:unless="${#lists.isEmpty(rooms)}">
+        <table>
+            <thead>
+            <tr>
+                <th scope="col" th:text="#{room.housekeeping.column.room}">Room</th>
+                <th scope="col" th:text="#{room.housekeeping.column.roomType}">Room Type</th>
+                <th scope="col" th:text="#{room.housekeeping.column.status}">Status</th>
+                <th scope="col" th:text="#{room.housekeeping.column.nextArrival}">Next Arrival</th>
+                <th scope="col" th:text="#{room.housekeeping.column.action}">Action</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="room : ${rooms}" th:classappend="${room.urgent} ? 'housekeeping-row-urgent'">
+                <td th:text="${room.roomNumber}">101</td>
+                <td th:text="${room.roomTypeName}">Standard</td>
+                <td>
+                    <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}"
+                          th:text="#{'room.housekeeping.status.' + ${room.status}}">DIRTY</span>
+                    <span class="status-badge housekeeping-urgent" th:if="${room.urgent}" th:text="#{room.housekeeping.urgent}">Urgent</span>
+                </td>
+                <td th:switch="${room.arrivalKind}">
+                    <span th:case="'TODAY'" th:text="#{room.housekeeping.arrival.today}">Today</span>
+                    <span th:case="'TOMORROW'" th:text="#{room.housekeeping.arrival.tomorrow}">Tomorrow</span>
+                    <span th:case="'DATE'" th:text="${#temporals.format(room.nextArrivalDate, 'dd/MM/yyyy')}">01/01/2026</span>
+                    <span th:case="*" th:text="#{room.housekeeping.arrival.none}">No upcoming arrival</span>
+                </td>
+                <td>
+                    <form class="housekeeping-inline-form" method="post" th:if="${action == 'start'}"
+                          th:action="@{/housekeeping/rooms/{id}/start-cleaning(id=${room.id})}">
+                        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        <button class="button button-primary" th:text="#{room.housekeeping.action.start}" type="submit">Start Cleaning</button>
+                    </form>
+                    <form class="housekeeping-inline-form" method="post" th:if="${action == 'finish'}"
+                          th:action="@{/housekeeping/rooms/{id}/finish-cleaning(id=${room.id})}">
+                        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        <button class="button button-primary" th:text="#{room.housekeeping.action.finish}" type="submit">Mark Clean</button>
+                    </form>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</th:block>
+</body>
+</html>

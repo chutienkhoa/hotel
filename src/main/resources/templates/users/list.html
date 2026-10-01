@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Users')}"></head>
+<body>
+<div class="app-shell page-users">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Users</h1>
+                <p>User Management</p>
+            </div>
+            <a class="button button-primary" th:href="@{/users/new}">Add User</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" aria-label="Filter users">
+            <form method="get" th:action="@{/users}">
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="query">Search username</label>
+                        <input id="query" name="query" placeholder="Username" th:value="${searchCriteria.query}" type="search" />
+                    </div>
+                    <div class="form-field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option th:selected="${!searchCriteria.hasStatusFilter()}" value="ALL">All</option>
+                            <option th:selected="${searchCriteria.isActiveFilter()}" value="ACTIVE">Active</option>
+                            <option th:selected="${searchCriteria.hasStatusFilter() and not searchCriteria.isActiveFilter()}"
+                                    value="INACTIVE">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-row">
+                    <a class="button button-secondary" th:href="@{/users}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <p class="empty-state" th:if="${#lists.isEmpty(users)}">No users match the current filters.</p>
+
+        <div class="table-wrap" th:unless="${#lists.isEmpty(users)}">
+            <table>
+                <thead>
+                <tr>
+                    <th scope="col">Username</th>
+                    <th scope="col">Staff</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Status</th>
+                    <th class="table-actions" scope="col">Actions</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="account : ${users}">
+                    <td><a th:href="@{/users/{id}(id=${account.id})}" th:text="${account.username}">admin</a></td>
+                    <td th:text="${account.staffCode != null} ? ${account.staffCode + ' - ' + account.staffName} : '—'">—</td>
+                    <td th:text="${account.role} ?: '—'">ADMIN</td>
+                    <td>
+                        <span class="status-badge"
+                              th:classappend="${account.active} ? ' status-badge--available' : ' status-badge--checked_out'"
+                              th:text="${account.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+                    </td>
+                    <td class="table-actions">
+                        <div class="action-row">
+                            <a class="button button-secondary table-action" th:href="@{/users/{id}(id=${account.id})}">View</a>
+                            <a class="button button-secondary table-action" th:href="@{/users/{id}/edit(id=${account.id})}">Edit</a>
+                            <form th:if="${account.active}" data-confirm-label="Deactivate user"
+                                  data-confirm-severity="WARNING" data-confirm-title="Deactivate user" method="post"
+                                  th:action="@{/users/{id}/deactivate(id=${account.id})}"
+                                  th:attr="data-confirm-message=|Deactivate ${account.username}?|">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-danger table-action" type="submit">Deactivate</button>
+                            </form>
+                            <form th:unless="${account.active}" data-confirm-label="Activate user"
+                                  data-confirm-severity="NORMAL" data-confirm-title="Activate user" method="post"
+                                  th:action="@{/users/{id}/activate(id=${account.id})}"
+                                  th:attr="data-confirm-message=|Activate ${account.username}?|">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-primary table-action" type="submit">Activate</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

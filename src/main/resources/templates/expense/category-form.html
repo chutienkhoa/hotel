@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${category == null} ? 'Create expense category' : 'Edit expense category')}"></head>
+<body>
+<div class="app-shell page-expenses">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/expense-categories}">Back to Expense Categories</a>
+        <div class="page-header"><div>
+            <h1 th:text="${category == null} ? 'Create expense category' : 'Edit expense category'">Category form</h1>
+        </div></div>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form class="form-card" data-confirm-message="Save this category?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${category == null} ? 'Create category' : 'Update category',data-confirm-label=${category == null} ? 'Create category' : 'Update category'"
+              method="post"
+              th:action="${category == null} ? @{/expense-categories} : @{/expense-categories/{id}(id=${category.id})}"
+              th:object="${categoryForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+            <div class="form-grid">
+                <div class="form-field" th:if="${category == null}">
+                    <label for="code">Code</label>
+                    <input id="code" maxlength="64" required th:field="*{code}" type="text" />
+                    <p class="field-error" th:errors="*{code}"></p>
+                </div>
+                <div class="form-field" th:if="${category != null}">
+                    <label for="codeDisplay">Code</label>
+                    <input disabled id="codeDisplay" th:value="${category.code}" type="text" />
+                </div>
+                <div class="form-field">
+                    <label for="name">Name</label>
+                    <input id="name" maxlength="128" required th:field="*{name}" type="text" />
+                    <p class="field-error" th:errors="*{name}"></p>
+                </div>
+            </div>
+            <div class="form-field">
+                <label for="description">Description <span aria-hidden="true">(optional)</span></label>
+                <textarea id="description" maxlength="1000" rows="4" th:field="*{description}"></textarea>
+                <p class="field-error" th:errors="*{description}"></p>
+            </div>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/expense-categories}">Cancel</a>
+                <button class="button button-primary" th:text="${category == null} ? 'Create Category' : 'Update Category'" type="submit">
+                    Save Category
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

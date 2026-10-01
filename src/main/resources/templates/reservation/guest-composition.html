@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{reservation.composition.title})}"></head>
+<body>
+<div class="app-shell page-reservations">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}" th:text="#{reservation.composition.back}">Back to reservation</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{reservation.composition.title}">Edit Guest Composition</h1>
+                <p th:text="#{reservation.composition.description}">Change only adults, children and accompanying guests.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <dl class="detail-list" id="composition-context">
+            <dt th:text="#{reservation.composition.reservation}">Reservation</dt>
+            <dd th:text="${reservation.reservationNumber}">R20260916-000001</dd>
+            <dt th:text="#{reservation.guests.primary}">Primary Guest</dt>
+            <dd id="composition-primary-guest" th:text="${reservation.guestCode}">G-1</dd>
+        </dl>
+
+        <form class="form-card" method="post" th:action="@{/reservations/{id}/guest-composition(id=${reservation.id})}"
+              th:object="${guestCompositionForm}">
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}" th:text="#{reservation.composition.fixErrors}">
+                Please correct the highlighted fields.
+            </p>
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <input data-guest-select th:value="${reservation.guestId}" type="hidden" />
+
+            <div class="form-grid reservation-details-grid">
+                <div class="form-field">
+                    <label for="adultCount" th:text="#{reservation.guests.adults} + ' *'">Adults *</label>
+                    <input id="adultCount" inputmode="numeric" min="1" required step="1" th:field="*{adultCount}" type="number" />
+                    <p class="field-error" th:errors="*{adultCount}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="childCount" th:text="#{reservation.guests.children} + ' *'">Children *</label>
+                    <input id="childCount" inputmode="numeric" min="0" required step="1" th:field="*{childCount}" type="number" />
+                    <p class="field-error" th:errors="*{childCount}"></p>
+                </div>
+            </div>
+
+            <div th:replace="~{reservation/accompanying-guests :: picker(${guests}, ${selectedAccompanyingGuests})}"></div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservation.id})}" th:text="#{common.action.cancel}">Cancel</a>
+                <button class="button button-primary" th:text="#{reservation.composition.submit}" type="submit">Update Guest Composition</button>
+            </div>
+        </form>
+    </main>
+</div>
+<script defer th:src="@{/js/reservation/form.js}"></script>
+</body>
+</html>

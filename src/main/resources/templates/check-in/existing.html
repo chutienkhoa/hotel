@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Check-in — Existing Reservation')}"></head>
+<body>
+<div class="app-shell page-check-in">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/check-in}">Back to Check-in</a>
+
+        <div class="page-header">
+            <div>
+                <h1>Existing Reservation</h1>
+                <p>Find a reservation already entered into Hotel System. Only CONFIRMED reservations can be checked in. Search is local to Hotel System only.</p>
+            </div>
+        </div>
+
+        <section class="form-card" aria-label="Search confirmed reservations">
+            <form method="get" th:action="@{/check-in/existing}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="reservationNumber">Reservation Number</label>
+                        <input id="reservationNumber" name="reservationNumber" type="search"
+                               th:value="${searchCriteria.reservationNumber}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="guest">Guest</label>
+                        <input id="guest" name="guest" type="search" th:value="${searchCriteria.guest}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="otaBookingReference">OTA Booking Reference</label>
+                        <input id="otaBookingReference" name="otaBookingReference" type="search"
+                               th:value="${searchCriteria.otaBookingReference}" />
+                    </div>
+                </div>
+                <div class="action-row expense-filter-actions">
+                    <a class="button button-secondary" th:href="@{/check-in/existing}">Clear</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="expense-results">
+            <div class="results-toolbar" th:if="${reservationPage != null}">
+                <p><span th:replace="~{layout/table :: resultSummary(${reservationPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${reservationPage}, 'Reservation pages', 'pagination')}"></nav>
+            </div>
+
+            <p class="empty-state" th:if="${reservationPage != null and reservationPage.empty}">
+                No confirmed reservations match these filters.
+            </p>
+
+            <div class="table-wrap" th:if="${reservationPage != null and not reservationPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th th:replace="~{layout/table :: sortHeader('Reservation', 'reservationNumber')}"></th>
+                        <th scope="col">Guest</th>
+                        <th scope="col">Room</th>
+                        <th scope="col">Source</th>
+                        <th scope="col">OTA Booking</th>
+                        <th th:replace="~{layout/table :: sortHeader('Check-in', 'checkInDate')}"></th>
+                        <th scope="col">Check-out</th>
+                        <th scope="col">Total</th>
+                        <th scope="col"></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="reservation : ${reservationPage.content}">
+                        <td th:text="${reservation.reservationNumber}">R20260916-000001</td>
+                        <td th:text="${reservation.guestFullName}">Guest name</td>
+                        <td th:text="${reservation.roomNumbers}">101</td>
+                        <td th:text="${reservation.source.displayName}">Direct</td>
+                        <td th:text="${reservation.otaBookingReference} ?: '—'">—</td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></td>
+                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></td>
+                        <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
+                        <td>
+                            <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${reservation.id})}">Check-in</a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+</body>
+</html>

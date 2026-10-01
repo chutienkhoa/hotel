@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Room detail')}"></head>
+<body>
+<div class="app-shell page-rooms">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/rooms}">Back to rooms</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="${room.roomNumber}">101</h1>
+                <p>Room profile</p>
+            </div>
+            <a class="button button-primary" th:href="@{/rooms/{id}/edit(id=${room.id})}">Edit Room</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <div class="card" th:if="${(room.status == 'AVAILABLE' or room.status == 'DIRTY') and not #lists.isEmpty(affectedReservations)}">
+            <p class="message message-warning" th:text="#{room.unavailability.warning.message(${#lists.size(affectedReservations)})}">
+                This room has upcoming confirmed reservations that will be affected.
+            </p>
+            <ul>
+                <li th:each="affected : ${affectedReservations}">
+                    <span th:text="${affected.reservationNumber}">R20261010-000001</span>
+                    (<span th:replace="~{layout/datetime :: date(${affected.checkInDate})}">—</span>
+                    &rarr;
+                    <span th:replace="~{layout/datetime :: date(${affected.checkOutDate})}">—</span>)
+                </li>
+            </ul>
+        </div>
+
+        <section class="card actions" aria-label="Room operations">
+            <form data-confirm-label="Start cleaning" data-confirm-message="Start cleaning this room?"
+                  data-confirm-severity="NORMAL" data-confirm-title="Start cleaning" method="post"
+                  th:action="@{/rooms/{id}/start-cleaning(id=${room.id})}" th:if="${canManageHousekeeping and room.status == 'DIRTY'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Start Cleaning</button>
+            </form>
+            <form data-confirm-label="Finish cleaning" data-confirm-message="Finish cleaning this room?"
+                  data-confirm-severity="NORMAL" data-confirm-title="Finish cleaning" method="post"
+                  th:action="@{/rooms/{id}/finish-cleaning(id=${room.id})}" th:if="${canManageHousekeeping and room.status == 'CLEANING'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Finish Cleaning</button>
+            </form>
+            <form class="reservation-reason-form" data-confirm-label="Start maintenance" data-confirm-message="Start maintenance for this room?"
+                  data-confirm-severity="WARNING" data-confirm-title="Start maintenance" method="post"
+                  th:action="@{/rooms/{id}/start-maintenance(id=${room.id})}" th:if="${room.status == 'AVAILABLE' or room.status == 'DIRTY'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <div class="form-field">
+                    <label for="startMaintenanceReason" th:text="#{room.unavailability.reason.label}">Reason</label>
+                    <textarea id="startMaintenanceReason" maxlength="2000" name="reason" required></textarea>
+                </div>
+                <button class="button button-secondary" type="submit">Start Maintenance</button>
+            </form>
+            <form class="reservation-reason-form" data-confirm-label="Mark out of order" data-confirm-message="Mark this room out of order?"
+                  data-confirm-severity="WARNING" data-confirm-title="Mark room out of order" method="post"
+                  th:action="@{/rooms/{id}/mark-out-of-order(id=${room.id})}" th:if="${room.status == 'AVAILABLE' or room.status == 'DIRTY'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <div class="form-field">
+                    <label for="markOutOfOrderReason" th:text="#{room.unavailability.reason.label}">Reason</label>
+                    <textarea id="markOutOfOrderReason" maxlength="2000" name="reason" required></textarea>
+                </div>
+                <button class="button button-secondary" type="submit">Mark Out Of Order</button>
+            </form>
+            <form data-confirm-label="Finish maintenance" data-confirm-message="Finish maintenance for this room?"
+                  data-confirm-severity="WARNING" data-confirm-title="Finish maintenance" method="post"
+                  th:action="@{/rooms/{id}/finish-maintenance(id=${room.id})}" th:if="${room.status == 'MAINTENANCE'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Finish Maintenance</button>
+            </form>
+            <form data-confirm-label="Restore service" data-confirm-message="Restore this room to service?"
+                  data-confirm-severity="WARNING" data-confirm-title="Restore room to service" method="post"
+                  th:action="@{/rooms/{id}/restore-to-service(id=${room.id})}" th:if="${room.status == 'OUT_OF_ORDER'}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="button button-primary" type="submit">Restore To Service</button>
+            </form>
+        </section>
+
+        <dl class="detail-list">
+            <dt>RoomType</dt>
+            <dd th:text="|${room.roomType.code} — ${room.roomType.name}|">SINGLE — Single</dd>
+            <dt>Floor</dt>
+            <dd th:text="${room.floor}">1</dd>
+            <dt>Status</dt>
+            <dd><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></dd>
+            <th:block th:if="${(room.status == 'MAINTENANCE' or room.status == 'OUT_OF_ORDER') and unavailabilityReason != null}">
+                <dt th:text="#{room.unavailability.reason.label}">Reason</dt>
+                <dd th:text="${unavailabilityReason}">Air conditioner compressor failure</dd>
+            </th:block>
+            <dt>Active inventory</dt>
+            <dd th:text="${room.active}">true</dd>
+        </dl>
+
+        <section aria-labelledby="room-images-heading" class="card reservation-detail-section">
+            <div class="reservation-detail-section-header">
+                <div>
+                    <h2 id="room-images-heading" th:text="#{room.image.section.title}">Images</h2>
+                </div>
+                <div class="action-row">
+                    <span class="reservation-info-secondary">
+                        <span th:text="${#lists.size(roomImages)}">0</span>
+                        <span th:text="${#lists.size(roomImages) == 1} ? #{room.image.count.singular} : #{room.image.count.plural}">images</span>
+                    </span>
+                </div>
+            </div>
+
+            <p class="reservation-info-secondary" th:if="${#lists.isEmpty(roomImages)}" th:text="#{room.image.empty}">No images uploaded for this room.</p>
+
+            <ul class="profile-document-list" id="room-image-list" th:if="${not #lists.isEmpty(roomImages)}">
+                <li class="passport-document-item room-image-item" th:each="image : ${roomImages}">
+                    <div class="room-image-thumb">
+                        <img loading="lazy" th:alt="#{room.image.alt}"
+                             th:src="@{/rooms/{id}/images/{imageId}/file(id=${room.id},imageId=${image.id})}" />
+                    </div>
+                    <div class="passport-document-content">
+                        <p class="passport-document-title" th:text="${image.originalFilename}">room-1.jpg</p>
+                        <p class="passport-document-description">
+                            <span class="status-badge status-badge--confirmed" th:if="${image.primary}" th:text="#{room.image.badge.primary}">Primary</span>
+                            <span th:text="#{room.image.badge.notPrimary}" th:unless="${image.primary}">Not primary</span>
+                        </p>
+                        <div class="passport-document-actions">
+                            <a class="button button-secondary" target="_blank"
+                               th:href="@{/rooms/{id}/images/{imageId}/file(id=${room.id},imageId=${image.id})}">
+                                <svg th:replace="~{layout/icons :: eye}"></svg>
+                                <th:block th:text="#{room.image.action.view}">View</th:block>
+                            </a>
+                            <form method="post"
+                                  th:action="@{/rooms/{id}/images/{imageId}/primary(id=${room.id},imageId=${image.id})}"
+                                  th:if="${not image.primary}">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-secondary" th:text="#{room.image.action.setPrimary}" type="submit">Set Primary</button>
+                            </form>
+                            <form method="post"
+                                  th:action="@{/rooms/{id}/images/{imageId}/remove(id=${room.id},imageId=${image.id})}"
+                                  th:attr="data-confirm-label=#{room.image.confirm.remove.label},data-confirm-message=#{room.image.confirm.remove.message},data-confirm-title=#{room.image.confirm.remove.title}"
+                                  data-confirm-severity="DANGER">
+                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                <button class="button button-secondary" th:text="#{room.image.action.remove}" type="submit">Remove</button>
+                            </form>
+                        </div>
+                    </div>
+                </li>
+            </ul>
+
+            <form class="reservation-reason-form" enctype="multipart/form-data" method="post"
+                  th:action="@{/rooms/{id}/images(id=${room.id})}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <div class="form-field">
+                    <label for="images" th:text="#{room.image.upload.label}">Upload images (JPG or PNG, up to 5 MB each, up to 10 per room)</label>
+                    <input accept="image/jpeg,image/png" id="images" multiple="multiple" name="images" type="file" />
+                </div>
+                <button class="button button-primary" th:text="#{room.image.upload.button}" type="submit">Upload</button>
+            </form>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

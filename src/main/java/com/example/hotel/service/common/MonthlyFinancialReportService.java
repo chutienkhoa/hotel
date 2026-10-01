@@ -1,0 +1,185 @@
+package com.example.hotel.service.common;
+
+import com.example.hotel.dto.common.response.MonthlyFinancialReport;
+import com.example.hotel.dto.common.response.NonVndRoomRevenueWarning;
+import com.example.hotel.entity.booking.ReservationStatus;
+import com.example.hotel.entity.common.AdditionalRevenueStatus;
+import com.example.hotel.entity.common.ExpenseStatus;
+import com.example.hotel.exception.ReportDataIntegrityException;
+import com.example.hotel.repository.booking.ReservationRepository;
+import com.example.hotel.repository.booking.ReservationRoomRevenueRow;
+import com.example.hotel.repository.booking.StayExtensionRevenueRow;
+import com.example.hotel.repository.booking.StayExtensionRoomRepository;
+import com.example.hotel.repository.common.AdditionalRevenueRepository;
+import com.example.hotel.repository.common.ExpenseRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/**
+ * Calculates the Monthly Financial Report (spec §61): recognized VND Room Revenue allocated by booked
+ * calendar room-night, recognized Additional Revenue and Expense, and the derived totals. It returns a
+ * locale-free result and knows nothing about presentation. Payments are never used.
+ */
+@Service
+public class MonthlyFinancialReportService {
+
+    static final String REPORT_CURRENCY = "VND";
+
+    /** Reservation statuses whose booked room pricing counts as recognized Room Revenue. */
+    static final List<ReservationStatus> ELIGIBLE_STATUSES =
+            List.of(ReservationStatus.CHECKED_IN, ReservationStatus.CHECKED_OUT);
+
+    private static final int MARGIN_SCALE = 2;
+    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
+
+    private final ReservationRepository reservationRepository;
+    private final StayExtensionRoomRepository stayExtensionRoomRepository;
+    private final AdditionalRevenueRepository additionalRevenueRepository;
+    private final ExpenseRepository expenseRepository;
+    private final Clock clock;
+
+    /**
+     * Creates the service.
+     *
+     * @param reservationRepository source of ReservationRoom pricing snapshots
+     * @param stayExtensionRoomRepository source of Stay Extension pricing snapshots (additive Room Revenue)
+     * @param additionalRevenueRepository source of recognized Additional Revenue
+     * @param expenseRepository source of recognized Expense
+     * @param clock hotel business clock: CHECKED_IN accommodation is recognized only for hotel nights that have started
+     */
+    public MonthlyFinancialReportService(
+            ReservationRepository reservationRepository,
+            StayExtensionRoomRepository stayExtensionRoomRepository,
+            AdditionalRevenueRepository additionalRevenueRepository,
+            ExpenseRepository expenseRepository,
+            Clock clock) {
+        this.reservationRepository = reservationRepository;
+        this.stayExtensionRoomRepository = stayExtensionRoomRepository;
+        this.additionalRevenueRepository = additionalRevenueRepository;
+        this.expenseRepository = expenseRepository;
+        this.clock = clock;
+    }
+
+    /**
+     * Builds the report for one calendar month.
+     *
+     * @param month the reported month
+     * @return the immutable report result
+     * @throws ReportDataIntegrityException if a used ReservationRoom total differs from nightly rate x booked nights
+     */
+    @Transactional(readOnly = true)
+    public MonthlyFinancialReport report(YearMonth month) {
+        LocalDate monthStart = month.atDay(1);
+        LocalDate nextMonthStart = month.plusMonths(1).atDay(1);
+        // A night is recognized once its start date has begun: a CHECKED_IN interval ends (exclusive) at hotelToday + 1.
+        LocalDate startedNightsEnd = LocalDate.now(clock).plusDays(1);
+
+        BigDecimal roomRevenue = BigDecimal.ZERO;
+        Set<java.util.UUID> excludedReservations = new HashSet<>();
+        int excludedRooms = 0;
+        Set<String> excludedCurrencies = new TreeSet<>();
+
+        for (ReservationRoomRevenueRow row :
+                reservationRepository.findRoomRevenueRows(monthStart, nextMonthStart, ELIGIBLE_STATUSES)) {
+            verifySnapshot(row);
+            if (!REPORT_CURRENCY.equals(row.currency())) {
+                excludedReservations.add(row.reservationId());
+                excludedRooms++;
+                excludedCurrencies.add(row.currency());
+                continue;
+            }
+            LocalDate overlapStart = row.checkInDate().isAfter(monthStart) ? row.checkInDate() : monthStart;
+            LocalDate overlapEnd = earliest(recognizedEnd(row.checkOutDate(), row.reservationStatus(), startedNightsEnd), nextMonthStart);
+            long nightsInsideMonth = Math.max(0, ChronoUnit.DAYS.between(overlapStart, overlapEnd));
+            roomRevenue = roomRevenue.add(row.nightlyRate().multiply(BigDecimal.valueOf(nightsInsideMonth)));
+        }
+
+        // Stay Extension lines are an additive second source with the same eligibility, overlap and currency rules.
+        for (StayExtensionRevenueRow row :
+                stayExtensionRoomRepository.findRevenueRows(monthStart, nextMonthStart, ELIGIBLE_STATUSES)) {
+            verifyExtension(row);
+            if (!REPORT_CURRENCY.equals(row.currency())) {
+                excludedReservations.add(row.reservationId());
+                excludedRooms++;
+                excludedCurrencies.add(row.currency());
+                continue;
+            }
+            LocalDate overlapStart = row.fromDate().isAfter(monthStart) ? row.fromDate() : monthStart;
+            LocalDate overlapEnd = earliest(recognizedEnd(row.toDate(), row.reservationStatus(), startedNightsEnd), nextMonthStart);
+            long nightsInsideMonth = Math.max(0, ChronoUnit.DAYS.between(overlapStart, overlapEnd));
+            roomRevenue = roomRevenue.add(row.nightlyRate().multiply(BigDecimal.valueOf(nightsInsideMonth)));
+        }
+
+        BigDecimal additionalRevenue = zeroIfNull(additionalRevenueRepository.sumAmountByStatusWithin(
+                AdditionalRevenueStatus.RECORDED, monthStart, nextMonthStart));
+        BigDecimal expense = zeroIfNull(
+                expenseRepository.sumAmountByStatusWithin(ExpenseStatus.POSTED, monthStart, nextMonthStart));
+        BigDecimal totalRevenue = roomRevenue.add(additionalRevenue);
+        BigDecimal netProfit = totalRevenue.subtract(expense);
+        BigDecimal profitMargin = totalRevenue.signum() > 0
+                ? netProfit.multiply(HUNDRED).divide(totalRevenue, MARGIN_SCALE, RoundingMode.HALF_UP)
+                : null;
+        NonVndRoomRevenueWarning warning = excludedRooms == 0
+                ? null
+                : new NonVndRoomRevenueWarning(excludedReservations.size(), excludedRooms, List.copyOf(excludedCurrencies));
+
+        return new MonthlyFinancialReport(
+                month, monthStart, nextMonthStart, REPORT_CURRENCY, roomRevenue, additionalRevenue, totalRevenue,
+                expense, netProfit, profitMargin, warning);
+    }
+
+    /**
+     * Enforces the domain invariant {@code totalAmount = nightlyRate x booked nights}. A mismatch is a
+     * data-integrity failure: it is never repaired, proportionally allocated, or ignored.
+     *
+     * @param row the snapshot to check
+     */
+    private void verifySnapshot(ReservationRoomRevenueRow row) {
+        long bookedNights = ChronoUnit.DAYS.between(row.checkInDate(), row.checkOutDate());
+        BigDecimal expectedTotal = row.nightlyRate().multiply(BigDecimal.valueOf(bookedNights));
+        if (expectedTotal.compareTo(row.totalAmount()) != 0) {
+            throw new ReportDataIntegrityException(
+                    row.reservationRoomId(),
+                    "ReservationRoom " + row.reservationRoomId() + " total " + row.totalAmount()
+                            + " differs from nightly rate x booked nights " + expectedTotal);
+        }
+    }
+
+    /** Same invariant as {@link #verifySnapshot} for an extension line: {@code amount = nightlyRate x nights}. */
+    private void verifyExtension(StayExtensionRevenueRow row) {
+        long nights = ChronoUnit.DAYS.between(row.fromDate(), row.toDate());
+        BigDecimal expectedTotal = row.nightlyRate().multiply(BigDecimal.valueOf(nights));
+        if (expectedTotal.compareTo(row.amount()) != 0) {
+            throw new ReportDataIntegrityException(
+                    row.extensionRoomId(),
+                    "StayExtensionRoom " + row.extensionRoomId() + " amount " + row.amount()
+                            + " differs from nightly rate x extension nights " + expectedTotal);
+        }
+    }
+
+    /**
+     * End (exclusive) of the recognizable accommodation interval: CHECKED_OUT keeps the contracted end, CHECKED_IN is
+     * capped at the end of the current hotel night so future nights are not recognized yet.
+     */
+    private static LocalDate recognizedEnd(LocalDate intervalEnd, ReservationStatus status, LocalDate startedNightsEnd) {
+        return status == ReservationStatus.CHECKED_IN ? earliest(intervalEnd, startedNightsEnd) : intervalEnd;
+    }
+
+    private static LocalDate earliest(LocalDate first, LocalDate second) {
+        return first.isBefore(second) ? first : second;
+    }
+
+    private BigDecimal zeroIfNull(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
+    }
+}

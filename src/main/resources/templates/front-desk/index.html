@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{reservation.frontDesk.title})}"></head>
+<body>
+<div class="app-shell page-front-desk">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{reservation.frontDesk.title}">Front Desk</h1>
+                <p th:text="#{reservation.frontDesk.description}">Today's arrivals, departures and in-house guests.</p>
+            </div>
+        </div>
+
+        <nav class="front-desk-tabs" th:aria-label="#{reservation.frontDesk.title}">
+            <a class="button" id="tab-arrivals" th:classappend="${view == 'arrivals'} ? 'button-primary' : 'button-secondary'"
+               th:href="@{/front-desk(view='arrivals')}" th:if="${canArrivals}" th:text="#{reservation.frontDesk.tab.arrivals}">Arrivals</a>
+            <a class="button" id="tab-departures" th:classappend="${view == 'departures'} ? 'button-primary' : 'button-secondary'"
+               th:href="@{/front-desk(view='departures')}" th:if="${canStays}" th:text="#{reservation.frontDesk.tab.departures}">Departures</a>
+            <a class="button" id="tab-in-house" th:classappend="${view == 'in-house'} ? 'button-primary' : 'button-secondary'"
+               th:href="@{/front-desk(view='in-house')}" th:if="${canStays}" th:text="#{reservation.frontDesk.tab.inHouse}">In-house</a>
+        </nav>
+
+        <!-- ARRIVALS -->
+        <th:block th:if="${view == 'arrivals'}">
+            <section class="card front-desk-group" id="arrivals-attention">
+                <h2 th:text="#{reservation.frontDesk.group.attention}">Needs Attention</h2>
+                <p class="empty-state" th:if="${#lists.isEmpty(attentionArrivals)}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
+                <th:block th:replace="~{front-desk/fragments :: arrivalTable(${attentionArrivals})}"></th:block>
+            </section>
+            <section class="card front-desk-group" id="arrivals-ready">
+                <h2 th:text="#{reservation.frontDesk.group.ready}">Ready</h2>
+                <p class="empty-state" th:if="${#lists.isEmpty(readyArrivals)}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
+                <th:block th:replace="~{front-desk/fragments :: arrivalTable(${readyArrivals})}"></th:block>
+            </section>
+        </th:block>
+
+        <!-- DEPARTURES -->
+        <th:block th:if="${view == 'departures'}">
+            <section class="card front-desk-group" id="departures-attention">
+                <h2 th:text="#{reservation.frontDesk.group.attention}">Needs Attention</h2>
+                <p class="empty-state" th:if="${#lists.isEmpty(attentionDepartures)}" th:text="#{reservation.frontDesk.departures.empty}">No departures.</p>
+                <th:block th:replace="~{front-desk/fragments :: departureTable(${attentionDepartures})}"></th:block>
+            </section>
+            <section class="card front-desk-group" id="departures-ready">
+                <h2 th:text="#{reservation.frontDesk.group.ready}">Ready</h2>
+                <p class="empty-state" th:if="${#lists.isEmpty(readyDepartures)}" th:text="#{reservation.frontDesk.departures.empty}">No departures.</p>
+                <th:block th:replace="~{front-desk/fragments :: departureTable(${readyDepartures})}"></th:block>
+            </section>
+        </th:block>
+
+        <!-- IN-HOUSE -->
+        <section class="card front-desk-group" id="in-house" th:if="${view == 'in-house'}">
+            <h2 th:text="#{reservation.frontDesk.tab.inHouse}">In-house</h2>
+            <p class="empty-state" th:if="${#lists.isEmpty(inHouseRows)}" th:text="#{reservation.frontDesk.inHouse.empty}">No in-house guests.</p>
+            <div class="table-wrap" th:unless="${#lists.isEmpty(inHouseRows)}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.checkedIn}">Checked in</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.plannedDeparture}">Planned Departure</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${inHouseRows}">
+                        <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+                        <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                        <td th:text="${row.reservationNumber}">R-1</td>
+                        <td><span th:replace="~{layout/datetime :: dateTime(${row.actualCheckInAt})}">—</span></td>
+                        <td><th:block th:replace="~{front-desk/fragments :: plannedDeparture(${row})}"></th:block></td>
+                        <td>
+                            <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
+                               th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
+                            <a class="button button-secondary" th:href="@{/reservations/{id}/folio(id=${row.reservationId})}"
+                               th:if="${canManagePayment}" th:text="#{reservation.frontDesk.action.folio}">Folio</a>
+                            <a class="button button-secondary" th:href="@{/check-out/{id}(id=${row.reservationId})}"
+                               th:if="${canCheckOut}" th:text="#{reservation.frontDesk.action.checkoutReview}">Check-out review</a>
+                            <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
+                               th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
+                            <a class="button button-secondary" th:if="${canChangeRoom}" th:each="room : ${row.rooms}"
+                               th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${row.reservationId},roomId=${room.roomId})}"
+                               th:text="#{reservation.frontDesk.action.changeRoom(${room.roomNumber})}">Change Room</a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+</div>
+
+</body>
+</html>

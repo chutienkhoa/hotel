@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${guest == null} ? 'Create guest' : 'Edit guest')}"></head>
+<body>
+<div class="app-shell page-guests">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="${returnTo} ?: @{/guests}"
+           th:text="${returnTo} != null ? 'Back to booking' : 'Back to guests'">Back to guests</a>
+        <div class="page-header"><div>
+            <h1 th:text="${guest == null} ? 'Create guest' : 'Edit guest'">Guest form</h1>
+            <p th:if="${guest == null}">The guest code is generated automatically after creation.</p>
+            <p th:unless="${guest == null}">
+                Guest code: <span th:text="${guest.guestCode}">G000001</span>
+            </p>
+        </div></div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form class="form-card" data-confirm-message="Save this guest?" data-confirm-severity="NORMAL"
+              enctype="multipart/form-data"
+              th:attr="data-confirm-title=${guest == null} ? 'Create guest' : 'Update guest',data-confirm-label=${guest == null} ? 'Create guest' : 'Update guest'" method="post"
+              th:action="${guest == null} ? @{/guests} : @{/guests/{id}(id=${guest.id})}"
+              th:object="${guestForm}">
+            <input th:if="${returnTo}" type="hidden" name="returnTo" th:value="${returnTo}" />
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+
+            <div class="form-grid guest-form-grid">
+                <div class="form-field">
+                    <label for="firstName">First name *</label>
+                    <input id="firstName" maxlength="100" required th:field="*{firstName}" type="text" />
+                    <p class="field-error" th:errors="*{firstName}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="lastName">Last name *</label>
+                    <input id="lastName" maxlength="100" required th:field="*{lastName}" type="text" />
+                    <p class="field-error" th:errors="*{lastName}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="email">Email</label>
+                    <input id="email" maxlength="255" th:field="*{email}" type="text" />
+                    <p class="field-error" th:errors="*{email}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="phone">Phone</label>
+                    <input id="phone" maxlength="100" th:field="*{phone}" type="text" />
+                    <p class="field-error" th:errors="*{phone}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="nationality">Nationality *</label>
+                    <select id="nationality" required th:field="*{nationality}">
+                        <option value="">Select nationality</option>
+                        <option th:if="${unmappedNationality != null}"
+                                th:selected="${unmappedNationality == guestForm.nationality}"
+                                th:text="${unmappedNationality}"
+                                th:value="${unmappedNationality}">Unmapped nationality</option>
+                        <option th:each="country : ${countries}"
+                                th:selected="${country.name == guestForm.nationality}"
+                                th:text="${country.flag + ' ' + country.name}"
+                                th:value="${country.name}">🇻🇳 Vietnam</option>
+                    </select>
+                    <p class="field-error" th:errors="*{nationality}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="dateOfBirth">Date of birth</label>
+                    <input class="js-date-picker" id="dateOfBirth" th:field="*{dateOfBirth}" type="text" />
+                    <p class="field-error" th:errors="*{dateOfBirth}"></p>
+                </div>
+
+                <div class="form-field guest-form-address">
+                    <label for="address">Address</label>
+                    <textarea id="address" rows="4" th:field="*{address}"></textarea>
+                    <p class="field-error" th:errors="*{address}"></p>
+                </div>
+
+                <section aria-labelledby="passport-heading" class="guest-passport-section guest-form-address"
+                         th:if="${canManageGuest}">
+                    <h2 id="passport-heading">Passport Images</h2>
+                    <p>Upload passport images for the guest and accompanying travelers.</p>
+
+                    <div th:if="${guest != null}" class="profile-document-existing">
+                        <h3>Existing documents</h3>
+                        <p th:if="${#lists.isEmpty(passportDocuments)}">No passport images uploaded.</p>
+                        <ul class="profile-document-list" th:if="${not #lists.isEmpty(passportDocuments)}">
+                            <li class="profile-document-row" th:each="document, iterStat : ${passportDocuments}">
+                                <span class="profile-document-label" th:text="${'Passport ' + (iterStat.index + 1)}">Passport 1</span>
+                                <span class="profile-document-actions">
+                                    <a class="button button-secondary" target="_blank"
+                                       th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${guest.id},documentId=${document.id})}">View Passport</a>
+                                    <!--
+                                        HTML forms cannot be nested inside the surrounding Edit Guest form, so this
+                                        removal control is a button bound by id to its own standalone form element,
+                                        rendered outside the Edit Guest form below (see #remove-passport-forms).
+                                    -->
+                                    <button class="button button-danger" type="submit"
+                                            th:form="${'remove-passport-' + document.id}">Remove</button>
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="passportImages" th:text="${guest == null} ? 'Passport images' : 'New images'">Passport images</label>
+                        <input accept="image/jpeg,image/png" class="js-passport-images-input" id="passportImages"
+                               multiple="multiple" name="passportImages" type="file" />
+                        <p class="form-hint">JPG or PNG, maximum 5 MB per image.</p>
+                        <p class="field-error" th:if="${passportError}" th:text="${passportError}"></p>
+                        <p class="field-error js-passport-size-warning" hidden></p>
+                    </div>
+                </section>
+            </div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="${returnTo} ?: @{/guests}">Cancel</a>
+                <button class="button button-primary" th:text="${guest == null} ? 'Create Guest' : 'Update Guest'" type="submit">
+                    Save Guest
+                </button>
+            </div>
+        </form>
+
+        <!--
+            Standalone removal forms for existing passport documents, kept OUTSIDE the Edit Guest
+            form above (HTML forms cannot be nested). Each Remove button inside the Edit Guest form
+            targets its matching form here by id via the standard HTML "form" attribute.
+        -->
+        <div id="remove-passport-forms" th:if="${guest != null}">
+            <form th:each="document : ${passportDocuments}"
+                  th:id="${'remove-passport-' + document.id}"
+                  method="post"
+                  th:action="@{/guests/{guestId}/documents/{documentId}/remove(guestId=${guest.id},documentId=${document.id})}"
+                  data-confirm-title="Remove passport image?"
+                  data-confirm-message="This image will be permanently removed."
+                  data-confirm-label="Remove"
+                  data-confirm-severity="DANGER">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            </form>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+<script defer th:src="@{/js/customer/guest-passport-upload.js}"></script>
+</body>
+</html>

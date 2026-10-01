@@ -1,0 +1,32 @@
+# Maven build output
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local environment variables (real credentials). Never tracked; see .env.example.
+.env
+.env.*
+!.env.example
+
+# Private Guest passport image storage
+var/guest-documents/
+
+# Private Room image storage
+var/room-images/

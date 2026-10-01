@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(${room == null} ? 'Create room' : 'Edit room')}"></head>
+<body>
+<div class="app-shell page-rooms">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/rooms}">Back to rooms</a>
+        <div class="page-header"><div>
+            <h1 th:text="${room == null} ? 'Create room' : 'Edit room'">Room form</h1>
+            <p th:if="${room == null}">New rooms are created as active and AVAILABLE.</p>
+            <p th:unless="${room == null}">Status and active inventory are managed by separate operations.</p>
+        </div></div>
+        <p th:if="${#lists.isEmpty(roomTypes)}" class="message message-error">
+            No RoomTypes are available. A RoomType must exist before a Room can be created or updated.
+        </p>
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <form class="form-card" data-confirm-message="Save this room?" data-confirm-severity="NORMAL"
+              th:attr="data-confirm-title=${room == null} ? 'Create room' : 'Update room',data-confirm-label=${room == null} ? 'Create room' : 'Update room'" method="post"
+              th:action="${room == null} ? @{/rooms} : @{/rooms/{id}(id=${room.id})}"
+              th:object="${roomForm}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
+                Please correct the highlighted fields.
+            </p>
+
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="roomNumber">Room number</label>
+                    <input id="roomNumber" maxlength="64" th:field="*{roomNumber}" type="text" />
+                    <p class="field-error" th:errors="*{roomNumber}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="roomTypeId">RoomType</label>
+                    <select id="roomTypeId" th:field="*{roomTypeId}">
+                        <option value="">Select a RoomType</option>
+                        <option th:each="roomType : ${roomTypes}"
+                                th:text="|${roomType.code} — ${roomType.name}|"
+                                th:value="${roomType.id}">
+                            SINGLE — Single
+                        </option>
+                    </select>
+                    <p class="field-error" th:errors="*{roomTypeId}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="floor">Floor</label>
+                    <input id="floor" maxlength="32" th:field="*{floor}" type="text" />
+                    <p class="field-error" th:errors="*{floor}"></p>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <a class="button button-secondary" th:href="@{/rooms}">Cancel</a>
+                <button class="button button-primary"
+                        th:disabled="${#lists.isEmpty(roomTypes)}"
+                        th:text="${room == null} ? 'Create Room' : 'Update Room'"
+                        type="submit">
+                    Save Room
+                </button>
+            </div>
+        </form>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

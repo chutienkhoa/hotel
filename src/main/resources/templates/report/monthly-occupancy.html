@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{report.occupancy.title})}"></head>
+<body>
+<div class="app-shell page-reports">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <a class="back-link" th:href="@{/reports}" th:text="#{report.occupancy.back}">Back to Reports</a>
+        <div class="page-header">
+            <div>
+                <h1 th:text="#{report.occupancy.title}">Monthly Occupancy Report</h1>
+                <p th:text="#{report.occupancy.description}">Room-night occupancy and hotel utilization for a selected month.</p>
+            </div>
+        </div>
+
+        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+        <section class="form-card" th:aria-label="#{report.occupancy.month.label}">
+            <form method="get" th:action="@{/reports/monthly-occupancy}">
+                <div class="form-field">
+                    <label for="month" th:text="#{report.occupancy.month.label}">Month</label>
+                    <input id="month" name="month" required th:value="${selectedMonth}" type="month" />
+                </div>
+                <div class="action-row">
+                    <button class="button button-primary" th:text="#{report.occupancy.view}" type="submit">View report</button>
+                </div>
+            </form>
+        </section>
+
+        <div th:if="${report != null}">
+            <p class="message" id="data-through" th:if="${report.partialMonth and report.reportedThrough != null}"
+               th:text="#{report.occupancy.dataThrough(${#temporals.format(report.reportedThrough, 'dd/MM/yyyy')})}">
+                Data through 19/09/2026
+            </p>
+            <p class="message" id="no-completed-nights" th:if="${report.reportedThrough == null}"
+               th:text="#{report.occupancy.noCompletedNights}">No nights have been completed yet in this month.</p>
+
+            <dl class="detail-list" id="occupancy-summary">
+                <dt th:text="#{report.occupancy.occupiedRoomNights}">Occupied Room Nights</dt>
+                <dd id="occupied-room-nights" th:text="${report.occupiedRoomNights}">0</dd>
+                <dt th:text="#{report.occupancy.availableRoomNights}">Available Room Nights</dt>
+                <dd id="available-room-nights" th:text="${report.sellableRoomNights}">0</dd>
+                <dt th:text="#{report.occupancy.occupancyRate}">Occupancy Rate</dt>
+                <dd id="occupancy-rate"
+                    th:text="${report.occupancyRate != null} ? ${#numbers.formatDecimal(report.occupancyRate, 1, 'COMMA', 2, 'POINT') + '%'} : #{report.occupancy.rate.na}">N/A</dd>
+            </dl>
+            <p th:text="#{report.occupancy.note.availableDefinition}">Available Room Nights count sellable inventory.</p>
+
+            <section aria-labelledby="room-type-performance-heading" class="card">
+                <h2 id="room-type-performance-heading" th:text="#{report.occupancy.roomTypePerformance}">Room Type Performance</h2>
+                <p class="empty-state" th:if="${#lists.isEmpty(report.roomTypePerformance)}" th:text="#{report.occupancy.roomTypes.empty}">No room inventory was recorded for this period.</p>
+                <div class="table-wrap" th:unless="${#lists.isEmpty(report.roomTypePerformance)}">
+                    <table id="room-type-performance">
+                        <thead>
+                        <tr>
+                            <th scope="col" th:text="#{report.occupancy.roomType}">Room Type</th>
+                            <th scope="col" th:text="#{report.occupancy.occupiedRoomNights}">Occupied Room Nights</th>
+                            <th scope="col" th:text="#{report.occupancy.availableRoomNights}">Available Room Nights</th>
+                            <th scope="col" th:text="#{report.occupancy.occupancyRate}">Occupancy Rate</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${report.roomTypePerformance}">
+                            <td th:text="${row.roomTypeName}">Double</td>
+                            <td th:text="${row.occupiedRoomNights}">0</td>
+                            <td th:text="${row.sellableRoomNights}">0</td>
+                            <td th:text="${row.occupancyRate != null} ? ${#numbers.formatDecimal(row.occupancyRate, 1, 'COMMA', 2, 'POINT') + '%'} : #{report.occupancy.rate.na}">N/A</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>

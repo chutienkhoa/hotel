@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head('Rooms')}"></head>
+<body>
+<div class="app-shell page-rooms">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="page-header">
+            <div>
+                <h1>Rooms</h1>
+                <p>Manage room profiles and their assigned RoomTypes.</p>
+            </div>
+            <a class="button button-primary" th:href="@{/rooms/new}">Create Room</a>
+        </div>
+
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+
+        <section class="form-card" aria-label="Filter rooms">
+            <form method="get" th:action="@{/rooms}">
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="roomNumber">Room Number</label>
+                        <input id="roomNumber" name="roomNumber" type="search"
+                               th:value="${searchCriteria.roomNumber}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="roomTypeId">Room Type</label>
+                        <select id="roomTypeId" name="roomTypeId">
+                            <option th:selected="${searchCriteria.roomTypeId == null}" value="">
+                                All room types
+                            </option>
+                            <option th:each="roomType : ${roomTypes}"
+                                    th:selected="${roomType.id == searchCriteria.roomTypeId}"
+                                    th:text="|${roomType.code} — ${roomType.name}|"
+                                    th:value="${roomType.id}">SINGLE — Single</option>
+                        </select>
+                    </div>
+                    <div class="form-field">
+                        <label for="floor">Floor</label>
+                        <input id="floor" name="floor" type="text"
+                               th:value="${searchCriteria.floor}" />
+                    </div>
+                    <div class="form-field">
+                        <label for="status">Status</label>
+                        <select id="status" name="status">
+                            <option th:selected="${searchCriteria.status == null}" value="">All statuses</option>
+                            <option th:each="roomStatus : ${roomStatuses}"
+                                    th:selected="${roomStatus == searchCriteria.status}"
+                                    th:text="${roomStatus}"
+                                    th:value="${roomStatus}">AVAILABLE</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="action-row room-filter-actions">
+                    <a class="button button-secondary" th:href="@{/rooms}">Reset</a>
+                    <button class="button button-primary" type="submit">Search</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="room-results">
+            <div class="results-toolbar">
+                <p><span th:replace="~{layout/table :: resultSummary(${roomPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${roomPage}, 'Room pages', 'pagination room-pagination')}"></nav>
+            </div>
+
+            <p class="empty-state" th:if="${roomPage.empty}">No rooms match the current filters.</p>
+
+            <div class="table-wrap" th:unless="${roomPage.empty}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th th:replace="~{layout/table :: sortHeader('Room Number', 'roomNumber')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('RoomType', 'roomType')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('Floor', 'floor')}"></th>
+                        <th th:replace="~{layout/table :: sortHeader('Status', 'status')}"></th>
+                        <th scope="col">Active</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="room : ${roomPage.content}">
+                        <td><a th:href="@{/rooms/{id}(id=${room.id})}" th:text="${room.roomNumber}">101</a></td>
+                        <td th:text="${room.roomType.code}">SINGLE</td>
+                        <td th:text="${room.floor}">1</td>
+                        <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(room.status)}" th:text="${room.status}">AVAILABLE</span></td>
+                        <td th:text="${room.active}">true</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+</div>
+</body>
+</html>
