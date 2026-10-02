@@ -35,6 +35,8 @@ The UI-flow workbook records 84 screen states and 241 mapped clickable elements.
 
 Representative names, dates, identifiers, amounts, and room numbers in mockups are sample data only.
 
+Approved, final, per-screen visual evidence is tracked at `docs/specs/evidence/task33/<module>/<screen>-final.png` (for example, `docs/specs/evidence/task33/dashboard/dashboard-final.png` for Dashboard, §9.1). Where a module section below references its own evidence file by this convention, that file is the current canonical visual reference for that screen and supersedes any earlier mockup for the same screen, subject to the same sample-data and backend-capability caveats as the rest of this section.
+
 ## 4. Scope boundaries
 
 ### 4.1 In scope
@@ -208,20 +210,151 @@ Clicking a record identifier or row opens its detail page. The row action menu e
 
 ### 9.1 Dashboard
 
-Purpose: daily operational overview and shortcuts, separate from analytical Reports.
+Purpose: an operational-first "what is happening at the hotel now/today" screen. Dashboard is not an analytics surface; Reports remains the primary location for reporting/analytics (§9.7).
 
-Required interactions:
+Canonical visual evidence: `docs/specs/evidence/task33/dashboard/dashboard-final.png`. This image is authoritative for layout, visual hierarchy, card composition, spacing, density, the two-column operational layout, KPI presentation, table styling, the Room Status visualization, and the Quick Actions layout. It is **not** authoritative for sample names/numbers, invented statuses, or any control that does not map to approved backend capability (§3). Where the image's sample content conflicts with this section or with real backend semantics, this section and real backend semantics win — see the explicit call-outs in §9.1.3, §9.1.6, and §9.1.14.
 
-- KPI cards and summary links navigate to the relevant filtered workspace.
-- Today's arrivals navigate to Front Desk → Arrivals.
-- Currently staying navigates to Front Desk → In-house or the selected stay/reservation detail.
-- Departures navigate to Front Desk → Departures.
-- Recent reservations navigate to Reservation List or Reservation Detail.
-- New Reservation starts the Create Reservation wizard.
-- Room status navigates to Rooms.
-- View Reports navigates to Reports (Overview view).
+§9.1.1–§9.1.9 are the final, approved Dashboard V1 product decisions, superseding every earlier Dashboard reconciliation recorded previously in this document, including the prior analytics-first Batch 2B hierarchy and the prior restriction against a Recent Reservations block or a date-scoped Arrivals/Departures KPI. Where any other part of this document could be read to require the earlier hierarchy or restriction, this section controls.
 
-The V1 Reservations KPI displays both `This year` and `This month`, based on `Reservation.checkInDate`.
+**Explicit supersession note**: technical-spec-v1 §41 states Dashboard v1 "intentionally" excludes date-scoped arrival/departure metrics. §9.1.2.C/D and §9.1.3/§9.1.6 below introduce exactly such metrics (a strict today-scoped Arrivals/Departures KPI and worklist), as an explicit, later-approved Task 33 product decision under this document's own precedence rule (§3, item 2). This is recorded here for traceability: `technical-spec-v1.md` itself is not modified by this document, so a reader comparing the two should treat this section as the controlling, superseding decision for Dashboard date-scoped arrival/departure summaries specifically — a documentary gap between the two documents, not an unresolved contradiction. No other technical-spec-v1 §41 exclusion is affected by this note; Revenue, Profit, Occupancy Rate, ADR, RevPAR, and global Charge/Payment/Outstanding totals remain fully excluded (§9.1.14).
+
+#### 9.1.1 Backing read models
+
+The final Dashboard reuses, and must not duplicate or diverge from the business rules of, these existing read models:
+
+- `DashboardService` — existing aggregate counts (Active Rooms, Available Rooms, Room-status counts).
+- `FrontDeskQueryService.arrivals()` / `.departures(includeAmounts)` / `.inHouse()` — the exact same Front Desk read models and readiness/eligibility/overdue rules; the Dashboard must reuse, never reimplement, this logic.
+- `ReservationQueryService` — for Recent Reservations (§9.1.7), via one new, narrowly-scoped read query, not by changing Reservation List's own `findPage` default sort or sort-key whitelist.
+
+New backend work approved by this redesign is limited to: (a) a guest-headcount aggregate query (§9.1.2.A), (b) a point-in-time "in-house as of an instant" query for the Currently Staying trend (§9.1.2.A), (c) a zero-fill completion of Room Status across all 6 `RoomStatus` values (§9.1.4), and (d) one new Recent Reservations read query (§9.1.7). No schema migration and no write-side/snapshot mechanism is approved or required for any Dashboard metric.
+
+#### 9.1.2 Final KPI row
+
+Four KPI cards, each independently permission-gated (§9.1.9):
+
+**A. Currently Staying**
+
+- Headline: current physical guest headcount = `SUM(Reservation.adultCount + Reservation.childCount)` over every `Stay` in-house at the evaluation instant (`actualCheckInAt ≤ instant AND (actualCheckOutAt IS NULL OR actualCheckOutAt > instant)`).
+- Secondary: current occupied/current room count — reuse the existing OCCUPIED count already produced for Room Status (§9.1.4); do not run a second, separate query for the same number.
+- Trend: a "vs. yesterday" guest-headcount delta, evaluated at the hotel-local date boundary (start of today / end of yesterday), using the same in-house interval query at a different instant. This is accurately derivable from existing `Stay.actualCheckInAt`/`actualCheckOutAt` data with no snapshot table, because guest composition (`adultCount`/`childCount`) is frozen for the life of a Stay once checked in (composition edits are permitted only while `Reservation.status = CONFIRMED`, i.e., before any Stay exists).
+
+**B. Available Rooms**
+
+- Headline: current available-room count only (reuse the existing `availableRooms` field).
+- **Must not** display a vs.-yesterday trend, arrow, or delta of any kind. Historical `Room.status` is a bare mutable field with no version history anywhere in the system (no audit trail records operational-status transitions, and `RoomInventoryPeriod` tracks sellable-inventory periods, not operational status) and cannot be reconstructed. This must not be implemented even if a future evidence image shows it.
+
+**C. Today's Arrivals**
+
+- Headline count means strictly `Reservation.checkInDate == hotelToday`. Overdue (pre-today) arrivals are excluded from this headline count, even though they remain visible in the Today's Arrivals worklist below (§9.1.3) and in Front Desk itself — the KPI number and the worklist are allowed to differ in scope.
+- Secondary "needs attention" count: derived from the existing readiness data (`needsAttention`) for today's rows only.
+
+**D. Today's Departures**
+
+- Headline count means strictly `Reservation.checkOutDate == hotelToday` (planned checkout date). Overdue departures are excluded from this headline count, for the same reason as C.
+- Secondary "needs attention"/payment-required count: derived from existing departure readiness data (`paymentRequired`/`needsAttention`) for today's rows only.
+
+#### 9.1.3 Today's Arrivals table
+
+Reuses `FrontDeskQueryService.arrivals()` and its existing readiness model. Fields: Reservation #, Guest Name, Check-in Date, Room(s), Source, operational readiness/status, Action.
+
+- **No ETA column.** `Reservation` has no planned-arrival-time field; the evidence image's "ETA" column is sample content and must not be implemented.
+- Status must use the real operational concepts already defined by Front Desk readiness (`Ready` / `Needs Attention`, plus the existing `Overdue Arrival` badge where applicable) — never the evidence image's illustrative "Expected" label, which is not a domain status.
+- Action navigates to the canonical Check-in Review route (`/check-in/reservations/{id}`), with the same label behavior Front Desk already uses (Check-in when ready, Review when needing attention). The Dashboard must never perform a direct, one-click check-in.
+- Gated by `PERM_CHECK_IN` (§9.1.9).
+
+#### 9.1.4 Room Status
+
+Shows current operational Room status — never booking-period availability (technical-spec-v1 §41's room-status/availability distinction is unaffected by this section). All 6 `RoomStatus` values are shown — `AVAILABLE`, `OCCUPIED`, `DIRTY`, `CLEANING`, `MAINTENANCE`, `OUT_OF_ORDER` — including any that are currently zero-count; a zero-count status must still appear (zero-filled), the same convention already used elsewhere on this Dashboard for monthly/source series. Percentages are derived at render time from the current counts; they are presentation arithmetic, not a stored or separately queried figure. "View all" navigates to the existing Room List (`/rooms`). Gated by the Dashboard's own existing permission only (no additional operational permission needed — room-status counts carry no guest-identifying data).
+
+#### 9.1.5 Currently Staying table
+
+Reuses `FrontDeskQueryService.inHouse()`. Fields: Room(s), Guest Name, Actual Check-in Date, Nights, Status, Action.
+
+- Nights is derived for presentation (from `actualCheckInAt` to the hotel's current date) and is explicitly not a stored domain field; it must not be mistaken for existing data when implemented.
+- Action navigates to the canonical Reservation Detail (`/reservations/{id}`). Do not create a Dashboard-specific stay detail page.
+- Gated by `PERM_CHECK_OUT` (the same permission `inHouse()`'s own canonical page already requires).
+
+#### 9.1.6 Today's Departures table
+
+Reuses `FrontDeskQueryService.departures(includeAmounts)`. Fields: Room(s), Guest Name, Planned Check-out Date, Nights, operational readiness/status, Action.
+
+- Status must use the real operational concepts already defined by Front Desk readiness (`Ready for Checkout` / `Payment Required`, plus the existing `Overdue Departure` badge where applicable). The evidence image's illustrative "Due today" and "Pending" labels are **not** domain statuses and must not be implemented, even though they still appear in the current evidence image — per §3/§9.1, explicit specification wording wins over mockup sample text.
+- Action navigates to the canonical Checkout Review route (`/check-out/{id}`), with the same label behavior Front Desk already uses. The Dashboard must never bypass outstanding-balance checks, stay-extension requirements, or any other existing checkout guard.
+- Financial amount (outstanding balance) visibility remains gated by `PERM_MANAGE_PAYMENT`, exactly as in `departures(includeAmounts)` today — never shown by default.
+- Gated by `PERM_CHECK_OUT`.
+
+#### 9.1.7 Recent Reservations
+
+Approved for V1. Definition: the 5 most recently **created** reservations, using `Reservation.reservedAt` (the existing, immutable, `NOT NULL` creation timestamp set once by the single production reservation-creation path, covering every source including walk-in and OTA) as the canonical creation time.
+
+Deterministic ordering:
+
+```text
+ORDER BY reservedAt DESC, reservationNumber DESC
+LIMIT 5
+```
+
+Implemented as one new, dedicated, small Dashboard read query (reusing the existing `ReservationSummaryResponse` shape and the existing batch room-number lookup pattern already used by `ReservationQueryService.findAll()`), not by changing Reservation List's own `findPage` default sort or its sort-key whitelist.
+
+Fields: Reservation #, Guest Name, Check-in Date, Check-out Date, Room(s), Source, Status. **No financial amount** is shown in this block, consistent with the Dashboard's existing no-financial-metrics boundary (§9.1.14).
+
+Gated by `PERM_VIEW_BOOKING`.
+
+#### 9.1.8 Quick Actions
+
+Four tiles, matching the approved evidence: New Reservation, Guest Management, Room Management, View Reports — each linking to its existing route (`/reservations/new`, `/guests`, `/rooms`, `/reports`) under its own existing permission (`MANAGE_BOOKING`, `MANAGE_GUEST`, `MANAGE_ROOM`, `VIEW_REPORT` respectively). No new route is created. These four actions are **not** also duplicated as page-header buttons; Quick Actions is their one and only placement on the Dashboard.
+
+#### 9.1.9 Permissions
+
+Dashboard page-level authorization is unchanged (`PERM_VIEW_REPORT`). `VIEW_REPORT` is never assumed to imply any operational permission. Each embedded block/action is independently gated by its own canonical permission, and is **omitted** (not disabled, not blanked) for a viewer who lacks it:
+
+| Block/action | Required permission |
+| --- | --- |
+| KPI row aggregate counts, Room Status | `PERM_VIEW_REPORT` only (no guest-identifying data) |
+| Today's Arrivals KPI + table | `PERM_CHECK_IN` |
+| Currently Staying KPI (headcount/room count) + table | `PERM_CHECK_OUT` |
+| Today's Departures KPI + table | `PERM_CHECK_OUT` |
+| Outstanding/financial amount within Departures | `PERM_MANAGE_PAYMENT` (in addition to `PERM_CHECK_OUT`) |
+| Recent Reservations | `PERM_VIEW_BOOKING` |
+| Quick Actions tiles | each tile's own existing destination permission |
+
+Hiding a block or link is a usability courtesy, never the authorization boundary; every destination route keeps enforcing its own permission independently of what the Dashboard shows or hides. No permission is loosened by this section.
+
+#### 9.1.10 Disposition of prior (Batch 2B) analytics blocks
+
+The following remain fully supported backend capability; removing them from the Dashboard here is a **presentation-only** change, not a requirement to delete their query/service code:
+
+- Reservations by Check-in Month, Booked Rooms by RoomType, Reservations by Source, Reservations by Status, Expenses by Status — no longer part of the Dashboard UI. Reports remains the primary location for this kind of reporting/analytics.
+- Active Rooms by Operational Status — visually superseded by Room Status (§9.1.4); do not render both.
+- Operational Room Alerts — may remain only if it fits the approved evidence hierarchy without becoming a large analytics section; it must not be restored to its previous full-width prominence.
+
+#### 9.1.11 Foundation reuse
+
+Reuse the Task 33 Foundation shell, cards, buttons/links, badges, standard tables, and the shared enum/i18n rendering convention. Breadcrumb is not added (Dashboard remains top-level). Toast/confirmation/error-dialog infrastructure is added only where a real Dashboard action needs it; the Check-in Review/Checkout Review/Reservation Detail/Room List/Reports links are navigation, not in-page actions, so none is required merely for them.
+
+#### 9.1.12 i18n
+
+All Dashboard user-visible text, including the operational blocks' labels, statuses, and Quick Actions tiles, must use the existing EN/VI message-key infrastructure; no new hardcoded English text.
+
+#### 9.1.13 Responsive
+
+Desktop visual target is the approved evidence. On mobile: KPI cards reflow cleanly; operational tables use the existing `.table-wrap` safe-overflow pattern already used by Front Desk and Reservation List; Quick Actions stack; Room Status remains readable; no page-level horizontal overflow; critical operational content is never removed merely to shorten the page; the existing Task 33 mobile drawer remains authoritative. The known hamburger/close mobile-icon-state cosmetic item remains a separate Foundation polish item, not part of this reconciliation.
+
+#### 9.1.14 Non-goals (V1)
+
+The following must not be introduced on the strength of the evidence image, an older mockup, or the UI-flow workbook, unless separately approved in a future product task:
+
+- Revenue, Profit, Occupancy Rate, ADR, RevPAR.
+- Cash received, payment totals, charge totals, or outstanding-balance totals shown by default (outstanding remains gated by `PERM_MANAGE_PAYMENT`, §9.1.9).
+- A vs.-yesterday trend, arrow, or delta on Available Rooms (§9.1.2.B).
+- An ETA/planned-arrival-time column (§9.1.3).
+- Invented statuses not backed by the real readiness model — "Expected," "Due today," "Pending," or any other illustrative label from the evidence image that does not correspond to an actual Front Desk readiness/overdue concept.
+- A direct, one-click Check-in or Check-out action that bypasses Check-in Review or Checkout Review.
+- A Dashboard-specific stay/reservation detail page.
+- Reservation Planning Board and Room Availability Dashboard (§13).
+- Forecasting, RMS recommendations, AI insights, notifications (including a header notification bell — §6.2 remains controlling: no backend capability for notifications exists, even though the current evidence image shows a bell icon), global search, or OTA sync status.
+- A new route created solely for Dashboard navigation or Quick Actions.
+- Duplicating New Reservation / View Reports (or any other Quick Actions tile) as a separate page-header button.
 
 ### 9.2 Front Desk
 

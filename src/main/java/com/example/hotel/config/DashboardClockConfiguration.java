@@ -5,7 +5,7 @@ import java.time.ZoneId;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** Configures the business-time clock used by Dashboard Analytics v2. */
+/** Configures the business-time clock used by the Dashboard's hotel-local date/time semantics. */
 @Configuration
 public class DashboardClockConfiguration {
 

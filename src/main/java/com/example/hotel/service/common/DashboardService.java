@@ -1,191 +1,219 @@
 package com.example.hotel.service.common;
 
+import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
+import com.example.hotel.dto.booking.response.FrontDeskStayRow;
+import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
+import com.example.hotel.dto.common.response.DashboardArrivalsKpi;
+import com.example.hotel.dto.common.response.DashboardCurrentlyStayingKpi;
+import com.example.hotel.dto.common.response.DashboardDeparturesKpi;
+import com.example.hotel.dto.common.response.DashboardPermissions;
 import com.example.hotel.dto.common.response.DashboardResponse;
-import com.example.hotel.dto.common.response.DashboardMonthCountResponse;
-import com.example.hotel.dto.common.response.DashboardRoomTypeCountResponse;
-import com.example.hotel.dto.common.response.DashboardSourceCountResponse;
 import com.example.hotel.dto.common.response.DashboardStatusCountResponse;
-import com.example.hotel.entity.booking.BookingSource;
-import com.example.hotel.entity.booking.StayStatus;
+import com.example.hotel.dto.common.response.DashboardStayRow;
 import com.example.hotel.entity.room.RoomStatus;
-import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
-import com.example.hotel.repository.common.ExpenseRepository;
 import com.example.hotel.repository.room.RoomRepository;
+import com.example.hotel.service.booking.FrontDeskQueryService;
+import com.example.hotel.service.booking.ReservationQueryService;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.format.TextStyle;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Locale;
-import java.util.function.Function;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Provides the approved read-only, non-financial Dashboard v1 metrics. */
+/**
+ * Provides the approved, operational-first Dashboard V1 read model (Task 33 final Dashboard, spec
+ * §9.1): "what is happening at the hotel now/today". It composes existing Front Desk and Reservation
+ * read models and business rules; it never reimplements check-in/checkout eligibility, readiness, or
+ * financial-amount visibility, and it performs no state change.
+ */
 @Service
 public class DashboardService {
 
-    private final ReservationRepository reservationRepository;
+    /**
+     * Maximum rows rendered per Dashboard operational table. Each table's KPI count is computed from
+     * the full underlying worklist before this limit is applied, so the limit only bounds presentation
+     * and never the reported count.
+     */
+    private static final int DASHBOARD_ROW_LIMIT = 5;
+
+    private static final DateTimeFormatter HOTEL_DATE_LABEL_FORMAT =
+            DateTimeFormatter.ofPattern("EEEE, MMM d, yyyy", Locale.ENGLISH);
+
     private final RoomRepository roomRepository;
     private final StayRepository stayRepository;
-    private final ExpenseRepository expenseRepository;
+    private final FrontDeskQueryService frontDeskQueryService;
+    private final ReservationQueryService reservationQueryService;
     private final Clock dashboardClock;
 
     /**
-     * Creates the Dashboard query service with repositories for the approved Dashboard metrics.
+     * Creates the Dashboard query service.
      *
-     * @param reservationRepository repository for Reservation count queries
-     * @param roomRepository repository for active Room count queries
-     * @param stayRepository repository for checked-in Stay count queries
-     * @param expenseRepository repository for Expense status count queries
+     * @param roomRepository repository for active Room status counts
+     * @param stayRepository repository for the in-house guest-headcount query
+     * @param frontDeskQueryService canonical Front Desk arrivals/in-house/departures read model
+     * @param reservationQueryService canonical Reservation read model, used for Recent Reservations
      * @param dashboardClock clock configured with the Dashboard business timezone
      */
     public DashboardService(
-            ReservationRepository reservationRepository,
             RoomRepository roomRepository,
             StayRepository stayRepository,
-            ExpenseRepository expenseRepository,
+            FrontDeskQueryService frontDeskQueryService,
+            ReservationQueryService reservationQueryService,
             Clock dashboardClock) {
-        this.reservationRepository = reservationRepository;
         this.roomRepository = roomRepository;
         this.stayRepository = stayRepository;
-        this.expenseRepository = expenseRepository;
+        this.frontDeskQueryService = frontDeskQueryService;
+        this.reservationQueryService = reservationQueryService;
         this.dashboardClock = dashboardClock;
     }
 
     /**
-     * Loads every approved Dashboard v1 metric without deriving financial or booking-availability data.
+     * Loads the final Dashboard V1 read model. Each operational block is included only when the
+     * supplied permissions allow it; otherwise its KPI is {@code null} and its row list is empty, so the
+     * caller can omit the block entirely rather than rendering it disabled.
      *
-     * @return immutable Dashboard v1 data for presentation
+     * @param permissions the viewer's resolved Dashboard-relevant permissions
+     * @return the Dashboard read model for presentation
      */
     @Transactional(readOnly = true)
-    public DashboardResponse getDashboard() {
-        LocalDate currentDate = LocalDate.now(dashboardClock);
-        LocalDate startDate = currentDate.withDayOfYear(1);
-        LocalDate endDateExclusive = startDate.plusYears(1);
-        List<DashboardStatusCountResponse> roomStatusCounts =
-                toStatusCounts(roomRepository.countActiveByStatus());
-        Map<String, Long> roomCountsByStatus = roomStatusCounts.stream()
-                .collect(Collectors.toMap(
-                        DashboardStatusCountResponse::status,
-                        DashboardStatusCountResponse::count));
-        List<DashboardMonthCountResponse> reservationsByCheckInMonth = completeMonthCounts(
-                currentDate.getYear(),
-                reservationRepository.countByCheckInMonthWithin(startDate, endDateExclusive));
-        long reservationsThisYear = reservationsByCheckInMonth.stream()
-                .mapToLong(DashboardMonthCountResponse::count)
-                .sum();
-        long reservationsThisMonth = reservationsByCheckInMonth.get(currentDate.getMonthValue() - 1).count();
+    public DashboardResponse getDashboard(DashboardPermissions permissions) {
+        ZoneId hotelZone = dashboardClock.getZone();
+        LocalDate hotelToday = LocalDate.now(dashboardClock);
+
+        List<DashboardStatusCountResponse> roomsByStatus =
+                completeRoomStatusCounts(roomRepository.countActiveByStatus());
+        long totalRooms = roomRepository.countByActiveTrue();
+        long availableRooms = statusCount(roomsByStatus, RoomStatus.AVAILABLE);
+        long occupiedRooms = statusCount(roomsByStatus, RoomStatus.OCCUPIED);
+
+        DashboardCurrentlyStayingKpi currentlyStaying = null;
+        List<DashboardStayRow> currentlyStayingRows = List.of();
+        if (permissions.canCheckOut()) {
+            Instant now = dashboardClock.instant();
+            Instant startOfToday = hotelToday.atStartOfDay(hotelZone).toInstant();
+            long guestsNow = stayRepository.sumGuestHeadcountInHouseAt(now);
+            long guestsYesterday = stayRepository.sumGuestHeadcountInHouseAt(startOfToday);
+            currentlyStaying =
+                    new DashboardCurrentlyStayingKpi(guestsNow, occupiedRooms, guestsNow - guestsYesterday);
+            currentlyStayingRows = frontDeskQueryService.inHouse().stream()
+                    .limit(DASHBOARD_ROW_LIMIT)
+                    .map(row -> new DashboardStayRow(row, nightsElapsed(row, hotelToday, hotelZone)))
+                    .toList();
+        }
+
+        DashboardArrivalsKpi arrivalsKpi = null;
+        List<FrontDeskArrivalRow> arrivalRows = List.of();
+        if (permissions.canCheckIn()) {
+            List<FrontDeskArrivalRow> arrivals = frontDeskQueryService.arrivals();
+            List<FrontDeskArrivalRow> todaysArrivals = arrivals.stream()
+                    .filter(row -> row.checkInDate().equals(hotelToday))
+                    .toList();
+            long needsAttentionToday =
+                    todaysArrivals.stream().filter(FrontDeskArrivalRow::needsAttention).count();
+            arrivalsKpi = new DashboardArrivalsKpi(todaysArrivals.size(), needsAttentionToday);
+            arrivalRows = arrivals.stream().limit(DASHBOARD_ROW_LIMIT).toList();
+        }
+
+        DashboardDeparturesKpi departuresKpi = null;
+        List<DashboardStayRow> departureRows = List.of();
+        if (permissions.canCheckOut()) {
+            List<FrontDeskStayRow> departures = frontDeskQueryService.departures(permissions.canManagePayment());
+            List<FrontDeskStayRow> todaysDepartures = departures.stream()
+                    .filter(row -> row.plannedCheckOutDate().equals(hotelToday))
+                    .toList();
+            long needsAttentionToday =
+                    todaysDepartures.stream().filter(FrontDeskStayRow::needsAttention).count();
+            departuresKpi = new DashboardDeparturesKpi(todaysDepartures.size(), needsAttentionToday);
+            departureRows = departures.stream()
+                    .limit(DASHBOARD_ROW_LIMIT)
+                    .map(row -> new DashboardStayRow(row, nightsOfStay(row, hotelZone)))
+                    .toList();
+        }
+
+        List<ReservationSummaryResponse> recentReservations =
+                permissions.canViewBooking() ? reservationQueryService.findRecent() : List.of();
 
         return new DashboardResponse(
-                reservationsThisYear,
-                reservationsThisMonth,
-                currentDate.getMonth().getDisplayName(TextStyle.SHORT, Locale.ENGLISH).toUpperCase(Locale.ROOT)
-                        + " " + currentDate.getYear(),
-                roomRepository.countByActiveTrue(),
-                roomCountsByStatus.getOrDefault(RoomStatus.AVAILABLE.name(), 0L),
-                stayRepository.countByStatus(StayStatus.CHECKED_IN),
-                stayRepository.countCheckedInScheduledForCheckOutOn(StayStatus.CHECKED_IN, currentDate),
-                toStatusCounts(reservationRepository.countAllByStatus()),
-                roomStatusCounts,
-                operationalAlerts(roomCountsByStatus),
-                toStatusCounts(expenseRepository.countAllByStatus()),
-                reservationsByCheckInMonth,
-                toRoomTypeCounts(
-                        reservationRepository.countBookedRoomsByRoomTypeWithin(
-                                startDate, endDateExclusive)),
-                completeSourceCounts(
-                        reservationRepository.countBySourceWithin(startDate, endDateExclusive)));
+                hotelToday,
+                hotelToday.format(HOTEL_DATE_LABEL_FORMAT),
+                currentlyStaying,
+                availableRooms,
+                arrivalsKpi,
+                departuresKpi,
+                arrivalRows,
+                roomsByStatus,
+                totalRooms,
+                currentlyStayingRows,
+                departureRows,
+                recentReservations);
     }
 
     /**
-     * Builds the complete twelve-month calendar-year series, supplying zero for absent query rows.
+     * Builds the complete, zero-filled active-Room status series across every {@link RoomStatus} value,
+     * so a status with no active Rooms still appears with a count of zero (required for the Room Status
+     * donut to always show all 6 categories).
      *
-     * @param year Dashboard reporting year
-     * @param rows grouped repository rows containing year, month, and count
-     * @return chronological complete monthly count data
+     * @param rows grouped repository rows containing status and count
+     * @return status counts for every {@code RoomStatus} value, in enum declaration order
      */
-    private List<DashboardMonthCountResponse> completeMonthCounts(int year, List<Object[]> rows) {
-        Map<Integer, Long> countsByMonth = rows.stream()
+    private List<DashboardStatusCountResponse> completeRoomStatusCounts(List<Object[]> rows) {
+        Map<String, Long> countsByStatus = rows.stream()
                 .collect(Collectors.toMap(
-                        row -> ((Number) row[1]).intValue(),
-                        row -> ((Number) row[2]).longValue()));
-
-        return java.util.stream.IntStream.rangeClosed(1, 12)
-                .mapToObj(month -> new DashboardMonthCountResponse(
-                        year, month, countsByMonth.getOrDefault(month, 0L)))
+                        row -> ((Enum<?>) row[0]).name(), row -> ((Number) row[1]).longValue()));
+        return Arrays.stream(RoomStatus.values())
+                .map(status -> new DashboardStatusCountResponse(
+                        status.name(), countsByStatus.getOrDefault(status.name(), 0L)))
                 .toList();
     }
 
     /**
-     * Converts grouped assigned-room rows into typed RoomType count data.
+     * Reads one status's count from an already-complete status-count series.
      *
-     * @param rows grouped repository rows containing RoomType code, name, and count
-     * @return RoomType count data in repository-defined stable order
+     * @param counts the complete status-count series
+     * @param status the status to read
+     * @return the matching count, or zero when absent
      */
-    private List<DashboardRoomTypeCountResponse> toRoomTypeCounts(List<Object[]> rows) {
-        return rows.stream()
-                .map(row -> new DashboardRoomTypeCountResponse(
-                        (String) row[0], (String) row[1], ((Number) row[2]).longValue()))
-                .toList();
+    private long statusCount(List<DashboardStatusCountResponse> counts, RoomStatus status) {
+        return counts.stream()
+                .filter(count -> count.status().equals(status.name()))
+                .mapToLong(DashboardStatusCountResponse::count)
+                .findFirst()
+                .orElse(0L);
     }
 
     /**
-     * Builds a complete approved-source series, supplying zero for absent grouped query rows.
+     * Computes nights elapsed so far for an in-house Stay: from its actual check-in date to the hotel's
+     * current date. This is a presentation-only value, never persisted.
      *
-     * @param rows grouped repository rows containing source and count
-     * @return source count data in approved source-enum order
+     * @param row the in-house stay row
+     * @param hotelToday the hotel's current date
+     * @param hotelZone the Dashboard business timezone
+     * @return nights elapsed, never negative
      */
-    private List<DashboardSourceCountResponse> completeSourceCounts(List<Object[]> rows) {
-        Map<BookingSource, Long> countsBySource = rows.stream()
-                .collect(Collectors.toMap(
-                        row -> (BookingSource) row[0],
-                        row -> ((Number) row[1]).longValue()));
-
-        return java.util.Arrays.stream(BookingSource.values())
-                .map(source -> new DashboardSourceCountResponse(
-                        source.name(), countsBySource.getOrDefault(source, 0L)))
-                .toList();
+    private long nightsElapsed(FrontDeskStayRow row, LocalDate hotelToday, ZoneId hotelZone) {
+        LocalDate actualCheckInDate = row.actualCheckInAt().atZone(hotelZone).toLocalDate();
+        return Math.max(0, ChronoUnit.DAYS.between(actualCheckInDate, hotelToday));
     }
 
     /**
-     * Converts one database status-count result set to immutable presentation data.
+     * Computes the full length of stay for a departing Stay: from its actual check-in date to its
+     * planned check-out date. This is a presentation-only value, never persisted.
      *
-     * @param rows grouped status-count result rows
-     * @return status counts in repository-defined stable order
+     * @param row the departing stay row
+     * @param hotelZone the Dashboard business timezone
+     * @return nights of stay, never negative
      */
-    private List<DashboardStatusCountResponse> toStatusCounts(List<Object[]> rows) {
-        return rows.stream()
-                .map(row -> new DashboardStatusCountResponse(
-                        ((Enum<?>) row[0]).name(), ((Number) row[1]).longValue()))
-                .toList();
-    }
-
-    /**
-     * Creates the approved operational alert list and supplies zero for statuses with no active Rooms.
-     *
-     * @param roomCountsByStatus active Room counts keyed by operational status
-     * @return counts for the approved alert statuses only
-     */
-    private List<DashboardStatusCountResponse> operationalAlerts(Map<String, Long> roomCountsByStatus) {
-        return List.of(
-                alert(RoomStatus.DIRTY, roomCountsByStatus),
-                alert(RoomStatus.CLEANING, roomCountsByStatus),
-                alert(RoomStatus.MAINTENANCE, roomCountsByStatus),
-                alert(RoomStatus.OUT_OF_ORDER, roomCountsByStatus));
-    }
-
-    /**
-     * Builds one operational alert from an active Room status count.
-     *
-     * @param status approved alert status
-     * @param roomCountsByStatus active Room counts keyed by operational status
-     * @return alert status and count
-     */
-    private DashboardStatusCountResponse alert(
-            RoomStatus status, Map<String, Long> roomCountsByStatus) {
-        return new DashboardStatusCountResponse(status.name(), roomCountsByStatus.getOrDefault(status.name(), 0L));
+    private long nightsOfStay(FrontDeskStayRow row, ZoneId hotelZone) {
+        LocalDate actualCheckInDate = row.actualCheckInAt().atZone(hotelZone).toLocalDate();
+        return Math.max(0, ChronoUnit.DAYS.between(actualCheckInDate, row.plannedCheckOutDate()));
     }
 }

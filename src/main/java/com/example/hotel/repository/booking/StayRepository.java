@@ -124,4 +124,19 @@ public interface StayRepository extends JpaRepository<Stay, UUID> {
      */
     @Query("SELECT s.reservation.id FROM Stay s WHERE s.reservation.id IN :reservationIds")
     List<UUID> findReservationIdsWithStay(@Param("reservationIds") Collection<UUID> reservationIds);
+
+    /**
+     * Sums the physical guest headcount (adults plus children) of every Stay that was in-house at one
+     * instant: checked in on or before it, and not yet checked out, or checked out after it. Used by the
+     * Dashboard Currently Staying KPI for both the current count and its historical "vs yesterday"
+     * comparison, since {@code actualCheckInAt}/{@code actualCheckOutAt} are immutable once set and
+     * {@code adultCount}/{@code childCount} are frozen once a Reservation reaches {@code CHECKED_IN}.
+     *
+     * @param instant the instant to evaluate in-house status at
+     * @return the summed adult and child count, or zero when nobody was in-house
+     */
+    @Query("SELECT COALESCE(SUM(r.adultCount + r.childCount), 0) FROM Stay s JOIN s.reservation r "
+            + "WHERE s.actualCheckInAt <= :instant "
+            + "AND (s.actualCheckOutAt IS NULL OR s.actualCheckOutAt > :instant)")
+    long sumGuestHeadcountInHouseAt(@Param("instant") Instant instant);
 }

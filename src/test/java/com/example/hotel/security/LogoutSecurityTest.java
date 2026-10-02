@@ -57,7 +57,7 @@ class LogoutSecurityTest {
     @Test
     void shouldShowUsernameAndLogoutInHeaderAccountArea() throws Exception {
         MockHttpSession session = authenticatedSession();
-        when(dashboardService.getDashboard()).thenReturn(org.mockito.Mockito.mock(DashboardResponse.class));
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(org.mockito.Mockito.mock(DashboardResponse.class));
 
         mockMvc.perform(get("/dashboard").session(session))
                 .andExpect(status().isOk())
@@ -72,7 +72,7 @@ class LogoutSecurityTest {
     @Test
     void shouldLogOutWithCsrfAndRequireLoginAgain() throws Exception {
         MockHttpSession session = authenticatedSession();
-        when(dashboardService.getDashboard()).thenReturn(org.mockito.Mockito.mock(DashboardResponse.class));
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(org.mockito.Mockito.mock(DashboardResponse.class));
 
         mockMvc.perform(post("/logout").session(session).with(csrf()))
                 .andExpect(status().is3xxRedirection())

@@ -137,42 +137,11 @@ p {
   top: var(--header-height);
   z-index: var(--z-sidebar);
 }
-.sidebar-brand {
-  align-items: center;
-  color: #fff;
-  display: flex;
-  gap: var(--space-3);
-  padding: 0 var(--space-3) var(--space-2);
-  text-decoration: none;
-}
-.sidebar-brand:hover {
-  color: #fff;
-}
-.sidebar-brand-icon {
-  align-items: center;
-  background: rgb(255 255 255 / 12%);
-  border-radius: var(--radius-sm);
-  color: #fff;
-  display: flex;
-  flex: none;
-  height: 2.25rem;
-  justify-content: center;
-  width: 2.25rem;
-}
-.sidebar-brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
-  min-width: 0;
-}
-.sidebar-brand-name {
-  font-size: 0.9375rem;
-  font-weight: 750;
-  letter-spacing: -0.01em;
-}
-/* .sidebar-brand-tagline, .sidebar-account, .sidebar-account-name, and .sidebar-logout were removed here:
-   Task33 Batch 1A dropped the tagline line and relocated the account area into the header (see
-   static/css/common/components.css: .header-account*, .header-account-logout). */
+/* .sidebar-brand, .sidebar-brand-icon/-text/-name, .sidebar-brand-tagline, .sidebar-account,
+   .sidebar-account-name, and .sidebar-logout were removed here: Task33 Batch 1A relocated the account
+   area into the header, and a later Dashboard visual polish removed the sidebar's duplicate brand block
+   in favor of the one already in the header (see static/css/common/components.css: .header-account*,
+   .header-account-logout, and layout/header.html's .brand). */
 .nav-section {
   display: grid;
   gap: var(--space-1);
@@ -290,7 +259,7 @@ p {
 }
 .content {
   margin: 0 auto;
-  max-width: 78rem;
+  max-width: 140rem;
   padding: var(--space-6);
   width: 100%;
 }
@@ -427,6 +396,12 @@ fieldset,
   margin: var(--space-1) 0 0;
   text-transform: uppercase;
 }
+.summary-card .action-row {
+  border-top: 1px solid var(--color-border);
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+}
 @media (max-width: 30rem) {
   .summary-card__kpis {
     grid-template-columns: 1fr;
@@ -438,79 +413,251 @@ fieldset,
     padding-top: var(--space-3);
   }
 }
-.alert-card {
-  border-color: #f5cc72;
+/* Task33 final Dashboard (spec sec. 9.1): operational-first KPI cards, a two-column operational
+   layout (worklist table + Room Status donut, then two more worklist tables), Recent Reservations,
+   and Quick Actions tiles. Reuses .card/.card-grid/.table-wrap/.button/.status-badge rather than a
+   parallel component set; the rules below are the small amount of layout genuinely specific to this
+   page's KPI/donut/tile composition. */
+.dashboard-date {
+  color: var(--color-muted);
+  font-weight: 600;
+  margin: 0;
 }
-.dashboard-chart-grid {
+.card-header-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+.card-header-row h2 {
+  margin-bottom: 0;
+}
+.kpi-card {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-4);
+}
+.kpi-card__icon {
+  align-items: center;
+  border-radius: 999px;
+  display: flex;
+  flex-shrink: 0;
+  height: 2.75rem;
+  justify-content: center;
+  width: 2.75rem;
+}
+.kpi-card__icon--info {
+  background: var(--color-info-surface);
+  color: var(--color-info);
+}
+.kpi-card__icon--success {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.kpi-card__icon--purple {
+  background: var(--color-purple-surface);
+  color: var(--color-purple);
+}
+.kpi-card__icon--warning {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+.kpi-card__body {
+  min-width: 0;
+}
+.kpi-card__value {
+  color: var(--color-navy);
+  font-size: 1.75rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  margin: var(--space-2) 0 0;
+}
+.kpi-card__unit {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.kpi-card__secondary {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: var(--space-1) 0 0;
+}
+.kpi-card__trend {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  margin: var(--space-1) 0 0;
+}
+.kpi-card__trend--up {
+  color: var(--color-success);
+}
+.kpi-card__trend--down {
+  color: var(--color-danger);
+}
+.kpi-card__trend--flat {
+  color: var(--color-muted);
+}
+.dashboard-operational-grid {
   align-items: start;
   display: grid;
   gap: var(--space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.dashboard-chart-grid > * {
+.dashboard-operational-grid > * {
   min-width: 0;
 }
-.chart-card {
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-  overflow: hidden;
+.room-status-layout {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
 }
-.chart-card h2,
-.chart-card p {
-  margin-bottom: 0;
-}
-.chart-canvas-wrap {
-  min-height: 18rem;
+.room-status-donut-wrap {
+  flex-shrink: 0;
+  height: 11rem;
   position: relative;
+  width: 11rem;
 }
-.chart-canvas-wrap canvas {
-  max-height: 20rem;
-}
-.analytics-card {
-  align-content: start;
-}
-.analytics-chart-area {
-  height: 18rem;
-  min-height: 18rem;
-}
-.chart-fallback {
-  color: var(--color-muted);
-  font-size: 0.875rem;
-  min-width: 0;
+.room-status-donut-wrap canvas {
+  height: 100%;
   width: 100%;
 }
-.chart-fallback summary {
-  cursor: pointer;
+.room-status-donut-total {
+  left: 50%;
+  position: absolute;
+  text-align: center;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.room-status-donut-total dd {
+  color: var(--color-navy);
+  font-size: 1.5rem;
+  font-weight: 750;
+  margin: 0;
+}
+.room-status-donut-total dt {
+  color: var(--color-muted);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+}
+.room-status-legend {
+  display: grid;
+  flex: 1;
+  gap: var(--space-2);
+  min-width: 10rem;
+}
+.room-status-legend-row {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+.room-status-legend-label {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+.room-status-legend-dot {
+  border-radius: 999px;
+  flex-shrink: 0;
+  height: 0.625rem;
+  width: 0.625rem;
+}
+.room-status-legend-count {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Same colors as the equivalent .status-badge--<status> modifiers, so the donut/legend and any
+   status badge elsewhere always agree on what each RoomStatus looks like. */
+.room-status-legend-dot--available {
+  background: var(--color-success);
+}
+.room-status-legend-dot--occupied {
+  background: var(--color-info);
+}
+.room-status-legend-dot--dirty {
+  background: var(--color-warning);
+}
+.room-status-legend-dot--cleaning {
+  background: #08798c;
+}
+.room-status-legend-dot--maintenance {
+  background: #a04300;
+}
+.room-status-legend-dot--out_of_order {
+  background: var(--color-danger);
+}
+/* Task33 Dashboard table visual polish (manual browser review): ordinary cell values, badges, and
+   action labels stay on one line; a table wider than its card scrolls horizontally inside the existing
+   .table-wrap instead of wrapping text and inflating row height. Scoped to Dashboard's own tables only
+   -- the shared .table-wrap/table/th/td rules every other page uses are untouched. overflow-anchor: none
+   stops the browser's scroll-anchoring from nudging this horizontal scroll position when the nearby Room
+   Status donut canvas resizes once Chart.js initializes. */
+.dashboard-table-wrap {
+  --control-height: 2rem;
+  overflow-anchor: none;
+}
+.dashboard-table-wrap table th,
+.dashboard-table-wrap table td {
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+.dashboard-table-wrap .status-badge,
+.dashboard-table-wrap .button {
+  white-space: nowrap;
+}
+.quick-actions-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.quick-action-tile {
+  align-items: center;
+  color: inherit;
+  display: flex;
+  gap: var(--space-3);
+  text-decoration: none;
+}
+.quick-action-tile:hover {
+  border-color: var(--color-border-strong);
+}
+.quick-action-tile__icon {
+  align-items: center;
+  border-radius: 999px;
+  display: flex;
+  flex-shrink: 0;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+.quick-action-tile__text {
+  display: block;
+  min-width: 0;
+}
+.quick-action-tile__title {
+  display: block;
   font-weight: 700;
 }
-.chart-fallback .table-wrap {
-  margin-top: var(--space-3);
-  max-width: 100%;
-  min-width: 0;
-  width: 100%;
+.quick-action-tile__subtitle {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.8125rem;
+  margin-top: var(--space-1);
 }
-.chart-fallback table {
-  width: 100%;
+.quick-action-tile__chevron {
+  color: var(--color-muted);
+  margin-left: auto;
 }
-.analytics-details {
-  margin: 0;
-}
-.analytics-details summary {
-  margin: 0;
-}
-.analytics-details[open] summary {
-  margin-bottom: var(--space-3);
-}
-.analytics-details .table-wrap {
-  margin: 0;
-}
-
-@media (min-width: 48.0625rem) {
-  .dashboard-chart-grid:has(
-      .analytics-card:first-child .analytics-details[open]
-    ):has(.analytics-card:last-child .analytics-details[open]) {
-    align-items: stretch;
+@media (max-width: 48rem) {
+  .dashboard-operational-grid,
+  .quick-actions-grid {
+    grid-template-columns: 1fr;
+  }
+  .room-status-layout {
+    justify-content: center;
   }
 }
 
@@ -813,23 +960,6 @@ tbody tr:last-child td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dashboard-numeric-column {
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-.dashboard-count-table {
-  table-layout: fixed;
-  width: 100%;
-}
-.dashboard-count-table th:first-child,
-.dashboard-count-table td:first-child {
-  width: 50%;
-}
-.dashboard-count-table th:last-child,
-.dashboard-count-table td:last-child {
-  width: 50%;
-}
-
 .status,
 .status-badge {
   align-items: center;
@@ -1933,8 +2063,9 @@ span.flatpickr-weekday {
 @media (max-width: 48rem) {
   /* Task33 Batch 1A: below this breakpoint the sidebar becomes a keyboard-accessible off-canvas drawer
      (toggled by the header's hamburger button, static/js/common/nav-toggle.js) instead of the previous
-     always-visible inline nav bar stacked above the content. The header's brand now covers the "brand
-     visible while the drawer is closed" need, so the sidebar's own brand block is hidden here. */
+     always-visible inline nav bar stacked above the content. The header's brand covers the "brand
+     visible while the drawer is closed" need (the sidebar's own brand block was later removed as a
+     duplicate — see layout/sidebar.html). */
   .app-shell {
     display: block;
   }
@@ -1953,9 +2084,6 @@ span.flatpickr-weekday {
   }
   .sidebar[data-open="true"] {
     transform: translateX(0);
-  }
-  .sidebar-brand {
-    display: none;
   }
   .sidebar-backdrop[data-open="true"] {
     background: rgb(16 42 67 / 45%);

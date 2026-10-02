@@ -62,7 +62,7 @@ class RootRedirectSecurityTest {
     /** Confirms Dashboard authorization is unchanged: an authenticated user without VIEW_REPORT is forbidden. */
     @Test
     void shouldKeepDashboardAuthorization() throws Exception {
-        when(dashboardService.getDashboard()).thenReturn(null);
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(null);
 
         mockMvc.perform(get("/dashboard").with(user("staff").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isForbidden());

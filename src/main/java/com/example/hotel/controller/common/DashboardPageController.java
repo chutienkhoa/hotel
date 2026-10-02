@@ -1,5 +1,7 @@
 package com.example.hotel.controller.common;
 
+import com.example.hotel.dto.common.response.DashboardPermissions;
+import com.example.hotel.dto.common.response.DashboardResponse;
 import com.example.hotel.service.common.DashboardService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -43,7 +45,14 @@ public class DashboardPageController {
     @GetMapping("/dashboard")
     @PreAuthorize("hasAuthority('PERM_VIEW_REPORT')")
     public String dashboard(Model model, Authentication authentication) {
-        model.addAttribute("dashboard", dashboardService.getDashboard());
+        DashboardPermissions permissions = new DashboardPermissions(
+                hasAuthority(authentication, "PERM_CHECK_IN"),
+                hasAuthority(authentication, "PERM_CHECK_OUT"),
+                hasAuthority(authentication, "PERM_MANAGE_PAYMENT"),
+                hasAuthority(authentication, "PERM_VIEW_BOOKING"));
+        DashboardResponse dashboard = dashboardService.getDashboard(permissions);
+        model.addAttribute("dashboard", dashboard);
+        model.addAttribute("hotelToday", dashboard.hotelToday());
         model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
         return "dashboard/index";
     }

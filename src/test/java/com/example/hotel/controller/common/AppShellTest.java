@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.example.hotel.dto.common.response.DashboardResponse;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.common.DashboardService;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,24 +59,26 @@ class AppShellTest {
                 new SimpleGrantedAuthority("PERM_MANAGE_USER"));
     }
 
-    /** Confirms the renamed brand appears in both the sidebar and the header. */
+    /**
+     * Confirms the renamed brand appears once, in the header, and is not duplicated in the sidebar
+     * (Task33 Dashboard visual polish removed the sidebar's own brand block).
+     */
     @Test
-    void shouldRenderSunsetHouseBrandInSidebarAndHeader() throws Exception {
-        when(dashboardService.getDashboard()).thenReturn(emptyDashboard());
+    void shouldRenderSunsetHouseBrandInHeaderOnlyNotDuplicatedInSidebar() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
 
         mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"sidebar-brand-name\">Sunset House<")))
                 .andExpect(content().string(containsString("class=\"brand\"")))
                 .andExpect(content().string(containsString(">Sunset House</a>")))
                 .andExpect(content().string(not(containsString("Hotel Management"))))
-                .andExpect(content().string(not(containsString("sidebar-brand-tagline"))));
+                .andExpect(content().string(not(containsString("sidebar-brand"))));
     }
 
     /** Confirms the mobile nav toggle targets the sidebar and starts closed, with a localized label. */
     @Test
     void shouldRenderMobileNavToggleControllingTheSidebar() throws Exception {
-        when(dashboardService.getDashboard()).thenReturn(emptyDashboard());
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
 
         mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
@@ -86,13 +89,19 @@ class AppShellTest {
                 .andExpect(content().string(containsString("data-label-open=\"Open navigation menu\"")))
                 .andExpect(content().string(containsString("data-label-close=\"Close navigation menu\"")))
                 .andExpect(content().string(containsString("id=\"sidebar-nav\"")))
-                .andExpect(content().string(containsString("id=\"sidebar-backdrop\"")));
+                .andExpect(content().string(containsString("id=\"sidebar-backdrop\"")))
+                // Regression guard: th:replace substitutes the whole host tag, so a class placed directly
+                // on the <svg> host (the original, buggy markup) never reaches the rendered page, and the
+                // aria-expanded CSS below never matches anything -- both icons then show at once. The class
+                // must live on a real wrapping element that th:replace does not touch.
+                .andExpect(content().string(containsString("<span class=\"header-nav-toggle-icon-open\">")))
+                .andExpect(content().string(containsString("<span class=\"header-nav-toggle-icon-close\">")));
     }
 
     /** Confirms the header account dropdown exposes the username, language switcher, and logout form. */
     @Test
     void shouldRenderHeaderAccountDropdown() throws Exception {
-        when(dashboardService.getDashboard()).thenReturn(emptyDashboard());
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
 
         mockMvc.perform(get("/dashboard").with(user("an.le").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
@@ -116,7 +125,7 @@ class AppShellTest {
      */
     @Test
     void shouldStillRenderUnchangedGroupsAndTransitionalLinks() throws Exception {
-        when(dashboardService.getDashboard()).thenReturn(emptyDashboard());
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
 
         mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
@@ -132,7 +141,8 @@ class AppShellTest {
     /** Creates the empty approved Dashboard shape used by MVC controller tests. */
     private DashboardResponse emptyDashboard() {
         return new DashboardResponse(
-                0L, 0L, "SEP 2026", 0L, 0L, 0L, 0L, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                LocalDate.of(2026, 9, 16), "Tuesday, Sep 16, 2026", null, 0L, null, null,
+                List.of(), List.of(), 0L, List.of(), List.of(), List.of());
     }
 
     /** Enables method-security interception for shell MVC tests. */

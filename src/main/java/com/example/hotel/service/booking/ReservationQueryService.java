@@ -77,6 +77,24 @@ public class ReservationQueryService {
     }
 
     /**
+     * Retrieves the 5 most recently created Reservations for the Dashboard Recent Reservations block,
+     * ordered by {@code reservedAt} descending (reservation number descending as a deterministic
+     * tie-break). This is a dedicated, isolated query: it does not use or change Reservation List's own
+     * {@link #findPage} default sort.
+     *
+     * @return up to 5 reservation list representations, most recently created first
+     */
+    @Transactional(readOnly = true)
+    public List<ReservationSummaryResponse> findRecent() {
+        List<Reservation> recent = reservationRepository.findTop5ByOrderByReservedAtDescReservationNumberDesc();
+        Map<UUID, String> roomNumbersByReservationId = roomNumbersByReservationId(recent);
+        return recent.stream()
+                .map(reservation -> reservationMapper.toSummaryResponse(
+                        reservation, roomNumbersByReservationId.getOrDefault(reservation.getId(), "")))
+                .toList();
+    }
+
+    /**
      * Retrieves one server-side page of Reservations matching the supplied optional criteria.
      *
      * @param criteria normalized optional list filters

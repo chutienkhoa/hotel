@@ -9,175 +9,281 @@
     <main class="content">
         <div class="page-header">
             <div>
-                <h1>Dashboard</h1>
-                <p>Read-only operational overview.</p>
+                <h1 th:text="#{dashboard.greeting(${currentUsername})}">Welcome back, admin!</h1>
+                <p th:text="#{dashboard.subtitle}">Here's what's happening at your hotel today.</p>
             </div>
+            <p class="dashboard-date" th:text="${dashboard.hotelDateLabel}">Tuesday, Sep 16, 2026</p>
         </div>
 
-        <section aria-label="Summary" class="card-grid">
-            <div class="card summary-card">
-                <dt>Reservations</dt>
-                <div class="summary-card__kpis">
-                    <div><dd th:text="${dashboard.reservationsThisYear}">0</dd><p class="summary-card__label">This year</p></div>
-                    <div><p class="summary-card__secondary summary-card__secondary--info" th:text="${dashboard.reservationsThisMonth}">0</p><p class="summary-card__label">This month</p><p class="summary-card__label" th:text="${dashboard.currentMonthLabel}">SEP 2026</p></div>
+        <section aria-label="KPI" class="card-grid">
+            <div class="card kpi-card" th:if="${dashboard.currentlyStaying != null}">
+                <div class="kpi-card__icon kpi-card__icon--info"><svg th:replace="~{layout/icons :: user}"></svg></div>
+                <div class="kpi-card__body">
+                    <p class="summary-card__label" th:text="#{dashboard.card.stays.title}">Currently Staying</p>
+                    <p class="kpi-card__value"><span th:text="${dashboard.currentlyStaying.guests}">0</span> <span class="kpi-card__unit" th:text="#{dashboard.card.currentlyStaying.guestsUnit}">guests</span></p>
+                    <p class="kpi-card__secondary" th:text="#{dashboard.card.currentlyStaying.inRooms(${dashboard.currentlyStaying.occupiedRooms})}">in 12 rooms</p>
+                    <p th:class="${dashboard.currentlyStaying.trendCssClass()}"
+                       th:text="#{dashboard.card.currentlyStaying.trend(${dashboard.currentlyStaying.signedGuestDeltaVsYesterday()})}">+2 vs yesterday</p>
                 </div>
             </div>
-            <div class="card summary-card">
-                <dt>Rooms</dt>
-                <div class="summary-card__kpis">
-                    <div><dd th:text="${dashboard.activeRooms}">0</dd><p class="summary-card__label">Active rooms</p></div>
-                    <div><p class="summary-card__secondary summary-card__secondary--available" th:text="${dashboard.availableRooms}">0</p><p class="summary-card__label">Available now</p></div>
+            <div class="card kpi-card">
+                <div class="kpi-card__icon kpi-card__icon--success"><svg th:replace="~{layout/icons :: bed}"></svg></div>
+                <div class="kpi-card__body">
+                    <p class="summary-card__label" th:text="#{dashboard.card.availableRooms.title}">Available Rooms</p>
+                    <p class="kpi-card__value"><span th:text="${dashboard.availableRooms}">0</span> <span class="kpi-card__unit" th:text="#{dashboard.card.availableRooms.unit}">rooms</span></p>
                 </div>
             </div>
-            <div class="card summary-card">
-                <dt>Currently Checked-in</dt>
-                <div class="summary-card__kpis">
-                    <div><dd th:text="${dashboard.checkedInStays}">0</dd><p class="summary-card__label">Current stays</p></div>
-                    <div><p class="summary-card__secondary summary-card__secondary--attention" th:text="${dashboard.checkOutTodayStays}">0</p><p class="summary-card__label">Check-out today</p></div>
+            <div class="card kpi-card" th:if="${dashboard.arrivalsKpi != null}">
+                <div class="kpi-card__icon kpi-card__icon--purple"><svg th:replace="~{layout/icons :: login}"></svg></div>
+                <div class="kpi-card__body">
+                    <p class="summary-card__label" th:text="#{dashboard.card.arrivals.title}">Today's Arrivals</p>
+                    <p class="kpi-card__value"><span th:text="${dashboard.arrivalsKpi.todayCount}">0</span> <span class="kpi-card__unit" th:text="#{dashboard.card.arrivals.unit}">check-ins</span></p>
+                    <p class="kpi-card__secondary" th:if="${dashboard.arrivalsKpi.needsAttentionCount > 0}"
+                       th:text="#{dashboard.card.arrivals.needAttention(${dashboard.arrivalsKpi.needsAttentionCount})}">2 need attention</p>
+                </div>
+            </div>
+            <div class="card kpi-card" th:if="${dashboard.departuresKpi != null}">
+                <div class="kpi-card__icon kpi-card__icon--warning"><svg th:replace="~{layout/icons :: logout}"></svg></div>
+                <div class="kpi-card__body">
+                    <p class="summary-card__label" th:text="#{dashboard.card.departures.title}">Today's Departures</p>
+                    <p class="kpi-card__value"><span th:text="${dashboard.departuresKpi.todayCount}">0</span> <span class="kpi-card__unit" th:text="#{dashboard.card.departures.unit}">check-outs</span></p>
+                    <p class="kpi-card__secondary" th:if="${dashboard.departuresKpi.needsAttentionCount > 0}"
+                       th:text="#{dashboard.card.departures.needAttention(${dashboard.departuresKpi.needsAttentionCount})}">1 need attention</p>
                 </div>
             </div>
         </section>
 
-        <section aria-labelledby="reservations-by-month-heading" class="card chart-card chart-card-wide">
-            <h2 id="reservations-by-month-heading">Reservations by Check-in Month</h2>
-            <p>Planned reservation volume for the current calendar year.</p>
-            <div class="chart-canvas-wrap">
-                <canvas aria-label="Reservations by check-in month chart" id="reservations-by-month-chart" role="img"></canvas>
-                <p data-chart-empty="reservations-by-month-chart" hidden>No reservations are planned for this year.</p>
-            </div>
-            <details class="chart-fallback">
-                <summary>View reservation counts by month</summary>
-                <div class="table-wrap">
-                    <table class="dashboard-count-table">
+        <section class="dashboard-operational-grid">
+            <article class="card" th:if="${dashboard.arrivalsKpi != null}">
+                <div class="card-header-row">
+                    <h2 th:text="#{dashboard.card.arrivals.title}">Today's Arrivals</h2>
+                    <a th:href="@{/front-desk(view='arrivals')}" th:text="#{dashboard.action.viewAll}">View all</a>
+                </div>
+                <p class="empty-state" th:if="${#lists.isEmpty(dashboard.arrivalRows)}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
+                <div class="table-wrap dashboard-table-wrap" th:unless="${#lists.isEmpty(dashboard.arrivalRows)}">
+                    <table>
                         <thead>
-                        <tr><th scope="col">Month</th><th class="dashboard-numeric-column" scope="col">Reservations</th></tr>
+                        <tr>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                            <th scope="col" th:text="#{dashboard.table.checkInDate}">Check-in Date</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Room(s)</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                        </tr>
                         </thead>
                         <tbody>
-                        <tr th:each="monthCount : ${dashboard.reservationsByCheckInMonth}">
-                            <td th:text="|${monthCount.year}-${#numbers.formatInteger(monthCount.month, 2)}|">2026-01</td>
-                            <td class="dashboard-numeric-column" th:text="${monthCount.count}">0</td>
+                        <tr th:each="row : ${dashboard.arrivalRows}" th:classappend="${row.overdue} ? 'housekeeping-row-urgent'">
+                            <td th:text="${row.reservationNumber}">R-1</td>
+                            <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                            <td><span th:replace="~{layout/datetime :: date(${row.checkInDate})}">—</span></td>
+                            <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+                            <td><span th:replace="~{layout/enum :: label('bookingSource', ${row.source})}">Direct</span></td>
+                            <td>
+                                <span class="status-badge"
+                                      th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'"
+                                      th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
+                                <span class="status-badge housekeeping-urgent" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueArrival}">Overdue Arrival</span>
+                            </td>
+                            <td>
+                                <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                                   th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkIn}">Review</a>
+                            </td>
                         </tr>
                         </tbody>
                     </table>
                 </div>
-            </details>
-        </section>
-
-        <section aria-label="Reservation analytics" class="dashboard-chart-grid">
-            <article aria-labelledby="booked-rooms-by-type-heading" class="card chart-card analytics-card">
-                <h2 id="booked-rooms-by-type-heading">Booked Rooms by RoomType</h2>
-                <p>Room assignments for reservations planned this year.</p>
-                <div class="chart-canvas-wrap analytics-chart-area">
-                    <canvas aria-label="Booked rooms by RoomType chart" id="booked-rooms-by-type-chart" role="img"></canvas>
-                    <p data-chart-empty="booked-rooms-by-type-chart" hidden>No room assignments are planned for this year.</p>
-                </div>
-                <details class="chart-fallback analytics-details">
-                    <summary>View room assignment counts by RoomType</summary>
-                    <div class="table-wrap">
-                        <table class="dashboard-count-table">
-                            <thead>
-                            <tr><th scope="col">RoomType</th><th class="dashboard-numeric-column" scope="col">Assignments</th></tr>
-                            </thead>
-                            <tbody>
-                            <tr th:each="roomTypeCount : ${dashboard.bookedRoomsByRoomType}">
-                                <td th:text="|${roomTypeCount.roomTypeCode} — ${roomTypeCount.roomTypeName}|">SINGLE — Single Room</td>
-                                <td class="dashboard-numeric-column" th:text="${roomTypeCount.count}">0</td>
-                            </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </details>
             </article>
 
-            <article aria-labelledby="reservations-by-source-heading" class="card chart-card analytics-card">
-                <h2 id="reservations-by-source-heading">Reservations by Source</h2>
-                <p>Booking sources for reservations planned this year.</p>
-                <div class="chart-canvas-wrap analytics-chart-area">
-                    <canvas aria-label="Reservations by source chart" id="reservations-by-source-chart" role="img"></canvas>
-                    <p data-chart-empty="reservations-by-source-chart" hidden>No reservations are planned for this year.</p>
+            <article class="card">
+                <div class="card-header-row">
+                    <h2 th:text="#{dashboard.section.roomStatus}">Room Status</h2>
+                    <a th:href="@{/rooms}" th:text="#{dashboard.action.viewAll}">View all</a>
                 </div>
-                <details class="chart-fallback analytics-details">
-                    <summary>View reservation counts by source</summary>
-                    <div class="table-wrap">
-                        <table class="dashboard-count-table">
-                            <thead>
-                            <tr><th scope="col">Source</th><th class="dashboard-numeric-column" scope="col">Reservations</th></tr>
-                            </thead>
-                            <tbody>
-                            <tr th:each="sourceCount : ${dashboard.reservationsBySource}">
-                                <td th:text="${sourceCount.source}">DIRECT</td>
-                                <td class="dashboard-numeric-column" th:text="${sourceCount.count}">0</td>
-                            </tr>
-                            </tbody>
-                        </table>
+                <div class="room-status-layout">
+                    <div class="room-status-donut-wrap">
+                        <canvas aria-hidden="true" id="room-status-donut"></canvas>
+                        <dl class="room-status-donut-total">
+                            <dd th:text="${dashboard.totalRooms}">20</dd>
+                            <dt th:text="#{dashboard.roomStatus.total}">Total Rooms</dt>
+                        </dl>
                     </div>
-                </details>
+                    <dl class="room-status-legend">
+                        <div class="room-status-legend-row" th:each="statusCount : ${dashboard.roomsByStatus}">
+                            <dt class="room-status-legend-label">
+                                <span aria-hidden="true" class="room-status-legend-dot" th:classappend="${'room-status-legend-dot--' + #strings.toLowerCase(statusCount.status)}"></span>
+                                <span th:replace="~{layout/enum :: label('roomStatus', ${statusCount.status})}">Available</span>
+                            </dt>
+                            <dd class="room-status-legend-count" th:text="${statusCount.count}">0</dd>
+                        </div>
+                    </dl>
+                </div>
             </article>
         </section>
 
-        <section class="card">
-            <h2>Reservations by Status</h2>
-            <div class="table-wrap"><table class="dashboard-count-table">
-                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Count</th></tr></thead>
-                <tbody>
-                <tr th:each="statusCount : ${dashboard.reservationsByStatus}">
-                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(statusCount.status)}" th:text="${statusCount.status}">DRAFT</span></td>
-                    <td class="dashboard-numeric-column" th:text="${statusCount.count}">0</td>
-                </tr>
-                </tbody>
-            </table></div>
+        <section class="dashboard-operational-grid">
+            <article class="card" th:if="${dashboard.currentlyStaying != null}">
+                <div class="card-header-row">
+                    <h2 th:text="#{dashboard.card.stays.title}">Currently Staying</h2>
+                    <a th:href="@{/front-desk(view='in-house')}" th:text="#{dashboard.action.viewAll}">View all</a>
+                </div>
+                <p class="empty-state" th:if="${#lists.isEmpty(dashboard.currentlyStayingRows)}" th:text="#{reservation.frontDesk.inHouse.empty}">No in-house guests.</p>
+                <div class="table-wrap dashboard-table-wrap" th:unless="${#lists.isEmpty(dashboard.currentlyStayingRows)}">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Room(s)</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.checkedIn}">Actual Check-in</th>
+                            <th scope="col" th:text="#{dashboard.table.nights}">Nights</th>
+                            <th scope="col" th:text="#{common.field.status}">Status</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="stayRow : ${dashboard.currentlyStayingRows}">
+                            <td><th:block th:replace="~{front-desk/fragments :: rooms(${stayRow.row.rooms})}"></th:block></td>
+                            <td><th:block th:replace="~{front-desk/fragments :: guest(${stayRow.row})}"></th:block></td>
+                            <td><span th:replace="~{layout/datetime :: dateTime(${stayRow.row.actualCheckInAt})}">—</span></td>
+                            <td th:text="${stayRow.nights}">2</td>
+                            <td><span th:replace="~{layout/enum :: badge('reservationStatus', 'CHECKED_IN', 'status-badge--checked_in')}">Checked In</span></td>
+                            <td>
+                                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${stayRow.row.reservationId})}"
+                                   th:text="#{reservation.frontDesk.action.openReservation}">View</a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="card" th:if="${dashboard.departuresKpi != null}">
+                <div class="card-header-row">
+                    <h2 th:text="#{dashboard.card.departures.title}">Today's Departures</h2>
+                    <a th:href="@{/front-desk(view='departures')}" th:text="#{dashboard.action.viewAll}">View all</a>
+                </div>
+                <p class="empty-state" th:if="${#lists.isEmpty(dashboard.departureRows)}" th:text="#{reservation.frontDesk.departures.empty}">No departures.</p>
+                <div class="table-wrap dashboard-table-wrap" th:unless="${#lists.isEmpty(dashboard.departureRows)}">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Room(s)</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.plannedCheckout}">Planned Check-out</th>
+                            <th scope="col" th:text="#{dashboard.table.nights}">Nights</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="stayRow : ${dashboard.departureRows}" th:classappend="${stayRow.row.overdue} ? 'housekeeping-row-urgent'">
+                            <td><th:block th:replace="~{front-desk/fragments :: rooms(${stayRow.row.rooms})}"></th:block></td>
+                            <td><th:block th:replace="~{front-desk/fragments :: guest(${stayRow.row})}"></th:block></td>
+                            <td><th:block th:replace="~{front-desk/fragments :: plannedDeparture(${stayRow.row})}"></th:block></td>
+                            <td th:text="${stayRow.nights}">2</td>
+                            <td>
+                                <span class="status-badge"
+                                      th:classappend="${stayRow.row.paymentRequired} ? 'status-badge--out_of_order' : 'status-badge--available'"
+                                      th:text="${stayRow.row.paymentRequired} ? #{reservation.frontDesk.paymentRequired} : #{reservation.frontDesk.readyForCheckout}">Ready</span>
+                            </td>
+                            <td>
+                                <a class="button button-primary" th:href="@{/check-out/{id}(id=${stayRow.row.reservationId})}"
+                                   th:text="${stayRow.row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkOut}">Review</a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
         </section>
 
-        <section class="card">
-            <h2>Active Rooms by Operational Status</h2>
-            <div class="table-wrap"><table class="dashboard-count-table">
-                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Count</th></tr></thead>
-                <tbody>
-                <tr th:each="statusCount : ${dashboard.roomsByStatus}">
-                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(statusCount.status)}" th:text="${statusCount.status}">AVAILABLE</span></td>
-                    <td class="dashboard-numeric-column" th:text="${statusCount.count}">0</td>
-                </tr>
-                </tbody>
-            </table></div>
-        </section>
+        <section class="dashboard-operational-grid">
+            <article class="card" th:if="${canViewBooking}">
+                <div class="card-header-row">
+                    <h2 th:text="#{dashboard.section.recentReservations}">Recent Reservations</h2>
+                    <a th:href="@{/reservations}" th:text="#{dashboard.action.viewAll}">View all</a>
+                </div>
+                <p class="empty-state" th:if="${#lists.isEmpty(dashboard.recentReservations)}" th:text="#{dashboard.recentReservations.empty}">No reservations yet.</p>
+                <div class="table-wrap dashboard-table-wrap" th:unless="${#lists.isEmpty(dashboard.recentReservations)}">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                            <th scope="col" th:text="#{dashboard.table.checkInDate}">Check-in Date</th>
+                            <th scope="col" th:text="#{dashboard.table.checkOutDate}">Check-out Date</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Room(s)</th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
+                            <th scope="col" th:text="#{common.field.status}">Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="recent : ${dashboard.recentReservations}">
+                            <td>
+                                <a th:href="@{/reservations/{id}(id=${recent.id})}" th:text="${recent.reservationNumber}">Reservation number</a>
+                            </td>
+                            <td th:text="${recent.guestFullName}">Guest name</td>
+                            <td><span th:replace="~{layout/datetime :: date(${recent.checkInDate})}">—</span></td>
+                            <td><span th:replace="~{layout/datetime :: date(${recent.checkOutDate})}">—</span></td>
+                            <td th:text="${recent.roomNumbers}">101</td>
+                            <td><span th:replace="~{layout/enum :: label('bookingSource', ${recent.source})}">Direct</span></td>
+                            <td><span th:replace="~{layout/enum :: badge('reservationStatus', ${recent.status}, ${'status-badge--' + #strings.toLowerCase(recent.status)})}">DRAFT</span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </article>
 
-        <section class="card alert-card">
-            <h2>Operational Room Alerts</h2>
-            <div class="table-wrap"><table class="dashboard-count-table">
-                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Active Room Count</th></tr></thead>
-                <tbody>
-                <tr th:each="alert : ${dashboard.operationalRoomAlerts}">
-                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(alert.status)}" th:text="${alert.status}">DIRTY</span></td>
-                    <td class="dashboard-numeric-column" th:text="${alert.count}">0</td>
-                </tr>
-                </tbody>
-            </table></div>
-        </section>
-
-        <section class="card">
-            <h2>Expenses by Status</h2>
-            <div class="table-wrap"><table class="dashboard-count-table">
-                <thead><tr><th scope="col">Status</th><th class="dashboard-numeric-column" scope="col">Count</th></tr></thead>
-                <tbody>
-                <tr th:each="statusCount : ${dashboard.expensesByStatus}">
-                    <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(statusCount.status)}" th:text="${statusCount.status}">DRAFT</span></td>
-                    <td class="dashboard-numeric-column" th:text="${statusCount.count}">0</td>
-                </tr>
-                </tbody>
-            </table></div>
+            <article class="card">
+                <h2 th:text="#{dashboard.section.quickActions}">Quick Actions</h2>
+                <div class="quick-actions-grid">
+                    <a class="card quick-action-tile" th:if="${canManageBooking}" th:href="@{/reservations/new}">
+                        <span class="quick-action-tile__icon kpi-card__icon--info"><svg th:replace="~{layout/icons :: plusCircle}"></svg></span>
+                        <span class="quick-action-tile__text">
+                            <span class="quick-action-tile__title" th:text="#{dashboard.quickAction.newReservation.title}">New Reservation</span>
+                            <span class="quick-action-tile__subtitle" th:text="#{dashboard.quickAction.newReservation.subtitle}">Create a new reservation</span>
+                        </span>
+                        <span class="quick-action-tile__chevron" aria-hidden="true"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                    </a>
+                    <a class="card quick-action-tile" th:if="${canManageGuest}" th:href="@{/guests}">
+                        <span class="quick-action-tile__icon kpi-card__icon--success"><svg th:replace="~{layout/icons :: user}"></svg></span>
+                        <span class="quick-action-tile__text">
+                            <span class="quick-action-tile__title" th:text="#{dashboard.quickAction.guests.title}">Guest Management</span>
+                            <span class="quick-action-tile__subtitle" th:text="#{dashboard.quickAction.guests.subtitle}">View and manage guests</span>
+                        </span>
+                        <span class="quick-action-tile__chevron" aria-hidden="true"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                    </a>
+                    <a class="card quick-action-tile" th:if="${canManageRoom}" th:href="@{/rooms}">
+                        <span class="quick-action-tile__icon kpi-card__icon--purple"><svg th:replace="~{layout/icons :: bed}"></svg></span>
+                        <span class="quick-action-tile__text">
+                            <span class="quick-action-tile__title" th:text="#{dashboard.quickAction.rooms.title}">Room Management</span>
+                            <span class="quick-action-tile__subtitle" th:text="#{dashboard.quickAction.rooms.subtitle}">View rooms and housekeeping</span>
+                        </span>
+                        <span class="quick-action-tile__chevron" aria-hidden="true"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                    </a>
+                    <a class="card quick-action-tile" th:if="${canViewReport}" th:href="@{/reports}">
+                        <span class="quick-action-tile__icon kpi-card__icon--warning"><svg th:replace="~{layout/icons :: coins}"></svg></span>
+                        <span class="quick-action-tile__text">
+                            <span class="quick-action-tile__title" th:text="#{dashboard.quickAction.reports.title}">View Reports</span>
+                            <span class="quick-action-tile__subtitle" th:text="#{dashboard.quickAction.reports.subtitle}">Occupancy, financial and operational reports</span>
+                        </span>
+                        <span class="quick-action-tile__chevron" aria-hidden="true"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                    </a>
+                </div>
+            </article>
         </section>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
-<script id="dashboard-analytics-data" th:inline="javascript" type="application/json">
+<script id="dashboard-room-status-data" th:inline="javascript" type="application/json">
     {
-        "reservationsByCheckInMonth": /*[[${dashboard.reservationsByCheckInMonth}]]*/ [],
-        "bookedRoomsByRoomType": /*[[${dashboard.bookedRoomsByRoomType}]]*/ [],
-        "reservationsBySource": /*[[${dashboard.reservationsBySource}]]*/ []
+        "roomsByStatus": /*[[${dashboard.roomsByStatus}]]*/ [],
+        "chartLabel": /*[[#{dashboard.roomStatus.chartLabel}]]*/ "Rooms"
     }
 </script>
 <script defer th:src="@{/webjars/chart.js/4.5.1/dist/chart.umd.js}"></script>
-<script defer th:src="@{/js/dashboard/analytics.js}"></script>
+<script defer th:src="@{/js/dashboard/room-status.js}"></script>
 </body>
 </html>

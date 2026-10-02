@@ -6,13 +6,8 @@
      this fragment gets the backdrop for free, with no per-template edit. -->
 <th:block th:fragment="sidebar">
 <nav aria-label="Main navigation" class="sidebar" id="sidebar-nav" th:aria-label="#{navigation.main.label}">
-    <a class="sidebar-brand" th:href="@{/reservations}">
-        <span class="sidebar-brand-icon"><svg th:replace="~{layout/icons :: building}"></svg></span>
-        <span class="sidebar-brand-text">
-            <span class="sidebar-brand-name" th:text="#{common.app.name}">Sunset House</span>
-        </span>
-    </a>
-
+    <!-- Task33 Dashboard visual polish: the hotel brand (icon + "Sunset House") is shown once, in the
+         shared header (layout/header.html), not duplicated here. Dashboard is the sidebar's first item. -->
     <a class="sidebar-nav-link nav-dashboard" th:href="@{/dashboard}" th:if="${canViewReport}">
         <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
         <span th:text="#{navigation.dashboard}">Dashboard</span>

@@ -15,8 +15,13 @@
         <button aria-controls="sidebar-nav" aria-expanded="false" class="header-nav-toggle" id="header-nav-toggle"
                 th:aria-label="#{navigation.toggle.open}" th:attr="data-label-open=#{navigation.toggle.open},data-label-close=#{navigation.toggle.close}"
                 type="button">
-            <svg class="header-nav-toggle-icon-open" th:replace="~{layout/icons :: menu}"></svg>
-            <svg class="header-nav-toggle-icon-close" th:replace="~{layout/icons :: close}"></svg>
+            <!-- th:replace substitutes the WHOLE host tag, including its own attributes, with the fragment's
+                 markup -- so a class placed directly on the <svg> host below would never survive into the
+                 rendered page (the icon fragment has no class of its own), and the aria-expanded-based
+                 show/hide CSS in components.css would never match anything. Wrapping each icon in its own
+                 <span> keeps the toggling class on a real element while only the inner <svg> is replaced. -->
+            <span class="header-nav-toggle-icon-open"><svg th:replace="~{layout/icons :: menu}"></svg></span>
+            <span class="header-nav-toggle-icon-close"><svg th:replace="~{layout/icons :: close}"></svg></span>
         </button>
         <a class="brand" th:href="@{/reservations}" th:text="#{common.app.name}">Sunset House</a>
     </div>

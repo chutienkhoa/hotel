@@ -76,7 +76,7 @@ class PermissionChangeRefreshTest {
     void shouldApplyPermissionRemovalToExistingMvcSessionOnNextRequest() throws Exception {
         Fixture fixture = fixture();
         when(appUserRepository.findById(fixture.user.getId())).thenReturn(Optional.of(fixture.user));
-        when(dashboardService.getDashboard()).thenReturn(mock(DashboardResponse.class));
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(mock(DashboardResponse.class));
         var session = new UsernamePasswordAuthenticationToken(
                 new SessionUserPrincipal(fixture.user.getId(), "an.le", "hash",
                         List.of(new SimpleGrantedAuthority("PERM_VIEW_REPORT"))),

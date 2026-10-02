@@ -67,6 +67,17 @@ public interface ReservationRepository
     List<Object[]> countAllByStatus();
 
     /**
+     * Loads the 5 most recently created Reservations, with Guest eagerly fetched, for the Dashboard
+     * Recent Reservations block. Creation order uses {@code reservedAt}, the immutable creation
+     * timestamp set once by every Reservation creation path, with {@code reservationNumber} as a
+     * deterministic tie-break.
+     *
+     * @return up to 5 Reservations, most recently created first
+     */
+    @EntityGraph(attributePaths = "guest")
+    List<Reservation> findTop5ByOrderByReservedAtDescReservationNumberDesc();
+
+    /**
      * Counts Reservations by planned check-in year and month within a reporting period.
      *
      * @param startDate inclusive reporting-period start
