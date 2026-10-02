@@ -8,7 +8,12 @@
     let availableRooms = [];
 
     const renderRoomOptions = (select) => {
-        const previous = select.value;
+        // On the very first render the select has no options yet (only the static placeholder), so
+        // its own value is always empty even when a room was already chosen earlier in the wizard
+        // (Back, Review -> Edit, or returning from Create New Guest). The server renders that
+        // preserved choice into data-selected-room-id so it can still be restored here once the
+        // real options arrive; after that, the select's own live value takes over as usual.
+        const previous = select.value || select.dataset.selectedRoomId || "";
         select.innerHTML = "";
         const placeholder = document.createElement("option");
         placeholder.value = "";

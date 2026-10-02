@@ -11,10 +11,12 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.dto.booking.response.CheckInReviewResponse;
 import com.example.hotel.dto.booking.response.CheckInTiming;
+import com.example.hotel.dto.customer.response.GuestLookupResponse;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.booking.CheckInService;
@@ -29,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -237,6 +240,263 @@ class CheckInPageControllerTest {
 
         mockMvc.perform(otaEntryPost("VND")).andExpect(status().is3xxRedirection());
         verify(checkInService).createOtaEntry(any());
+    }
+
+    /** Confirms a valid {@code createdGuestId} flash attribute pre-selects the Guest on the Walk-in form. */
+    @Test
+    void shouldPreSelectCreatedGuestOnWalkInFormWhenReturningFromGuestCreation() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+
+        mockMvc.perform(get("/check-in/walk-in")
+                        .flashAttr("createdGuestId", GUEST_ID)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(selectedGuestOptionFragment())));
+    }
+
+    /** Confirms a valid {@code createdGuestId} flash attribute pre-selects the Guest on the OTA entry form. */
+    @Test
+    void shouldPreSelectCreatedGuestOnOtaEntryFormWhenReturningFromGuestCreation() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+
+        mockMvc.perform(get("/check-in/ota-entry")
+                        .flashAttr("createdGuestId", GUEST_ID)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(selectedGuestOptionFragment())));
+    }
+
+    /**
+     * Confirms a {@code createdGuestId} that no longer resolves to a real Guest (missing/invalid)
+     * is safely ignored: the Walk-in form still loads with nothing pre-selected.
+     */
+    @Test
+    void shouldIgnoreUnknownCreatedGuestIdOnWalkInForm() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        when(guestQueryService.findForReservationCreation(any())).thenReturn(null);
+
+        mockMvc.perform(get("/check-in/walk-in")
+                        .flashAttr("createdGuestId", UUID.randomUUID())
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("selected=\"selected\""))));
+    }
+
+    /** Confirms Walk-in Review -&gt; Back redisplays the form with every previously entered value intact (spec 9.3.3a). */
+    @Test
+    void shouldPreserveWalkInFieldsOnBackFromReview() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        UUID roomId = UUID.randomUUID();
+
+        mockMvc.perform(post("/check-in/walk-in/back")
+                        .param("guestId", GUEST_ID.toString())
+                        .param("checkOutDate", LocalDate.now().plusDays(3).toString())
+                        .param("adultCount", "2")
+                        .param("childCount", "1")
+                        .param("currency", "VND")
+                        .param("notes", "Late arrival expected")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "1200000")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(selectedGuestOptionFragment())))
+                .andExpect(content().string(containsString("Late arrival expected")));
+        verify(checkInService, never()).confirmWalkIn(any());
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms the Walk-in Back action requires CSRF like every other mutating action. */
+    @Test
+    void shouldRequireCsrfForWalkInBack() throws Exception {
+        mockMvc.perform(post("/check-in/walk-in/back").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Confirms the rendered Walk-in Review page wires its "Back to Walk-in" control to resubmit the
+     * reviewed selections to the new Back endpoint (spec 9.3.3a), rather than a plain link that
+     * would discard them on a blank GET.
+     */
+    @Test
+    void shouldRenderWalkInReviewBackControlWiredToPreserveState() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(new com.example.hotel.dto.booking.response.WalkInReviewResponse(
+                GUEST_ID, "Ann Lee", "G000001", false, null,
+                LocalDate.now(), LocalDate.now().plusDays(2), Instant.now(),
+                List.of(), java.math.BigDecimal.TEN, "VND"));
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("form=\"walk-in-confirm-form\"")))
+                .andExpect(content().string(containsString("formaction=\"/check-in/walk-in/back\"")))
+                .andExpect(content().string(containsString("id=\"walk-in-confirm-form\"")));
+    }
+
+    /**
+     * Confirms the Walk-in "+ Create New Guest" stash-and-redirect preserves the rest of the
+     * in-progress wizard state across the full Guest-creation round trip, and that the created
+     * Guest is pre-selected on return (spec 9.2.5 / 9.3.3a). No Reservation or Guest is created by
+     * either request.
+     */
+    @Test
+    void shouldStashAndRestoreWalkInFieldsAcrossCreateNewGuestRoundTrip() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        UUID roomId = UUID.randomUUID();
+
+        mockMvc.perform(post("/check-in/walk-in/new-guest")
+                        .session(session)
+                        .param("checkOutDate", LocalDate.now().plusDays(4).toString())
+                        .param("adultCount", "3")
+                        .param("childCount", "0")
+                        .param("currency", "VND")
+                        .param("notes", "Needs late checkout")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "900000")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/guests/new?returnTo=/check-in/walk-in"));
+
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+
+        mockMvc.perform(get("/check-in/walk-in")
+                        .session(session)
+                        .flashAttr("createdGuestId", GUEST_ID)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(selectedGuestOptionFragment())))
+                .andExpect(content().string(containsString("Needs late checkout")));
+        verify(checkInService, never()).confirmWalkIn(any());
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms the same stash-and-restore round trip for OTA Booking Not Entered. */
+    @Test
+    void shouldStashAndRestoreOtaEntryFieldsAcrossCreateNewGuestRoundTrip() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        UUID roomId = UUID.randomUUID();
+
+        mockMvc.perform(post("/check-in/ota-entry/new-guest")
+                        .session(session)
+                        .param("checkInDate", LocalDate.now().toString())
+                        .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                        .param("adultCount", "2")
+                        .param("childCount", "0")
+                        .param("source", "AGODA")
+                        .param("otaBookingReference", "AG-99")
+                        .param("currency", "VND")
+                        .param("notes", "OTA only note")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "700000")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/guests/new?returnTo=/check-in/ota-entry"));
+
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+
+        mockMvc.perform(get("/check-in/ota-entry")
+                        .session(session)
+                        .flashAttr("createdGuestId", GUEST_ID)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(selectedGuestOptionFragment())))
+                .andExpect(content().string(containsString("AG-99")))
+                .andExpect(content().string(containsString("OTA only note")));
+        verify(checkInService, never()).createOtaEntry(any());
+    }
+
+    /** Confirms Walk-in stashed state never leaks into the OTA entry form, and vice versa. */
+    @Test
+    void shouldKeepWalkInAndOtaEntryStashedStateIsolated() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        UUID roomId = UUID.randomUUID();
+
+        mockMvc.perform(post("/check-in/walk-in/new-guest")
+                        .session(session)
+                        .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                        .param("adultCount", "2")
+                        .param("childCount", "0")
+                        .param("currency", "VND")
+                        .param("notes", "Walk-in only note")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "500000")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(get("/check-in/ota-entry")
+                        .session(session)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("Walk-in only note"))));
+    }
+
+    /**
+     * Confirms a successful Walk-in confirmation clears any leftover stashed state, so it can
+     * never resurface on a later, unrelated Walk-in visit.
+     */
+    @Test
+    void shouldClearStashedWalkInStateAfterSuccessfulConfirm() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
+        UUID roomId = UUID.randomUUID();
+
+        mockMvc.perform(post("/check-in/walk-in/new-guest")
+                        .session(session)
+                        .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                        .param("adultCount", "2")
+                        .param("childCount", "0")
+                        .param("currency", "VND")
+                        .param("notes", "Stale note")
+                        .param("rooms[0].roomId", roomId.toString())
+                        .param("rooms[0].nightlyRate", "500000")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        when(checkInService.confirmWalkIn(any())).thenReturn(new com.example.hotel.dto.booking.response.Response(
+                UUID.randomUUID(), "R1", "CHECKED_IN", java.math.BigDecimal.TEN, "VND"));
+        mockMvc.perform(walkInPost("/check-in/walk-in/confirm", "VND").session(session))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(get("/check-in/walk-in").session(session).with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("Stale note"))));
+    }
+
+    /** Confirms the new Walk-in/OTA Create-New-Guest wiring stays behind the existing CHECK_IN authorization. */
+    @Test
+    void shouldForbidNewGuestAndBackActionsWithoutCheckInPermission() throws Exception {
+        var noPermission = List.of(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
+
+        mockMvc.perform(post("/check-in/walk-in/back").with(user("viewer").authorities(noPermission)).with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/check-in/walk-in/new-guest").with(user("viewer").authorities(noPermission)).with(csrf()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/check-in/ota-entry/new-guest").with(user("viewer").authorities(noPermission)).with(csrf()))
+                .andExpect(status().isForbidden());
+    }
+
+    /** Builds a representative created-Guest lookup entry matching {@code GUEST_ID}. */
+    private GuestLookupResponse guestLookup() {
+        return new GuestLookupResponse(GUEST_ID, "G000001", "Ann Lee", null, null, null);
+    }
+
+    /**
+     * Builds the exact rendered fragment of the {@link #guestLookup()} entry's {@code <option>}
+     * when Thymeleaf marks it selected, matching the actual attribute order the guest selector
+     * renders in (value, then the {@code data-*} verification attributes, then {@code selected}).
+     *
+     * @return the selected-option markup fragment to search for
+     */
+    private String selectedGuestOptionFragment() {
+        return "value=\"" + GUEST_ID + "\" data-guest-code=\"G000001\" data-full-name=\"Ann Lee\" selected=\"selected\"";
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder walkInPost(

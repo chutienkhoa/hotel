@@ -50,7 +50,8 @@
                                 <div><dt>Nationality</dt><dd data-guest-nationality>Nationality</dd></div>
                             </dl>
                         </details>
-                        <a class="inline-link" th:href="@{/guests/new(returnTo='/check-in/ota-entry')}">+ Create New Guest</a>
+                        <button class="inline-link" formnovalidate th:formaction="@{/check-in/ota-entry/new-guest}"
+                                formmethod="post" type="submit">+ Create New Guest</button>
                     </div>
                 </section>
 

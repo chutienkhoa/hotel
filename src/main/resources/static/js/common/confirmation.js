@@ -31,6 +31,13 @@
     const openConfirmation = (event) => {
         const form = event.currentTarget;
 
+        // A submit control with its own formaction (for example a "+ Create New Guest" escape
+        // hatch, or a wizard "Back" control) performs a different, non-destructive action than
+        // the form's own confirmed action, so it must bypass that unrelated confirmation dialog.
+        if (event.submitter instanceof HTMLElement && event.submitter.hasAttribute("formaction")) {
+            return;
+        }
+
         if (confirmedForms.has(form)) {
             confirmedForms.delete(form);
             return;

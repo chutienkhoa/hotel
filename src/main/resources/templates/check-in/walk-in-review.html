@@ -7,7 +7,14 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/check-in/walk-in}">Back to Walk-in</a>
+        <!--
+            This resubmits every currently entered Walk-in selection to the Walk-in form instead of
+            navigating back to a blank GET, so Back preserves state (spec 9.3.3a). It is associated
+            with the Confirm & Check-in form below (not nested inside it) via the standard HTML
+            "form" attribute, the same cross-form pattern already used for passport removal.
+        -->
+        <button class="back-link" form="walk-in-confirm-form" formnovalidate
+                th:formaction="@{/check-in/walk-in/back}" formmethod="post" type="submit">Back to Walk-in</button>
 
         <div class="page-header">
             <div>
@@ -146,7 +153,7 @@
                     </div>
                 </div>
                 <form data-confirm-label="Confirm &amp; Check-in" data-confirm-message="Create this reservation and check the guest in now?"
-                      data-confirm-severity="WARNING" data-confirm-title="Confirm &amp; Check-in" method="post"
+                      data-confirm-severity="WARNING" data-confirm-title="Confirm &amp; Check-in" id="walk-in-confirm-form" method="post"
                       th:action="@{/check-in/walk-in/confirm}">
                     <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                     <input name="guestId" th:value="${walkInForm.guestId}" type="hidden" />

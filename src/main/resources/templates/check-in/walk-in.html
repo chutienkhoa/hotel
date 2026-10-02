@@ -48,7 +48,8 @@
                                 <div><dt>Nationality</dt><dd data-guest-nationality>Nationality</dd></div>
                             </dl>
                         </details>
-                        <a class="inline-link" th:href="@{/guests/new(returnTo='/check-in/walk-in')}">+ Create New Guest</a>
+                        <button class="inline-link" formnovalidate th:formaction="@{/check-in/walk-in/new-guest}"
+                                formmethod="post" type="submit">+ Create New Guest</button>
                     </div>
                 </section>
 
@@ -103,6 +104,7 @@
                             <div class="form-field">
                                 <label th:for="${'room-' + roomRowStat.index}">Room</label>
                                 <select data-room-select required th:field="*{rooms[__${roomRowStat.index}__].roomId}"
+                                        th:attr="data-selected-room-id=${roomRequest.roomId}"
                                         th:id="${'room-' + roomRowStat.index}">
                                     <option value="">Select a check-out date first</option>
                                 </select>

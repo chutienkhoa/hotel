@@ -15,6 +15,7 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.service.booking.CheckInService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -48,6 +49,23 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 @Controller
 @RequestMapping("/check-in")
 public class CheckInPageController {
+
+    /**
+     * Session key holding one stashed, possibly incomplete, Walk-in form while the user visits the
+     * existing Guest creation form (spec 9.2.5 / 9.3.3a). Scoped to the Walk-in flow only; the OTA
+     * Booking Not Entered flow uses its own separate key so the two flows can never contaminate
+     * each other.
+     */
+    private static final String WALK_IN_WIZARD_SESSION_KEY = "checkIn.walkIn.stashedForm";
+
+    /** Session key holding one stashed, possibly incomplete, OTA Booking Not Entered form. */
+    private static final String OTA_ENTRY_WIZARD_SESSION_KEY = "checkIn.otaEntry.stashedForm";
+
+    /** The Walk-in flow's own {@code returnTo} target, as accepted by {@code GuestPageController}. */
+    private static final String WALK_IN_RETURN_TARGET = "/check-in/walk-in";
+
+    /** The OTA Booking Not Entered flow's own {@code returnTo} target, as accepted by {@code GuestPageController}. */
+    private static final String OTA_ENTRY_RETURN_TARGET = "/check-in/ota-entry";
 
     private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
     private final CheckInService checkInService;
@@ -169,9 +187,28 @@ public class CheckInPageController {
      */
     @GetMapping("/ota-entry")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
-    public String otaEntryForm(Model model) {
-        addOtaEntryFormAttributes(model, emptyOtaEntryForm());
+    public String otaEntryForm(HttpSession session, Model model) {
+        CreateRequest otaEntryForm = withCreatedGuestIfAny(consumeStashedOtaEntryForm(session), model);
+        addOtaEntryFormAttributes(model, otaEntryForm);
         return "check-in/ota-entry";
+    }
+
+    /**
+     * Stashes the OTA Booking Not Entered form's current, possibly incomplete, field values for
+     * exactly one subsequent Guest-creation round trip, then redirects to the existing Guest
+     * creation form. No Reservation or Guest is created by this step (spec 9.2.5): it only
+     * preserves already-entered OTA fields so they are not lost while the user visits Guest
+     * creation and returns.
+     *
+     * @param otaEntryForm current, possibly incomplete, OTA Booking Not Entered field values
+     * @param session HTTP session used to carry the stashed values across the Guest-creation round trip
+     * @return a redirect to the existing Guest creation form with the OTA entry {@code returnTo} target
+     */
+    @PostMapping("/ota-entry/new-guest")
+    @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
+    public String otaEntryNewGuest(@ModelAttribute("otaEntryForm") CreateRequest otaEntryForm, HttpSession session) {
+        session.setAttribute(OTA_ENTRY_WIZARD_SESSION_KEY, otaEntryForm);
+        return "redirect:/guests/new?returnTo=" + OTA_ENTRY_RETURN_TARGET;
     }
 
     /**
@@ -180,6 +217,7 @@ public class CheckInPageController {
      * @param otaEntryForm submitted OTA Reservation data
      * @param bindingResult structural validation result
      * @param model model used to redisplay the form after a safe error
+     * @param session HTTP session cleared of any leftover stashed OTA entry state on success
      * @param redirectAttributes attributes used to show post-redirect feedback
      * @return a redirect into Check-in Review on success, or the form template on failure
      */
@@ -189,6 +227,7 @@ public class CheckInPageController {
             @Valid @ModelAttribute("otaEntryForm") CreateRequest otaEntryForm,
             BindingResult bindingResult,
             Model model,
+            HttpSession session,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             addOtaEntryFormAttributes(model, otaEntryForm);
@@ -196,6 +235,9 @@ public class CheckInPageController {
         }
         try {
             Response response = checkInService.createOtaEntry(otaEntryForm);
+            // The wizard has completed, so any stashed in-progress state from an earlier Create New
+            // Guest round trip is no longer needed and must not leak into a later, unrelated visit.
+            session.removeAttribute(OTA_ENTRY_WIZARD_SESSION_KEY);
             redirectAttributes.addFlashAttribute(
                     "successMessage", "Reservation created and confirmed. Continue with Check-in review below.");
             return "redirect:/check-in/reservations/" + response.id();
@@ -209,13 +251,55 @@ public class CheckInPageController {
     /**
      * Displays the Walk-in form. Source is always DIRECT and is never exposed for selection.
      *
+     * <p>When the user is returning from the existing Guest creation form (spec 9.2.5), this
+     * restores the rest of the in-progress Walk-in selections stashed by {@link #walkInNewGuest}
+     * and pre-selects the newly created Guest from the {@code createdGuestId} flash attribute that
+     * {@code GuestPageController.create} already sets. An absent or invalid stash/{@code
+     * createdGuestId} safely falls back to the ordinary empty form.</p>
+     *
+     * @param session HTTP session possibly holding a stashed in-progress Walk-in form
      * @param model model used to render the form
      * @return the Walk-in template name
      */
     @GetMapping("/walk-in")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
-    public String walkInForm(Model model) {
-        addWalkInFormAttributes(model, emptyWalkInForm(), List.of());
+    public String walkInForm(HttpSession session, Model model) {
+        WalkInRequest walkInForm = withCreatedGuestIfAny(consumeStashedWalkInForm(session), model);
+        addWalkInFormAttributes(model, walkInForm, List.of());
+        return "check-in/walk-in";
+    }
+
+    /**
+     * Stashes the Walk-in form's current, possibly incomplete, field values for exactly one
+     * subsequent Guest-creation round trip, then redirects to the existing Guest creation form. No
+     * Reservation or Guest is created by this step (spec 9.2.5): it only preserves already-entered
+     * Walk-in fields so they are not lost while the user visits Guest creation and returns.
+     *
+     * @param walkInForm current, possibly incomplete, Walk-in field values
+     * @param session HTTP session used to carry the stashed values across the Guest-creation round trip
+     * @return a redirect to the existing Guest creation form with the Walk-in {@code returnTo} target
+     */
+    @PostMapping("/walk-in/new-guest")
+    @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
+    public String walkInNewGuest(@ModelAttribute("walkInForm") WalkInRequest walkInForm, HttpSession session) {
+        session.setAttribute(WALK_IN_WIZARD_SESSION_KEY, walkInForm);
+        return "redirect:/guests/new?returnTo=" + WALK_IN_RETURN_TARGET;
+    }
+
+    /**
+     * Returns from the read-only Walk-in Review step to the editable Walk-in form without losing
+     * any previously entered selection, closing the Back/state-loss gap recorded in spec 9.3.3a.
+     * Nothing is persisted or re-validated here; the values resubmitted from Review are redisplayed
+     * exactly as entered so the user can keep editing.
+     *
+     * @param walkInForm Walk-in field values resubmitted from the Review step
+     * @param model model used to render the Walk-in form
+     * @return the Walk-in template name, pre-filled with the preserved selections
+     */
+    @PostMapping("/walk-in/back")
+    @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
+    public String walkInBack(@ModelAttribute("walkInForm") WalkInRequest walkInForm, Model model) {
+        addWalkInFormAttributes(model, walkInForm, List.of());
         return "check-in/walk-in";
     }
 
@@ -270,6 +354,7 @@ public class CheckInPageController {
      * @param walkInForm submitted Walk-in guest/room/date selections, resubmitted from Review
      * @param bindingResult structural validation result
      * @param model model used to redisplay the form after a safe error
+     * @param session HTTP session cleared of any leftover stashed Walk-in state on success
      * @param redirectAttributes attributes used to show post-redirect feedback
      * @return a redirect to Reservation Detail on success, or the Walk-in form on failure
      */
@@ -279,6 +364,7 @@ public class CheckInPageController {
             @Valid @ModelAttribute("walkInForm") WalkInRequest walkInForm,
             BindingResult bindingResult,
             Model model,
+            HttpSession session,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             addWalkInFormAttributes(model, walkInForm, List.of());
@@ -286,6 +372,9 @@ public class CheckInPageController {
         }
         try {
             Response response = checkInService.confirmWalkIn(walkInForm);
+            // The wizard has completed, so any stashed in-progress state from an earlier Create New
+            // Guest round trip is no longer needed and must not leak into a later, unrelated visit.
+            session.removeAttribute(WALK_IN_WIZARD_SESSION_KEY);
             redirectAttributes.addFlashAttribute("successMessage", "Walk-in guest checked in successfully.");
             return "redirect:/reservations/" + response.id();
         } catch (ResponseStatusException exception) {
@@ -340,6 +429,119 @@ public class CheckInPageController {
     private WalkInRequest emptyWalkInForm() {
         return new WalkInRequest(null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
                 null, null, List.of(new RoomRequest(null, null)));
+    }
+
+    /**
+     * Retrieves and clears any Walk-in form stashed by {@link #walkInNewGuest}, so the stash is
+     * consumed exactly once and can never leak into a later, unrelated Walk-in visit.
+     *
+     * @param session current HTTP session
+     * @return the stashed Walk-in form, or a fresh empty form when nothing was stashed
+     */
+    private WalkInRequest consumeStashedWalkInForm(HttpSession session) {
+        Object stashed = session.getAttribute(WALK_IN_WIZARD_SESSION_KEY);
+        session.removeAttribute(WALK_IN_WIZARD_SESSION_KEY);
+        return stashed instanceof WalkInRequest stashedForm ? stashedForm : emptyWalkInForm();
+    }
+
+    /**
+     * Retrieves and clears any OTA Booking Not Entered form stashed by {@link #otaEntryNewGuest},
+     * so the stash is consumed exactly once and can never leak into a later, unrelated OTA visit.
+     *
+     * @param session current HTTP session
+     * @return the stashed OTA entry form, or a fresh empty form when nothing was stashed
+     */
+    private CreateRequest consumeStashedOtaEntryForm(HttpSession session) {
+        Object stashed = session.getAttribute(OTA_ENTRY_WIZARD_SESSION_KEY);
+        session.removeAttribute(OTA_ENTRY_WIZARD_SESSION_KEY);
+        return stashed instanceof CreateRequest stashedForm ? stashedForm : emptyOtaEntryForm();
+    }
+
+    /**
+     * Resolves the {@code createdGuestId} flash attribute set by {@code GuestPageController.create}
+     * on a successful Guest creation redirect, confirming the identifier still resolves to a real
+     * Guest before it is trusted for pre-selection.
+     *
+     * @param model model carrying any flash attributes merged in for this request
+     * @return the created Guest identifier, or {@code null} when absent or no longer valid
+     */
+    private UUID resolveCreatedGuestId(Model model) {
+        Object candidate = model.asMap().get("createdGuestId");
+        if (!(candidate instanceof UUID createdGuestId)) {
+            return null;
+        }
+        return guestQueryService.findForReservationCreation(createdGuestId) != null ? createdGuestId : null;
+    }
+
+    /**
+     * Pre-selects the just-created Guest on a Walk-in form, when one is available, without
+     * disturbing any other previously entered or restored Walk-in selection.
+     *
+     * @param walkInForm Walk-in form to pre-select the Guest on
+     * @param model model carrying any flash attributes merged in for this request
+     * @return the form with the created Guest selected, or the form unchanged when none applies
+     */
+    private WalkInRequest withCreatedGuestIfAny(WalkInRequest walkInForm, Model model) {
+        UUID createdGuestId = resolveCreatedGuestId(model);
+        return createdGuestId == null ? walkInForm : withGuestId(walkInForm, createdGuestId);
+    }
+
+    /**
+     * Pre-selects the just-created Guest on an OTA Booking Not Entered form, when one is
+     * available, without disturbing any other previously entered or restored OTA selection.
+     *
+     * @param otaEntryForm OTA entry form to pre-select the Guest on
+     * @param model model carrying any flash attributes merged in for this request
+     * @return the form with the created Guest selected, or the form unchanged when none applies
+     */
+    private CreateRequest withCreatedGuestIfAny(CreateRequest otaEntryForm, Model model) {
+        UUID createdGuestId = resolveCreatedGuestId(model);
+        return createdGuestId == null ? otaEntryForm : withGuestId(otaEntryForm, createdGuestId);
+    }
+
+    /**
+     * Returns a copy of a Walk-in form with its Guest selection replaced, preserving every other
+     * field.
+     *
+     * @param walkInForm form to copy
+     * @param guestId Guest identifier to select
+     * @return the form with the replaced Guest selection
+     */
+    private WalkInRequest withGuestId(WalkInRequest walkInForm, UUID guestId) {
+        return new WalkInRequest(
+                guestId,
+                walkInForm.checkOutDate(),
+                walkInForm.adultCount(),
+                walkInForm.childCount(),
+                walkInForm.currency(),
+                walkInForm.notes(),
+                walkInForm.rooms());
+    }
+
+    /**
+     * Returns a copy of an OTA Booking Not Entered form with its Guest selection replaced,
+     * preserving every other field.
+     *
+     * @param otaEntryForm form to copy
+     * @param guestId Guest identifier to select
+     * @return the form with the replaced Guest selection
+     */
+    private CreateRequest withGuestId(CreateRequest otaEntryForm, UUID guestId) {
+        return new CreateRequest(
+                guestId,
+                otaEntryForm.checkInDate(),
+                otaEntryForm.checkOutDate(),
+                otaEntryForm.adultCount(),
+                otaEntryForm.childCount(),
+                otaEntryForm.source(),
+                otaEntryForm.otaBookingReference(),
+                otaEntryForm.currency(),
+                otaEntryForm.notes(),
+                otaEntryForm.rooms(),
+                otaEntryForm.accompanyingGuestIdsOrEmpty(),
+                otaEntryForm.bookingContactName(),
+                otaEntryForm.bookingContactPhone(),
+                otaEntryForm.bookingContactEmail());
     }
 
     private void putIfPresent(Map<String, String> filters, String name, String value) {

@@ -291,11 +291,16 @@ p {
   gap: var(--space-3);
 }
 .back-link {
+  background: none;
+  border: none;
   color: var(--color-muted);
+  cursor: pointer;
   display: inline-flex;
+  font-family: inherit;
   font-size: 0.875rem;
   font-weight: 600;
   margin-bottom: var(--space-3);
+  padding: 0;
   text-decoration: none;
 }
 .back-link:hover {
@@ -1666,9 +1671,19 @@ legend {
   justify-content: space-between;
 }
 .reservation-guest-actions .inline-link {
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
   margin-left: auto;
   padding-top: var(--space-3);
+  text-decoration: underline;
   white-space: nowrap;
+}
+.reservation-guest-actions .inline-link:hover {
+  color: var(--color-primary-hover);
 }
 .reservation-rooms-section {
   margin-bottom: 0;
