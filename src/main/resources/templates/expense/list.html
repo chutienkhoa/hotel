@@ -74,11 +74,12 @@
             </div>
 
             <div th:if="${expensePage != null and expensePage.empty and errorMessage == null}">
-                <p class="empty-state" th:if="${filtersActive}">
-                    No expenses match the selected filters.
-                    <a th:href="@{/expenses}">Clear filters</a>
-                </p>
-                <p class="empty-state" th:unless="${filtersActive}">No expenses found.</p>
+                <div th:if="${filtersActive}">
+                    <div th:replace="~{layout/empty-state :: noResults('No expenses match the selected filters.', @{/expenses})}"></div>
+                </div>
+                <div th:unless="${filtersActive}">
+                    <div th:replace="~{layout/empty-state :: emptyState('inbox', 'No expenses found.', null, null)}"></div>
+                </div>
             </div>
 
             <div class="table-wrap" th:if="${expensePage != null and not expensePage.empty}">
@@ -100,7 +101,7 @@
                         </td>
                         <td class="table-number"><span th:replace="~{layout/money :: amount(${expense.amount}, ${expense.currency})}">0 VND</span></td>
                         <td th:text="${expense.paymentMethod}">CASH</td>
-                        <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(expense.status)}" th:text="${expense.status}">DRAFT</span></td>
+                        <td><span th:replace="~{layout/enum :: badge('expenseStatus', ${expense.status}, ${'status-badge--' + #strings.toLowerCase(expense.status)})}">DRAFT</span></td>
                     </tr>
                     </tbody>
                 </table>

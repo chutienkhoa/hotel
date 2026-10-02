@@ -7,7 +7,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/expenses}">Back to expenses</a>
+        <div th:replace="~{layout/breadcrumb :: trail(@{/expenses}, 'Expenses', 'Categories')}"></div>
         <div class="page-header">
             <div>
                 <h1>Expense Categories</h1>
@@ -16,10 +16,9 @@
             <a class="button button-primary" th:if="${canManageExpense}" th:href="@{/expense-categories/new}">Add Category</a>
         </div>
 
-        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
-
-        <p class="empty-state" th:if="${#lists.isEmpty(categories)}">No Expense categories found.</p>
+        <div th:if="${#lists.isEmpty(categories)}">
+            <div th:replace="~{layout/empty-state :: emptyState('inbox', 'No Expense categories found.', null, null)}"></div>
+        </div>
 
         <div class="table-wrap" th:unless="${#lists.isEmpty(categories)}">
             <table>
@@ -38,7 +37,7 @@
                     <td>
                         <span class="status-badge"
                               th:classappend="${category.active} ? ' status-badge--available' : ' status-badge--checked_out'"
-                              th:text="${category.active} ? 'ACTIVE' : 'INACTIVE'">ACTIVE</span>
+                              th:text="${category.active} ? #{common.status.active} : #{common.status.inactive}">ACTIVE</span>
                     </td>
                     <td class="table-actions">
                         <div class="action-row" th:if="${canManageExpense}">
@@ -67,6 +66,8 @@
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+    <th:block th:replace="~{layout/toast :: toast}"></th:block>
+    <th:block th:replace="~{layout/feedback-dialog :: feedbackDialog}"></th:block>
 </div>
 </body>
 </html>

@@ -11,10 +11,21 @@
     <meta name="pms-i18n:js.datePicker.today.aria" th:content="#{js.datePicker.today.aria}" content="Select today" />
     <link rel="stylesheet" th:href="@{/css/vendor/flatpickr-4.6.13.min.css}" />
     <link rel="stylesheet" th:href="@{/css/common/layout.css}" />
+    <link rel="stylesheet" th:href="@{/css/common/components.css}" />
     <script defer th:src="@{/js/common/i18n.js}"></script>
     <script defer th:src="@{/js/vendor/flatpickr-4.6.13.min.js}"></script>
     <script defer th:src="@{/js/common/date-picker.js}"></script>
     <script defer th:src="@{/js/common/money-input.js}"></script>
     <script defer th:src="@{/js/common/confirmation.js}"></script>
+    <!-- Task33 Batch 1A: app-shell foundation behavior (mobile sidebar drawer, header account menu). -->
+    <script defer th:src="@{/js/common/nav-toggle.js}"></script>
+    <script defer th:src="@{/js/common/header-account.js}"></script>
+    <!-- Translated strings for toast.js. -->
+    <meta name="pms-i18n:js.toast.close" th:content="#{js.toast.close}" content="Close" />
+    <!-- Task33 Batch 1B: global feedback / UI state infrastructure. submit-guard.js loads after
+         confirmation.js (see its own comment for why the order matters). -->
+    <script defer th:src="@{/js/common/toast.js}"></script>
+    <script defer th:src="@{/js/common/feedback-dialog.js}"></script>
+    <script defer th:src="@{/js/common/submit-guard.js}"></script>
 </head>
 </html>

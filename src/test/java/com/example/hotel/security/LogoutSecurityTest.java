@@ -32,7 +32,7 @@ import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Verifies the sidebar account area and the existing Spring Security POST /logout through the real MVC chain. */
+/** Verifies the header account area and the existing Spring Security POST /logout through the real MVC chain. */
 @WebMvcTest(DashboardPageController.class)
 @Import({SecurityConfig.class, SessionUserDetailsService.class})
 class LogoutSecurityTest {
@@ -49,15 +49,19 @@ class LogoutSecurityTest {
     @MockitoBean
     private JwtService jwtService;
 
-    /** Confirms the sidebar shows the current username and a CSRF-protected POST logout form. */
+    /**
+     * Confirms the header account area shows the current username and a CSRF-protected POST logout form.
+     * Task33 Batch 1A moved this from the sidebar footer into the shared header (layout/header.html);
+     * the markup/behavior otherwise is unchanged from before that move.
+     */
     @Test
-    void shouldShowUsernameAndLogoutInSidebar() throws Exception {
+    void shouldShowUsernameAndLogoutInHeaderAccountArea() throws Exception {
         MockHttpSession session = authenticatedSession();
         when(dashboardService.getDashboard()).thenReturn(org.mockito.Mockito.mock(DashboardResponse.class));
 
         mockMvc.perform(get("/dashboard").session(session))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"sidebar-account-name\">an.le<")))
+                .andExpect(content().string(containsString("class=\"header-account-name\">an.le<")))
                 .andExpect(content().string(containsString("action=\"/logout\"")))
                 .andExpect(content().string(containsString("method=\"post\"")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")))

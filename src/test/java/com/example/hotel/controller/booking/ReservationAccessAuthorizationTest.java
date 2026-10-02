@@ -703,7 +703,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-dashboard\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-reservations\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-guests\"")))
-                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-rooms\"")))
+                .andExpect(content().string(containsString("nav-room-list")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-expenses\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-additional-revenues\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-users\"")))
@@ -743,7 +743,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-reservations\"")))
                 .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-dashboard\""))))
                 .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-guests\""))))
-                .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-rooms\""))))
+                .andExpect(content().string(not(containsString("nav-room-list"))))
                 .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-expenses\""))))
                 .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-additional-revenues\""))))
                 .andReturn().getResponse().getContentAsString();

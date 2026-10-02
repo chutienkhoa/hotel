@@ -1,8 +1,51 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
+<!-- Task33 Batch 1A header foundation. The mobile nav toggle controls the sidebar (layout/sidebar.html,
+     id="sidebar-nav") via static/js/common/nav-toggle.js. The brand link is kept here (not just in the
+     sidebar) because on a narrow viewport the sidebar is hidden off-canvas until opened, and the header is
+     the only persistently visible chrome. Global search and the notification bell described in the
+     specification (§6.2) are intentionally NOT implemented: no backend capability exists for a
+     cross-domain search or for notifications (confirmed absent from the service/repository layer during
+     the Batch 1 audit), and the specification's own §13 defers both beyond the approved header/list
+     direction. Building a non-functional search input or bell would violate the "no dead controls"
+     principle (§5) instead of satisfying it. -->
 <header class="site-header" th:fragment="header">
-    <a class="brand" th:href="@{/reservations}" th:text="#{common.app.name}">Hotel Management</a>
+    <div class="site-header-start">
+        <button aria-controls="sidebar-nav" aria-expanded="false" class="header-nav-toggle" id="header-nav-toggle"
+                th:aria-label="#{navigation.toggle.open}" th:attr="data-label-open=#{navigation.toggle.open},data-label-close=#{navigation.toggle.close}"
+                type="button">
+            <svg class="header-nav-toggle-icon-open" th:replace="~{layout/icons :: menu}"></svg>
+            <svg class="header-nav-toggle-icon-close" th:replace="~{layout/icons :: close}"></svg>
+        </button>
+        <a class="brand" th:href="@{/reservations}" th:text="#{common.app.name}">Sunset House</a>
+    </div>
+
+    <div class="header-account" th:if="${currentUsername != null}">
+        <button aria-controls="header-account-menu" aria-expanded="false" aria-haspopup="menu"
+                class="header-account-trigger" id="header-account-trigger" type="button">
+            <span aria-hidden="true" class="header-account-initial"
+                  th:text="${#strings.toUpperCase(#strings.substring(currentUsername, 0, 1))}">A</span>
+            <span class="header-account-name" th:text="${currentUsername}">admin</span>
+            <svg aria-hidden="true" class="header-account-chevron" th:replace="~{layout/icons :: chevronDown}"></svg>
+        </button>
+        <div aria-labelledby="header-account-trigger" class="header-account-menu" hidden
+             id="header-account-menu" role="menu">
+            <div class="header-account-menu-section" role="none">
+                <nav th:replace="~{layout/language :: switcher}"></nav>
+            </div>
+            <form method="post" role="none" th:action="@{/logout}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <button class="header-account-logout" role="menuitem" type="submit">
+                    <!-- Deliberately not .sidebar-nav-icon: that class's light-gray color is tuned for the
+                         dark sidebar and would be low-contrast here. No color override is set, so the SVG's
+                         stroke="currentColor" simply follows this (dark-on-light) button's own text color. -->
+                    <span class="header-account-logout-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
+                    <span th:text="#{navigation.logout}">Logout</span>
+                </button>
+            </form>
+        </div>
+    </div>
 </header>
 </body>
 </html>

@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Task33 Batch 1B: Empty State vs. No Results (spec sec. 10). Empty State is for a dataset that is
+     genuinely empty; No Results is for a dataset that exists but the active search/filter matched zero
+     rows, and always offers Clear Filters. Both extend the existing .empty-state CSS class rather than
+     introducing a parallel one, so the ~17 pages using it as a plain paragraph today are unaffected. -->
+<div class="empty-state" th:fragment="emptyState(icon, message, actionHref, actionLabel)">
+    <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: ${icon}}"></svg></span>
+    <p class="empty-state-message" th:text="${message}">No records yet.</p>
+    <a class="button button-secondary" th:href="${actionHref}" th:if="${actionHref != null}" th:text="${actionLabel}">Action</a>
+</div>
+
+<div class="empty-state empty-state--no-results" th:fragment="noResults(message, clearFiltersHref)">
+    <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: search}"></svg></span>
+    <p class="empty-state-message" th:text="${message}">No results match the current filters.</p>
+    <a class="button button-secondary" th:href="${clearFiltersHref}" th:text="#{common.action.clearFilters}">Clear filters</a>
+</div>
+</body>
+</html>

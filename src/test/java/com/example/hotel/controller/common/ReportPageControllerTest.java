@@ -93,7 +93,8 @@ class ReportPageControllerTest {
                 .andExpect(content().string(containsString("Monthly Occupancy Report")))
                 .andExpect(content().string(containsString("Room-night occupancy and hotel utilization for a selected month.")))
                 .andExpect(content().string(not(containsString("Coming soon"))))
-                .andExpect(content().string(containsString("<title>Reports | Hotel Management</title>")));
+                // Task33 Batch 1A renamed the brand to Sunset House (see common.app.name).
+                .andExpect(content().string(containsString("<title>Reports | Sunset House</title>")));
     }
 
     /** Confirms the Vietnamese rendering, including the sidebar entry. */

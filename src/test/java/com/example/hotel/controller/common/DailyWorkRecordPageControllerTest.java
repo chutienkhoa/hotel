@@ -261,6 +261,23 @@ class DailyWorkRecordPageControllerTest {
         verify(staffService, org.mockito.Mockito.never()).findById(any());
     }
 
+    /**
+     * Confirms the Task33 navigation fix: an attendance-only user (no MANAGE_STAFF) sees no "Staff"
+     * sidebar link, since /staff itself requires MANAGE_STAFF and would 403 — the previous
+     * {@code canManageStaff or canManageAttendance} condition could show a link that led to that 403.
+     * Batch 1B gives Work Records its own sidebar item (final nav contract, spec sec. 7.1c), gated only
+     * by MANAGE_ATTENDANCE, so this user now sees that replacement link instead of "Staff".
+     */
+    @Test
+    void shouldHideStaffSidebarLinkForAttendanceOnlyUser() throws Exception {
+        when(dailyWorkRecordService.loadLines(any())).thenReturn(List.of());
+
+        mockMvc.perform(get("/staff/daily-work-record").with(user("admin").authorities(manageAttendanceAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("nav-staff"))))
+                .andExpect(content().string(containsString("nav-work-records")));
+    }
+
     /** Confirms the By Staff screen is reachable with MANAGE_ATTENDANCE, showing By Date/By Staff tabs. */
     @Test
     void shouldAccessByStaffScreenWithManageAttendance() throws Exception {

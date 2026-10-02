@@ -1,0 +1,316 @@
+/* Task33 Batch 1A — Design System + Global App Shell Foundation.
+
+   New, additive component styles only: the header's mobile nav toggle and account dropdown. Loaded
+   after static/css/common/layout.css (see templates/layout/base.html) and reuses its tokens
+   (--color-*, --space-*, --radius-*, --shadow-dropdown, --z-overlay/--z-dropdown) rather than
+   introducing a parallel set, per the specification's "no new color/typography/spacing/component
+   system when an approved one already exists" rule (docs/specs/Task33_UI_UX_Specification.md §6.3).
+
+   Batch 1A's scope was limited to what it actually shipped: toasts, a generic business/system error
+   dialog, and loading/submit-guard styles were deferred to Batch 1B, added below. Standardized tabs,
+   buttons, forms, badges, cards, and tables remain Batch 1C work. */
+
+/* ---------------------------------------------------------------------------------------------------
+   Header: left cluster (mobile nav toggle + brand)
+   --------------------------------------------------------------------------------------------------- */
+
+.site-header-start {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The V1 desktop/tablet sidebar is persistent and not collapsible (specification §7.1), so the toggle
+   only needs to exist below the 48rem breakpoint. Its `display: none` base and the <=48rem
+   `display: inline-flex` override both live together in layout.css (next to .sidebar-backdrop's own
+   base-hide rule) -- not here -- because this file loads after layout.css: an unconditional `display`
+   declared in this file would win the cascade over layout.css's media-query override at every viewport,
+   permanently hiding the toggle even on mobile. (This is exactly the bug that shipped originally: a
+   `display: none` was declared here, unconditionally, defeating the mobile override.) */
+.header-nav-toggle {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  cursor: pointer;
+  flex: none;
+  height: var(--control-height);
+  justify-content: center;
+  padding: 0;
+  width: var(--control-height);
+}
+
+.header-nav-toggle:hover,
+.header-nav-toggle:focus-visible {
+  background: rgb(255 255 255 / 10%);
+}
+
+.header-nav-toggle-icon-close {
+  display: none;
+}
+
+.header-nav-toggle[aria-expanded="true"] .header-nav-toggle-icon-open {
+  display: none;
+}
+
+.header-nav-toggle[aria-expanded="true"] .header-nav-toggle-icon-close {
+  display: block;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   Header: account area (moved out of the sidebar footer, see templates/layout/header.html)
+   --------------------------------------------------------------------------------------------------- */
+
+.header-account {
+  flex: none;
+  position: relative;
+}
+
+.header-account-trigger {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: var(--space-1) var(--space-2);
+}
+
+.header-account-trigger:hover,
+.header-account-trigger:focus-visible {
+  background: rgb(255 255 255 / 10%);
+}
+
+.header-account-initial {
+  align-items: center;
+  background: var(--color-primary);
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  height: 1.75rem;
+  justify-content: center;
+  width: 1.75rem;
+}
+
+.header-account-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-account-chevron {
+  color: #9fb3c8;
+  flex: none;
+  transition: transform 0.15s ease-in-out;
+}
+
+.header-account-trigger[aria-expanded="true"] .header-account-chevron {
+  transform: rotate(180deg);
+}
+
+/* Visibility is driven by the `hidden` attribute (static/js/common/header-account.js toggles it), not
+   display, so the dropdown degrades to "always hidden" if JavaScript fails to load rather than ever
+   being stuck open. */
+.header-account-menu {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  margin-top: var(--space-2);
+  min-width: 12rem;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: var(--z-dropdown);
+}
+
+.header-account-menu-section {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-3);
+}
+
+.header-account-menu-section .language-switch {
+  color: var(--color-text);
+}
+
+.header-account-logout {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-weight: 600;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  text-align: left;
+  width: 100%;
+}
+
+.header-account-logout-icon {
+  align-items: center;
+  display: flex;
+  flex: none;
+  justify-content: center;
+}
+
+.header-account-logout:hover,
+.header-account-logout:focus-visible {
+  background: var(--color-surface-muted);
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   Mobile sidebar drawer backdrop (opened/closed state lives on .sidebar/.sidebar-backdrop in
+   layout.css's <=48rem media query; this file only needs the always-hidden default, defined there so
+   it sits next to the rule that un-hides it).
+   --------------------------------------------------------------------------------------------------- */
+
+/* ---------------------------------------------------------------------------------------------------
+   Task33 Batch 1B: global success/warning toast (layout/toast.html, static/js/common/toast.js)
+   --------------------------------------------------------------------------------------------------- */
+
+.toast-region {
+  bottom: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 24rem;
+  position: fixed;
+  right: var(--space-5);
+  z-index: var(--z-toast);
+}
+.toast {
+  align-items: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.toast--success {
+  border-color: #a6e9bf;
+}
+.toast--success .toast-icon {
+  color: var(--color-success);
+}
+.toast--warning {
+  border-color: #f5cc72;
+}
+.toast--warning .toast-icon {
+  color: var(--color-warning);
+}
+.toast-icon {
+  flex: none;
+  padding-top: 0.125rem;
+}
+.toast-message {
+  color: var(--color-text);
+  flex: 1;
+  font-size: 0.875rem;
+  margin: 0;
+}
+.toast-close {
+  background: transparent;
+  border: 0;
+  color: var(--color-muted);
+  cursor: pointer;
+  flex: none;
+  padding: var(--space-1);
+}
+.toast-close:hover,
+.toast-close:focus-visible {
+  color: var(--color-text);
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   Task33 Batch 1B: shared business/system error dialog (layout/feedback-dialog.html,
+   static/js/common/feedback-dialog.js). Reuses the native <dialog> reset from .confirmation-dialog
+   rather than inventing a second one.
+   --------------------------------------------------------------------------------------------------- */
+
+.feedback-dialog {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1.5rem 3rem rgb(16 42 67 / 24%);
+  color: var(--color-text);
+  max-width: min(28rem, calc(100% - 2 * var(--space-4)));
+  padding: 0;
+  width: 100%;
+}
+.feedback-dialog::backdrop {
+  background: rgb(11 32 53 / 52%);
+}
+.feedback-dialog__content {
+  padding: var(--space-5);
+  text-align: center;
+}
+.feedback-dialog__icon {
+  color: var(--color-danger);
+  display: inline-flex;
+  margin-bottom: var(--space-3);
+}
+.feedback-dialog__content h2 {
+  margin-bottom: var(--space-2);
+}
+.feedback-dialog__content p {
+  color: var(--color-muted);
+  margin-bottom: var(--space-5);
+}
+.feedback-dialog__actions {
+  display: flex;
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   Task33 Batch 1B: opt-in duplicate-submit guard (static/js/common/submit-guard.js). Reuses the
+   existing .button:disabled treatment (layout.css); only the busy indicator is new.
+   --------------------------------------------------------------------------------------------------- */
+
+.button[aria-busy="true"] {
+  cursor: wait;
+}
+
+/* ---------------------------------------------------------------------------------------------------
+   Task33 Batch 1B: 403/404/500 error pages (templates/error/*.html)
+   --------------------------------------------------------------------------------------------------- */
+
+.error-page {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: var(--space-8) auto;
+  max-width: 28rem;
+  text-align: center;
+}
+.error-page-icon {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border-radius: 50%;
+  color: var(--color-muted);
+  display: flex;
+  height: 3.5rem;
+  justify-content: center;
+  width: 3.5rem;
+}
+.error-page p {
+  color: var(--color-muted);
+  margin: 0;
+}

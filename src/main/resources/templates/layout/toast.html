@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Task33 Batch 1B: global success/warning toast (spec sec. 10 "Global feedback contract"). Reuses the
+     existing successMessage/warningMessage flash attributes already set by the page's own controller; a
+     page opts in by including this fragment, with no controller change required. Success auto-dismisses;
+     a warning never does (important warnings must stay visible), per the approved contract. Announced
+     through aria-live so it reaches screen readers without stealing focus. -->
+<div aria-live="polite" class="toast-region" id="toast-region" role="status" th:fragment="toast">
+    <div class="toast toast--success" data-toast data-toast-auto-dismiss="6000" th:if="${successMessage}">
+        <span aria-hidden="true" class="toast-icon"><svg th:replace="~{layout/icons :: checkCircle}"></svg></span>
+        <p class="toast-message" th:text="${successMessage}">Action completed successfully.</p>
+        <button class="toast-close" data-toast-close th:aria-label="#{common.action.close}" type="button">
+            <svg th:replace="~{layout/icons :: close}"></svg>
+        </button>
+    </div>
+    <div class="toast toast--warning" data-toast th:if="${warningMessage}">
+        <span aria-hidden="true" class="toast-icon"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></span>
+        <p class="toast-message" th:text="${warningMessage}">Warning.</p>
+        <button class="toast-close" data-toast-close th:aria-label="#{common.action.close}" type="button">
+            <svg th:replace="~{layout/icons :: close}"></svg>
+        </button>
+    </div>
+</div>
+</body>
+</html>

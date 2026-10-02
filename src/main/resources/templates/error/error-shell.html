@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Task33 Batch 1B: shared chrome for templates/error/403.html, 404.html, and 500.html (spec sec. 12
+     "Error pages"). Rendered through Spring Boot's default /error dispatch (DefaultErrorViewResolver +
+     Tomcat's auto-registered error pages), so no controller or security code is needed here -- adding
+     these templates is enough for them to render instead of the Whitelabel Error Page.
+     Deliberately never reads the error dispatch's message/trace model attributes (suppressed by default
+     server.error.include-* settings, but not relied on regardless): each caller supplies its own fixed,
+     safe copy, so no stack trace, SQL, exception class name, or path ever reaches this page. -->
+<div class="app-shell page-error" th:fragment="shell(icon, title, message)">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content">
+        <div class="error-page">
+            <span aria-hidden="true" class="error-page-icon"><svg th:replace="~{layout/icons :: ${icon}}"></svg></span>
+            <h1 th:text="${title}">Something went wrong</h1>
+            <p th:text="${message}">Please try again.</p>
+            <a class="button button-primary" th:href="@{/reservations}" th:text="#{error.action.home}">Go to Reservations</a>
+        </div>
+    </main>
+</div>
+</body>
+</html>

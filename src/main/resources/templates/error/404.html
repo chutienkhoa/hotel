@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{error.404.title})}"></head>
+<body>
+<div th:replace="~{error/error-shell :: shell('search', #{error.404.title}, #{error.404.message})}"></div>
+</body>
+</html>

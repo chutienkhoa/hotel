@@ -1,12 +1,15 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
-<nav aria-label="Main navigation" class="sidebar" th:aria-label="#{navigation.main.label}" th:fragment="sidebar">
+<!-- A th:block fragment yields two sibling root elements (the nav and its mobile backdrop) in place of
+     the single <aside> host tag every page uses, so every one of the ~54 pages that already include
+     this fragment gets the backdrop for free, with no per-template edit. -->
+<th:block th:fragment="sidebar">
+<nav aria-label="Main navigation" class="sidebar" id="sidebar-nav" th:aria-label="#{navigation.main.label}">
     <a class="sidebar-brand" th:href="@{/reservations}">
         <span class="sidebar-brand-icon"><svg th:replace="~{layout/icons :: building}"></svg></span>
         <span class="sidebar-brand-text">
-            <span class="sidebar-brand-name" th:text="#{common.app.name}">Hotel Management</span>
-            <span class="sidebar-brand-tagline" th:text="#{common.app.tagline}">System</span>
+            <span class="sidebar-brand-name" th:text="#{common.app.name}">Sunset House</span>
         </span>
     </a>
 
@@ -15,17 +18,13 @@
         <span th:text="#{navigation.dashboard}">Dashboard</span>
     </a>
 
-    <a class="sidebar-nav-link nav-reports" th:href="@{/reports}" th:if="${canViewReport}">
-        <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
-        <span th:text="#{navigation.reports}">Reports</span>
-    </a>
-
     <div class="nav-section" th:if="${canCheckIn or canCheckOut or canViewBooking or canManageGuest}">
         <p class="nav-section-label" th:text="#{navigation.section.operations}">Operations</p>
         <a class="sidebar-nav-link nav-front-desk" th:href="@{/front-desk}" th:if="${canCheckIn or canCheckOut}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
             <span th:text="#{navigation.frontDesk}">Front Desk</span>
         </a>
+        <!-- Task33 Batch 1A: transitional only, kept until Batch 3 (Front Desk); not the final contract. -->
         <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
             <span th:text="#{navigation.checkIn}">Check-in</span>
@@ -44,35 +43,50 @@
         </a>
     </div>
 
+    <!-- Task33 Batch 1B: final nav contract (spec sec. 7.1a). Rooms is a group label only (no route of
+         its own); Room List is the existing /rooms destination, renamed from the former "Rooms" link. -->
     <div class="nav-section" th:if="${canManageRoom or canManageHousekeeping}">
         <p class="nav-section-label" th:text="#{navigation.section.hotel}">Hotel</p>
-        <a class="sidebar-nav-link nav-rooms" th:href="@{/rooms}" th:if="${canManageRoom}">
+        <p class="nav-group-label" th:text="#{navigation.rooms}">Rooms</p>
+        <a class="sidebar-nav-link sidebar-nav-link--nested nav-room-list" th:href="@{/rooms}" th:if="${canManageRoom}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: bed}"></svg></span>
-            <span th:text="#{navigation.rooms}">Rooms</span>
+            <span th:text="#{navigation.roomList}">Room List</span>
         </a>
-        <a class="sidebar-nav-link nav-housekeeping" th:href="@{/housekeeping}" th:if="${canManageHousekeeping}">
+        <a class="sidebar-nav-link sidebar-nav-link--nested nav-housekeeping" th:href="@{/housekeeping}" th:if="${canManageHousekeeping}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
             <span th:text="#{navigation.housekeeping}">Housekeeping</span>
         </a>
     </div>
 
-    <div class="nav-section" th:if="${canManageExpense or canManageAdditionalRevenue}">
+    <!-- Task33 Batch 1B: Reports moves under FINANCE as one entry (spec sec. 7.1b); its internal views
+         stay inside the Reports destination rather than becoming separate sidebar items. -->
+    <div class="nav-section" th:if="${canManageExpense or canManageAdditionalRevenue or canViewReport}">
         <p class="nav-section-label" th:text="#{navigation.section.finance}">Finance</p>
-        <a class="sidebar-nav-link nav-expenses" th:href="@{/expenses}" th:if="${canManageExpense}">
-            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: minusCircle}"></svg></span>
-            <span th:text="#{navigation.expenses}">Expenses</span>
-        </a>
         <a class="sidebar-nav-link nav-additional-revenues" th:href="@{/additional-revenues}" th:if="${canManageAdditionalRevenue}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: plusCircle}"></svg></span>
             <span th:text="#{navigation.additionalRevenue}">Additional Revenue</span>
         </a>
+        <a class="sidebar-nav-link nav-expenses" th:href="@{/expenses}" th:if="${canManageExpense}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: minusCircle}"></svg></span>
+            <span th:text="#{navigation.expenses}">Expenses</span>
+        </a>
+        <a class="sidebar-nav-link nav-reports" th:href="@{/reports}" th:if="${canViewReport}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
+            <span th:text="#{navigation.reports}">Reports</span>
+        </a>
     </div>
 
+    <!-- Task33 Batch 1B: Work Records added as its own ADMINISTRATION entry, gated only by the existing
+         attendance permission (spec sec. 7.1c) -- never combined with Staff's MANAGE_STAFF gate. -->
     <div class="nav-section" th:if="${canManageStaff or canManageAttendance or canManageUser}">
         <p class="nav-section-label" th:text="#{navigation.section.administration}">Administration</p>
-        <a class="sidebar-nav-link nav-staff" th:href="@{/staff}" th:if="${canManageStaff or canManageAttendance}">
+        <a class="sidebar-nav-link nav-staff" th:href="@{/staff}" th:if="${canManageStaff}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
             <span th:text="#{navigation.staff}">Staff</span>
+        </a>
+        <a class="sidebar-nav-link nav-work-records" th:href="@{/staff/daily-work-record}" th:if="${canManageAttendance}">
+            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
+            <span th:text="#{navigation.workRecords}">Work Records</span>
         </a>
         <a class="sidebar-nav-link nav-users" th:href="@{/users}" th:if="${canManageUser}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
@@ -84,17 +98,9 @@
         </a>
     </div>
 
-    <div class="sidebar-account" th:if="${currentUsername != null}">
-        <p class="sidebar-account-name" th:text="${currentUsername}">admin</p>
-        <nav th:replace="~{layout/language :: switcher}"></nav>
-        <form method="post" th:action="@{/logout}">
-            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-            <button class="sidebar-nav-link sidebar-logout" type="submit">
-                <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
-                <span th:text="#{navigation.logout}">Logout</span>
-            </button>
-        </form>
-    </div>
+    <!-- Task33 Batch 1A: the account area moved from here into the shared header; see header.html. -->
 </nav>
+<div aria-hidden="true" class="sidebar-backdrop" data-nav-backdrop id="sidebar-backdrop"></div>
+</th:block>
 </body>
 </html>

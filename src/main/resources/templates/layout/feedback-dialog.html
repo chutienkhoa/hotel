@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Task33 Batch 1B: shared business/system error dialog (spec sec. 10 "Global feedback contract").
+     Mirrors layout/confirmation.html's native <dialog> pattern for the same accessible focus/Escape
+     handling. Reads the existing errorMessage model attribute already set by controllers' caught
+     business ResponseStatusExceptions; a page opts in by including this fragment, with no controller
+     change required, and the current page/form state is naturally preserved because the controller
+     re-renders the same view rather than redirecting.
+     systemErrorMessage is the matching hook for a future recoverable in-page/AJAX system failure; no
+     controller sets it yet (every current catch block targets a specific business exception, never a
+     generic system failure), so that half of this component is infrastructure only until a later batch
+     has a real caller. Page-level/unrecoverable errors are instead handled by templates/error/*.html. -->
+<dialog aria-describedby="feedback-dialog-message" aria-labelledby="feedback-dialog-title"
+        class="feedback-dialog" id="feedback-dialog" th:fragment="feedbackDialog">
+    <div class="feedback-dialog__content">
+        <span aria-hidden="true" class="feedback-dialog__icon"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></span>
+        <h2 id="feedback-dialog-title"
+            th:text="${systemErrorMessage != null} ? #{common.error.system.title} : #{common.error.business.title}">
+            Unable to complete
+        </h2>
+        <p id="feedback-dialog-message" th:text="${systemErrorMessage} ?: ${errorMessage}"></p>
+        <div class="feedback-dialog__actions">
+            <button autofocus class="button button-primary" data-feedback-dialog-close th:text="#{common.action.close}" type="button">
+                Close
+            </button>
+        </div>
+    </div>
+</dialog>
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Task33 Batch 1C: breadcrumb foundation (spec sec. 10). Extends the existing .breadcrumb/-separator/
+     -current CSS (previously inline-only in customer/detail.html) into one reusable fragment, adding
+     aria-current="page" on the current item. parentHref/parentLabel describe one preceding level only
+     -- real breadcrumb usages in this app are two levels deep (list -> detail/form); do not stretch this
+     into a generic multi-level trail. customer/detail.html's existing inline breadcrumb is left as-is
+     (Guests is a protected module this batch); it can adopt this fragment when its own batch touches it. -->
+<nav aria-label="Breadcrumb" class="breadcrumb" th:fragment="trail(parentHref, parentLabel, currentLabel)">
+    <a th:href="${parentHref}" th:text="${parentLabel}">Parent</a>
+    <span aria-hidden="true" class="breadcrumb-separator">/</span>
+    <span aria-current="page" class="breadcrumb-current" th:text="${currentLabel}">Current</span>
+</nav>
+</body>
+</html>

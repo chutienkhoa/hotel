@@ -129,8 +129,8 @@ class ExpenseCategoryPageControllerTest {
 
         mockMvc.perform(get("/expense-categories").with(user("admin").authorities(manageExpense())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("ACTIVE")))
-                .andExpect(content().string(containsString("INACTIVE")))
+                .andExpect(content().string(containsString("Active")))
+                .andExpect(content().string(containsString("Inactive")))
                 .andExpect(content().string(containsString(">Deactivate</button>")))
                 .andExpect(content().string(containsString(">Reactivate</button>")));
     }
