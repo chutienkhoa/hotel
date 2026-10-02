@@ -1,5 +1,8 @@
 package com.example.hotel.service.booking;
 
+import com.example.hotel.common.SortWhitelist;
+import com.example.hotel.common.TableSorts;
+import com.example.hotel.dto.booking.request.FrontDeskSearchCriteria;
 import com.example.hotel.dto.booking.response.ArrivalIssueCode;
 import com.example.hotel.dto.booking.response.ArrivalIssueSeverity;
 import com.example.hotel.dto.booking.response.ArrivalReadiness;
@@ -32,10 +35,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +56,36 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class FrontDeskQueryService {
+
+    /** Page size used by every paged Front Desk view (Batch 3A), consistent with the other list screens. */
+    private static final int FRONT_DESK_PAGE_SIZE = 10;
+
+    /** Allow-listed in-memory comparators for the Arrivals sortable columns, keyed by {@link TableSorts#FRONT_DESK_ARRIVALS}. */
+    private static final Map<String, Comparator<FrontDeskArrivalRow>> ARRIVAL_SORTS = Map.of(
+            "reservationNumber", Comparator.comparing(FrontDeskArrivalRow::reservationNumber),
+            "guestName", Comparator.comparing(
+                            (FrontDeskArrivalRow row) -> row.guestName() == null ? "" : row.guestName(),
+                            String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(FrontDeskArrivalRow::reservationNumber),
+            "checkInDate", Comparator.comparing(FrontDeskArrivalRow::checkInDate)
+                    .thenComparing(FrontDeskArrivalRow::reservationNumber));
+
+    /**
+     * Allow-listed in-memory comparators for the Departures/In-house sortable columns, keyed by
+     * {@link TableSorts#FRONT_DESK_DEPARTURES} and {@link TableSorts#FRONT_DESK_IN_HOUSE}. Both views share this
+     * single map: each view's own whitelist already restricts which of these keys it accepts.
+     */
+    private static final Map<String, Comparator<FrontDeskStayRow>> STAY_SORTS = Map.of(
+            "reservationNumber", Comparator.comparing(FrontDeskStayRow::reservationNumber),
+            "guestName", Comparator.comparing(
+                            (FrontDeskStayRow row) -> row.guestName() == null ? "" : row.guestName(),
+                            String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(FrontDeskStayRow::reservationNumber),
+            "plannedCheckOutDate", Comparator.comparing(FrontDeskStayRow::plannedCheckOutDate)
+                    .thenComparing(FrontDeskStayRow::reservationNumber),
+            "room", Comparator.comparing(
+                            (FrontDeskStayRow row) -> row.rooms().isEmpty() ? "" : row.rooms().get(0).roomNumber())
+                    .thenComparing(FrontDeskStayRow::reservationNumber));
 
     private final ReservationRepository reservations;
     private final StayRepository stays;
@@ -132,6 +170,23 @@ public class FrontDeskQueryService {
     }
 
     /**
+     * Loads one page of Arrivals (Batch 3A read-model enhancement over {@link #arrivals()}). The business
+     * population is exactly {@link #arrivals()}'s: this narrows it with an optional search fragment (matched
+     * against Reservation number, Guest name/code, contact phone, OTA booking reference and Room number) and,
+     * when a whitelisted column is requested, re-orders it by that column instead of the default
+     * needs-attention/overdue-first ordering; otherwise the default ordering is kept exactly.
+     *
+     * @param criteria normalized optional search/sort state for this request
+     * @param page zero-based requested page number
+     * @return the matching page of arrival rows
+     */
+    @Transactional(readOnly = true)
+    public Page<FrontDeskArrivalRow> arrivals(FrontDeskSearchCriteria criteria, int page) {
+        List<FrontDeskArrivalRow> matching = filterArrivals(arrivals(), criteria.getSearch());
+        return paginate(sortArrivals(matching, criteria.getSort(), criteria.getDir()), page);
+    }
+
+    /**
      * Loads Departures: CHECKED_IN Stays (of CHECKED_IN Reservations) whose planned check-out date is on or before
      * the hotel date (four queries: stays with reservation and guest, open assignments, grouped charges, grouped PAID
      * payments). Ordered overdue first, then payment required, then ready; ties by check-out date then Reservation
@@ -153,6 +208,26 @@ public class FrontDeskQueryService {
     }
 
     /**
+     * Loads one page of Departures (Batch 3A read-model enhancement over {@link #departures(boolean)}). The
+     * business population is exactly {@link #departures(boolean)}'s: this narrows it with an optional search
+     * fragment (matched against Reservation number, Guest name/code and Room number) and, when a whitelisted
+     * column is requested, re-orders it by that column instead of the default overdue/payment-required-first
+     * ordering; otherwise the default ordering is kept exactly. Outstanding amount visibility is unaffected and
+     * still follows {@code includeAmounts} exactly as {@link #departures(boolean)} already does.
+     *
+     * @param includeAmounts whether the outstanding amount may be included (user holds MANAGE_PAYMENT)
+     * @param criteria normalized optional search/sort state for this request
+     * @param page zero-based requested page number
+     * @return the matching page of departure rows
+     */
+    @Transactional(readOnly = true)
+    public Page<FrontDeskStayRow> departures(boolean includeAmounts, FrontDeskSearchCriteria criteria, int page) {
+        List<FrontDeskStayRow> matching = filterStays(departures(includeAmounts), criteria.getSearch());
+        return paginate(
+                sortStays(matching, TableSorts.FRONT_DESK_DEPARTURES, criteria.getSort(), criteria.getDir()), page);
+    }
+
+    /**
      * Loads In-house: every CHECKED_IN Stay of a CHECKED_IN Reservation (two queries: stays with reservation and
      * guest, open assignments). Ordered by the first current room number then Reservation number. No money is read.
      *
@@ -167,6 +242,24 @@ public class FrontDeskQueryService {
                 .comparing((FrontDeskStayRow row) -> row.rooms().isEmpty() ? "" : row.rooms().get(0).roomNumber())
                 .thenComparing(FrontDeskStayRow::reservationNumber));
         return rows;
+    }
+
+    /**
+     * Loads one page of In-house (Batch 3A read-model enhancement over {@link #inHouse()}). The business
+     * population is exactly {@link #inHouse()}'s: this narrows it with an optional search fragment (matched
+     * against Reservation number, Guest name/code and Room number) and, when a whitelisted column is requested,
+     * re-orders it by that column instead of the default room-number ordering; otherwise the default ordering is
+     * kept exactly. No Charge/Payment query is added: {@link #inHouse()} still never reads money (§9.2.4).
+     *
+     * @param criteria normalized optional search/sort state for this request
+     * @param page zero-based requested page number
+     * @return the matching page of in-house rows
+     */
+    @Transactional(readOnly = true)
+    public Page<FrontDeskStayRow> inHouse(FrontDeskSearchCriteria criteria, int page) {
+        List<FrontDeskStayRow> matching = filterStays(inHouse(), criteria.getSearch());
+        return paginate(
+                sortStays(matching, TableSorts.FRONT_DESK_IN_HOUSE, criteria.getSort(), criteria.getDir()), page);
     }
 
     private List<FrontDeskStayRow> toStayRows(List<Stay> source, LocalDate today, boolean withBalance, boolean includeAmounts) {
@@ -267,5 +360,145 @@ public class FrontDeskQueryService {
     private String guestName(Guest guest) {
         String fullName = guestMapper.toLookupResponse(guest).fullName();
         return fullName == null || fullName.isBlank() ? null : fullName.trim();
+    }
+
+    /**
+     * Narrows an already-loaded, already business-scoped Arrivals list to the rows matching one search fragment.
+     * Matching reuses data every row already carries (no extra lookup): Reservation number, Guest name/code,
+     * contact phone, OTA booking reference, and every booked Room number.
+     *
+     * @param rows the full Arrivals result for the hotel date, unchanged
+     * @param search normalized optional search fragment, or {@code null} for no filtering
+     * @return the matching rows, in their original relative order
+     */
+    private List<FrontDeskArrivalRow> filterArrivals(List<FrontDeskArrivalRow> rows, String search) {
+        if (search == null) {
+            return rows;
+        }
+        String needle = search.toLowerCase(Locale.ROOT);
+        return rows.stream().filter(row -> matchesArrival(row, needle)).toList();
+    }
+
+    /**
+     * Tells whether one Arrivals row matches a lowercased search fragment.
+     *
+     * @param row candidate arrival row
+     * @param needle already-lowercased, non-blank search fragment
+     * @return {@code true} when any searchable field contains the fragment
+     */
+    private boolean matchesArrival(FrontDeskArrivalRow row, String needle) {
+        return containsIgnoreCase(row.reservationNumber(), needle)
+                || containsIgnoreCase(row.guestName(), needle)
+                || containsIgnoreCase(row.guestCode(), needle)
+                || containsIgnoreCase(row.contactPhone(), needle)
+                || containsIgnoreCase(row.otaBookingReference(), needle)
+                || row.rooms().stream().anyMatch(room -> containsIgnoreCase(room.roomNumber(), needle));
+    }
+
+    /**
+     * Re-orders a filtered Arrivals list by a whitelisted column when one is validly requested, otherwise leaves
+     * the default needs-attention/overdue-first ordering untouched.
+     *
+     * @param rows the filtered Arrivals rows, already in default order
+     * @param sort requested public sort key, validated against {@link TableSorts#FRONT_DESK_ARRIVALS}
+     * @param dir requested sort direction, validated against the same whitelist
+     * @return the rows in the requested order, or unchanged when no valid sort was requested
+     */
+    private List<FrontDeskArrivalRow> sortArrivals(List<FrontDeskArrivalRow> rows, String sort, String dir) {
+        String key = TableSorts.FRONT_DESK_ARRIVALS.key(sort, dir);
+        if (key == null) {
+            return rows;
+        }
+        Comparator<FrontDeskArrivalRow> comparator = ARRIVAL_SORTS.get(key);
+        boolean descending = "desc".equals(TableSorts.FRONT_DESK_ARRIVALS.activeDirection(sort, dir));
+        List<FrontDeskArrivalRow> sorted = new ArrayList<>(rows);
+        sorted.sort(descending ? comparator.reversed() : comparator);
+        return sorted;
+    }
+
+    /**
+     * Narrows an already-loaded, already business-scoped Departures/In-house list to the rows matching one search
+     * fragment. Matching reuses data every row already carries (no extra lookup): Reservation number, Guest
+     * name/code, and every current Room number.
+     *
+     * @param rows the full Departures or In-house result, unchanged
+     * @param search normalized optional search fragment, or {@code null} for no filtering
+     * @return the matching rows, in their original relative order
+     */
+    private List<FrontDeskStayRow> filterStays(List<FrontDeskStayRow> rows, String search) {
+        if (search == null) {
+            return rows;
+        }
+        String needle = search.toLowerCase(Locale.ROOT);
+        return rows.stream().filter(row -> matchesStay(row, needle)).toList();
+    }
+
+    /**
+     * Tells whether one Departures/In-house row matches a lowercased search fragment.
+     *
+     * @param row candidate stay row
+     * @param needle already-lowercased, non-blank search fragment
+     * @return {@code true} when any searchable field contains the fragment
+     */
+    private boolean matchesStay(FrontDeskStayRow row, String needle) {
+        return containsIgnoreCase(row.reservationNumber(), needle)
+                || containsIgnoreCase(row.guestName(), needle)
+                || containsIgnoreCase(row.guestCode(), needle)
+                || row.rooms().stream().anyMatch(room -> containsIgnoreCase(room.roomNumber(), needle));
+    }
+
+    /**
+     * Re-orders a filtered Departures/In-house list by a whitelisted column when one is validly requested,
+     * otherwise leaves its own default ordering (overdue/payment-required-first for Departures, room-number for
+     * In-house) untouched.
+     *
+     * @param rows the filtered rows, already in the view's default order
+     * @param whitelist the requesting view's own sort whitelist ({@link TableSorts#FRONT_DESK_DEPARTURES} or
+     *     {@link TableSorts#FRONT_DESK_IN_HOUSE})
+     * @param sort requested public sort key, validated against {@code whitelist}
+     * @param dir requested sort direction, validated against the same whitelist
+     * @return the rows in the requested order, or unchanged when no valid sort was requested
+     */
+    private List<FrontDeskStayRow> sortStays(
+            List<FrontDeskStayRow> rows, SortWhitelist whitelist, String sort, String dir) {
+        String key = whitelist.key(sort, dir);
+        if (key == null) {
+            return rows;
+        }
+        Comparator<FrontDeskStayRow> comparator = STAY_SORTS.get(key);
+        boolean descending = "desc".equals(whitelist.activeDirection(sort, dir));
+        List<FrontDeskStayRow> sorted = new ArrayList<>(rows);
+        sorted.sort(descending ? comparator.reversed() : comparator);
+        return sorted;
+    }
+
+    /**
+     * Tells whether a value contains a search fragment, case-insensitively.
+     *
+     * @param value field value, possibly {@code null}
+     * @param needle already-lowercased, non-blank search fragment
+     * @return {@code true} when {@code value} is present and contains the fragment
+     */
+    private static boolean containsIgnoreCase(String value, String needle) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(needle);
+    }
+
+    /**
+     * Slices an already filtered and sorted in-memory list into one {@link Page}, the same shape the other list
+     * screens already return from a database query, so the shared {@code PaginationSupport}/{@code layout/table}
+     * presentation mechanics apply unchanged.
+     *
+     * @param rows the full filtered and sorted result for the requested view
+     * @param page zero-based requested page number; a negative value is treated as {@code 0}
+     * @param <T> the row type
+     * @return the requested page, empty when {@code page} is beyond the last page
+     */
+    private <T> Page<T> paginate(List<T> rows, int page) {
+        int pageNumber = Math.max(page, 0);
+        Pageable pageable = PageRequest.of(pageNumber, FRONT_DESK_PAGE_SIZE);
+        int total = rows.size();
+        int start = Math.min(pageNumber * FRONT_DESK_PAGE_SIZE, total);
+        int end = Math.min(start + FRONT_DESK_PAGE_SIZE, total);
+        return new PageImpl<>(rows.subList(start, end), pageable, total);
     }
 }

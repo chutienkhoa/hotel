@@ -50,5 +50,39 @@ public final class TableSorts {
             Sort.by(Sort.Order.desc("revenueDate"), Sort.Order.desc("id")),
             List.of(Sort.Order.desc("revenueDate"), Sort.Order.desc("id")));
 
+    /**
+     * Front Desk Arrivals (Batch 3A). Front Desk sorts its already-loaded read model in memory, not
+     * through a database {@code Sort}, so only {@link SortWhitelist#key(String, String)} and
+     * {@link SortWhitelist#activeDirection(String, String)} are used; the {@code defaultSort}/
+     * tie-breaker fields below are unused placeholders kept only so this whitelist has the same
+     * shape as every other screen's.
+     */
+    public static final SortWhitelist FRONT_DESK_ARRIVALS = new SortWhitelist(
+            Map.of(
+                    "reservationNumber", "reservationNumber",
+                    "guestName", "guestName",
+                    "checkInDate", "checkInDate"),
+            Sort.by(Sort.Order.asc("checkInDate"), Sort.Order.asc("reservationNumber")),
+            List.of(Sort.Order.asc("reservationNumber")));
+
+    /** Front Desk Departures (Batch 3A). See {@link #FRONT_DESK_ARRIVALS} for how this is used. */
+    public static final SortWhitelist FRONT_DESK_DEPARTURES = new SortWhitelist(
+            Map.of(
+                    "reservationNumber", "reservationNumber",
+                    "guestName", "guestName",
+                    "plannedCheckOutDate", "plannedCheckOutDate"),
+            Sort.by(Sort.Order.asc("plannedCheckOutDate"), Sort.Order.asc("reservationNumber")),
+            List.of(Sort.Order.asc("reservationNumber")));
+
+    /** Front Desk In-house (Batch 3A). See {@link #FRONT_DESK_ARRIVALS} for how this is used. */
+    public static final SortWhitelist FRONT_DESK_IN_HOUSE = new SortWhitelist(
+            Map.of(
+                    "reservationNumber", "reservationNumber",
+                    "guestName", "guestName",
+                    "room", "room",
+                    "plannedCheckOutDate", "plannedCheckOutDate"),
+            Sort.by(Sort.Order.asc("room"), Sort.Order.asc("reservationNumber")),
+            List.of(Sort.Order.asc("reservationNumber")));
+
     private TableSorts() {}
 }

@@ -419,6 +419,49 @@ Flow:
 - On success: reservation/stay becomes `CHECKED_OUT`; the current occupied room becomes `DIRTY`; show success feedback; return to Departures or the approved completion view.
 - A future reservation for that room does not block checkout and does not prevent the room from becoming `DIRTY`.
 - Do not add Room Condition, checkout staff, extra checklist, or any new checkout capability in Task 33.
+- **Checkout Complete** (the "approved completion view" above) is a presentation/success state only, not a new domain state; the underlying lifecycle remains Reservation `CHECKED_OUT` / Stay `CHECKED_OUT` as already set by `ReservationService.checkOut`. It may link to Reservation Detail, Front Desk, or the next Departures row, consistent with the approved `checkout-complete-final.png` evidence.
+- **Evidence override**: neither Checkout Review nor Checkout Complete renders a generic "Edit Guest" action or any other control without a backing route; every visible action must map to an existing route (Open Folio, Record Payment, Confirm Checkout, navigation), per §5 principle 7 and §12.
+
+#### 9.2.3 Front Desk table UX and read-model enhancements (Batch 3A)
+
+Arrivals, In-house, and Departures currently have no pagination, column-header sorting, or search/filter parameters in the backend read model (`FrontDeskQueryService`/`FrontDeskPageController`) at all. Task 33 approves bounded, read-model-only enhancements to add them, without changing what each view means:
+
+- Pagination, sortable column headers, and practical search/filter are approved additions, implemented as read-model query parameters analogous to the pattern already used by Reservation List/Guest List/Check-in search.
+- Filtering only narrows the already-valid, date/state-scoped result set each view already defines (technical-spec-v1 §65) — it must never bypass hotel-date scoping, change which Reservations/Stays qualify for a view, or alter existing ordering rules (needs-attention/overdue-first for Arrivals and Departures, room-number order for In-house) beyond an explicitly approved sortable column.
+- Approved layout: the pagination control sits above the table, aligned upper-right; sortable columns use clickable column headers; each row exposes exactly one primary Action button (Check-in/Review, Checkout, or the equivalent); critical row content (Guest Name, Room(s), Reservation #) stays single-line where practical; on narrow screens, prefer horizontal scrolling over wrapping that would truncate or stack critical content destructively.
+- This is new backend read-model work (new query parameters/filters), not a new business domain; it does not change the Arrivals/In-house/Departures business definitions in technical-spec-v1 §65.
+
+#### 9.2.4 Front Desk financial display — In-house and Departures are not symmetric
+
+- **In-house never shows a Balance/Outstanding column.** `FrontDeskQueryService.inHouse()` does not compute or read Charge/Payment totals for In-house rows at all — it has no `includeAmounts` parameter and calls `toStayRows` with `withBalance = false`. Adding an In-house Balance column would require new financial querying added solely to reproduce a mockup, which is out of scope; do not add it.
+- **Departures may legitimately show an outstanding amount.** `FrontDeskQueryService.departures(includeAmounts)` already computes Outstanding for readiness purposes and exposes it only to a viewer who holds `PERM_MANAGE_PAYMENT`, exactly as the Dashboard's Today's Departures block already does (§9.1.6, §9.1.9); a viewer with only `PERM_CHECK_OUT` sees the Ready-for-Checkout/Payment-Required label without the amount. This is existing, already-approved behavior, not new scope, and it does not extend to In-house.
+- Financial information otherwise stays contextual through Reservation Detail/Folio, consistent with §9.1.14 and §9.6.
+
+#### 9.2.5 Walk-in and OTA Booking Not Entered — Guest creation orchestration (Batch 3B)
+
+Both the Walk-in and OTA Booking Not Entered flows (§9.2.1a) require selecting a Guest. There is no separate aggregate "Guest + Passport + Reservation" creation request, and none is approved — Walk-in/OTA Guest selection and creation reuse the existing, already-built operational Guest creation capability (`GuestPageController`), not a new cross-domain transaction:
+
+- The wizard offers **Existing Guest** (search/select an existing `guestId`, reusing the existing eligible-guest lookup) or **New Guest**.
+- **New Guest** navigates to the existing Guest creation form (`GET /guests/new?returnTo=...`), which already accepts `returnTo` restricted to `/reservations/new`, `/check-in/walk-in`, and `/check-in/ota-entry`, and already sets a `createdGuestId` flash attribute and redirects back to the `returnTo` target on success (`GuestPageController.create`).
+- **Remaining implementation work, scoped to Batch 3B**: `CheckInPageController`'s Walk-in (`GET /check-in/walk-in`) and OTA Booking Not Entered (`GET /check-in/ota-entry`) handlers do not currently read the `createdGuestId` flash attribute back. Batch 3B must consume it, pre-select the newly created Guest in the wizard's Guest field, and preserve the rest of the in-progress wizard state across the round trip (folded in with the existing §9.3.3a Walk-in Back/state-loss fix). This is UI/controller wiring on top of an already-built capability, not a new backend aggregate or a new write path.
+- **No cross-domain transaction**: Guest creation and Reservation/Stay creation remain two separate, already-existing operations performed in sequence (create the Guest, then continue Walk-in/OTA using the resulting `guestId`); Task 33 does not introduce a single transaction spanning Guest + Passport + Reservation.
+- **Passport stays a Guest-management boundary** (§9.4.2): an operational user (holding only `CHECK_IN`/`MANAGE_BOOKING`, not `MANAGE_GUEST`) may create the Guest record itself through this flow, but the passport-upload control on that form is hidden for them and any submitted passport file is dropped server-side (`GuestPageController.create`); passport upload/replace/delete remain `MANAGE_GUEST`-only. Do not broaden this boundary to make the wizard's passport step more convenient.
+- **No structured passport/ID fields anywhere.** Passport remains an image document only. Do not add a Passport Number, ID Number, OCR, or any other structured passport metadata field to the Walk-in/OTA wizard, the Guest creation form, or Check-in Review, even if a mockup/evidence image (`walk-in-reservation-final.png`, `ota-booking-not-entered-final.png`) shows one.
+- **Reservation Summary evidence note**: the `reservation-summary-final.png` evidence corresponds to the existing read-only Review step already described for Walk-in (`check-in/walk-in-review`) and for OTA Booking Not Entered/Existing Reservation (Check-in Review, §9.2.6) — it is not a separate, additional screen beyond those approved Review steps.
+
+#### 9.2.6 Check-in Review — approved controls (evidence override)
+
+Check-in Review (§9.2.1) shows only the approved read-only guest/reservation/room/payment context and the approved actions already backed by a real route. The following controls, even where shown in the `check-in-review-final.png` evidence image or an older mockup, are not supported and must not be implemented as written there:
+
+- **No generic "Edit Guest" action** without a backing route. Guest profile editing remains the existing `MANAGE_GUEST`-only Guest Edit flow (§9.4.1), reached from Guest Detail, not from Check-in Review.
+- **No direct "Upload Passport" action** without a backing route from Check-in Review. Passport upload/replace/delete remain the existing `MANAGE_GUEST`-only Documents flow (§9.4.2) on Guest Detail; Check-in Review may link to secure View Passport (read-only) but does not add its own upload control.
+- **No generic "Change Room" action.** Before check-in, the only backed room-reassignment capability is the existing per-blocker **Reassign Room** action, surfaced next to the specific room that is actually blocking Arrival Readiness (not as a standalone, always-available button), restricted to the real eligibility rules already enforced server-side for pre-check-in room reassignment. "Room Change" as a named operation applies only after check-in, to a `CHECKED_IN` Stay (§9.5), and is a different capability from this pre-check-in Reassign Room.
+
+#### 9.2.7 Front Desk / Check-in implementation boundary (Batch 3)
+
+Batch 3 MAY add: Front Desk read-model pagination/search/sort (§9.2.3); UI/controller wiring for `createdGuestId` return/pre-selection and wizard state preservation (§9.2.5, §9.3.3a); the redesigned Thymeleaf UI, responsive behavior, and accessibility for Front Desk/Check-in/Checkout screens; permission-aware action rendering consistent with existing permissions.
+
+Batch 3 MUST NOT add: schema fields added only for mockup cosmetics (for example `Room.floor`-based filtering, a stored ETA, or a stored Balance snapshot); partial refunds or any `refundAmount` field; a financial adjustment/`ADJUSTMENT` Charge model; editable financial records (Edit Charge/Edit Payment); manually created `ROOM` Charges; a Passport Number/OCR/structured-ID field; a new `Room.floor` filtering model; a cross-domain Guest+Reservation aggregate transaction; or any other V2/deferred functionality listed in §13.
 
 ### 9.3 Reservations
 
@@ -483,11 +526,11 @@ This contract applies to Create Reservation and every other multi-step wizard:
 
 #### 9.3.3a Known deferred issue — Walk-in Review → Back
 
-Confirmed current issue: in the Walk-in flow, using `Back` from the Review step currently loses previously entered wizard state, which does not yet meet the contract in §9.3.3. This reconciliation records the gap but does not fix it here. It is assigned to Batch 3 (Front Desk, §14), where the Walk-in flow's final implementation must follow the §9.3.3 state-preservation contract in full: `Back`/`Next` preserve entered state, validation failure preserves entered state, and business/system errors preserve entered state. `Cancel` still explicitly discards only after confirmation. As with the rest of §9.3.3, V1 does not require state recovery across a browser refresh, a closed tab, or reopening the URL.
+Confirmed current issue: in the Walk-in flow, using `Back` from the Review step currently loses previously entered wizard state, which does not yet meet the contract in §9.3.3. This reconciliation records the gap but does not fix it here. It is assigned to Batch 3B (Front Desk, §14), where the Walk-in flow's final implementation must follow the §9.3.3 state-preservation contract in full: `Back`/`Next` preserve entered state, validation failure preserves entered state, and business/system errors preserve entered state. `Cancel` still explicitly discards only after confirmation. Batch 3B also covers the related New-Guest round trip: returning from Guest creation must preserve the rest of the wizard's entered state and auto-select the newly created Guest via `createdGuestId` (§9.2.5), not only the `Back`-button case. As with the rest of §9.3.3, V1 does not require state recovery across a browser refresh, a closed tab, or reopening the URL.
 
 #### 9.3.4 Reservation Detail and action matrix — GAP-02 closed
 
-Use one consistent detail layout with state-aware actions and tabs for overview, stay/rooms, guests, financial/folio, and activity/history as approved by the mockups.
+Use one consistent detail layout with state-aware actions and tabs for overview, stay/rooms, guests, financial/folio, notes, and activity/history as approved by the mockups.
 
 | Reservation state | Available actions |
 | --- | --- |
@@ -508,6 +551,21 @@ Rules:
 - Destructive actions use confirmation dialogs.
 - No-show appears only when the existing date/business condition is met.
 - Correct OTA Reference appears only for non-`DIRECT` reservations.
+
+#### 9.3.4a Reservation Notes (evidence override)
+
+`Reservation.notes` is a single mutable free-text field (existing backend field, edited through the existing dedicated `GET/POST /reservations/{id}/notes` controlled operation) — it is not a comment thread, not a set of multiple timestamped entries, and not a staff-messaging feature. Reservation Detail's Notes tab/section shows the current value of this one field and, when the Reservation is `DRAFT`, `CONFIRMED`, or `CHECKED_IN` and the user holds the existing notes-edit permission, an Edit action that replaces the whole field value in one controlled update. It is read-only once the Reservation is `CHECKED_OUT`, `CANCELLED`, or `NO_SHOW`, consistent with the rest of this matrix.
+
+**Evidence override**: where a mockup/evidence image shows Notes as a multi-entry thread, a list of separately timestamped notes, or an "add note" affordance that appends rather than replaces, that illustration is incorrect — this section's single-field, replace-in-place behavior is authoritative. The separate Activity/History tab (audit timeline) remains the correct place for a chronological record of actions; it is not merged with Notes.
+
+#### 9.3.4b Stay Extension (evidence override)
+
+`Extend Stay` (`CHECKED_IN` only, see the action matrix above) changes only the Stay's planned check-out date. The approved form accepts the new check-out date (and the currently-displayed check-out date, used only for stale-request detection) and nothing else.
+
+- **Evidence override**: a mockup/evidence image (`extend-stay-final.png`) that shows an editable Room Type or Rate Type dropdown on the Extend Stay form is incorrect and must not be implemented. V1 Stay Extension has no room or rate selection control.
+- Pricing for the extended nights is always based on the existing/original `ReservationRoom` nightly-rate lineage already attached to the room(s) currently assigned to the Stay; Stay Extension never accepts a different rate or room type from the user and never invents a new price.
+- Changing to a different physical room during an active Stay is Room Change (§9.5), a separate operation; Stay Extension does not combine with or substitute for it.
+- The Review/confirmation step (`extend-stay-review-charges-final.png`) may display Original Booking Total, Extension Amount, and Current Accommodation Total (all derived, read-only) consistent with the approved evidence, but these remain presentation of backend-calculated values, not editable inputs.
 
 ### 9.4 Guests
 
@@ -555,9 +613,10 @@ Room Change rules preserved by the UI:
 - The new room cannot be the current room.
 - The new room must be usable and available for the remaining stay; availability is revalidated under lock at confirmation.
 - Multiple sequential changes and returning to a previously used room are allowed when currently valid.
-- History is immutable.
-- In V1, the old room becomes `AVAILABLE`; the newly vacated room becomes `DIRTY` at checkout.
+- History is immutable (`StayRoomAssignment` is append-only except for closing the open interval).
+- **Room Change state transition (corrected)**: on successful confirmation, the old (current) room transitions `OCCUPIED` → `DIRTY` immediately, in the same transaction as the change — it does not become `AVAILABLE`, and the `DIRTY` transition is not deferred to checkout. The new room transitions `AVAILABLE` → `OCCUPIED`. The vacated room then follows the existing Housekeeping lifecycle (`DIRTY` → `CLEANING` → `AVAILABLE`, §7.1a) before it is check-in-ready again. **Evidence override**: an earlier version of this document, and the `change-room-final.png` evidence image/flow description, stated or implied that the old room becomes `AVAILABLE` directly or that the `DIRTY` transition happens at checkout; both are incorrect. This corrected rule is authoritative, not that earlier text or the evidence image — `RoomChangeService.changeRoom` (via `Room.releaseForRoomChange()`) already implements it correctly today; only this document's wording was wrong.
 - Room change does not automatically change reservation pricing unless an existing approved rule/action explicitly does so.
+- **Not supported in V1 (evidence override)**: a mockup/evidence image may show a "High floor preferred" toggle, a floor filter, or a capacity filter on the replacement-room candidate list. None of these exist in the backend candidate-room query (`RoomChangeService.candidateRooms`) and none is approved for V1; do not implement them. `Room.floor` is not exposed as a filter and no new `Room.floor`-based filtering capability is approved. `RoomType.capacity` is existing backend data and may be shown as a read-only display value on a candidate room row where useful, but it is not an eligibility filter — eligibility/availability stays fully backend-rule-determined (`RoomChangeService.candidateRooms`/`changeRoom`), unaffected by what is or is not displayed.
 
 ### 9.6 Finance
 
@@ -566,7 +625,9 @@ Room Change rules preserved by the UI:
 - Folio provides stay/reservation context, balance summary, Charges, Payments, Outstanding, and checkout readiness.
 - Financial amounts and mutation actions require the existing financial permissions.
 - Users with checkout-only access see checkout readiness but not protected financial detail.
-- `CHECKED_OUT` folio is read-only.
+- `CHECKED_OUT` folio is read-only (§9.6.2 restates this for the correction actions specifically). This is a usability mirror of the server-side `StayStatus.CHECKED_IN` gate already enforced in `ChargeService`/`PaymentService`, not a UI-invented authorization boundary — hiding a mutation control here never substitutes for that server-side check (§5, principle 4).
+- **Approved mutation actions only**: Add Charge (a supported non-`ROOM` Charge type — `BREAKFAST`, `EXTRA_BED`, `LAUNDRY`, `MINIBAR`, `SERVICE`, or `OTHER`), Void Charge (eligible manual non-`ROOM` Charge only, §9.6.2), Record Payment, Refund Payment (whole payment only, §9.6.2), and Void Payment (§9.6.2).
+- **Not supported in V1 — do not implement even where a mockup/evidence image shows it**: "Add Room Charge" (`ROOM` Charges are created only by the system, at check-in and by Stay Extension, never manually — `ChargeService.create` rejects a manual `ROOM` type outright), "Add Adjustment" (there is no `ADJUSTMENT` Charge type and none is approved), "Edit Charge" (a posted Charge is corrected only through Void, never edited in place), and "Edit Payment" (a posted Payment is corrected only through Void or Refund, never edited in place). Any `folio-charges-final.png`/`folio-payments-final.png`/`folio-overview-final.png` evidence control matching these names is superseded by this list.
 
 #### 9.6.2 Folio correction flow — GAP-03 closed
 
@@ -580,6 +641,7 @@ Payments tab:
 
 - `Refund Payment` shows Payment Amount as read-only and supports whole refund only.
 - Partial refund is not supported.
+- **Evidence override**: a mockup/evidence image showing an editable Refund Amount input is incorrect; `PaymentRefundRequest` has no amount field at all — Refund Payment is reason-only and always refunds the full Payment amount. Do not add an editable amount field to this flow.
 - Confirming the refund marks the payment `REFUNDED`.
 - `Void Payment` requires a reason and confirmation, then marks the payment `VOIDED`.
 
@@ -761,6 +823,20 @@ Task 33 is implemented in the following batches. Status reflects the current che
 | Final | UX / Permission / Responsive / Dead-link / E2E Audit | Not started |
 
 Batch 3 (Front Desk) is where the transitional Check-in/Check-out navigation rule (§9.2.1a) resolves: it must establish the approved `Check-in Guest` / `Checkout` entry points before the legacy `Check-in` / `Check-out` sidebar links are removed. Batch 3 is also where the known deferred issue in §9.3.3a (Walk-in Review → Back losing wizard state) is to be fixed. Batch 7 (Finance + Reports) is where the web Reports UI is redesigned per §7.1b/§9.7; PDF/Excel exports are unaffected.
+
+Batch 3 (Front Desk) is implemented in the following sequence of slices, per the implementation boundary in §9.2.7:
+
+| Slice | Scope |
+| --- | --- |
+| 3A | Front Desk query/read-model enhancements — pagination, sort, filter (§9.2.3) |
+| 3B | Check-in Guest + Walk-in/OTA orchestration + wizard state (§9.2.5, §9.3.3a) |
+| 3C | Check-in Review (§9.2.6) |
+| 3D | Reservation Detail / active Stay (§9.3.4, §9.3.4a) |
+| 3E | Room Change (§9.5) |
+| 3F | Stay Extension (§9.3.4b) |
+| 3G | Folio / Charges / Payments (§9.6) |
+| 3H | Checkout (§9.2.2) |
+| 3I | Front Desk integration / responsive / permissions / E2E audit |
 
 Implementation must remain pixel-close to the approved mockups. Do not redesign screens during coding.
 

@@ -23,75 +23,126 @@
                th:href="@{/front-desk(view='in-house')}" th:if="${canStays}" th:text="#{reservation.frontDesk.tab.inHouse}">In-house</a>
         </nav>
 
+        <section class="form-card" th:aria-label="#{reservation.frontDesk.search.label}">
+            <form method="get" th:action="@{/front-desk}">
+                <input type="hidden" name="view" th:value="${view}" />
+                <th:block th:replace="~{layout/table :: sortState}"></th:block>
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label for="frontDeskSearch" th:text="#{reservation.frontDesk.search.label}">Search</label>
+                        <input id="frontDeskSearch" name="search" type="search" th:value="${searchCriteria.search}"
+                               th:placeholder="${view == 'arrivals'} ? #{reservation.frontDesk.search.placeholder.arrivals} : #{reservation.frontDesk.search.placeholder.stay}" />
+                    </div>
+                </div>
+                <div class="action-row">
+                    <a class="button button-secondary" th:href="@{/front-desk(view=${view})}" th:text="#{common.action.clearFilters}">Clear filters</a>
+                    <button class="button button-primary" type="submit" th:text="#{common.action.search}">Search</button>
+                </div>
+            </form>
+        </section>
+
         <!-- ARRIVALS -->
         <th:block th:if="${view == 'arrivals'}">
-            <section class="card front-desk-group" id="arrivals-attention">
-                <h2 th:text="#{reservation.frontDesk.group.attention}">Needs Attention</h2>
-                <p class="empty-state" th:if="${#lists.isEmpty(attentionArrivals)}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
-                <th:block th:replace="~{front-desk/fragments :: arrivalTable(${attentionArrivals})}"></th:block>
-            </section>
-            <section class="card front-desk-group" id="arrivals-ready">
-                <h2 th:text="#{reservation.frontDesk.group.ready}">Ready</h2>
-                <p class="empty-state" th:if="${#lists.isEmpty(readyArrivals)}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
-                <th:block th:replace="~{front-desk/fragments :: arrivalTable(${readyArrivals})}"></th:block>
-            </section>
+            <div class="results-toolbar">
+                <p><span th:replace="~{layout/table :: resultSummary(${arrivalsPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${arrivalsPage}, #{reservation.frontDesk.tab.arrivals}, 'pagination')}"></nav>
+            </div>
+
+            <p class="empty-state" th:if="${arrivalsPage.empty and searchCriteria.search == null}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
+            <div th:if="${arrivalsPage.empty and searchCriteria.search != null}">
+                <p class="empty-state" th:text="#{reservation.frontDesk.arrivals.noResults}">No arrivals match your search.</p>
+                <a class="button button-secondary" th:href="@{/front-desk(view='arrivals')}" th:text="#{common.action.clearFilters}">Clear filters</a>
+            </div>
+
+            <th:block th:unless="${arrivalsPage.empty}">
+                <section class="card front-desk-group" id="arrivals-attention">
+                    <h2 th:text="#{reservation.frontDesk.group.attention}">Needs Attention</h2>
+                    <th:block th:replace="~{front-desk/fragments :: arrivalTable(${attentionArrivals})}"></th:block>
+                </section>
+                <section class="card front-desk-group" id="arrivals-ready">
+                    <h2 th:text="#{reservation.frontDesk.group.ready}">Ready</h2>
+                    <th:block th:replace="~{front-desk/fragments :: arrivalTable(${readyArrivals})}"></th:block>
+                </section>
+            </th:block>
         </th:block>
 
         <!-- DEPARTURES -->
         <th:block th:if="${view == 'departures'}">
-            <section class="card front-desk-group" id="departures-attention">
-                <h2 th:text="#{reservation.frontDesk.group.attention}">Needs Attention</h2>
-                <p class="empty-state" th:if="${#lists.isEmpty(attentionDepartures)}" th:text="#{reservation.frontDesk.departures.empty}">No departures.</p>
-                <th:block th:replace="~{front-desk/fragments :: departureTable(${attentionDepartures})}"></th:block>
-            </section>
-            <section class="card front-desk-group" id="departures-ready">
-                <h2 th:text="#{reservation.frontDesk.group.ready}">Ready</h2>
-                <p class="empty-state" th:if="${#lists.isEmpty(readyDepartures)}" th:text="#{reservation.frontDesk.departures.empty}">No departures.</p>
-                <th:block th:replace="~{front-desk/fragments :: departureTable(${readyDepartures})}"></th:block>
-            </section>
+            <div class="results-toolbar">
+                <p><span th:replace="~{layout/table :: resultSummary(${departuresPage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${departuresPage}, #{reservation.frontDesk.tab.departures}, 'pagination')}"></nav>
+            </div>
+
+            <p class="empty-state" th:if="${departuresPage.empty and searchCriteria.search == null}" th:text="#{reservation.frontDesk.departures.empty}">No departures.</p>
+            <div th:if="${departuresPage.empty and searchCriteria.search != null}">
+                <p class="empty-state" th:text="#{reservation.frontDesk.departures.noResults}">No departures match your search.</p>
+                <a class="button button-secondary" th:href="@{/front-desk(view='departures')}" th:text="#{common.action.clearFilters}">Clear filters</a>
+            </div>
+
+            <th:block th:unless="${departuresPage.empty}">
+                <section class="card front-desk-group" id="departures-attention">
+                    <h2 th:text="#{reservation.frontDesk.group.attention}">Needs Attention</h2>
+                    <th:block th:replace="~{front-desk/fragments :: departureTable(${attentionDepartures})}"></th:block>
+                </section>
+                <section class="card front-desk-group" id="departures-ready">
+                    <h2 th:text="#{reservation.frontDesk.group.ready}">Ready</h2>
+                    <th:block th:replace="~{front-desk/fragments :: departureTable(${readyDepartures})}"></th:block>
+                </section>
+            </th:block>
         </th:block>
 
         <!-- IN-HOUSE -->
-        <section class="card front-desk-group" id="in-house" th:if="${view == 'in-house'}">
-            <h2 th:text="#{reservation.frontDesk.tab.inHouse}">In-house</h2>
-            <p class="empty-state" th:if="${#lists.isEmpty(inHouseRows)}" th:text="#{reservation.frontDesk.inHouse.empty}">No in-house guests.</p>
-            <div class="table-wrap" th:unless="${#lists.isEmpty(inHouseRows)}">
-                <table>
-                    <thead>
-                    <tr>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.checkedIn}">Checked in</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.plannedDeparture}">Planned Departure</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr th:each="row : ${inHouseRows}">
-                        <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
-                        <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
-                        <td th:text="${row.reservationNumber}">R-1</td>
-                        <td><span th:replace="~{layout/datetime :: dateTime(${row.actualCheckInAt})}">—</span></td>
-                        <td><th:block th:replace="~{front-desk/fragments :: plannedDeparture(${row})}"></th:block></td>
-                        <td>
-                            <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
-                               th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
-                            <a class="button button-secondary" th:href="@{/reservations/{id}/folio(id=${row.reservationId})}"
-                               th:if="${canManagePayment}" th:text="#{reservation.frontDesk.action.folio}">Folio</a>
-                            <a class="button button-secondary" th:href="@{/check-out/{id}(id=${row.reservationId})}"
-                               th:if="${canCheckOut}" th:text="#{reservation.frontDesk.action.checkoutReview}">Check-out review</a>
-                            <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
-                               th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
-                            <a class="button button-secondary" th:if="${canChangeRoom}" th:each="room : ${row.rooms}"
-                               th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${row.reservationId},roomId=${room.roomId})}"
-                               th:text="#{reservation.frontDesk.action.changeRoom(${room.roomNumber})}">Change Room</a>
-                        </td>
-                    </tr>
-                    </tbody>
-                </table>
+        <th:block th:if="${view == 'in-house'}">
+            <div class="results-toolbar">
+                <p><span th:replace="~{layout/table :: resultSummary(${inHousePage})}">Showing 1&#8211;10 of 0</span></p>
+                <nav th:replace="~{layout/table :: pagination(${inHousePage}, #{reservation.frontDesk.tab.inHouse}, 'pagination')}"></nav>
             </div>
-        </section>
+
+            <p class="empty-state" th:if="${inHousePage.empty and searchCriteria.search == null}" th:text="#{reservation.frontDesk.inHouse.empty}">No in-house guests.</p>
+            <div th:if="${inHousePage.empty and searchCriteria.search != null}">
+                <p class="empty-state" th:text="#{reservation.frontDesk.inHouse.noResults}">No in-house guests match your search.</p>
+                <a class="button button-secondary" th:href="@{/front-desk(view='in-house')}" th:text="#{common.action.clearFilters}">Clear filters</a>
+            </div>
+
+            <section class="card front-desk-group" id="in-house" th:unless="${inHousePage.empty}">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
+                            <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                            <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.checkedIn}">Checked in</th>
+                            <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.plannedDeparture}, 'plannedCheckOutDate')}"></th>
+                            <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="row : ${inHousePage.content}">
+                            <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+                            <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                            <td th:text="${row.reservationNumber}">R-1</td>
+                            <td><span th:replace="~{layout/datetime :: dateTime(${row.actualCheckInAt})}">—</span></td>
+                            <td><th:block th:replace="~{front-desk/fragments :: plannedDeparture(${row})}"></th:block></td>
+                            <td>
+                                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
+                                   th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
+                                <a class="button button-secondary" th:href="@{/reservations/{id}/folio(id=${row.reservationId})}"
+                                   th:if="${canManagePayment}" th:text="#{reservation.frontDesk.action.folio}">Folio</a>
+                                <a class="button button-secondary" th:href="@{/check-out/{id}(id=${row.reservationId})}"
+                                   th:if="${canCheckOut}" th:text="#{reservation.frontDesk.action.checkoutReview}">Check-out review</a>
+                                <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
+                                   th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
+                                <a class="button button-secondary" th:if="${canChangeRoom}" th:each="room : ${row.rooms}"
+                                   th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${row.reservationId},roomId=${room.roomId})}"
+                                   th:text="#{reservation.frontDesk.action.changeRoom(${room.roomNumber})}">Change Room</a>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </th:block>
     </main>
 </div>
 

@@ -27,11 +27,11 @@
         <table>
             <thead>
             <tr>
-                <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
+                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.arrival}">Arrival</th>
+                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.arrival}, 'checkInDate')}"></th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
             </tr>
@@ -82,9 +82,9 @@
             <thead>
             <tr>
                 <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.reservation}">Reservation</th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.plannedCheckout}">Planned Checkout</th>
+                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
+                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
                 <th scope="col" th:if="${canManagePayment}" th:text="#{reservation.frontDesk.column.balance}">Balance</th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>

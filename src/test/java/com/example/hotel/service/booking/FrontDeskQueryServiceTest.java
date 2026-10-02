@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.example.hotel.dto.booking.request.FrontDeskSearchCriteria;
 import com.example.hotel.dto.booking.response.ArrivalIssueCode;
 import com.example.hotel.dto.booking.response.ArrivalReadinessState;
 import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
@@ -46,6 +47,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** Verifies Front Desk grouping, ordering, derived attention, current-room semantics, money visibility and query use. */
@@ -301,7 +303,206 @@ class FrontDeskQueryServiceTest {
         assertEquals(Instant.parse("2026-09-20T07:35:00Z"), rows.get(0).actualCheckInAt());
     }
 
+    // ----------------------------------------------- Batch 3A: search, sort, pagination
+
+    /** Confirms the paged Arrivals method selects the exact same business population as the original with no search/sort. */
+    @Test
+    void shouldPreserveArrivalsSelectionWhenNoSearchOrSortRequested() {
+        Reservation ready = reservation("R-2", TODAY);
+        Reservation overdue = reservation("R-1", TODAY.minusDays(1));
+        line(ready, room("101", RoomStatus.AVAILABLE));
+        line(overdue, room("102", RoomStatus.AVAILABLE));
+
+        List<String> original = arrivals().stream().map(FrontDeskArrivalRow::reservationNumber).toList();
+        Page<FrontDeskArrivalRow> paged = arrivalsPaged(criteria(null, null, null), 0);
+
+        assertEquals(original, paged.getContent().stream().map(FrontDeskArrivalRow::reservationNumber).toList());
+    }
+
+    /** Confirms search matches Reservation number, Guest name, Guest code, contact phone, OTA reference and Room number. */
+    @Test
+    void shouldMatchArrivalsSearchAcrossEverySearchableField() {
+        Reservation byNumber = reservation("R-100", TODAY);
+        Reservation byRoom = reservation("R-200", TODAY);
+        line(byNumber, room("101", RoomStatus.AVAILABLE));
+        line(byRoom, room("999", RoomStatus.AVAILABLE));
+
+        assertEquals(List.of("R-100"), namesOf(arrivalsPaged(criteria("r-100", null, null), 0)));
+        assertEquals(List.of("R-200"), namesOf(arrivalsPaged(criteria("999", null, null), 0)));
+    }
+
+    /** Confirms a search fragment matching nothing returns an empty page, not an error and not the full list. */
+    @Test
+    void shouldReturnEmptyPageWhenArrivalsSearchMatchesNothing() {
+        Reservation reservation = reservation("R-1", TODAY);
+        line(reservation, room("101", RoomStatus.AVAILABLE));
+
+        Page<FrontDeskArrivalRow> page = arrivalsPaged(criteria("no-such-match", null, null), 0);
+
+        assertTrue(page.getContent().isEmpty());
+        assertEquals(0, page.getTotalElements());
+    }
+
+    /** Confirms an explicit whitelisted sort overrides the default needs-attention-first ordering. */
+    @Test
+    void shouldSortArrivalsByRequestedColumn() {
+        Reservation blocked = reservation("R-2", TODAY);
+        Reservation ready = reservation("R-1", TODAY);
+        line(blocked, room("101", RoomStatus.DIRTY));
+        line(ready, room("102", RoomStatus.AVAILABLE));
+
+        Page<FrontDeskArrivalRow> ascending = arrivalsPaged(criteria(null, "reservationNumber", "asc"), 0);
+        Page<FrontDeskArrivalRow> descending = arrivalsPaged(criteria(null, "reservationNumber", "desc"), 0);
+
+        assertEquals(List.of("R-1", "R-2"), namesOf(ascending));
+        assertEquals(List.of("R-2", "R-1"), namesOf(descending));
+    }
+
+    /** Confirms an unsupported/unknown sort key is rejected (never used for ordering) and falls back to the default. */
+    @Test
+    void shouldFallBackToDefaultOrderingForUnsupportedArrivalsSortKey() {
+        Reservation ready = reservation("R-2", TODAY);
+        Reservation overdue = reservation("R-1", TODAY.minusDays(1));
+        line(ready, room("101", RoomStatus.AVAILABLE));
+        line(overdue, room("102", RoomStatus.AVAILABLE));
+
+        Page<FrontDeskArrivalRow> page = arrivalsPaged(criteria(null, "guest.passwordHash", "asc"), 0);
+
+        assertEquals(List.of("R-1", "R-2"), namesOf(page));
+    }
+
+    /** Confirms pagination slices the filtered/sorted result and reports the correct total count. */
+    @Test
+    void shouldPaginateArrivals() {
+        for (int index = 0; index < 12; index++) {
+            Reservation reservation = reservation(String.format("R-%02d", index), TODAY);
+            line(reservation, room("1" + String.format("%02d", index), RoomStatus.AVAILABLE));
+        }
+
+        Page<FrontDeskArrivalRow> firstPage = arrivalsPaged(criteria(null, "reservationNumber", "asc"), 0);
+        Page<FrontDeskArrivalRow> secondPage = arrivalsPaged(criteria(null, "reservationNumber", "asc"), 1);
+
+        assertEquals(12, firstPage.getTotalElements());
+        assertEquals(10, firstPage.getContent().size());
+        assertEquals(2, secondPage.getContent().size());
+        assertEquals("R-00", firstPage.getContent().get(0).reservationNumber());
+        assertEquals("R-10", secondPage.getContent().get(0).reservationNumber());
+    }
+
+    /** Confirms a page number past the end returns an empty page while still reporting the true total. */
+    @Test
+    void shouldReturnEmptyContentForOutOfRangeArrivalsPage() {
+        Reservation reservation = reservation("R-1", TODAY);
+        line(reservation, room("101", RoomStatus.AVAILABLE));
+
+        Page<FrontDeskArrivalRow> page = arrivalsPaged(criteria(null, null, null), 5);
+
+        assertTrue(page.getContent().isEmpty());
+        assertEquals(1, page.getTotalElements());
+    }
+
+    /** Confirms Departures search matches Room number in addition to Reservation number and Guest identity. */
+    @Test
+    void shouldMatchDeparturesSearchByRoomNumber() {
+        stay("R-1", TODAY, "301");
+        stay("R-2", TODAY, "999");
+
+        Page<FrontDeskStayRow> page = departuresPaged(true, criteria("999", null, null), 0);
+
+        assertEquals(List.of("R-2"), page.getContent().stream().map(FrontDeskStayRow::reservationNumber).toList());
+    }
+
+    /**
+     * Confirms an explicit sort by planned checkout date (with its reservation-number tie-break) overrides the
+     * default overdue/payment-required-first ordering for Departures, using two same-day stays whose default rank
+     * order and alphabetical reservation-number order deliberately disagree.
+     */
+    @Test
+    void shouldSortDeparturesByPlannedCheckOutDate() {
+        Stay owing = stay("R-ZZZ-OWING", TODAY, "101");
+        Stay paid = stay("R-AAA-PAID", TODAY, "102");
+        pay(owing, "500000", "0");
+        pay(paid, "500000", "500000");
+
+        List<String> defaultOrder = departuresPaged(true, criteria(null, null, null), 0).getContent().stream()
+                .map(FrontDeskStayRow::reservationNumber).toList();
+        List<String> explicitOrder = departuresPaged(true, criteria(null, "plannedCheckOutDate", "asc"), 0).getContent()
+                .stream().map(FrontDeskStayRow::reservationNumber).toList();
+
+        assertEquals(List.of("R-ZZZ-OWING", "R-AAA-PAID"), defaultOrder);
+        assertEquals(List.of("R-AAA-PAID", "R-ZZZ-OWING"), explicitOrder);
+    }
+
+    /** Confirms Departures outstanding visibility through the paged method still follows includeAmounts exactly. */
+    @Test
+    void shouldHideDeparturesOutstandingThroughPagedMethodWhenNotAuthorized() {
+        Stay owing = stay("R-1", TODAY, "101");
+        pay(owing, "500000", "0");
+
+        FrontDeskStayRow hidden = departuresPaged(false, criteria(null, null, null), 0).getContent().get(0);
+        FrontDeskStayRow visible = departuresPaged(true, criteria(null, null, null), 0).getContent().get(0);
+
+        assertNull(hidden.outstanding());
+        assertEquals(0, new BigDecimal("500000").compareTo(visible.outstanding()));
+    }
+
+    /** Confirms the paged In-house method keeps the default room-number ordering when no sort is requested. */
+    @Test
+    void shouldPreserveInHouseRoomOrderingWhenNoSortRequested() {
+        stay("R-2", TODAY.plusDays(2), "202");
+        stay("R-1", TODAY, "101");
+
+        Page<FrontDeskStayRow> page = inHousePaged(criteria(null, null, null), 0);
+
+        assertEquals(List.of("R-1", "R-2"), page.getContent().stream().map(FrontDeskStayRow::reservationNumber).toList());
+    }
+
+    /** Confirms an explicit Room sort is accepted for In-house (its own additional whitelisted column). */
+    @Test
+    void shouldSortInHouseByRoomDescending() {
+        stay("R-1", TODAY, "101");
+        stay("R-2", TODAY, "202");
+
+        Page<FrontDeskStayRow> page = inHousePaged(criteria(null, "room", "desc"), 0);
+
+        assertEquals(List.of("R-2", "R-1"), page.getContent().stream().map(FrontDeskStayRow::reservationNumber).toList());
+    }
+
+    /** Confirms In-house never leaks a Balance/Outstanding amount through the paged method either. */
+    @Test
+    void shouldNeverExposeBalanceThroughPagedInHouseMethod() {
+        stay("R-1", TODAY, "101");
+
+        Page<FrontDeskStayRow> page = inHousePaged(criteria(null, null, null), 0);
+
+        assertNull(page.getContent().get(0).outstanding());
+        verifyNoInteractions(charges, payments);
+    }
+
+    /** Confirms In-house search matches Guest code in addition to Reservation number and Room number. */
+    @Test
+    void shouldMatchInHouseSearchByGuestCode() {
+        stay("R-1", TODAY, "101");
+        stay("R-2", TODAY, "202");
+
+        Page<FrontDeskStayRow> page = inHousePaged(criteria("G-R-2", null, null), 0);
+
+        assertEquals(List.of("R-2"), page.getContent().stream().map(FrontDeskStayRow::reservationNumber).toList());
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static List<String> namesOf(Page<FrontDeskArrivalRow> page) {
+        return page.getContent().stream().map(FrontDeskArrivalRow::reservationNumber).toList();
+    }
+
+    private static FrontDeskSearchCriteria criteria(String search, String sort, String dir) {
+        FrontDeskSearchCriteria criteria = new FrontDeskSearchCriteria();
+        criteria.setSearch(search);
+        criteria.setSort(sort);
+        criteria.setDir(dir);
+        return criteria;
+    }
 
     private List<FrontDeskArrivalRow> arrivals() {
         when(reservations.findByStatusAndCheckInOnOrBefore(ReservationStatus.CONFIRMED, TODAY)).thenReturn(pending);
@@ -311,9 +512,27 @@ class FrontDeskQueryServiceTest {
         return service.arrivals();
     }
 
+    private Page<FrontDeskArrivalRow> arrivalsPaged(FrontDeskSearchCriteria criteria, int page) {
+        when(reservations.findByStatusAndCheckInOnOrBefore(ReservationStatus.CONFIRMED, TODAY)).thenReturn(pending);
+        when(reservations.findBookedRoomsByReservationIdIn(any())).thenReturn(rows);
+        when(stays.findReservationIdsWithStay(any())).thenReturn(stayed);
+        stubGuest();
+        return service.arrivals(criteria, page);
+    }
+
     private List<FrontDeskStayRow> departures(boolean amounts) {
         stubGuest();
         return service.departures(amounts);
+    }
+
+    private Page<FrontDeskStayRow> departuresPaged(boolean amounts, FrontDeskSearchCriteria criteria, int page) {
+        stubGuest();
+        return service.departures(amounts, criteria, page);
+    }
+
+    private Page<FrontDeskStayRow> inHousePaged(FrontDeskSearchCriteria criteria, int page) {
+        stubGuest();
+        return service.inHouse(criteria, page);
     }
 
     private String guestName = "Nguyen Van An";
@@ -323,9 +542,14 @@ class FrontDeskQueryServiceTest {
     private final List<StayAmountRow> paidRows = new ArrayList<>();
 
     private void stubGuest() {
+        // Null-guarded: when a Batch 3A test calls more than one stubGuest()-backed helper in the same test
+        // (e.g. comparing the default and an explicit sort), Mockito's own when(...) re-registration invokes the
+        // mock once with a null argument to find the prior stub; without this guard that invocation itself NPEs.
         when(guestMapper.toLookupResponse(any())).thenAnswer(invocation -> {
             Guest guest = invocation.getArgument(0);
-            return new GuestLookupResponse(guest.getId(), guest.getGuestCode(), guestName, null, null, null);
+            return guest == null
+                    ? null
+                    : new GuestLookupResponse(guest.getId(), guest.getGuestCode(), guestName, null, null, null);
         });
         when(stays.findWithReservationAndGuestDueBy(StayStatus.CHECKED_IN, ReservationStatus.CHECKED_IN, TODAY))
                 .thenReturn(stayList.stream().filter(s -> !s.getReservation().getCheckOutDate().isAfter(TODAY)).toList());

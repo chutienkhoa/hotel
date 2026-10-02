@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.example.hotel.dto.booking.request.FrontDeskSearchCriteria;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
 import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
@@ -204,6 +205,37 @@ class FrontDeskReadModelIntegrationTest {
         FrontDeskStayRow row = frontDesk.inHouse().get(0);
 
         assertEquals(List.of("FD-NEW"), row.rooms().stream().map(room -> room.roomNumber()).toList());
+    }
+
+    /**
+     * Confirms the Batch 3A paged Arrivals method ({@link FrontDeskQueryService#arrivals(FrontDeskSearchCriteria, int)})
+     * selects exactly the same business population, in the same order, as the original {@link FrontDeskQueryService#arrivals()}
+     * against real PostgreSQL data, when no search/sort is requested.
+     */
+    @Test
+    void shouldPreserveArrivalsSelectionThroughThePagedMethod() {
+        add("R-TODAY", "CONFIRMED", today, today.plusDays(1), "FP-1");
+        add("R-OVERDUE", "CONFIRMED", today.minusDays(2), today.plusDays(1), "FP-2");
+
+        List<String> original = frontDesk.arrivals().stream().map(FrontDeskArrivalRow::reservationNumber).toList();
+        List<String> paged = frontDesk.arrivals(new FrontDeskSearchCriteria(), 0).getContent().stream()
+                .map(FrontDeskArrivalRow::reservationNumber).toList();
+
+        assertEquals(original, paged);
+    }
+
+    /** Confirms a search fragment only narrows Arrivals; it never surfaces a Reservation outside the existing business scope. */
+    @Test
+    void shouldNarrowArrivalsBySearchWithoutBroadeningSelection() {
+        add("R-ALPHA", "CONFIRMED", today, today.plusDays(1), "FQ-1");
+        add("R-BETA", "CONFIRMED", today, today.plusDays(1), "FQ-2");
+        FrontDeskSearchCriteria search = new FrontDeskSearchCriteria();
+        search.setSearch("ALPHA");
+
+        List<String> filtered = frontDesk.arrivals(search, 0).getContent().stream()
+                .map(FrontDeskArrivalRow::reservationNumber).toList();
+
+        assertEquals(List.of("R-ALPHA"), filtered);
     }
 
     private UUID add(String number, String status, LocalDate in, LocalDate out, String roomNumber) {
