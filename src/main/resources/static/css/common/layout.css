@@ -500,13 +500,16 @@ fieldset,
   color: var(--color-muted);
 }
 .dashboard-operational-grid {
-  align-items: start;
+  align-items: stretch;
   display: grid;
   gap: var(--space-4);
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .dashboard-operational-grid > * {
   min-width: 0;
+}
+.dashboard-operational-grid > .card {
+  height: 100%;
 }
 .room-status-layout {
   align-items: center;
