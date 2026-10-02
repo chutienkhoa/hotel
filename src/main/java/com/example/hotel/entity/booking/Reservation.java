@@ -647,6 +647,15 @@ public class Reservation extends AuditedEntity {
     }
 
     /**
+     * Returns the instant the reservation was made.
+     *
+     * @return the reservation's creation/booking instant
+     */
+    public Instant getReservedAt() {
+        return reservedAt;
+    }
+
+    /**
      * Trả về tổng số tiền đã tính từ các phòng.
      *
      * @return tổng số tiền reservation

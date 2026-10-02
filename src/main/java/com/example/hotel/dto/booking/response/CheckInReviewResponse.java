@@ -35,6 +35,21 @@ import java.util.UUID;
  * @param adultCount the number of adults (read-only information)
  * @param childCount the number of children (read-only information)
  * @param accompanyingGuests the Accompanying Guests (known profiles; read-only information, never a readiness input)
+ * @param reservedAt the instant the Reservation was made (Booking Date)
+ * @param guestDateOfBirth the associated Guest's date of birth, when available
+ * @param guestPhone the associated Guest's own phone number, when available
+ * @param guestEmail the associated Guest's own email address, when available
+ * @param effectiveBookingContactName the Booking Contact name, or the Primary Guest's name when no Booking
+ *     Contact snapshot is set
+ * @param effectiveBookingContactPhone the Booking Contact phone, or the Primary Guest's phone when no Booking
+ *     Contact snapshot is set
+ * @param effectiveBookingContactEmail the Booking Contact email, or the Primary Guest's email when no Booking
+ *     Contact snapshot is set
+ * @param bookingContactFromPrimaryGuest {@code true} when no Booking Contact snapshot is set and the three
+ *     effective fields above are the Primary Guest fallback, not the Reservation's own snapshot
+ * @param firstPassportDocumentId identifier of the Guest's oldest passport image, used to build the secure
+ *     View Passport link; {@code null} when no passport image exists
+ * @param arrivalOverdueDays whole days the planned check-in is in the past (0 unless {@code timing} is LATE)
  */
 public record CheckInReviewResponse(
         UUID reservationId,
@@ -59,5 +74,15 @@ public record CheckInReviewResponse(
         ArrivalReadiness readiness,
         int adultCount,
         int childCount,
-        List<AccompanyingGuestResponse> accompanyingGuests) {
+        List<AccompanyingGuestResponse> accompanyingGuests,
+        Instant reservedAt,
+        LocalDate guestDateOfBirth,
+        String guestPhone,
+        String guestEmail,
+        String effectiveBookingContactName,
+        String effectiveBookingContactPhone,
+        String effectiveBookingContactEmail,
+        boolean bookingContactFromPrimaryGuest,
+        UUID firstPassportDocumentId,
+        long arrivalOverdueDays) {
 }

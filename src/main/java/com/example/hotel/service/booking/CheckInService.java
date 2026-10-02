@@ -133,6 +133,9 @@ public class CheckInService {
         CheckInTiming timing = ArrivalReadinessRules.classify(today, reservation.getCheckInDate());
         Guest guest = reservation.getGuest();
         boolean passportAvailable = guestDocumentService.hasPassport(guest.getId());
+        List<GuestDocumentResponse> passports = guestDocumentService.findPassports(guest.getId());
+        UUID firstPassportDocumentId = passports.isEmpty() ? null : passports.get(0).id();
+        EffectiveBookingContact contact = EffectiveBookingContact.of(reservation);
         ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(
                 reservation.getStatus(),
                 reservation.getCheckInDate(),
@@ -166,7 +169,17 @@ public class CheckInService {
                 readiness,
                 reservation.getAdultCount(),
                 reservation.getChildCount(),
-                reservationQueryService.findAccompanyingGuests(reservation.getId()));
+                reservationQueryService.findAccompanyingGuests(reservation.getId()),
+                reservation.getReservedAt(),
+                guest.getDateOfBirth(),
+                guest.getPhone(),
+                guest.getEmail(),
+                contact.name(),
+                contact.phone(),
+                contact.email(),
+                contact.fromPrimaryGuest(),
+                firstPassportDocumentId,
+                timing == CheckInTiming.LATE ? ChronoUnit.DAYS.between(reservation.getCheckInDate(), today) : 0L);
     }
 
     /**
@@ -305,7 +318,9 @@ public class CheckInService {
                 reservationRoom.getCheckOutDate(),
                 reservationRoom.getNightlyRate(),
                 nights,
-                reservationRoom.getTotalAmount());
+                reservationRoom.getTotalAmount(),
+                room.getRoomType() == null ? null : room.getRoomType().getCapacity(),
+                room.getStatus().name());
     }
 
     /**
@@ -330,6 +345,8 @@ public class CheckInService {
                 checkOutDate,
                 roomRequest.nightlyRate(),
                 nights,
-                total);
+                total,
+                room.getRoomType() == null ? null : room.getRoomType().getCapacity(),
+                room.getStatus().name());
     }
 }

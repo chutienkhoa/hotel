@@ -291,7 +291,8 @@ class ReservationAccompanyingGuestsPageTest {
                 LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 17), LocalDate.of(2026, 9, 15),
                 Instant.parse("2026-09-15T10:00:00Z"), BookingSource.DIRECT, null, GUEST_ID, "Nguyen Van A", "GUEST-001",
                 "Vietnam", false, List.of(), BigDecimal.TEN, "VND",
-                new ArrivalReadiness(ArrivalReadinessState.READY, CheckInTiming.NORMAL, List.of()), 3, 1, companions);
+                new ArrivalReadiness(ArrivalReadinessState.READY, CheckInTiming.NORMAL, List.of()), 3, 1, companions,
+                Instant.parse("2026-08-25T10:00:00Z"), null, null, null, "Nguyen Van A", null, null, true, null, 0L);
     }
 
     private static RequestPostProcessor manager() {

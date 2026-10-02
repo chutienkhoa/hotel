@@ -138,7 +138,14 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("Ref: BK-12345")));
     }
 
-    /** Confirms the Guest tile shows only the Guest Code, linked, for a user authorized to manage guests. */
+    /**
+     * Confirms the Guest Information card shows the Guest's name/nationality (already present on the
+     * read model) and the Guest Code link opens Guest Detail for a user authorized to manage guests.
+     * Task 33 final layout (check-in-review-final.png) surfaces Guest name/nationality directly,
+     * consistent with Guest identity already being shown by full name elsewhere in Front Desk
+     * (front-desk/fragments.html); only the Guest Detail navigation link itself stays
+     * permission-gated, as it was before this redesign.
+     */
     @Test
     void shouldShowOnlyGuestCodeAsLinkWhenAuthorizedToManageGuests() throws Exception {
         when(checkInService.review(RESERVATION_ID)).thenReturn(reviewResponse(CheckInTiming.NORMAL, true, null));
@@ -149,13 +156,17 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("GUEST-001")))
                 .andExpect(content().string(containsString("class=\"reservation-info-value reservation-info-link\"")))
                 .andExpect(content().string(containsString("href=\"/guests/" + GUEST_ID + "\"")))
-                .andExpect(content().string(not(containsString("Nguyen Van A"))))
-                .andExpect(content().string(not(containsString("Vietnam"))))
-                .andExpect(content().string(not(containsString("No passport image on file."))))
+                .andExpect(content().string(containsString("Nguyen Van A")))
+                .andExpect(content().string(containsString("Vietnam")))
+                .andExpect(content().string(containsString("No passport image on file.")))
                 .andExpect(content().string(not(containsString("View Passport"))));
     }
 
-    /** Confirms the Guest tile shows the Guest Code as plain text, never a link, without PERM_MANAGE_GUEST. */
+    /**
+     * Confirms the Guest Code stays plain text (never a link) without PERM_MANAGE_GUEST, while the
+     * Guest Information card's name/nationality still render — those fields are not part of the
+     * Guest-management authorization boundary, only the Guest Detail navigation link is.
+     */
     @Test
     void shouldShowGuestCodeAsPlainTextWithoutManageGuestPermission() throws Exception {
         when(checkInService.review(RESERVATION_ID)).thenReturn(reviewResponse(CheckInTiming.NORMAL, true, null));
@@ -165,9 +176,37 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("GUEST-001")))
                 .andExpect(content().string(not(containsString("href=\"/guests/" + GUEST_ID + "\""))))
                 .andExpect(content().string(not(containsString("reservation-info-link"))))
-                .andExpect(content().string(not(containsString("Nguyen Van A"))))
-                .andExpect(content().string(not(containsString("Vietnam"))))
+                .andExpect(content().string(containsString("Nguyen Van A")))
+                .andExpect(content().string(containsString("Vietnam")))
+                .andExpect(content().string(containsString("No passport image on file.")));
+    }
+
+    /** Confirms View Passport renders, using the secure document route, only when a passport image exists. */
+    @Test
+    void shouldRenderViewPassportLinkOnlyWhenPassportAvailable() throws Exception {
+        UUID documentId = UUID.randomUUID();
+        when(checkInService.review(RESERVATION_ID)).thenReturn(
+                reviewResponseWithPassport(CheckInTiming.NORMAL, true, documentId));
+
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID).with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("View Passport")))
+                .andExpect(content().string(containsString(
+                        "href=\"/guests/" + GUEST_ID + "/documents/" + documentId + "/passport\"")))
                 .andExpect(content().string(not(containsString("No passport image on file."))));
+    }
+
+    /** Confirms no generic Edit Guest, Upload Passport, or generic Change Room control is ever rendered (spec 9.2.6). */
+    @Test
+    void shouldNotRenderUnsupportedGuestOrRoomControls() throws Exception {
+        when(checkInService.review(RESERVATION_ID)).thenReturn(reviewResponse(CheckInTiming.NORMAL, true, null));
+
+        mockMvc.perform(get("/check-in/reservations/{id}", RESERVATION_ID)
+                        .with(user("admin").authorities(checkInAndManageGuestAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("Edit Guest"))))
+                .andExpect(content().string(not(containsString("Upload Passport"))))
+                .andExpect(content().string(not(containsString(">Change Room<"))));
     }
 
     /** Confirms the Check-in confirm POST requires CSRF like every other mutating action. */
@@ -558,7 +597,32 @@ class CheckInPageControllerTest {
                         timing, List.of()),
                 1,
                 0,
-                List.of());
+                List.of(),
+                Instant.parse("2026-08-25T10:00:00Z"),
+                null,
+                null,
+                null,
+                "Nguyen Van A",
+                null,
+                null,
+                true,
+                null,
+                0L);
+    }
+
+    /** Builds a representative Check-in Review response with an available passport image. */
+    private CheckInReviewResponse reviewResponseWithPassport(CheckInTiming timing, boolean eligible, UUID documentId) {
+        CheckInReviewResponse base = reviewResponse(timing, eligible, null);
+        return new CheckInReviewResponse(
+                base.reservationId(), base.reservationNumber(), base.status(), base.eligibleForCheckIn(),
+                base.timing(), base.scheduledCheckInDate(), base.scheduledCheckOutDate(), base.currentHotelDate(),
+                base.actualCheckInPreview(), base.source(), base.otaBookingReference(), base.guestId(),
+                base.guestFullName(), base.guestCode(), base.guestNationality(), true, base.rooms(),
+                base.totalAmount(), base.currency(), base.readiness(), base.adultCount(), base.childCount(),
+                base.accompanyingGuests(), base.reservedAt(), base.guestDateOfBirth(), base.guestPhone(),
+                base.guestEmail(), base.effectiveBookingContactName(), base.effectiveBookingContactPhone(),
+                base.effectiveBookingContactEmail(), base.bookingContactFromPrimaryGuest(), documentId,
+                base.arrivalOverdueDays());
     }
 
     /** Builds the CHECK_IN authority. */

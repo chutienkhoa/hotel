@@ -13,6 +13,8 @@ import java.time.LocalDate;
  * @param nightlyRate the snapshot nightly rate
  * @param nights the number of booked nights for this room
  * @param totalAmount the snapshot room total
+ * @param roomTypeCapacity the assigned Room's RoomType adult capacity, or {@code null} when not configured
+ * @param roomStatus the Room's current live status (e.g. {@code AVAILABLE}, {@code DIRTY})
  */
 public record CheckInRoomLine(
         String roomNumber,
@@ -21,5 +23,7 @@ public record CheckInRoomLine(
         LocalDate checkOutDate,
         BigDecimal nightlyRate,
         long nights,
-        BigDecimal totalAmount) {
+        BigDecimal totalAmount,
+        Integer roomTypeCapacity,
+        String roomStatus) {
 }
