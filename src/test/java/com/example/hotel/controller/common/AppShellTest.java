@@ -253,13 +253,25 @@ class AppShellTest {
 
         mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"nav-group-label\"")))
+                .andExpect(content().string(not(containsString("class=\"nav-group-label\""))))
                 .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-rooms\""))))
                 .andExpect(content().string(containsString("nav-room-list")))
-                .andExpect(content().string(containsString("class=\"sidebar-nav-link sidebar-nav-link--nested nav-housekeeping\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-housekeeping\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-in\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-out\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-staff\"")));
+    }
+
+    /** Confirms the shared shell renders the desktop collapse control, its state script, and ROOMS as a section heading. */
+    @Test
+    void shouldRenderSidebarCollapseControlAndRoomsSection() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"sidebar-collapse-toggle\"")))
+                .andExpect(content().string(containsString("/js/common/sidebar-collapse.js")))
+                .andExpect(content().string(containsString("<p class=\"nav-section-label\">Rooms</p>")));
     }
 
     /** Creates the empty approved Dashboard shape used by MVC controller tests. */

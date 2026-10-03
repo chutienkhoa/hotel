@@ -75,6 +75,10 @@ class StayExtensionPageTest {
 
     /** A preview whose amounts follow the state: a valid date carries nights × rate, an unselected date carries none. */
     private StayExtensionPreviewResponse preview(State state, LocalDate requested, Folio folio) {
+        return preview(state, requested, folio, 0);
+    }
+
+    private StayExtensionPreviewResponse preview(State state, LocalDate requested, Folio folio, long overdueDays) {
         boolean valid = state == State.AVAILABLE || state == State.ROOM_CONFLICT;
         long nights = valid ? 2 : 0;
         BigDecimal amount = valid ? RATE.multiply(BigDecimal.valueOf(nights)) : null;
@@ -82,7 +86,7 @@ class StayExtensionPageTest {
                 CHECK_IN, CURRENT_OUT, LocalDate.of(2026, 9, 23), requested, state, 2, nights, 2 + nights,
                 List.of(new Room(ROOM_ID, "201", "Single", RATE, amount, state == State.ROOM_CONFLICT, false)),
                 amount, new BigDecimal("2000000"), new BigDecimal("2000000").add(amount == null ? BigDecimal.ZERO : amount),
-                folio, null, CURRENT_OUT.plusDays(62));
+                folio, null, CURRENT_OUT.plusDays(62), overdueDays);
     }
 
     private static Folio folio() {
@@ -105,6 +109,25 @@ class StayExtensionPageTest {
                 .andExpect(content().string(not(containsString("name=\"nightlyRate\""))))
                 .andExpect(content().string(not(containsString("name=\"rateType\""))))
                 .andExpect(content().string(not(containsString("outstanding balance"))));
+    }
+
+    /** Confirms the current stay's dates follow the PMS date convention and overdue shows on its own line, whatever date is proposed. */
+    @Test
+    void shouldShowDateConventionAndOverdueForTheCurrentStayOnly() throws Exception {
+        when(service.preview(eq(ID), eq(NEW_OUT), eq(false))).thenReturn(preview(State.AVAILABLE, NEW_OUT, null, 3));
+        mockMvc.perform(get("/reservations/{id}/stay-extension", ID).param("newCheckOutDate", "2026-09-24").with(manager()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("date-value--check-in")))
+                .andExpect(content().string(containsString("date-value--check-out")))
+                .andExpect(content().string(containsString("(3 days overdue)")));
+
+        when(service.preview(eq(ID), eq(null), eq(false))).thenReturn(preview(State.NOT_SELECTED, null, null, 1));
+        mockMvc.perform(get("/reservations/{id}/stay-extension", ID).with(manager()))
+                .andExpect(content().string(containsString("(1 day overdue)")));
+
+        when(service.preview(eq(ID), eq(null), eq(false))).thenReturn(preview(State.NOT_SELECTED, null, null, 0));
+        mockMvc.perform(get("/reservations/{id}/stay-extension", ID).with(manager()))
+                .andExpect(content().string(not(containsString("overdue)"))));
     }
 
     /** Confirms the Select screen exposes the live regions and the data the client needs for an immediate estimate. */

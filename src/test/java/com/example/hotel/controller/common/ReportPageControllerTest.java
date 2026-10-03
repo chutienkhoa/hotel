@@ -105,7 +105,7 @@ class ReportPageControllerTest {
                 .andExpect(content().string(containsString("Báo cáo tài chính tháng")))
                 .andExpect(content().string(containsString("Báo cáo công suất phòng tháng")))
                 .andExpect(content().string(not(containsString("Sắp có"))))
-                .andExpect(content().string(containsString("<span>Báo cáo</span>")))
+                .andExpect(content().string(containsString(">Báo cáo</span>")))
                 .andExpect(content().string(not(containsString("Coming soon"))));
     }
 

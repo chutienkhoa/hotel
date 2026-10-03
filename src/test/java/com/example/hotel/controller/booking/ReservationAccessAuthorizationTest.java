@@ -723,10 +723,11 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-users\"")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-roles\"")))
                 .andExpect(content().string(containsString(">Operations<")))
-                .andExpect(content().string(containsString(">Hotel<")))
+                .andExpect(content().string(containsString(">Rooms<")))
                 .andExpect(content().string(containsString(">Finance<")))
                 .andReturn().getResponse().getContentAsString();
 
+        assertEquals(false, body.contains(">Hotel<"));
         assertFakeNavigationAbsent(body);
     }
 

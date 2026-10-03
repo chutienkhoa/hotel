@@ -24,6 +24,7 @@ import java.util.UUID;
  * @param currency the Reservation currency code
  * @param currentRoomHasImage whether the current room has a primary image to show
  * @param roomChangeOpen whether the date window currently permits Room Change
+ * @param overdueDays calendar days the CHECKED_IN stay is past its planned check-out date (0 when not overdue)
  */
 public record RoomChangeFormResponse(
         UUID reservationId,
@@ -41,4 +42,5 @@ public record RoomChangeFormResponse(
         BigDecimal totalAmount,
         String currency,
         boolean currentRoomHasImage,
-        boolean roomChangeOpen) {}
+        boolean roomChangeOpen,
+        long overdueDays) {}

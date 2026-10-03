@@ -3,6 +3,7 @@ package com.example.hotel.dto.booking.response;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * The extension history and derived accommodation totals of one Reservation. The original booking total is
@@ -36,6 +37,20 @@ public record StayExtensionSummaryResponse(
      * @param nightlyRate rate snapshot
      * @param nights added nights
      * @param amount amount snapshot
+     * @param roomId identifier of the room occupied at the time of the extension, used to link to its Room Detail
      */
-    public record Line(String roomNumber, BigDecimal nightlyRate, long nights, BigDecimal amount) {}
+    public record Line(String roomNumber, BigDecimal nightlyRate, long nights, BigDecimal amount, UUID roomId) {
+
+        /**
+         * Creates an extension line without the room identifier, for existing fixtures that predate room links.
+         *
+         * @param roomNumber room actually occupied at the time of the extension
+         * @param nightlyRate rate snapshot
+         * @param nights added nights
+         * @param amount amount snapshot
+         */
+        public Line(String roomNumber, BigDecimal nightlyRate, long nights, BigDecimal amount) {
+            this(roomNumber, nightlyRate, nights, amount, null);
+        }
+    }
 }

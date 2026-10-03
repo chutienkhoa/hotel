@@ -78,11 +78,15 @@
                                 </div>
                                 <div>
                                     <dt th:text="#{reservation.stayExtension.field.checkIn}">Check-in Date</dt>
-                                    <dd><span th:replace="~{layout/datetime :: date(${preview.checkInDate})}">—</span></dd>
+                                    <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${preview.checkInDate})}">—</span></dd>
                                 </div>
                                 <div>
                                     <dt th:text="#{reservation.stayExtension.field.currentCheckOut}">Current Check-out</dt>
-                                    <dd id="stay-extension-current-checkout"><span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span></dd>
+                                    <dd class="date-value--check-out" id="stay-extension-current-checkout">
+                                        <span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span>
+                                        <span class="reservation-overdue reservation-overdue--below" th:if="${preview.overdueDays > 0}"
+                                              th:text="#{reservation.detail.overdue(${preview.overdueDays})}">(1 day overdue)</span>
+                                    </dd>
                                 </div>
                                 <div>
                                     <dt th:text="#{reservation.stayExtension.field.currentNights}">Current Nights</dt>

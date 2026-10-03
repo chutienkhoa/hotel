@@ -222,7 +222,8 @@ public class StayExtensionService {
                 accommodation.add(added),
                 folio,
                 firstUnavailable,
-                availabilityKnownUntil);
+                availabilityKnownUntil,
+                OverdueDeparture.overdueDays(previous, today));
     }
 
     /**
@@ -307,7 +308,8 @@ public class StayExtensionService {
                     line.getRoom().getRoomNumber(),
                     line.getNightlyRate(),
                     ChronoUnit.DAYS.between(line.getFromDate(), line.getToDate()),
-                    line.getAmount()));
+                    line.getAmount(),
+                    line.getRoom().getId()));
             extensionAmount = extensionAmount.add(line.getAmount());
         }
         if (last != null) {

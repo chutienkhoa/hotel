@@ -12,6 +12,9 @@
     <link rel="stylesheet" th:href="@{/css/vendor/flatpickr-4.6.13.min.css}" />
     <link rel="stylesheet" th:href="@{/css/common/layout.css}" />
     <link rel="stylesheet" th:href="@{/css/common/components.css}" />
+    <!-- Desktop sidebar collapse state: deliberately NOT deferred, so the remembered state is applied before the
+         first paint instead of flashing the expanded sidebar on every page load. -->
+    <script th:src="@{/js/common/sidebar-collapse.js}"></script>
     <!-- Optional domain stylesheet, set by a page with th:with="pageStylesheet=..." on its html element. -->
     <link rel="stylesheet" th:if="${pageStylesheet}" th:href="@{${pageStylesheet}}" />
     <script defer th:src="@{/js/common/i18n.js}"></script>

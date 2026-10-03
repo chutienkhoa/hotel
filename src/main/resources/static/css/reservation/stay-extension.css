@@ -421,9 +421,6 @@
 
 /* Select New Check-out Date: the calendar is a real flatpickr inline calendar bound to the date input. Without
    JavaScript the native date input and the noscript submit button remain. */
-.flatpickr-days {
-  margin-bottom: 0.35rem;
-}
 
 .stay-extension-date-form {
   margin: 0;

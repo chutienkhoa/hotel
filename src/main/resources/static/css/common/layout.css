@@ -18,6 +18,8 @@
   --color-warning-surface: #fef0c7;
   --color-info: #185fa5;
   --color-info-surface: #e5f0fb;
+  --color-date-check-in: #4a86c5;
+  --color-date-check-out: #cc5a52;
   --color-purple: #6b3fa0;
   --color-purple-surface: #f1e7fb;
   --shadow-card: 0 1px 2px rgb(16 42 67 / 6%);
@@ -164,15 +166,6 @@ p {
   margin: 0 var(--space-3) var(--space-1);
   text-transform: uppercase;
 }
-/* Task33 Batch 1B: a non-interactive group label nested one level inside a .nav-section (e.g. "Rooms"
-   grouping Room List/Housekeeping, spec sec. 7.1a). Visually lighter than .nav-section-label so the two
-   heading levels stay distinguishable. */
-.nav-group-label {
-  color: #7d93ab;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  margin: var(--space-1) var(--space-3) 0;
-}
 .sidebar-nav-link {
   align-items: center;
   background: transparent;
@@ -210,10 +203,6 @@ p {
 .sidebar-nav-link:hover .sidebar-nav-icon,
 .sidebar-nav-link:focus-visible .sidebar-nav-icon {
   color: #fff;
-}
-/* Task33 Batch 1B: Room List/Housekeeping are nested one level under the "Rooms" group label. */
-.sidebar-nav-link--nested {
-  padding-left: var(--space-5);
 }
 .app-shell.page-dashboard .nav-dashboard,
 .app-shell.page-reports .nav-reports,
@@ -1066,19 +1055,23 @@ tbody tr:last-child td {
 .status-badge--available,
 .status-badge--approved,
 .status-badge--recorded,
-.status-badge--current {
+.status-badge--current,
+.status-badge--active,
+.status-badge--paid {
   background: var(--color-success-surface);
   color: var(--color-success);
 }
 .status-badge--cancelled,
 .status-badge--out_of_order,
 .status-badge--rejected,
-.status-badge--voided {
+.status-badge--voided,
+.status-badge--failed {
   background: var(--color-danger-surface);
   color: var(--color-danger);
 }
 .status-badge--no_show,
-.status-badge--dirty {
+.status-badge--dirty,
+.status-badge--pending {
   background: var(--color-warning-surface);
   color: var(--color-warning);
 }
@@ -1091,7 +1084,8 @@ tbody tr:last-child td {
   color: #a04300;
 }
 .status-badge--checked_out,
-.status-badge--posted {
+.status-badge--posted,
+.status-badge--refunded {
   background: var(--color-surface);
   border-color: var(--color-border-strong);
   color: var(--color-muted);
@@ -1922,6 +1916,16 @@ legend {
 .reservation-secondary-grid--single {
   grid-template-columns: 1fr;
 }
+/* Clickable record identifiers (guest code, room number): standard blue link text, underlined on hover and focus.
+   Plain text rather than a button, so table rows and summary cards keep their height. */
+.record-link {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+.record-link:hover,
+.record-link:focus-visible {
+  text-decoration: underline;
+}
 .reservation-info-link {
   color: var(--color-primary);
   cursor: pointer;
@@ -2390,6 +2394,84 @@ span.flatpickr-weekday {
 .header-nav-toggle {
   display: none;
 }
+/* Desktop sidebar collapse (static/js/common/sidebar-collapse.js). The row and its button stay out of the
+   layout on the mobile drawer, which uses the header toggle instead; the rules that show them and narrow the
+   sidebar are scoped to above the 48rem breakpoint below. */
+.sidebar-collapse-row,
+.sidebar-collapse-toggle {
+  display: none;
+}
+@media not all and (max-width: 48rem) {
+  /* The row is taken out of the sidebar's flex column (position: absolute on the sticky .sidebar), so it reserves
+     no height or gap and never moves Dashboard or any menu item. It floats at the right edge, vertically centred. */
+  .sidebar-collapse-row {
+    display: flex;
+    position: absolute;
+    right: var(--space-1);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1;
+  }
+  .sidebar-collapse-toggle {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: #7f96ad;
+    cursor: pointer;
+    display: inline-flex;
+    justify-content: center;
+    padding: var(--space-1);
+  }
+  .sidebar-collapse-toggle svg {
+    height: 0.875rem;
+    width: 0.875rem;
+  }
+  .sidebar-collapse-toggle:hover,
+  .sidebar-collapse-toggle:focus-visible {
+    background: rgb(255 255 255 / 10%);
+    color: #fff;
+  }
+  .sidebar-collapse-icon {
+    display: inline-flex;
+  }
+  .sidebar-collapse-toggle[aria-expanded="true"] .sidebar-collapse-icon--expand,
+  .sidebar-collapse-toggle[aria-expanded="false"] .sidebar-collapse-icon--collapse {
+    display: none;
+  }
+  .app-shell {
+    transition: grid-template-columns 0.2s ease-in-out;
+  }
+  html.sidebar-collapsed .app-shell {
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+  }
+  /* Collapsed rail: headings take zero height, and group separation is the sidebar's own gap (12px) instead of the
+     expanded section spacing. Items inside a group keep the expanded .nav-section gap, so the rhythm matches. */
+  html.sidebar-collapsed .sidebar {
+    gap: var(--space-3);
+    padding: var(--space-5) var(--space-2);
+  }
+  html.sidebar-collapsed .nav-section-label {
+    display: none;
+  }
+  /* Labels stay in the DOM (visually hidden) so each link keeps its accessible name. */
+  html.sidebar-collapsed .sidebar-nav-label {
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    position: absolute;
+    width: 1px;
+  }
+  html.sidebar-collapsed .sidebar-nav-link {
+    justify-content: center;
+    padding: var(--space-2) 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell {
+    transition: none;
+  }
+}
 
 @media (max-width: 64rem) {
   .app-shell {
@@ -2601,4 +2683,31 @@ span.flatpickr-weekday {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* Reservation Detail date convention: check-in value light blue, check-out value (and any overdue text) light red. */
+.hub-summary-item .reservation-info-value.date-value--check-in,
+.hub-field dd.date-value--check-in,
+.stay-extension-facts dd.date-value--check-in,
+.folio-facts dd.date-value--check-in,
+.room-change-facts dd.date-value--check-in {
+  color: var(--color-date-check-in);
+}
+
+.hub-summary-item .reservation-info-value.date-value--check-out,
+.hub-field dd.date-value--check-out,
+.stay-extension-facts dd.date-value--check-out,
+.folio-facts dd.date-value--check-out,
+.room-change-facts dd.date-value--check-out {
+  color: var(--color-date-check-out);
+}
+
+/* Summary bar: the overdue text sits on its own compact line under the check-out date, slightly smaller. */
+.hub-summary-item .reservation-overdue--below,
+.stay-extension-facts .reservation-overdue--below,
+.folio-facts .reservation-overdue--below,
+.hub-field .reservation-overdue--below {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.2;
 }

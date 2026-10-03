@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<section aria-labelledby="folio-activity-heading" class="card folio-section" th:fragment="recentActivity">
+    <div class="card-header-row folio-section__head">
+        <h2 id="folio-activity-heading">
+            <svg th:replace="~{layout/icons :: clock}"></svg>
+            <span th:text="#{payment.folio.activity.title}">Recent Activity</span>
+        </h2>
+    </div>
+    <ul class="hub-timeline folio-activity" th:unless="${#lists.isEmpty(recentActivity)}">
+        <li class="hub-timeline-item" th:each="item, itemStat : ${recentActivity}">
+            <div class="hub-timeline-rail">
+                <span class="hub-timeline-dot" aria-hidden="true"></span>
+                <span class="hub-timeline-connector" aria-hidden="true" th:unless="${itemStat.last}"></span>
+            </div>
+            <div class="hub-timeline-content">
+                <p class="hub-timeline-label" th:text="${item.label}">Checked in</p>
+                <p class="hub-timeline-meta">
+                    <span th:replace="~{layout/datetime :: dateTime(${item.occurredAt})}">—</span>
+                    <span aria-hidden="true">·</span>
+                    <span th:text="#{payment.folio.activity.by(${item.actorDisplay})}">by admin</span>
+                </p>
+            </div>
+        </li>
+    </ul>
+    <div class="empty-state folio-empty" th:if="${#lists.isEmpty(recentActivity)}">
+        <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: inbox}"></svg></span>
+        <p class="empty-state-message" th:text="#{payment.folio.activity.empty}">No activity recorded yet.</p>
+    </div>
+</section>
+        <section aria-label="Folio balance summary" class="folio-kpis" th:fragment="summaryCards">
+            <div class="card folio-kpi folio-kpi--charges">
+                <p class="folio-kpi__label">
+                    <svg th:replace="~{layout/icons :: note}"></svg>
+                    <span th:text="#{payment.folio.kpi.activeCharges}">Active Charges</span>
+                </p>
+                <p class="folio-kpi__value">
+                    <span th:replace="~{layout/money :: amount(${balance.totalCharges}, ${reservation.currency})}">0 VND</span>
+                </p>
+            </div>
+            <div class="card folio-kpi folio-kpi--payments">
+                <p class="folio-kpi__label">
+                    <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                    <span th:text="#{payment.folio.kpi.appliedPayments}">Applied Payments</span>
+                </p>
+                <p class="folio-kpi__value">
+                    <span th:replace="~{layout/money :: amount(${balance.totalPaidPayments}, ${reservation.currency})}">0 VND</span>
+                </p>
+            </div>
+            <div class="card folio-kpi folio-kpi--outstanding"
+                 th:classappend="${outstandingSettled} ? 'folio-kpi--settled' : 'folio-kpi--due'">
+                <p class="folio-kpi__label">
+                    <svg th:replace="~{layout/icons :: coins}"></svg>
+                    <span th:text="#{payment.folio.kpi.outstanding}">Outstanding</span>
+                </p>
+                <p class="folio-kpi__value">
+                    <span th:replace="~{layout/money :: amount(${balance.outstanding}, ${reservation.currency})}">0 VND</span>
+                </p>
+            </div>
+            <div class="card folio-kpi folio-kpi--guests">
+                <p class="folio-kpi__label">
+                    <svg th:replace="~{layout/icons :: user}"></svg>
+                    <span th:text="#{payment.folio.kpi.guests}">Guests</span>
+                </p>
+                <dl class="folio-kpi__pairs">
+                    <div>
+                        <dt th:text="#{payment.folio.guest.code}">Guest Code</dt>
+                        <dd>
+                            <a class="record-link" th:if="${canManageGuest}"
+                               th:href="@{/guests/{id}(id=${reservation.guestId})}"
+                               th:text="${reservation.guestCode}">CUS-000123</a>
+                            <span th:unless="${canManageGuest}" th:text="${reservation.guestCode}">CUS-000123</span>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt th:text="#{payment.folio.guest.name}">Guest Name</dt>
+                        <dd class="folio-kpi__name"
+                            th:text="${guest != null and !#strings.isEmpty(guest.fullName) ? guest.fullName : '—'}"
+                            th:title="${guest != null ? guest.fullName : null}">Linh Do</dd>
+                    </div>
+                </dl>
+            </div>
+        </section>
+</body>
+</html>

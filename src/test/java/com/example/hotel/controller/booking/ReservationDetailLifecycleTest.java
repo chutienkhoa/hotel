@@ -23,8 +23,10 @@ import com.example.hotel.service.booking.StayRoomAssignmentQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -227,6 +229,24 @@ class ReservationDetailLifecycleTest {
                 .andExpect(content().string(not(containsString("No state-changing actions are available."))));
     }
 
+    /** Confirms a CHECKED_IN stay past its planned check-out shows the overdue warning while the status stays CHECKED_IN. */
+    @Test
+    void shouldShowOverdueDaysOnlyForCheckedInPastPlannedCheckOut() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("admin").authorities(allAuthorities())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("(3 days overdue)")))
+                .andExpect(content().string(containsString("date-value--check-out")))
+                .andExpect(content().string(containsString("date-value--check-in")));
+
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_OUT"));
+        when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(List.of());
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("admin").authorities(allAuthorities())))
+                .andExpect(content().string(not(containsString("overdue)"))));
+    }
+
     /** Confirms an eligible DRAFT exposes Confirm and the existing Cancel form (with its reason fields), but never No-show. */
     @Test
     void shouldOfferCancelForDraftWithManageBooking() throws Exception {
@@ -332,5 +352,16 @@ class ReservationDetailLifecycleTest {
     /** Enables method-security interception for this MVC authorization test slice. */
     @TestConfiguration
     @EnableMethodSecurity
-    static class MethodSecurityTestConfiguration {}
+    static class MethodSecurityTestConfiguration {
+
+        /**
+         * Supplies a fixed hotel Clock three days after the fixture's planned check-out (18 September 2026).
+         *
+         * @return fixed Clock on 21 September 2026 in the hotel timezone
+         */
+        @org.springframework.context.annotation.Bean
+        Clock clock() {
+            return Clock.fixed(Instant.parse("2026-09-21T05:00:00Z"), ZoneId.of("Asia/Ho_Chi_Minh"));
+        }
+    }
 }

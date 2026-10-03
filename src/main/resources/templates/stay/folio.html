@@ -1,355 +1,1022 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Stay Folio')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/stay/folio.css'">
+<head th:replace="~{layout/base :: head(#{payment.folio.title})}"></head>
 <body>
 <div class="app-shell page-reservations">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}">Back to reservation</a>
+    <main class="content folio">
+        <div class="folio-page">
+            <a class="back-link back-link--primary folio-back" th:href="@{/reservations/{id}(id=${reservation.id})}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{payment.folio.backToReservation(${reservation.reservationNumber})}">Back to Reservation</span>
+            </a>
 
-        <div class="page-header">
-            <div>
-                <h1>Stay Folio</h1>
-                <p th:text="${reservation.reservationNumber}">Reservation number</p>
-                <p>Folio Currency: <strong th:text="${reservation.currency}">VND</strong></p>
-            </div>
-            <div class="action-row">
-                <span class="status-badge"
-                      th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}"
-                      th:text="${reservation.status}">CHECKED_IN</span>
-            </div>
-        </div>
-
-        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
-        <p class="message message-warning" th:if="${not folioMutable}">
-            This Folio is closed and read-only.
-        </p>
-
-        <section aria-labelledby="folio-context-heading" class="card">
-            <h2 id="folio-context-heading">Reservation and Stay</h2>
-            <dl class="detail-grid">
-                <div>
-                    <dt>Guest</dt>
-                    <dd th:text="${reservation.guestCode}">Guest code</dd>
+            <div class="page-header folio-header">
+                <div class="folio-header__title">
+                    <h1>
+                        <span th:text="#{payment.folio.heading(${reservation.reservationNumber})}">Folio</span>
+                        <span class="status-badge folio-header__status"
+                              th:replace="~{layout/enum :: badge('reservationStatus', ${reservation.status}, 'status-badge--' + ${#strings.toLowerCase(reservation.status)})}">CHECKED_IN</span>
+                    </h1>
+                    <p class="folio-identity">
+                        <span th:text="${guest != null and !#strings.isEmpty(guest.fullName) ? guest.fullName : reservation.guestCode}">Guest name</span>
+                        <th:block th:if="${currentRoomLabel != null}">
+                            <span aria-hidden="true">·</span>
+                            <span th:text="#{payment.folio.identity.room(${currentRoomLabel})}">Room</span>
+                        </th:block>
+                    </p>
                 </div>
-                <div>
-                    <dt>Stay status</dt>
-                    <dd th:text="${stay.status}">CHECKED_IN</dd>
+                <div class="folio-header__actions" th:if="${checkoutReviewAvailable}">
+                    <a class="button button-outline-primary" th:href="@{/check-out/{id}(id=${reservation.id})}">
+                        <svg th:replace="~{layout/icons :: checkCircle}"></svg>
+                        <span th:text="#{payment.folio.actions.checkoutReview}">Checkout Review</span>
+                    </a>
                 </div>
-                <div>
-                    <dt>Actual check-in</dt>
-                    <dd><span th:replace="~{layout/datetime :: dateTime(${stay.actualCheckInAt})}">—</span></dd>
-                </div>
-                <div th:if="${stay.actualCheckOutAt}">
-                    <dt>Actual check-out</dt>
-                    <dd><span th:replace="~{layout/datetime :: dateTime(${stay.actualCheckOutAt})}">—</span></dd>
-                </div>
-            </dl>
-        </section>
-
-        <section aria-label="Folio balance summary" class="card-grid">
-            <div class="card summary-card">
-                <dt>Total Charges</dt>
-                <dd><span th:replace="~{layout/money :: amount(${balance.totalCharges}, ${reservation.currency})}">0 VND</span></dd>
-                <p class="summary-card__label" th:text="'in ' + ${reservation.currency}">in VND</p>
-            </div>
-            <div class="card summary-card">
-                <dt>Total Paid</dt>
-                <dd><span th:replace="~{layout/money :: amount(${balance.totalPaidPayments}, ${reservation.currency})}">0 VND</span></dd>
-                <p class="summary-card__label" th:text="'Applied payments in ' + ${reservation.currency}">Applied payments in VND</p>
-            </div>
-            <div class="card summary-card">
-                <dt>Outstanding</dt>
-                <dd><span th:replace="~{layout/money :: amount(${balance.outstanding}, ${reservation.currency})}">0 VND</span></dd>
-                <p class="summary-card__label" th:text="'in ' + ${reservation.currency}">in VND</p>
-            </div>
-        </section>
-
-        <section aria-labelledby="charges-heading" class="card">
-            <h2 id="charges-heading">Charges</h2>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th scope="col">Type</th>
-                        <th scope="col">Description</th>
-                        <th scope="col">Quantity</th>
-                        <th scope="col">Unit price</th>
-                        <th scope="col">Amount</th>
-                        <th scope="col">Charged at</th>
-                        <th scope="col">Status</th>
-                        <th class="table-actions" scope="col">Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr th:each="charge : ${charges}">
-                        <td th:text="${charge.type}">ROOM</td>
-                        <td th:text="${charge.description ?: '—'}">—</td>
-                        <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
-                        <td class="table-number">
-                            <th:block th:if="${charge.unitPrice != null}">
-                                <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
-                            </th:block>
-                            <span th:unless="${charge.unitPrice != null}">—</span>
-                        </td>
-                        <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></td>
-                        <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
-                        <td>
-                            <span class="status-badge" th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Active</span>
-                            <p class="reservation-info-secondary" th:if="${charge.status == 'VOIDED' and charge.voidReason != null}"
-                               th:text="${'Reason: ' + charge.voidReason}">Reason: —</p>
-                        </td>
-                        <td class="table-actions">
-                            <form data-confirm-severity="DANGER" method="post"
-                                  th:action="@{/reservations/{reservationId}/folio/charges/{chargeId}/void(reservationId=${reservation.id},chargeId=${charge.id})}"
-                                  th:attr="data-confirm-label=#{payment.folio.charge.void.action},data-confirm-title=#{payment.folio.charge.void.confirmTitle},data-confirm-message=#{payment.folio.charge.void.confirmMessage}"
-                                  th:if="${folioMutable and charge.status == 'ACTIVE' and charge.type != 'ROOM'}">
-                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                                <input class="charge-void-reason" maxlength="1000" name="reason"
-                                       th:placeholder="#{payment.folio.charge.void.reasonPlaceholder}" required type="text" />
-                                <button class="button button-danger table-action" th:text="#{payment.folio.charge.void.action}" type="submit">Void</button>
-                            </form>
-                        </td>
-                    </tr>
-                    <tr th:if="${#lists.isEmpty(charges)}">
-                        <td colspan="8">No Charges have been recorded.</td>
-                    </tr>
-                    </tbody>
-                </table>
             </div>
 
-            <form class="form-card" data-confirm-label="Add fixed charge"
-                  data-confirm-message="Record this fixed charge?" data-confirm-severity="NORMAL"
-                  data-confirm-title="Add fixed charge" method="post"
-                  th:action="@{/reservations/{id}/folio/charges(id=${reservation.id})}"
-                  th:if="${folioMutable}" th:object="${chargeForm}">
-                <h3>Add Charge — Fixed Amount</h3>
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label for="fixed-charge-type">Type</label>
-                        <select id="fixed-charge-type" required th:field="*{type}">
-                            <option value="">Select a type</option>
-                            <option th:each="type : ${chargeTypes}" th:text="${type}" th:value="${type}">ROOM</option>
-                        </select>
-                        <p class="field-error" th:errors="*{type}"></p>
-                    </div>
-                    <div class="form-field">
-                        <label for="fixed-charge-amount">Amount</label>
-                        <input class="js-money-input" id="fixed-charge-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
-                        <p class="field-error" th:errors="*{amount}"></p>
-                    </div>
-                </div>
-                <div class="form-field">
-                    <label for="fixed-charge-description">Description <span aria-hidden="true">(optional)</span></label>
-                    <textarea id="fixed-charge-description" maxlength="1000" th:field="*{description}"></textarea>
-                    <p class="field-error" th:errors="*{description}"></p>
-                </div>
-                <p class="field-error" th:errors="*{pricingModeValid}"></p>
-                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                <div class="form-actions">
-                    <button class="button button-primary" type="submit">Add Fixed Charge</button>
-                </div>
-            </form>
+            <nav aria-label="Folio sections" class="detail-tabs folio-tabs">
+                <a class="detail-tab" th:aria-current="${activeTab == 'overview'} ? 'page' : null"
+                   th:classappend="${activeTab == 'overview'} ? 'detail-tab--active' : ''"
+                   th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
+                    <svg th:replace="~{layout/icons :: note}"></svg>
+                    <span th:text="#{payment.folio.tab.overview}">Overview</span>
+                </a>
+                <a class="detail-tab" th:aria-current="${activeTab == 'charges'} ? 'page' : null"
+                   th:classappend="${activeTab == 'charges'} ? 'detail-tab--active' : ''"
+                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='charges')}">
+                    <svg th:replace="~{layout/icons :: coins}"></svg>
+                    <span th:text="#{payment.folio.tab.charges}">Charges</span>
+                </a>
+                <a class="detail-tab" th:aria-current="${activeTab == 'payments'} ? 'page' : null"
+                   th:classappend="${activeTab == 'payments'} ? 'detail-tab--active' : ''"
+                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='payments')}">
+                    <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                    <span th:text="#{payment.folio.tab.payments}">Payments</span>
+                </a>
+            </nav>
 
-            <form class="form-card" data-confirm-label="Add itemized charge"
-                  data-confirm-message="Record this itemized charge?" data-confirm-severity="NORMAL"
-                  data-confirm-title="Add itemized charge" method="post"
-                  th:action="@{/reservations/{id}/folio/charges(id=${reservation.id})}"
-                  th:if="${folioMutable}" th:object="${chargeForm}">
-                <h3>Add Charge — Itemized</h3>
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label for="itemized-charge-type">Type</label>
-                        <select id="itemized-charge-type" required th:field="*{type}">
-                            <option value="">Select a type</option>
-                            <option th:each="type : ${chargeTypes}" th:text="${type}" th:value="${type}">ROOM</option>
-                        </select>
-                        <p class="field-error" th:errors="*{type}"></p>
-                    </div>
-                    <div class="form-field">
-                        <label for="itemized-charge-quantity">Quantity</label>
-                        <input id="itemized-charge-quantity" inputmode="numeric" pattern="[0-9]*" required th:field="*{quantity}" type="text" />
-                        <p class="field-error" th:errors="*{quantity}"></p>
-                    </div>
-                    <div class="form-field">
-                        <label for="itemized-charge-unit-price">Unit price</label>
-                        <input class="js-money-input" id="itemized-charge-unit-price" inputmode="decimal" required th:field="*{unitPrice}" type="text" />
-                        <p class="field-error" th:errors="*{unitPrice}"></p>
-                    </div>
-                </div>
-                <div class="form-field">
-                    <label for="itemized-charge-description">Description <span aria-hidden="true">(optional)</span></label>
-                    <textarea id="itemized-charge-description" maxlength="1000" th:field="*{description}"></textarea>
-                    <p class="field-error" th:errors="*{description}"></p>
-                </div>
-                <p class="field-error" th:errors="*{quantityAndUnitPricePaired}"></p>
-                <p class="field-error" th:errors="*{pricingModeValid}"></p>
-                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                <div class="form-actions">
-                    <button class="button button-primary" type="submit">Add Itemized Charge</button>
-                </div>
-            </form>
-        </section>
+            <p class="message message-success" role="status" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="message message-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <section aria-labelledby="payments-heading" class="card">
-            <h2 id="payments-heading">Payments</h2>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                    <tr>
-                        <th scope="col">Received</th>
-                        <th scope="col">Rate</th>
-                        <th scope="col">Applied</th>
-                        <th scope="col">Method</th>
-                        <th scope="col">Reference</th>
-                        <th scope="col">Status</th>
-                        <th scope="col">Paid at</th>
-                        <th class="table-actions" scope="col">Actions</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr th:each="payment : ${payments}">
-                        <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0 VND</span></td>
-                        <td class="table-number">
-                            <span th:if="${payment.exchangeRate != null}"
-                                  th:text="${'1 USD = ' + #numbers.formatDecimal(payment.exchangeRate, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' VND'}">1 USD = 25,000 VND</span>
-                            <span th:unless="${payment.exchangeRate != null}">—</span>
-                        </td>
-                        <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0 VND</span></td>
-                        <td th:text="${payment.method}">CASH</td>
-                        <td class="table-reference" th:attr="title=${payment.reference}" th:text="${payment.reference ?: '—'}">—</td>
-                        <td>
-                            <span class="status-badge" th:text="${payment.status}">PENDING</span>
-                            <p class="reservation-info-secondary" th:if="${payment.status == 'REFUNDED' and payment.refundReason != null}"
-                               th:text="${'Reason: ' + payment.refundReason}">Reason: —</p>
-                            <p class="reservation-info-secondary" th:if="${payment.status == 'VOIDED' and payment.voidReason != null}"
-                               th:text="${'Reason: ' + payment.voidReason}">Reason: —</p>
-                        </td>
-                        <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
-                        <td class="table-actions">
-                            <div class="action-row" th:if="${folioMutable}">
-                                <form data-confirm-label="Mark paid" data-confirm-message="Mark this payment as paid?"
-                                      data-confirm-severity="WARNING" data-confirm-title="Mark payment paid" method="post"
-                                      th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/mark-paid(reservationId=${reservation.id},paymentId=${payment.id})}"
-                                      th:if="${payment.status == 'PENDING'}">
-                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                                    <button class="button button-primary table-action" type="submit">Mark paid</button>
-                                </form>
-                                <form data-confirm-label="Mark failed" data-confirm-message="Mark this payment as failed?"
-                                      data-confirm-severity="WARNING" data-confirm-title="Mark payment failed" method="post"
-                                      th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/mark-failed(reservationId=${reservation.id},paymentId=${payment.id})}"
-                                      th:if="${payment.status == 'PENDING'}">
-                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                                    <button class="button button-secondary table-action" type="submit">Mark failed</button>
-                                </form>
-                                <form class="payment-refund-form" data-confirm-label="Refund payment" data-confirm-severity="DANGER"
-                                      data-confirm-title="Refund payment" method="post"
-                                      th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/refund(reservationId=${reservation.id},paymentId=${payment.id})}"
-                                      th:attr="data-confirm-message=${'Refund ' + (payment.currency == 'VND' ? #numbers.formatDecimal(payment.amount, 1, 'COMMA', 0, 'POINT') + ' VND' : #numbers.formatDecimal(payment.amount, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' ' + payment.currency) + '?'}"
-                                      th:if="${payment.status == 'PAID'}">
-                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                                    <input class="payment-refund-reason" maxlength="1000" name="reason"
-                                           placeholder="Refund reason" required type="text" />
-                                    <button class="button button-danger table-action" type="submit">Refund</button>
-                                </form>
-                                <form class="payment-void-form" data-confirm-severity="DANGER" method="post"
-                                      th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/void(reservationId=${reservation.id},paymentId=${payment.id})}"
-                                      th:attr="data-confirm-label=#{payment.folio.payment.void.action},data-confirm-title=#{payment.folio.payment.void.confirmTitle},data-confirm-message=#{payment.folio.payment.void.confirmMessage}"
-                                      th:if="${payment.status == 'PAID'}">
-                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                                    <input class="payment-void-reason" maxlength="1000" name="reason"
-                                           th:placeholder="#{payment.folio.payment.void.reasonPlaceholder}" required type="text" />
-                                    <button class="button button-danger table-action" th:text="#{payment.folio.payment.void.action}" type="submit">Void</button>
-                                </form>
+            <p class="folio-readonly" th:if="${not folioMutable}">
+                <svg th:replace="~{layout/icons :: lock}"></svg>
+                <span th:text="#{payment.folio.readOnly}">This stay is checked out. Charges and payments are read-only.</span>
+            </p>
+
+            <!-- Shared Folio summary: the same four cards on Overview, Charges and Payments. -->
+            <th:block th:replace="~{stay/folio-fragments :: summaryCards}"></th:block>
+
+            <!-- Overview: the approved two-column composition. Unsupported mockup actions are omitted, never replaced. -->
+            <th:block th:if="${activeTab == 'overview'}">
+
+                <div class="folio-overview">
+                    <div class="folio-overview__main">
+                        <section aria-labelledby="folio-charges-summary-heading" class="card folio-section">
+                            <div class="card-header-row folio-section__head">
+                                <h2 id="folio-charges-summary-heading">
+                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:text="#{payment.folio.charges.title}">Charges</span>
+                                </h2>
+                                <a class="button button-outline-primary button-compact"
+                                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='charges')}">
+                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:text="#{payment.folio.viewDetail}">Detail</span>
+                                </a>
                             </div>
-                        </td>
-                    </tr>
-                    <tr th:if="${#lists.isEmpty(payments)}">
-                        <td colspan="8">No Payments have been recorded.</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
+                            <div class="table-wrap" th:unless="${#lists.isEmpty(recentCharges)}">
+                                <table class="folio-table folio-overview-charges">
+                                    <thead>
+                                    <tr>
+                                        <th scope="col" th:text="#{payment.folio.column.date}">Date</th>
+                                        <th scope="col" th:text="#{payment.folio.column.type}">Type</th>
+                                        <th class="table-number" scope="col" th:text="#{payment.folio.column.quantity}">Qty</th>
+                                        <th class="table-number" scope="col" th:text="#{payment.folio.column.unitPrice}">Unit price</th>
+                                        <th class="table-number" scope="col" th:text="#{payment.folio.column.amount}">Amount</th>
+                                        <th scope="col" th:text="#{payment.folio.column.addedBy}">Added by</th>
+                                        <th scope="col" th:text="#{payment.folio.column.description}">Description</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="charge : ${recentCharges}">
+                                        <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
+                                        <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></td>
+                                        <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
+                                        <td class="table-number">
+                                            <th:block th:if="${charge.unitPrice != null}">
+                                                <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
+                                            </th:block>
+                                            <span th:unless="${charge.unitPrice != null}">—</span>
+                                        </td>
+                                        <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></td>
+                                        <td th:text="${charge.addedByUsername ?: '—'}">admin</td>
+                                        <td class="folio-description">
+                                            <span class="folio-description__text" th:text="${charge.description ?: '—'}"
+                                                  th:title="${charge.description}">—</span>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                    <tfoot>
+                                    <tr class="table-total-row">
+                                        <td colspan="4" th:text="#{payment.folio.charges.total}">Total Active Charges</td>
+                                        <td class="table-number"><span th:replace="~{layout/money :: amount(${balance.totalCharges}, ${reservation.currency})}">0 VND</span></td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div class="empty-state folio-empty" th:if="${#lists.isEmpty(recentCharges)}">
+                                <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: inbox}"></svg></span>
+                                <p class="empty-state-message" th:text="#{payment.folio.charges.empty}">No charges recorded yet.</p>
+                            </div>
+                        </section>
 
-            <form class="form-card" data-confirm-label="Add payment"
-                  data-confirm-message="Record this payment?" data-confirm-severity="NORMAL"
-                  data-confirm-title="Add payment" data-payment-form
-                  method="post"
-                  th:action="@{/reservations/{id}/folio/payments(id=${reservation.id})}"
-                  th:attr="data-reservation-currency=${reservation.currency}"
-                  th:if="${folioMutable}" th:object="${paymentForm}">
-                <h3>Add Payment</h3>
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label for="payment-amount">Amount</label>
-                        <input class="js-money-input" id="payment-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
-                        <p class="field-error" th:errors="*{amount}"></p>
+                        <section aria-labelledby="folio-payments-summary-heading" class="card folio-section">
+                            <div class="card-header-row folio-section__head">
+                                <h2 id="folio-payments-summary-heading">
+                                    <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                                    <span th:text="#{payment.folio.payments.title}">Payments</span>
+                                </h2>
+                                <a class="button button-outline-primary button-compact"
+                                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='payments')}">
+                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:text="#{payment.folio.viewDetail}">Detail</span>
+                                </a>
+                            </div>
+                            <div class="table-wrap" th:unless="${#lists.isEmpty(recentPayments)}">
+                                <table class="folio-table">
+                                    <thead>
+                                    <tr>
+                                        <th scope="col" th:text="#{payment.folio.column.date}">Date</th>
+                                        <th scope="col" th:text="#{payment.folio.column.method}">Method</th>
+                                        <th scope="col" th:text="#{payment.folio.column.reference}">Reference</th>
+                                        <th class="table-number" scope="col" th:text="#{payment.folio.column.applied}">Amount</th>
+                                        <th scope="col" th:text="#{payment.folio.column.addedBy}">Added by</th>
+                                        <th scope="col" th:text="#{payment.folio.column.status}">Status</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="payment : ${recentPayments}">
+                                        <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
+                                        <td><span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">CASH</span></td>
+                                        <td class="table-reference" th:attr="title=${payment.reference}" th:text="${payment.reference ?: '—'}">—</td>
+                                        <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0 VND</span></td>
+                                        <td th:text="${payment.addedByUsername ?: '—'}">admin</td>
+                                        <td>
+                                            <span th:replace="~{layout/enum :: badge('paymentStatus', ${payment.status}, 'status-badge--' + ${#strings.toLowerCase(payment.status)})}">PAID</span>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                    <tfoot>
+                                    <tr class="table-total-row">
+                                        <td colspan="3" th:text="#{payment.folio.payments.total}">Total Applied Payments (PAID)</td>
+                                        <td class="table-number"><span th:replace="~{layout/money :: amount(${balance.totalPaidPayments}, ${reservation.currency})}">0 VND</span></td>
+                                        <td colspan="2"></td>
+                                    </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div class="empty-state folio-empty" th:if="${#lists.isEmpty(recentPayments)}">
+                                <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: inbox}"></svg></span>
+                                <p class="empty-state-message" th:text="#{payment.folio.payments.empty}">No payments recorded yet.</p>
+                            </div>
+                        </section>
+
+                        <section aria-labelledby="folio-outstanding-heading" class="card folio-section">
+                            <div class="card-header-row folio-section__head">
+                                <h2 id="folio-outstanding-heading">
+                                    <svg th:replace="~{layout/icons :: coins}"></svg>
+                                    <span th:text="#{payment.folio.outstanding.title}">Outstanding Balance</span>
+                                </h2>
+                            </div>
+                            <!-- Presentation only: every value is the authoritative StayBalance total computed on the server. -->
+                            <div class="folio-equation">
+                                <div class="folio-equation__cell">
+                                    <p class="folio-equation__label" th:text="#{payment.folio.kpi.activeCharges}">Active Charges</p>
+                                    <p class="folio-equation__value">
+                                        <span th:replace="~{layout/money :: amount(${balance.totalCharges}, ${reservation.currency})}">0 VND</span>
+                                    </p>
+                                </div>
+                                <p aria-hidden="true" class="folio-equation__operator">-</p>
+                                <div class="folio-equation__cell">
+                                    <p class="folio-equation__label" th:text="#{payment.folio.kpi.appliedPayments}">Applied Payments</p>
+                                    <p class="folio-equation__value">
+                                        <span th:replace="~{layout/money :: amount(${balance.totalPaidPayments}, ${reservation.currency})}">0 VND</span>
+                                    </p>
+                                </div>
+                                <p aria-hidden="true" class="folio-equation__operator">=</p>
+                                <div class="folio-equation__cell folio-equation__cell--outstanding"
+                                     th:classappend="${outstandingSettled} ? 'folio-outstanding--settled' : 'folio-outstanding--due'">
+                                    <p class="folio-equation__label" th:text="#{payment.folio.kpi.outstanding}">Outstanding</p>
+                                    <p class="folio-equation__value">
+                                        <span th:replace="~{layout/money :: amount(${balance.outstanding}, ${reservation.currency})}">0 VND</span>
+                                    </p>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                    <div class="form-field">
-                        <label for="payment-currency">Payment Currency</label>
-                        <select id="payment-currency" required th:field="*{currency}">
-                            <option value="">Select currency</option>
-                            <option th:each="currency : ${paymentCurrencies}" th:text="${currency}" th:value="${currency}">VND</option>
-                        </select>
-                        <p class="field-error" th:errors="*{currency}"></p>
-                    </div>
-                    <div class="form-field" data-exchange-rate-field>
-                        <label for="payment-exchange-rate">Exchange Rate</label>
-                        <div class="exchange-rate-inline">
-                            <span aria-hidden="true">1 USD =</span>
-                            <input class="js-money-input" id="payment-exchange-rate" inputmode="decimal" th:field="*{exchangeRate}" type="text" />
-                            <span aria-hidden="true">VND</span>
+
+                    <aside class="folio-overview__side">
+                        <section aria-labelledby="folio-stay-heading" class="card folio-section">
+                            <div class="card-header-row folio-section__head">
+                                <h2 id="folio-stay-heading">
+                                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                    <span th:text="#{payment.folio.stay.title}">Stay Summary</span>
+                                </h2>
+                            </div>
+                            <dl class="folio-facts">
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.roomNumber}">Room No.</dt>
+                                    <dd>
+                                        <th:block th:each="room, roomStat : ${currentRooms}">
+                                            <span aria-hidden="true" th:unless="${roomStat.first}">, </span>
+                                            <a class="record-link" th:if="${canManageRoom}"
+                                               th:href="@{/rooms/{id}(id=${room.roomId})}"
+                                               th:text="${room.roomNumber}">101</a>
+                                            <span th:unless="${canManageRoom}" th:text="${room.roomNumber}">101</span>
+                                        </th:block>
+                                        <span th:if="${#lists.isEmpty(currentRooms)}">—</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.roomType}">Room Type</dt>
+                                    <dd th:text="${currentRoomTypeLabel ?: '—'}">Double Room</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.checkIn}">Actual check-in</dt>
+                                    <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: dateTime(${stay.actualCheckInAt})}">—</span></dd>
+                                </div>
+                                <div th:if="${stay.actualCheckOutAt != null}">
+                                    <dt th:text="#{payment.folio.stay.checkOutActual}">Actual check-out</dt>
+                                    <dd><span th:replace="~{layout/datetime :: dateTime(${stay.actualCheckOutAt})}">—</span></dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.checkOut}">Planned check-out</dt>
+                                    <dd class="date-value--check-out">
+                                        <span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span>
+                                        <span class="reservation-overdue reservation-overdue--below" th:if="${overdueDays > 0}"
+                                              th:text="#{reservation.detail.overdue(${overdueDays})}">(1 day overdue)</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.nights}">Nights</dt>
+                                    <dd>
+                                        <span th:text="${nights}">5</span>
+                                        <span class="folio-facts__note" th:if="${extensionNights > 0}"
+                                              th:text="#{payment.folio.kpi.nightsBreakdown(${originalNights}, ${extensionNights})}">(Original 3 + 2 extended)</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.adults}">Adults</dt>
+                                    <dd th:text="${reservation.adultCount}">2</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.children}">Children</dt>
+                                    <dd th:text="${reservation.childCount}">0</dd>
+                                </div>
+                            </dl>
+                        </section>
+
+                        <th:block th:replace="~{stay/folio-fragments :: recentActivity}"></th:block>
+                    </aside>
+                </div>
+            </th:block>
+
+            <!-- Charges: the table is the primary content. Clicking a row selects that Charge; the Charge Detail panel
+                 shows the selected Charge's data and the row-level actions the business rules allow. Adding happens in a dialog. -->
+            <th:block th:if="${activeTab == 'charges'}">
+                <div class="folio-charges">
+                    <section aria-labelledby="folio-charges-heading" class="card folio-section folio-charges__main">
+                        <div class="card-header-row folio-section__head">
+                            <h2 id="folio-charges-heading">
+                                <svg th:replace="~{layout/icons :: note}"></svg>
+                                <span th:text="#{payment.folio.charges.title}">Charges</span>
+                            </h2>
+                            <button class="button button-outline-primary button-compact" data-dialog-open="folio-add-charge-dialog"
+                                    th:if="${folioMutable}" type="button">
+                                <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                <span th:text="#{payment.folio.addCharge.title}">Add Charge</span>
+                            </button>
                         </div>
-                        <p class="field-error" th:errors="*{exchangeRate}"></p>
-                    </div>
-                    <div class="form-field">
-                        <label for="payment-applied-preview">Applied to Folio</label>
-                        <output aria-live="polite" data-applied-preview id="payment-applied-preview">—</output>
-                        <p class="summary-card__label">Informational only — the backend calculates the recorded amount.</p>
-                    </div>
-                    <div class="form-field">
-                        <label for="payment-method">Method</label>
-                        <select id="payment-method" required th:field="*{method}">
-                            <option value="">Select a method</option>
-                            <option th:each="method : ${paymentMethods}" th:text="${method}" th:value="${method}">CASH</option>
-                        </select>
-                        <p class="field-error" th:errors="*{method}"></p>
-                    </div>
-                </div>
-                <div class="form-field">
-                    <label for="payment-reference">Reference <span aria-hidden="true" data-reference-hint>(optional)</span></label>
-                    <input id="payment-reference" maxlength="1000" th:field="*{reference}" type="text" />
-                    <p class="field-error" th:errors="*{reference}"></p>
-                    <p class="form-hint">Required for OTA payments.</p>
-                </div>
-                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                <div class="form-actions">
-                    <button class="button button-secondary" type="submit">Add as Pending</button>
-                    <button class="button button-primary" th:formaction="@{/reservations/{id}/folio/payments/record-paid(id=${reservation.id})}" type="submit">Record Payment</button>
-                </div>
-                <p class="form-hint"><strong>Record Payment</strong> = money already received, recorded as Paid immediately. <strong>Add as Pending</strong> = recorded now, confirmed Paid later.</p>
-            </form>
-        </section>
+                        <div class="table-wrap" th:unless="${#lists.isEmpty(charges)}">
+                            <table class="folio-table folio-table--charges">
+                                <thead>
+                                <tr>
+                                    <th class="folio-sort-th" scope="col" aria-sort="ascending">
+                                        <button class="folio-sort" data-sort-key="date" type="button">
+                                            <span th:text="#{payment.folio.column.date}">Date</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↑</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="type" type="button">
+                                            <span th:text="#{payment.folio.column.type}">Type</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th table-number" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="qty" type="button">
+                                            <span th:text="#{payment.folio.column.quantity}">Qty</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th table-number" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="price" type="button">
+                                            <span th:text="#{payment.folio.column.unitPrice}">Unit price</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th table-number" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="amount" type="button">
+                                            <span th:text="#{payment.folio.column.amount}">Amount</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="status" type="button">
+                                            <span th:text="#{payment.folio.column.status}">Status</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="added" type="button">
+                                            <span th:text="#{payment.folio.column.addedBy}">Added by</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <!-- Sort keys are the underlying values, never the formatted text. Empty means no value, which always sorts last. -->
+                                <tr class="folio-charge-row" tabindex="0" th:each="charge, rowStat : ${charges}"
+                                    th:attr="data-charge-row=${charge.id},data-sort-date=${charge.chargedAt != null ? charge.chargedAt.toEpochMilli() : ''},data-sort-type=${charge.type},data-sort-qty=${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : ''},data-sort-price=${charge.unitPrice != null ? charge.unitPrice.stripTrailingZeros().toPlainString() : ''},data-sort-amount=${charge.amount.stripTrailingZeros().toPlainString()},data-sort-status=${charge.status},data-sort-added=${charge.addedByUsername ?: ''}"
+                                    th:classappend="${rowStat.first} ? 'folio-charge-row--selected' : ''"
+                                    th:aria-current="${rowStat.first} ? 'true' : null">
+                                    <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
+                                    <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></td>
+                                    <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
+                                    <td class="table-number">
+                                        <th:block th:if="${charge.unitPrice != null}">
+                                            <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
+                                        </th:block>
+                                        <span th:unless="${charge.unitPrice != null}">—</span>
+                                    </td>
+                                    <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></td>
+                                    <td>
+                                        <span class="status-badge"
+                                              th:classappend="${'status-badge--' + #strings.toLowerCase(charge.status)}"
+                                              th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Active</span>
+                                    </td>
+                                    <td th:text="${charge.addedByUsername ?: '—'}">admin</td>
+                                </tr>
+                                </tbody>
+                                <tfoot>
+                                <tr class="table-total-row">
+                                    <td colspan="4" th:text="#{payment.folio.charges.total}">Total Charges</td>
+                                    <td class="table-number"><span th:replace="~{layout/money :: amount(${balance.totalCharges}, ${reservation.currency})}">0 VND</span></td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        <div class="empty-state folio-empty" th:if="${#lists.isEmpty(charges)}">
+                            <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: inbox}"></svg></span>
+                            <p class="empty-state-message" th:text="#{payment.folio.charges.empty}">No charges recorded yet.</p>
+                        </div>
+                    </section>
 
-        <section aria-labelledby="checkout-heading" class="card">
-            <h2 id="checkout-heading">Check-out</h2>
-            <p th:if="${not checkoutReady}">Check-out is unavailable until the outstanding balance is zero.</p>
-            <form data-confirm-label="Check out" data-confirm-severity="DANGER"
-                  data-confirm-title="Check out reservation" method="post"
-                  th:action="@{/reservations/{id}/check-out(id=${reservation.id})}"
-                  th:attr="data-confirm-message=|Check out reservation ${reservation.reservationNumber}?|"
-                  th:if="${checkoutReady and canCheckOut}">
-                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                <button class="button button-primary" type="submit">Check-out</button>
-            </form>
-        </section>
+                    <aside class="folio-charges__side">
+                        <section aria-labelledby="folio-charge-detail-heading" class="card folio-section">
+                            <div class="card-header-row folio-section__head">
+                                <h2 id="folio-charge-detail-heading">
+                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:text="#{payment.folio.charges.detail.title}">Charge Detail</span>
+                                </h2>
+                            </div>
+                            <th:block th:each="charge, detailStat : ${charges}">
+                                <div class="folio-charge-detail-item" th:attr="data-charge-detail=${charge.id}"
+                                     th:hidden="${!detailStat.first}">
+                                    <dl class="folio-facts">
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.date}">Date</dt>
+                                            <dd><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.type}">Type</dt>
+                                            <dd><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.description}">Description</dt>
+                                            <dd th:text="${charge.description ?: '—'}">—</dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.field.quantity}">Quantity</dt>
+                                            <dd th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.field.unitPrice}">Unit price</dt>
+                                            <dd>
+                                                <th:block th:if="${charge.unitPrice != null}">
+                                                    <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
+                                                </th:block>
+                                                <span th:unless="${charge.unitPrice != null}">—</span>
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.amount}">Amount</dt>
+                                            <dd><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.status}">Status</dt>
+                                            <dd>
+                                                <span class="status-badge"
+                                                      th:classappend="${'status-badge--' + #strings.toLowerCase(charge.status)}"
+                                                      th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Active</span>
+                                            </dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.addedBy}">Added by</dt>
+                                            <dd th:text="${charge.addedByUsername ?: '—'}">admin</dd>
+                                        </div>
+                                    </dl>
+                                    <p class="folio-reason" th:if="${charge.status == 'VOIDED' and charge.voidReason != null}"
+                                       th:text="#{payment.folio.reason(${charge.voidReason})}">Reason: —</p>
+                                    <div class="folio-charge-detail__actions"
+                                         th:if="${folioMutable and charge.status == 'ACTIVE' and charge.type != 'ROOM'}">
+                                        <button class="button button-danger" type="button"
+                                                th:attr="data-dialog-open=|folio-void-dialog-${charge.id}|"
+                                                th:text="#{payment.folio.charge.void.menuItem}">Void Charge</button>
+                                    </div>
+
+                                    <dialog class="folio-dialog" th:attr="aria-labelledby=|folio-void-dialog-title-${charge.id}|, id=|folio-void-dialog-${charge.id}|"
+                                            th:if="${folioMutable and charge.status == 'ACTIVE' and charge.type != 'ROOM'}">
+                                        <div class="folio-dialog__header">
+                                            <h2 th:attr="id=|folio-void-dialog-title-${charge.id}|" th:text="#{payment.folio.charge.void.dialogTitle}">Void Charge</h2>
+                                            <button class="folio-dialog__close" data-dialog-close type="button"
+                                                    th:attr="aria-label=#{common.action.close}">
+                                                <svg th:replace="~{layout/icons :: close}"></svg>
+                                            </button>
+                                        </div>
+                                        <div class="folio-dialog__body">
+                                            <p class="folio-dialog__warning" role="alert">
+                                                <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                                                <span>
+                                                    <strong th:text="#{payment.folio.charge.void.warningTitle}">This action cannot be undone.</strong>
+                                                    <span th:text="#{payment.folio.charge.void.confirmMessage}">This charge will no longer count toward Outstanding.</span>
+                                                </span>
+                                            </p>
+                                            <dl class="folio-dialog__summary">
+                                                <div>
+                                                    <dt th:text="#{payment.folio.column.description}">Description</dt>
+                                                    <dd th:text="${charge.description ?: '—'}">—</dd>
+                                                </div>
+                                                <div>
+                                                    <dt th:text="#{payment.folio.column.amount}">Amount</dt>
+                                                    <dd><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0 VND</span></dd>
+                                                </div>
+                                            </dl>
+                                            <form class="folio-dialog__form" method="post"
+                                                  th:action="@{/reservations/{reservationId}/folio/charges/{chargeId}/void(reservationId=${reservation.id},chargeId=${charge.id})}">
+                                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                                <div class="form-field">
+                                                    <label th:attr="for=|void-charge-reason-${charge.id}|">
+                                                        <span th:text="#{payment.folio.charge.void.reasonLabel}">Void reason</span>
+                                                        <span aria-hidden="true">*</span>
+                                                    </label>
+                                                    <input class="charge-void-reason" maxlength="1000" name="reason" required
+                                                           th:attr="id=|void-charge-reason-${charge.id}|"
+                                                           th:placeholder="#{payment.folio.charge.void.reasonPlaceholder}" type="text" />
+                                                </div>
+                                                <div class="folio-dialog__footer">
+                                                    <button class="button button-secondary" data-dialog-close type="button"
+                                                            th:text="#{common.action.cancel}">Cancel</button>
+                                                    <button class="button button-danger" th:text="#{payment.folio.charge.void.action}" type="submit">Void</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </dialog>
+                                </div>
+                            </th:block>
+                            <p class="folio-empty-text" th:if="${#lists.isEmpty(charges)}"
+                               th:text="#{payment.folio.charges.detail.empty}">Select a charge to see its details.</p>
+                        </section>
+
+                        <th:block th:replace="~{stay/folio-fragments :: recentActivity}"></th:block>
+                    </aside>
+                </div>
+
+                <dialog aria-labelledby="folio-add-charge-dialog-title" class="folio-dialog folio-dialog--add-charge"
+                        id="folio-add-charge-dialog" th:if="${folioMutable}"
+                        th:attr="data-autoopen=${addChargeOpen ? 'true' : 'false'}">
+                    <div class="folio-dialog__header">
+                        <h2 id="folio-add-charge-dialog-title" th:text="#{payment.folio.addCharge.title}">Add Charge</h2>
+                        <button class="folio-dialog__close" data-dialog-close type="button"
+                                th:attr="aria-label=#{common.action.close}">
+                            <svg th:replace="~{layout/icons :: close}"></svg>
+                        </button>
+                    </div>
+                    <div class="folio-dialog__body">
+                        <div class="folio-mode-tabs" role="tablist" th:attr="aria-label=#{payment.folio.addCharge.modeLabel}">
+                            <button class="folio-mode-tabs__tab" data-charge-mode-tab="fixed" id="folio-charge-tab-fixed"
+                                    role="tab" type="button" aria-controls="folio-charge-form-fixed"
+                                    th:classappend="${addChargeMode == 'ITEMIZED'} ? '' : 'is-active'"
+                                    th:attr="aria-selected=${addChargeMode == 'ITEMIZED' ? 'false' : 'true'},tabindex=${addChargeMode == 'ITEMIZED' ? '-1' : '0'}">
+                                <svg th:replace="~{layout/icons :: note}"></svg>
+                                <span th:text="#{payment.folio.addCharge.tab.fixed}">Fixed Amount</span>
+                            </button>
+                            <button class="folio-mode-tabs__tab" data-charge-mode-tab="itemized" id="folio-charge-tab-itemized"
+                                    role="tab" type="button" aria-controls="folio-charge-form-itemized"
+                                    th:classappend="${addChargeMode == 'ITEMIZED'} ? 'is-active' : ''"
+                                    th:attr="aria-selected=${addChargeMode == 'ITEMIZED' ? 'true' : 'false'},tabindex=${addChargeMode == 'ITEMIZED' ? '0' : '-1'}">
+                                <svg th:replace="~{layout/icons :: calculator}"></svg>
+                                <span th:text="#{payment.folio.addCharge.tab.itemized}">Itemized</span>
+                            </button>
+                        </div>
+
+                        <form class="folio-charge-form" data-charge-mode-panel="fixed" id="folio-charge-form-fixed"
+                              method="post" role="tabpanel" aria-labelledby="folio-charge-tab-fixed"
+                              th:action="@{/reservations/{id}/folio/charges(id=${reservation.id})}"
+                              th:attr="data-confirm-label=#{payment.folio.addCharge.confirmFixedTitle},data-confirm-message=#{payment.folio.addCharge.confirmFixedMessage},data-confirm-title=#{payment.folio.addCharge.confirmFixedTitle}"
+                              th:hidden="${addChargeMode == 'ITEMIZED'}"
+                              data-confirm-severity="NORMAL" th:object="${chargeForm}">
+                            <div class="form-field">
+                                <label for="fixed-charge-type">
+                                    <span th:text="#{payment.folio.column.type}">Type</span>
+                                    <span class="form-required" aria-hidden="true">*</span>
+                                </label>
+                                <select id="fixed-charge-type" required th:field="*{type}"
+                                        th:attr="data-required-message=#{payment.folio.addCharge.required.type}">
+                                    <option value="" th:text="#{payment.folio.field.selectType}">Select a type</option>
+                                    <option th:each="type : ${chargeTypes}" th:text="#{'enum.chargeType.' + ${type}}" th:value="${type}">ROOM</option>
+                                </select>
+                                <p class="field-error folio-client-error" data-client-error-for="fixed-charge-type" hidden></p>
+                                <p class="field-error" th:errors="*{type}"></p>
+                            </div>
+                            <div class="form-field">
+                                <label for="fixed-charge-amount">
+                                    <span th:text="#{payment.folio.addCharge.amountVnd}">Amount (VND)</span>
+                                    <span class="form-required" aria-hidden="true">*</span>
+                                </label>
+                                <input class="js-money-input" id="fixed-charge-amount" inputmode="decimal" required th:field="*{amount}" type="text"
+                                       th:attr="data-required-message=#{payment.folio.addCharge.required.amount}" />
+                                <p class="field-error folio-client-error" data-client-error-for="fixed-charge-amount" hidden></p>
+                                <p class="field-error" th:errors="*{amount}"></p>
+                            </div>
+                            <div class="form-field">
+                                <label for="fixed-charge-description"><span th:text="#{payment.folio.field.description}">Description (optional)</span></label>
+                                <textarea id="fixed-charge-description" maxlength="1000" th:field="*{description}"></textarea>
+                                <span class="folio-counter" aria-live="polite" data-counter-for="fixed-charge-description">0/1000</span>
+                                <p class="field-error" th:errors="*{description}"></p>
+                            </div>
+                            <p class="field-error" th:errors="*{pricingModeValid}"></p>
+                            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        </form>
+
+                        <form class="folio-charge-form" data-charge-mode-panel="itemized" id="folio-charge-form-itemized"
+                              method="post" role="tabpanel" aria-labelledby="folio-charge-tab-itemized"
+                              th:action="@{/reservations/{id}/folio/charges(id=${reservation.id})}"
+                              th:attr="data-confirm-label=#{payment.folio.addCharge.confirmItemizedTitle},data-confirm-message=#{payment.folio.addCharge.confirmItemizedMessage},data-confirm-title=#{payment.folio.addCharge.confirmItemizedTitle}"
+                              th:hidden="${addChargeMode != 'ITEMIZED'}"
+                              data-confirm-severity="NORMAL" th:object="${chargeForm}">
+                            <div class="form-field">
+                                <label for="itemized-charge-type">
+                                    <span th:text="#{payment.folio.column.type}">Type</span>
+                                    <span class="form-required" aria-hidden="true">*</span>
+                                </label>
+                                <select id="itemized-charge-type" required th:field="*{type}"
+                                        th:attr="data-required-message=#{payment.folio.addCharge.required.type}">
+                                    <option value="" th:text="#{payment.folio.field.selectType}">Select a type</option>
+                                    <option th:each="type : ${chargeTypes}" th:text="#{'enum.chargeType.' + ${type}}" th:value="${type}">ROOM</option>
+                                </select>
+                                <p class="field-error folio-client-error" data-client-error-for="itemized-charge-type" hidden></p>
+                                <p class="field-error" th:errors="*{type}"></p>
+                            </div>
+                            <div class="form-grid folio-charge-form__pair">
+                                <div class="form-field">
+                                    <label for="itemized-charge-quantity">
+                                        <span th:text="#{payment.folio.field.quantity}">Quantity</span>
+                                        <span class="form-required" aria-hidden="true">*</span>
+                                    </label>
+                                    <input id="itemized-charge-quantity" inputmode="numeric" pattern="[0-9]*" required th:field="*{quantity}" type="text"
+                                           th:attr="data-required-message=#{payment.folio.addCharge.required.quantity}" />
+                                    <p class="field-error folio-client-error" data-client-error-for="itemized-charge-quantity" hidden></p>
+                                    <p class="field-error" th:errors="*{quantity}"></p>
+                                </div>
+                                <div class="form-field">
+                                    <label for="itemized-charge-unit-price">
+                                        <span th:text="#{payment.folio.addCharge.unitPriceVnd}">Unit Price (VND)</span>
+                                        <span class="form-required" aria-hidden="true">*</span>
+                                    </label>
+                                    <input class="js-money-input" id="itemized-charge-unit-price" inputmode="decimal" required th:field="*{unitPrice}" type="text"
+                                           th:attr="data-required-message=#{payment.folio.addCharge.required.unitPrice}" />
+                                    <p class="field-error folio-client-error" data-client-error-for="itemized-charge-unit-price" hidden></p>
+                                    <p class="field-error" th:errors="*{unitPrice}"></p>
+                                </div>
+                            </div>
+                            <div class="folio-charge-total">
+                                <div>
+                                    <p class="folio-charge-total__label" th:text="#{payment.folio.addCharge.total}">Total</p>
+                                    <output class="folio-charge-total__value" aria-live="polite" data-charge-total>—</output>
+                                </div>
+                                <span class="folio-charge-total__breakdown" data-charge-breakdown></span>
+                            </div>
+                            <div class="form-field">
+                                <label for="itemized-charge-description"><span th:text="#{payment.folio.field.description}">Description (optional)</span></label>
+                                <textarea id="itemized-charge-description" maxlength="1000" th:field="*{description}"></textarea>
+                                <span class="folio-counter" aria-live="polite" data-counter-for="itemized-charge-description">0/1000</span>
+                                <p class="field-error" th:errors="*{description}"></p>
+                            </div>
+                            <p class="field-error" th:errors="*{quantityAndUnitPricePaired}"></p>
+                            <p class="field-error" th:errors="*{pricingModeValid}"></p>
+                            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        </form>
+                    </div>
+                    <div class="folio-dialog__footer">
+                        <button class="button button-secondary" data-dialog-close type="button"
+                                th:text="#{common.action.cancel}">Cancel</button>
+                        <button class="button button-primary" id="folio-charge-submit" type="submit"
+                                th:attr="form=${addChargeMode == 'ITEMIZED' ? 'folio-charge-form-itemized' : 'folio-charge-form-fixed'}"
+                                th:text="#{payment.folio.addCharge.submit}">Add Charge</button>
+                    </div>
+                </dialog>
+            </th:block>
+
+            <!-- Payments: same interaction model as Charges. A table row selects a Payment; the Payment Detail panel shows it
+                 and hosts the row-level actions the business rules allow. Recording, refunding and voiding happen in dialogs. -->
+            <th:block th:if="${activeTab == 'payments'}">
+                <div class="folio-charges">
+                    <section aria-labelledby="folio-payments-heading" class="card folio-section folio-charges__main">
+                        <div class="card-header-row folio-section__head">
+                            <h2 id="folio-payments-heading">
+                                <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                                <span th:text="#{payment.folio.payments.title}">Payments</span>
+                            </h2>
+                            <button class="button button-outline-primary button-compact" data-dialog-open="folio-record-payment-dialog"
+                                    th:if="${folioMutable}" type="button">
+                                <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                <span th:text="#{payment.folio.addPayment.recordButton}">Record Payment</span>
+                            </button>
+                        </div>
+                        <div class="table-wrap" th:unless="${#lists.isEmpty(payments)}">
+                            <table class="folio-table folio-table--payments">
+                                <thead>
+                                <tr>
+                                    <th class="folio-sort-th" scope="col" aria-sort="ascending">
+                                        <button class="folio-sort" data-sort-key="date" type="button">
+                                            <span th:text="#{payment.folio.column.date}">payment.folio.column.date</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↑</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="method" type="button">
+                                            <span th:text="#{payment.folio.column.paymentMethod}">payment.folio.column.paymentMethod</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="reference" type="button">
+                                            <span th:text="#{payment.folio.column.referenceNo}">payment.folio.column.referenceNo</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="currency" type="button">
+                                            <span th:text="#{payment.folio.column.currency}">payment.folio.column.currency</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th table-number" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="amount" type="button">
+                                            <span th:text="#{payment.folio.column.amount}">payment.folio.column.amount</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th table-number" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="applied" type="button">
+                                            <span th:text="#{payment.folio.column.appliedAmount}">payment.folio.column.appliedAmount</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="status" type="button">
+                                            <span th:text="#{payment.folio.column.status}">payment.folio.column.status</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                    <th class="folio-sort-th" scope="col" aria-sort="none">
+                                        <button class="folio-sort" data-sort-key="added" type="button">
+                                            <span th:text="#{payment.folio.column.addedBy}">payment.folio.column.addedBy</span>
+                                            <span aria-hidden="true" class="folio-sort__icon">↕</span>
+                                        </button>
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <!-- Sort keys are the underlying values, never the formatted text. Empty means no value, which always sorts last. -->
+                                <tr class="folio-charge-row" tabindex="0" th:each="payment, rowStat : ${payments}"
+                                    th:attr="data-payment-row=${payment.id},data-sort-date=${payment.paidAt != null ? payment.paidAt.toEpochMilli() : ''},data-sort-method=${payment.method},data-sort-reference=${payment.reference ?: ''},data-sort-currency=${payment.currency},data-sort-amount=${payment.amount.stripTrailingZeros().toPlainString()},data-sort-applied=${payment.appliedAmount.stripTrailingZeros().toPlainString()},data-sort-status=${payment.status},data-sort-added=${payment.addedByUsername ?: ''}"
+                                    th:classappend="${rowStat.first} ? 'folio-charge-row--selected' : ''"
+                                    th:aria-current="${rowStat.first} ? 'true' : null">
+                                    <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
+                                    <td><span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">CASH</span></td>
+                                    <td class="table-reference" th:attr="title=${payment.reference}" th:text="${payment.reference ?: '—'}">—</td>
+                                    <td th:text="${payment.currency}">VND</td>
+                                    <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0 VND</span></td>
+                                    <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0 VND</span></td>
+                                    <td>
+                                        <span th:replace="~{layout/enum :: badge('paymentStatus', ${payment.status}, 'status-badge--' + ${#strings.toLowerCase(payment.status)})}">PENDING</span>
+                                    </td>
+                                    <td th:text="${payment.addedByUsername ?: '—'}">admin</td>
+                                </tr>
+                                </tbody>
+                                <tfoot>
+                                <tr class="table-total-row">
+                                    <td colspan="5" th:text="#{payment.folio.payments.total}">Total Applied Payments (PAID)</td>
+                                    <td class="table-number"><span th:replace="~{layout/money :: amount(${balance.totalPaidPayments}, ${reservation.currency})}">0 VND</span></td>
+                                    <td colspan="2"></td>
+                                </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                        <div class="empty-state folio-empty" th:if="${#lists.isEmpty(payments)}">
+                            <span aria-hidden="true" class="empty-state-icon"><svg th:replace="~{layout/icons :: inbox}"></svg></span>
+                            <p class="empty-state-message" th:text="#{payment.folio.payments.empty}">No payments recorded yet.</p>
+                        </div>
+                    </section>
+
+                    <aside class="folio-charges__side">
+                        <section aria-labelledby="folio-payment-detail-heading" class="card folio-section">
+                            <div class="card-header-row folio-section__head">
+                                <h2 id="folio-payment-detail-heading">
+                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:text="#{payment.folio.payments.detail.title}">Payment Detail</span>
+                                </h2>
+                            </div>
+                            <th:block th:each="payment, detailStat : ${payments}">
+                                <div class="folio-charge-detail-item" th:attr="data-payment-detail=${payment.id}"
+                                     th:hidden="${!detailStat.first}">
+                                    <dl class="folio-facts">
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.date}">Date</dt>
+                                            <dd><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.paymentMethod}">Payment method</dt>
+                                            <dd><span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">CASH</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.referenceNo}">Reference No.</dt>
+                                            <dd th:text="${payment.reference ?: '—'}">—</dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.currency}">Currency</dt>
+                                            <dd th:text="${payment.currency}">VND</dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.amount}">Amount</dt>
+                                            <dd><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0 VND</span></dd>
+                                        </div>
+                                        <div th:if="${payment.exchangeRate != null}">
+                                            <dt th:text="#{payment.folio.column.rate}">Rate</dt>
+                                            <dd th:text="${'1 USD = ' + #numbers.formatDecimal(payment.exchangeRate, 1, 'COMMA', 6, 'POINT').replaceAll('0+$', '').replaceAll('\.$', '') + ' VND'}">1 USD = 25,000 VND</dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.appliedAmountIn(${reservation.currency})}">Applied amount</dt>
+                                            <dd><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0 VND</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.status}">Status</dt>
+                                            <dd><span th:replace="~{layout/enum :: badge('paymentStatus', ${payment.status}, 'status-badge--' + ${#strings.toLowerCase(payment.status)})}">PENDING</span></dd>
+                                        </div>
+                                        <div>
+                                            <dt th:text="#{payment.folio.column.addedBy}">Added by</dt>
+                                            <dd th:text="${payment.addedByUsername ?: '—'}">admin</dd>
+                                        </div>
+                                    </dl>
+                                    <p class="folio-reason" th:if="${payment.status == 'REFUNDED' and payment.refundReason != null}"
+                                       th:text="#{payment.folio.reason(${payment.refundReason})}">Reason: —</p>
+                                    <p class="folio-reason" th:if="${payment.status == 'VOIDED' and payment.voidReason != null}"
+                                       th:text="#{payment.folio.reason(${payment.voidReason})}">Reason: —</p>
+                                    <div class="folio-charge-detail__actions folio-payment-detail__actions"
+                                         th:if="${folioMutable and (payment.status == 'PENDING' or payment.status == 'PAID')}">
+                                        <form data-confirm-severity="WARNING" method="post"
+                                              th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/mark-paid(reservationId=${reservation.id},paymentId=${payment.id})}"
+                                              th:attr="data-confirm-label=#{payment.folio.payment.markPaid},data-confirm-title=#{payment.folio.payment.markPaid.confirmTitle},data-confirm-message=#{payment.folio.payment.markPaid.confirmMessage}"
+                                              th:if="${payment.status == 'PENDING'}">
+                                            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                            <button class="button button-primary" th:text="#{payment.folio.payment.markPaid}" type="submit">Mark paid</button>
+                                        </form>
+                                        <form data-confirm-severity="WARNING" method="post"
+                                              th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/mark-failed(reservationId=${reservation.id},paymentId=${payment.id})}"
+                                              th:attr="data-confirm-label=#{payment.folio.payment.markFailed},data-confirm-title=#{payment.folio.payment.markFailed.confirmTitle},data-confirm-message=#{payment.folio.payment.markFailed.confirmMessage}"
+                                              th:if="${payment.status == 'PENDING'}">
+                                            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                            <button class="button button-secondary" th:text="#{payment.folio.payment.markFailed}" type="submit">Mark failed</button>
+                                        </form>
+                                        <button class="button button-danger" th:if="${payment.status == 'PAID'}" type="button"
+                                                th:attr="data-dialog-open=|folio-refund-dialog-${payment.id}|"
+                                                th:text="#{payment.folio.payment.refund.menuItem}">Refund Payment</button>
+                                        <button class="button button-danger" th:if="${payment.status == 'PAID'}" type="button"
+                                                th:attr="data-dialog-open=|folio-payment-void-dialog-${payment.id}|"
+                                                th:text="#{payment.folio.payment.void.menuItem}">Void Payment</button>
+                                    </div>
+
+                                    <dialog class="folio-dialog" th:attr="aria-labelledby=|folio-refund-dialog-title-${payment.id}|, id=|folio-refund-dialog-${payment.id}|"
+                                            th:if="${folioMutable and payment.status == 'PAID'}">
+                                        <div class="folio-dialog__header">
+                                            <h2 th:attr="id=|folio-refund-dialog-title-${payment.id}|" th:text="#{payment.folio.payment.refund.dialogTitle}">Refund Payment</h2>
+                                            <button class="folio-dialog__close" data-dialog-close type="button"
+                                                    th:attr="aria-label=#{common.action.close}">
+                                                <svg th:replace="~{layout/icons :: close}"></svg>
+                                            </button>
+                                        </div>
+                                        <div class="folio-dialog__body">
+                                            <p class="folio-dialog__warning" role="alert">
+                                                <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                                                <span>
+                                                    <strong th:text="#{payment.folio.payment.refund.warningTitle}">The full amount will be refunded.</strong>
+                                                    <span th:text="#{payment.folio.payment.refund.warningMessage}">Partial refunds are not supported. The payment will no longer count toward Total Payments.</span>
+                                                </span>
+                                            </p>
+                                            <dl class="folio-dialog__summary">
+                                                <div>
+                                                    <dt th:text="#{payment.folio.payment.originalPayment}">Original payment</dt>
+                                                    <dd>
+                                                        <span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">CASH</span>
+                                                        <span th:if="${payment.reference != null}" th:text="${'· ' + payment.reference}"></span>
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt th:text="#{payment.folio.payment.refund.amountLabel}">Refund amount</dt>
+                                                    <dd><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0 VND</span></dd>
+                                                </div>
+                                            </dl>
+                                            <form class="folio-dialog__form" method="post"
+                                                  th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/refund(reservationId=${reservation.id},paymentId=${payment.id})}">
+                                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                                <div class="form-field">
+                                                    <label th:attr="for=|refund-payment-reason-${payment.id}|">
+                                                        <span th:text="#{payment.folio.payment.refund.reasonLabel}">Refund reason</span>
+                                                        <span aria-hidden="true">*</span>
+                                                    </label>
+                                                    <input class="payment-refund-reason" maxlength="1000" name="reason" required
+                                                           th:attr="id=|refund-payment-reason-${payment.id}|"
+                                                           th:placeholder="#{payment.folio.payment.refund.reasonPlaceholder}" type="text" />
+                                                </div>
+                                                <div class="folio-dialog__footer">
+                                                    <button class="button button-secondary" data-dialog-close type="button"
+                                                            th:text="#{common.action.cancel}">Cancel</button>
+                                                    <button class="button button-danger" th:text="#{payment.folio.payment.refund.menuItem}" type="submit">Refund Payment</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </dialog>
+
+                                    <dialog class="folio-dialog" th:attr="aria-labelledby=|folio-payment-void-dialog-title-${payment.id}|, id=|folio-payment-void-dialog-${payment.id}|"
+                                            th:if="${folioMutable and payment.status == 'PAID'}">
+                                        <div class="folio-dialog__header">
+                                            <h2 th:attr="id=|folio-payment-void-dialog-title-${payment.id}|" th:text="#{payment.folio.payment.void.dialogTitle}">Void Payment</h2>
+                                            <button class="folio-dialog__close" data-dialog-close type="button"
+                                                    th:attr="aria-label=#{common.action.close}">
+                                                <svg th:replace="~{layout/icons :: close}"></svg>
+                                            </button>
+                                        </div>
+                                        <div class="folio-dialog__body">
+                                            <p class="folio-dialog__warning" role="alert">
+                                                <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                                                <span>
+                                                    <strong th:text="#{payment.folio.charge.void.warningTitle}">This action cannot be undone.</strong>
+                                                    <span th:text="#{payment.folio.payment.void.confirmMessage}">Use Void only when no money was returned.</span>
+                                                </span>
+                                            </p>
+                                            <dl class="folio-dialog__summary">
+                                                <div>
+                                                    <dt th:text="#{payment.folio.payment.originalPayment}">Original payment</dt>
+                                                    <dd>
+                                                        <span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">CASH</span>
+                                                        <span th:if="${payment.reference != null}" th:text="${'· ' + payment.reference}"></span>
+                                                    </dd>
+                                                </div>
+                                                <div>
+                                                    <dt th:text="#{payment.folio.column.amount}">Amount</dt>
+                                                    <dd><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0 VND</span></dd>
+                                                </div>
+                                            </dl>
+                                            <form class="folio-dialog__form" method="post"
+                                                  th:action="@{/reservations/{reservationId}/folio/payments/{paymentId}/void(reservationId=${reservation.id},paymentId=${payment.id})}">
+                                                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                                <div class="form-field">
+                                                    <label th:attr="for=|void-payment-reason-${payment.id}|">
+                                                        <span th:text="#{payment.folio.payment.void.reasonLabel}">Void reason</span>
+                                                        <span aria-hidden="true">*</span>
+                                                    </label>
+                                                    <input class="payment-void-reason" maxlength="1000" name="reason" required
+                                                           th:attr="id=|void-payment-reason-${payment.id}|"
+                                                           th:placeholder="#{payment.folio.payment.void.reasonPlaceholder}" type="text" />
+                                                </div>
+                                                <div class="folio-dialog__footer">
+                                                    <button class="button button-secondary" data-dialog-close type="button"
+                                                            th:text="#{common.action.cancel}">Cancel</button>
+                                                    <button class="button button-danger" th:text="#{payment.folio.payment.void.menuItem}" type="submit">Void Payment</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </dialog>
+                                </div>
+                            </th:block>
+                            <p class="folio-empty-text" th:if="${#lists.isEmpty(payments)}"
+                               th:text="#{payment.folio.payments.detail.empty}">Select a payment to see its details.</p>
+                        </section>
+
+                        <th:block th:replace="~{stay/folio-fragments :: recentActivity}"></th:block>
+                    </aside>
+                </div>
+
+                <dialog aria-labelledby="folio-record-payment-dialog-title" class="folio-dialog folio-dialog--add-charge"
+                        id="folio-record-payment-dialog" th:if="${folioMutable}"
+                        th:attr="data-autoopen=${addPaymentOpen ? 'true' : 'false'}">
+                    <div class="folio-dialog__header">
+                        <h2 id="folio-record-payment-dialog-title" th:text="#{payment.folio.addPayment.recordButton}">Record Payment</h2>
+                        <button class="folio-dialog__close" data-dialog-close type="button"
+                                th:attr="aria-label=#{common.action.close}">
+                            <svg th:replace="~{layout/icons :: close}"></svg>
+                        </button>
+                    </div>
+                    <form data-confirm-severity="NORMAL" data-payment-form
+                          method="post"
+                          th:action="@{/reservations/{id}/folio/payments(id=${reservation.id})}"
+                          th:attr="data-confirm-label=#{payment.folio.addPayment.confirmTitle},data-confirm-title=#{payment.folio.addPayment.confirmTitle},data-confirm-message=#{payment.folio.addPayment.confirmMessage},data-reservation-currency=${reservation.currency}"
+                          th:object="${paymentForm}">
+                      <div class="folio-dialog__body">
+                        <div class="form-field">
+                            <label for="payment-method" th:text="#{payment.folio.field.method}">Method</label>
+                            <select id="payment-method" required th:field="*{method}">
+                                <option value="" th:text="#{payment.folio.field.selectMethod}">Select a method</option>
+                                <option th:each="method : ${paymentMethods}" th:text="#{'enum.paymentMethod.' + ${method}}" th:value="${method}">CASH</option>
+                            </select>
+                            <p class="field-error" th:errors="*{method}"></p>
+                        </div>
+                        <div class="form-grid folio-charge-form__pair">
+                            <div class="form-field">
+                                <label for="payment-currency" th:text="#{payment.folio.field.currency}">Payment Currency</label>
+                                <select id="payment-currency" required th:field="*{currency}">
+                                    <option value="" th:text="#{payment.folio.field.selectCurrency}">Select currency</option>
+                                    <option th:each="currency : ${paymentCurrencies}" th:text="${currency}" th:value="${currency}">VND</option>
+                                </select>
+                                <p class="field-error" th:errors="*{currency}"></p>
+                            </div>
+                            <div class="form-field">
+                                <label for="payment-amount" th:text="#{payment.folio.field.paymentAmount}">Amount</label>
+                                <input class="js-money-input" id="payment-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
+                                <p class="field-error" th:errors="*{amount}"></p>
+                            </div>
+                        </div>
+                        <div class="form-field" data-exchange-rate-field>
+                            <label for="payment-exchange-rate" th:text="#{payment.folio.field.exchangeRate}">Exchange Rate</label>
+                            <div class="exchange-rate-inline">
+                                <span aria-hidden="true">1 USD =</span>
+                                <input class="js-money-input" id="payment-exchange-rate" inputmode="decimal" th:field="*{exchangeRate}" type="text" />
+                                <span aria-hidden="true">VND</span>
+                            </div>
+                            <p class="field-error" th:errors="*{exchangeRate}"></p>
+                        </div>
+                        <div class="form-field">
+                            <label for="payment-applied-preview" th:text="#{payment.folio.field.appliedPreview}">Applied to Folio</label>
+                            <output aria-live="polite" data-applied-preview id="payment-applied-preview">—</output>
+                            <p class="folio-hint" th:text="#{payment.folio.field.appliedPreviewHint}">Informational only.</p>
+                        </div>
+                        <div class="form-field">
+                            <label for="payment-reference">
+                                <span th:text="#{payment.folio.column.referenceNo}">Reference No.</span>
+                                <span aria-hidden="true" data-reference-hint
+                                      th:attr="data-optional-text=#{payment.folio.field.referenceOptional},data-required-text=#{payment.folio.field.referenceRequired}"
+                                      th:text="#{payment.folio.field.referenceOptional}">(optional)</span>
+                            </label>
+                            <input id="payment-reference" maxlength="1000" th:field="*{reference}" type="text" />
+                            <p class="field-error" th:errors="*{reference}"></p>
+                            <p class="folio-hint" th:text="#{payment.folio.field.referenceOta}">Required for OTA payments.</p>
+                        </div>
+                        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        <p class="folio-hint" th:text="#{payment.folio.addPayment.hint}">Record Payment = money already received. Add as Pending = recorded now, confirmed later.</p>
+                      </div>
+                        <div class="folio-dialog__footer">
+                            <button class="button button-secondary" data-dialog-close type="button"
+                                    th:text="#{common.action.cancel}">Cancel</button>
+                            <button class="button button-secondary" th:text="#{payment.folio.addPayment.pendingButton}" type="submit">Add as Pending</button>
+                            <button class="button button-primary" th:formaction="@{/reservations/{id}/folio/payments/record-paid(id=${reservation.id})}"
+                                    th:text="#{payment.folio.addPayment.recordButton}" type="submit">Record Payment</button>
+                        </div>
+                    </form>
+                </dialog>
+            </th:block>
+        </div>
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 <script defer th:src="@{/js/stay/folio.js}"></script>
+<script defer th:src="@{/js/stay/folio-charges.js}"></script>
 </body>
 </html>

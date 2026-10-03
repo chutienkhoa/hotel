@@ -2,6 +2,7 @@ package com.example.hotel.controller.booking;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.example.hotel.dto.booking.response.CurrentRoomResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
+import com.example.hotel.dto.booking.response.RoomHistoryLineResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
 import com.example.hotel.dto.room.response.RoomResponse;
@@ -157,6 +159,56 @@ class ReservationDetailHubTest {
                 .andExpect(content().string(containsString("status-badge--occupied")));
     }
 
+    /**
+     * Confirms the Room Details Room No. links to the existing Room Detail route for the actual current room only for
+     * users with MANAGE_ROOM, and shows plain text otherwise.
+     */
+    @Test
+    void shouldLinkRoomNumberInRoomDetailsToRoomDetail() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(
+                List.of(new CurrentRoomResponse(UUID.randomUUID(), ROOM_ID, "DEMO-404", Instant.parse("2026-10-02T03:00:00Z"))));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("v").authorities(
+                                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                                new SimpleGrantedAuthority("PERM_MANAGE_ROOM"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/rooms/" + ROOM_ID + "\"")))
+                .andExpect(content().string(containsString("DEMO-404")));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("DEMO-404")))
+                .andExpect(content().string(not(containsString("href=\"/rooms/" + ROOM_ID + "\""))));
+    }
+
+    /**
+     * Confirms every Room History row links to the room that row actually occupied, historical rooms included, and only
+     * for users with MANAGE_ROOM.
+     */
+    @Test
+    void shouldLinkEveryRoomHistoryRowToItsOwnRoomDetail() throws Exception {
+        UUID historicalRoomId = UUID.fromString("88888888-8888-8888-8888-888888888888");
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(
+                new StayResponse(STAY_ID, "CHECKED_IN", Instant.parse("2026-10-02T03:00:00Z"), null));
+        when(stayRoomAssignmentQueryService.findHistory(RESERVATION_ID)).thenReturn(List.of(
+                new RoomHistoryLineResponse("DEMO-201", Instant.parse("2026-10-02T03:00:00Z"),
+                        Instant.parse("2026-10-03T03:00:00Z"), "Initial Check-in", "staff01", historicalRoomId),
+                new RoomHistoryLineResponse("DEMO-404", Instant.parse("2026-10-03T03:00:00Z"), null,
+                        "Guest request", "manager01", ROOM_ID)));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("v").authorities(
+                                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                                new SimpleGrantedAuthority("PERM_MANAGE_ROOM"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/rooms/" + historicalRoomId + "\"")))
+                .andExpect(content().string(containsString("href=\"/rooms/" + ROOM_ID + "\"")));
+    }
+
     /** Confirms the Financial Summary card (Total Charges/Payments/Outstanding) is MANAGE_PAYMENT-gated. */
     @Test
     void shouldShowFinancialSummaryOnlyWithManagePayment() throws Exception {
@@ -245,6 +297,38 @@ class ReservationDetailHubTest {
     }
 
     /** Builds a CHECKED_IN Reservation Detail response with one booked room. */
+    /**
+     * Confirms the summary strip leads with the Guest Code, linked to the existing Guest Detail route only for users
+     * with MANAGE_GUEST, and no longer repeats the adult and child count that Stay Information already shows.
+     */
+    @Test
+    void shouldLinkGuestCodeFirstInSummaryStripToGuestDetail() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(
+                new StayResponse(STAY_ID, "CHECKED_IN", Instant.parse("2026-10-02T03:00:00Z"), null));
+
+        String body = mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("v").authorities(
+                                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                                new SimpleGrantedAuthority("PERM_MANAGE_GUEST"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("href=\"/guests/" + GUEST_ID + "\"")))
+                .andExpect(content().string(not(containsString("adults, "))))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        assertTrue(body.indexOf(">Guest</p>") < body.indexOf(">Room</p>"));
+        assertTrue(body.indexOf(">Room</p>") < body.indexOf(">Source</p>"));
+        assertTrue(body.indexOf(">Source</p>") < body.indexOf(">Check-in</p>"));
+        assertTrue(!body.contains("reservation-info-label\">Created By</p>"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("GUEST-001")))
+                .andExpect(content().string(not(containsString("href=\"/guests/" + GUEST_ID + "\""))));
+    }
+
     private ReservationDetailResponse reservation() {
         return new ReservationDetailResponse(
                 RESERVATION_ID, "R20261002-000001", GUEST_ID, "GUEST-001", "CHECKED_IN",

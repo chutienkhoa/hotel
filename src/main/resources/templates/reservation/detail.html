@@ -87,6 +87,37 @@
                     <h2 class="visually-hidden" id="hub-summary-heading">Reservation summary</h2>
                     <div class="hub-summary-strip">
                         <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--purple">
+                                <svg th:replace="~{layout/icons :: user}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.guest}">Guest</p>
+                                <a class="reservation-info-value reservation-info-link"
+                                   th:href="@{/guests/{id}(id=${reservation.guestId})}" th:if="${canManageGuest}">
+                                    <span th:text="${reservation.guestCode}">CUS-000001</span>
+                                    <span class="reservation-info-link-icon"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+                                </a>
+                                <p class="reservation-info-value" th:text="${reservation.guestCode}" th:unless="${canManageGuest}">CUS-000001</p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--blue">
+                                <svg th:replace="~{layout/icons :: bed}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.room}">Room</p>
+                                <p class="reservation-info-value">
+                                    <th:block th:each="room, roomStat : ${currentRooms}">
+                                        <span aria-hidden="true" th:unless="${roomStat.first}">, </span>
+                                        <a class="record-link" th:if="${canManageRoom}"
+                                           th:href="@{/rooms/{id}(id=${room.roomId})}" th:text="${room.roomNumber}">DEMO-404</a>
+                                        <span th:unless="${canManageRoom}" th:text="${room.roomNumber}">DEMO-404</span>
+                                    </th:block>
+                                    <span th:if="${#lists.isEmpty(currentRooms)}">—</span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
                             <span class="reservation-info-icon reservation-info-icon--green">
                                 <svg th:replace="~{layout/icons :: building}"></svg>
                             </span>
@@ -101,7 +132,7 @@
                             </span>
                             <div class="reservation-info-content">
                                 <p class="reservation-info-label" th:text="#{reservation.detail.summary.checkIn}">Check-in</p>
-                                <p class="reservation-info-value"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></p>
+                                <p class="reservation-info-value date-value--check-in"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></p>
                             </div>
                         </div>
                         <div class="hub-summary-item">
@@ -110,7 +141,11 @@
                             </span>
                             <div class="reservation-info-content">
                                 <p class="reservation-info-label" th:text="#{reservation.detail.summary.checkOut}">Check-out</p>
-                                <p class="reservation-info-value"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></p>
+                                <p class="reservation-info-value date-value--check-out">
+                                    <span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span>
+                                    <span class="reservation-overdue reservation-overdue--below" th:if="${overdueDays > 0}"
+                                       th:text="#{reservation.detail.overdue(${overdueDays})}">(1 day overdue)</span>
+                                </p>
                             </div>
                         </div>
                         <div class="hub-summary-item">
@@ -121,25 +156,6 @@
                                 <p class="reservation-info-label" th:text="#{reservation.detail.summary.nights}">Nights</p>
                                 <p class="reservation-info-value"
                                    th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</p>
-                            </div>
-                        </div>
-                        <div class="hub-summary-item">
-                            <span class="reservation-info-icon reservation-info-icon--purple">
-                                <svg th:replace="~{layout/icons :: user}"></svg>
-                            </span>
-                            <div class="reservation-info-content">
-                                <p class="reservation-info-label" th:text="#{reservation.guests.title}">Guests</p>
-                                <p class="reservation-info-value"
-                                   th:text="|${reservation.adultCount} adults, ${reservation.childCount} children|">2 adults, 1 children</p>
-                            </div>
-                        </div>
-                        <div class="hub-summary-item">
-                            <span class="reservation-info-icon reservation-info-icon--purple">
-                                <svg th:replace="~{layout/icons :: user}"></svg>
-                            </span>
-                            <div class="reservation-info-content">
-                                <p class="reservation-info-label" th:text="#{reservation.detail.reservationInfo.createdBy}">Created By</p>
-                                <p class="reservation-info-value" th:text="${reservation.createdByUsername ?: '—'}">admin</p>
                             </div>
                         </div>
                         <div class="hub-summary-item" th:if="${reservation.reservedAt != null}">
@@ -242,11 +258,15 @@
                                     <dl class="hub-fields">
                                         <div class="hub-field">
                                             <dt th:text="#{reservation.detail.stayInfo.checkIn}">Check-in Date</dt>
-                                            <dd><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></dd>
+                                            <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></dd>
                                         </div>
                                         <div class="hub-field">
                                             <dt th:text="#{reservation.detail.stayInfo.checkOut}">Check-out Date</dt>
-                                            <dd><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></dd>
+                                            <dd class="date-value--check-out">
+                                                <span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span>
+                                                <span class="reservation-overdue reservation-overdue--below" th:if="${overdueDays > 0}"
+                                       th:text="#{reservation.detail.overdue(${overdueDays})}">(1 day overdue)</span>
+                                            </dd>
                                         </div>
                                         <div class="hub-field">
                                             <dt th:text="#{reservation.detail.stayInfo.nights}">Nights</dt>
@@ -347,7 +367,11 @@
                                         <tbody>
                                         <tr th:each="room : ${currentRooms}"
                                             th:with="detail=${currentRoomDetails.get(room.roomId)},pricing=${roomPricingByRoomId.get(room.roomId)}">
-                                            <td th:text="${room.roomNumber}">101</td>
+                                            <td>
+                                                <a class="record-link" th:if="${canManageRoom}"
+                                                   th:href="@{/rooms/{id}(id=${room.roomId})}" th:text="${room.roomNumber}">101</a>
+                                                <span th:unless="${canManageRoom}" th:text="${room.roomNumber}">101</span>
+                                            </td>
                                             <td th:text="${detail != null ? detail.roomType.name : '—'}">Double Room</td>
                                             <td th:text="|${reservation.adultCount} adults, ${reservation.childCount} children|">2 adults, 1 children</td>
                                             <td class="table-number">
@@ -568,7 +592,13 @@
                                 </thead>
                                 <tbody>
                                 <tr th:each="line : ${roomHistory}">
-                                    <td><strong th:text="${line.roomNumber}">101</strong></td>
+                                    <td>
+                                        <strong>
+                                            <a class="record-link" th:if="${canManageRoom and line.roomId != null}"
+                                               th:href="@{/rooms/{id}(id=${line.roomId})}" th:text="${line.roomNumber}">101</a>
+                                            <span th:unless="${canManageRoom and line.roomId != null}" th:text="${line.roomNumber}">101</span>
+                                        </strong>
+                                    </td>
                                     <td class="text-muted"><span th:replace="~{layout/datetime :: dateTime(${line.assignedFrom})}">—</span></td>
                                     <td>
                                         <span class="status-badge status-badge--current" th:if="${line.assignedTo == null}">Current</span>
@@ -872,7 +902,13 @@
                         </thead>
                         <tbody>
                         <tr th:each="line : ${roomHistory}">
-                            <td><strong th:text="${line.roomNumber}">101</strong></td>
+                            <td>
+                                <strong>
+                                    <a class="record-link" th:if="${canManageRoom and line.roomId != null}"
+                                       th:href="@{/rooms/{id}(id=${line.roomId})}" th:text="${line.roomNumber}">101</a>
+                                    <span th:unless="${canManageRoom and line.roomId != null}" th:text="${line.roomNumber}">101</span>
+                                </strong>
+                            </td>
                             <td class="text-muted"><span th:replace="~{layout/datetime :: dateTime(${line.assignedFrom})}">—</span></td>
                             <td>
                                 <span class="status-badge status-badge--current" th:if="${line.assignedTo == null}">Current</span>
@@ -913,7 +949,11 @@
                                 <span th:replace="~{layout/datetime :: date(${event.previousCheckOutDate})}">—</span> –
                                 <span th:replace="~{layout/datetime :: date(${event.newCheckOutDate})}">—</span>
                             </td>
-                            <td th:text="${line.roomNumber}">101</td>
+                            <td>
+                                <a class="record-link" th:if="${canManageRoom and line.roomId != null}"
+                                   th:href="@{/rooms/{id}(id=${line.roomId})}" th:text="${line.roomNumber}">101</a>
+                                <span th:unless="${canManageRoom and line.roomId != null}" th:text="${line.roomNumber}">101</span>
+                            </td>
                             <td th:text="${line.nights}">2</td>
                             <td><span th:replace="~{layout/money :: amount(${line.nightlyRate}, ${reservation.currency})}">0 VND</span></td>
                             <td><span th:replace="~{layout/money :: amount(${line.amount}, ${reservation.currency})}">0 VND</span></td>

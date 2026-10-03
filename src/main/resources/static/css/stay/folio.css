@@ -1,0 +1,915 @@
+/* Task33 Folio Overview (Overview, Charges and Payments sections of one Reservation's Folio), composed after
+   docs/specs/evidence/task33/front-desk/folio-overview-final.png. Every rule is scoped under .folio so the shared
+   Reservation Detail, Change Room and Extend Stay styles are untouched. */
+
+.folio {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+}
+
+.folio-page {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: var(--space-6) var(--space-6) var(--space-8);
+}
+
+.folio-page > * + * {
+  margin-top: var(--space-5);
+}
+
+/* Icons read as weighted glyphs next to their headings, not as light hairlines. */
+.folio svg {
+  stroke-width: 2.2;
+}
+
+.folio-back {
+  margin-bottom: var(--space-2);
+}
+
+.folio-back svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.folio-header {
+  margin-bottom: 0;
+}
+
+/* The title block may shrink to the viewport so a long reservation number wraps instead of widening the page. */
+.folio-header > div {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.folio-header h1 {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 2rem;
+  gap: var(--space-3);
+  line-height: 1.15;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.folio-header h1 .status-badge {
+  font-size: 0.8125rem;
+}
+
+.folio-identity {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 0;
+}
+
+.folio-tabs {
+  margin-bottom: 0;
+}
+
+.folio-tabs .detail-tab {
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.folio-tabs .detail-tab:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.folio-readonly {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.folio-readonly svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+/* KPI row: four equal-width cards (Total Charges, Total Payments, Outstanding Balance, Guest). Every card
+   shares one padding value and stretches to the row height, so all four have the same outer size. */
+.folio-kpis {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.folio-kpi__pairs {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.folio-kpi__pairs > div {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.folio-kpi__pairs dt {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.folio-kpi__pairs dd {
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  margin: 0;
+  min-width: 0;
+}
+
+/* Guest name stays on one line inside the card; a long name ends in an ellipsis and keeps its full text as a title. */
+.folio-kpi__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* Every KPI card shares this minimum height so all five stay the same size at every breakpoint. Content taller
+   than the minimum would enlarge its own row, so keep KPI content short. */
+.folio-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 8.5rem;
+  min-width: 0;
+  padding: var(--space-5);
+}
+
+.folio-kpi--charges {
+  background: var(--color-info-surface);
+}
+
+.folio-kpi--payments {
+  background: var(--color-success-surface);
+}
+
+.folio-kpi__label {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.folio-kpi__label svg {
+  flex: none;
+  height: var(--icon-size-section);
+  width: var(--icon-size-section);
+}
+
+.folio-kpi__value {
+  color: var(--color-navy);
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.folio-kpi--due {
+  background: var(--color-danger-surface);
+  border-color: var(--color-danger);
+}
+
+.folio-kpi--due .folio-kpi__label,
+.folio-kpi--due .folio-kpi__value {
+  color: var(--color-danger);
+}
+
+.folio-kpi--settled {
+  background: var(--color-success-surface);
+}
+
+.folio-kpi--settled .folio-kpi__label,
+.folio-kpi--settled .folio-kpi__value {
+  color: var(--color-success);
+}
+
+.folio-kpi__hint {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+}
+
+/* Overview body: Charges, Payments and Outstanding on the left (about 70%), Stay Summary, Quick Actions and
+   Recent Activity on the right (about 30%). Both columns start at the same top edge. Stacks below 64rem. */
+.folio-overview {
+  align-items: start;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 2.5fr) minmax(16rem, 1fr);
+}
+
+.folio-overview__main,
+.folio-overview__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.folio-section {
+  min-width: 0;
+}
+
+.folio-section__head {
+  margin-bottom: var(--space-4);
+}
+
+.folio-section__head h2 {
+  align-items: center;
+  display: flex;
+  font-size: 1.125rem;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.folio-facts {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.folio-facts > div {
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding-bottom: var(--space-2);
+}
+
+.folio-facts > div:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.folio-facts dt {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.folio-facts dd {
+  color: var(--color-text);
+  font-weight: 700;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.folio-facts__note {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* Page-level actions sit top-right in the header, aligned on one row with a shared button height. */
+.folio-header__actions {
+  align-items: center;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.folio-header__actions .button {
+  gap: var(--space-2);
+  height: var(--control-height);
+}
+
+.folio-header__actions .button svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+/* Recent Activity reuses the shared hub timeline; the folio only resets list spacing. */
+.folio-activity {
+  margin: 0;
+  padding: 0;
+}
+
+/* Outstanding Balance: Charges - Applied Payments = Outstanding, presentation only. The values come from StayBalance. */
+.folio-equation {
+  align-items: stretch;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  padding: var(--space-3);
+}
+
+.folio-equation__cell {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  justify-content: center;
+  min-width: 0;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.folio-equation__label {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.folio-equation__value {
+  color: var(--color-navy);
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.folio-equation__operator {
+  align-self: center;
+  color: var(--color-muted);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+
+.folio-equation__cell--outstanding {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* State classes are single-dash modifiers: Thymeleaf reserves double underscores inside th:* expressions. */
+.folio-outstanding--due {
+  background: var(--color-danger-surface);
+}
+
+.folio-outstanding--due .folio-equation__label,
+.folio-outstanding--due .folio-equation__value {
+  color: var(--color-danger);
+}
+
+.folio-outstanding--settled {
+  background: var(--color-success-surface);
+}
+
+.folio-outstanding--settled .folio-equation__label,
+.folio-outstanding--settled .folio-equation__value {
+  color: var(--color-success);
+}
+
+/* Tables keep one line per row; wide tables scroll inside .table-wrap instead of wrapping or widening the card. */
+.folio-table th,
+.folio-table td {
+  white-space: nowrap;
+}
+
+.folio-table .folio-reason {
+  white-space: normal;
+}
+
+/* Overview Charges summary: Description shows its full text on one line; no ellipsis. */
+.folio-overview-charges .folio-description__text {
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.folio-description__text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folio-table .table-total-row td {
+  font-size: 0.9375rem;
+}
+
+/* Sortable Charges headers: the whole header cell is the click target. The button fills the cell, keeps the
+   shared header typography, and reserves a fixed-width arrow slot so the header does not shift when the sort moves. */
+.folio-sort-th {
+  padding: 0;
+}
+
+.folio-sort {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--space-1);
+  letter-spacing: inherit;
+  padding: var(--space-3) var(--space-4);
+  text-transform: inherit;
+  width: 100%;
+}
+
+.folio-sort:hover {
+  color: var(--color-primary);
+}
+
+.folio-sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+/* The idle indicator is a subtle neutral glyph; only the active column's arrow uses the primary blue. */
+.folio-sort__icon {
+  color: var(--color-muted);
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 0.75rem;
+  text-align: center;
+}
+
+.folio-table th[aria-sort="ascending"],
+.folio-table th[aria-sort="descending"] {
+  color: var(--color-navy);
+}
+
+.folio-table th[aria-sort="ascending"] .folio-sort__icon,
+.folio-table th[aria-sort="descending"] .folio-sort__icon {
+  color: var(--color-primary);
+}
+
+/* Charges numeric columns are right-aligned in both header and cells so the figures line up. */
+.folio-table--charges .table-number,
+.folio-table--payments .table-number {
+  text-align: right;
+}
+
+.folio-table--charges .table-number .folio-sort,
+.folio-table--payments .table-number .folio-sort {
+  justify-content: flex-end;
+}
+
+.folio-reason {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: var(--space-1) 0 0;
+}
+
+.folio-empty {
+  padding: var(--space-6) var(--space-4);
+}
+
+/* Payment Detail actions share the Charge Detail action row; several buttons wrap instead of overflowing. */
+.folio-payment-detail__actions {
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.folio-payment-detail__actions form {
+  display: contents;
+}
+
+/* Add Charge: fixed and itemized forms side by side on desktop, stacked on narrower screens. */
+.folio-forms {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.folio-forms .form-card {
+  margin: 0;
+}
+
+.folio-forms h3 {
+  margin: 0 0 var(--space-4);
+}
+
+.folio-hint {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: var(--space-2) 0 0;
+}
+
+/* Tablet: KPI cards wrap into three equal columns, so every card keeps the same size within this breakpoint.
+   The Overview stacks in the mobile order Charges, Payments, Outstanding, Stay Summary, Quick Actions, Activity. */
+@media (max-width: 64rem) {
+  .folio-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .folio-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .folio-forms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Phones: KPI cards in two equal columns, Outstanding first so the amount that drives action leads; the equation
+   stacks vertically. */
+@media (max-width: 52rem) {
+  .folio-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .folio-kpi--outstanding {
+    order: -1;
+  }
+
+  .folio-equation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .folio-equation__operator {
+    font-size: 1.125rem;
+    line-height: 1;
+  }
+}
+
+/* Phones: 16px gutter, title and tabs sized to the viewport; tabs scroll sideways rather than wrapping. */
+@media (max-width: 40rem) {
+  .folio-page {
+    padding: var(--space-5) var(--space-4) var(--space-8);
+  }
+
+  .folio-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .folio-tabs {
+    flex-wrap: nowrap;
+    gap: var(--space-4);
+    overflow-x: auto;
+  }
+
+  .folio-kpi__value {
+    font-size: 1.25rem;
+  }
+
+  .folio-section,
+  .folio-kpi {
+    padding: var(--space-4);
+  }
+}
+
+/* Charges tab: the table is the primary column; the Charge Detail panel and Recent Activity sit beside it. */
+.folio-charges {
+  align-items: start;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 2.5fr) minmax(18rem, 1fr);
+}
+
+.folio-charges__main,
+.folio-charges__side {
+  min-width: 0;
+}
+
+.folio-charges__side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.folio-table--charges .folio-charge-row--selected td,
+.folio-table--payments .folio-charge-row--selected td {
+  background: var(--color-info-surface);
+}
+
+/* Charge rows are selectable: pointer cursor and a subtle hover on unselected rows; the selected row keeps the
+   light-blue selected background. Focus is visible for keyboard selection. */
+.folio-charge-row {
+  cursor: pointer;
+}
+
+.folio-charge-row:not(.folio-charge-row--selected):hover td {
+  background: var(--color-surface-muted);
+}
+
+.folio-charge-row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.folio-table--charges .folio-charge-row--selected td:first-child,
+.folio-table--payments .folio-charge-row--selected td:first-child {
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.folio-charge-detail__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+.folio-empty-text {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+/* Dialogs (Add Charge, Void Charge): the same native <dialog> treatment as the shared confirmation dialog. */
+.folio-dialog {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 1.5rem 3rem rgb(16 42 67 / 24%);
+  color: var(--color-text);
+  max-width: min(34rem, calc(100% - 2 * var(--space-4)));
+  padding: 0;
+  width: 100%;
+}
+
+.folio-dialog--wide {
+  max-width: min(60rem, calc(100% - 2 * var(--space-4)));
+}
+
+.folio-dialog::backdrop {
+  background: rgb(16 42 67 / 40%);
+}
+
+.folio-dialog__header {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+}
+
+.folio-dialog__header h2 {
+  font-size: 1.125rem;
+  margin: 0;
+}
+
+.folio-dialog__close {
+  background: none;
+  border: 0;
+  color: var(--color-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+}
+
+.folio-dialog__close svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+.folio-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.folio-dialog__warning {
+  align-items: flex-start;
+  background: var(--color-danger-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+}
+
+.folio-dialog__warning svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+.folio-dialog__warning span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.folio-dialog__summary {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.folio-dialog__summary dt {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.folio-dialog__summary dd {
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.folio-dialog__footer {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+@media (max-width: 64rem) {
+  .folio-charges {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Add Charge modal: a compact dialog (about 32.5rem, as in the approved evidence) with Fixed Amount / Itemized tabs.
+   Only one form is visible at a time. */
+.folio-dialog--add-charge {
+  max-width: min(32.5rem, calc(100% - 2 * var(--space-4)));
+}
+
+.folio-dialog--add-charge .folio-dialog__body {
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.folio-dialog--add-charge .folio-dialog__footer {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space-4) var(--space-5);
+}
+
+.folio-mode-tabs {
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-1);
+}
+
+.folio-mode-tabs__tab {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-muted);
+  cursor: pointer;
+  display: flex;
+  flex: 1 1 0;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  gap: var(--space-2);
+  justify-content: center;
+  padding: var(--space-2) var(--space-3);
+}
+
+.folio-mode-tabs__tab svg {
+  flex: none;
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+.folio-mode-tabs__tab:hover {
+  color: var(--color-text);
+}
+
+.folio-mode-tabs__tab.is-active {
+  background: var(--color-info-surface);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
+  color: var(--color-primary);
+}
+
+.form-required {
+  color: var(--color-danger);
+  margin-left: 2px;
+}
+
+.folio-counter {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.8125rem;
+  margin-top: var(--space-1);
+  text-align: right;
+}
+
+/* Inline required-field message: shown after the user touches the field or attempts to submit. */
+.folio-client-error {
+  align-items: center;
+  color: var(--color-danger);
+  display: flex;
+  gap: var(--space-2);
+}
+
+.folio-client-error[hidden] {
+  display: none;
+}
+
+.folio-client-error::before {
+  align-items: center;
+  background: var(--color-danger);
+  border-radius: 50%;
+  color: #fff;
+  content: "!";
+  display: inline-flex;
+  flex: none;
+  font-size: 0.75rem;
+  font-weight: 800;
+  height: 1rem;
+  justify-content: center;
+  width: 1rem;
+}
+
+.folio-mode-tabs__tab:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.folio-charge-form {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+/* The class rules above set display, which would otherwise override the hidden attribute that selects the active tab. */
+.folio-charge-form[hidden] {
+  display: none;
+}
+
+.folio-charge-form__pair {
+  margin-bottom: var(--space-4);
+}
+
+.folio-charge-total {
+  align-items: center;
+  background: var(--color-info-surface);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.folio-charge-total__label {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.folio-charge-total__value {
+  color: var(--color-primary);
+  display: block;
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.folio-charge-total__breakdown {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Validation timing: the shared rule paints every empty required field red on open. Inside this dialog a field is
+   marked invalid only after the user has interacted with it or attempted to submit (data-interacted). */
+.folio-dialog--add-charge input:invalid:not(:placeholder-shown),
+.folio-dialog--add-charge select:invalid,
+.folio-dialog--add-charge textarea:invalid:not(:placeholder-shown) {
+  border-color: var(--color-border-strong);
+}
+
+.folio-dialog--add-charge [data-interacted]:invalid,
+.folio-dialog--add-charge [data-interacted]:invalid:not(:placeholder-shown) {
+  border-color: var(--color-danger);
+}
+
+@media (max-width: 40rem) {
+  .folio-charge-form__pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

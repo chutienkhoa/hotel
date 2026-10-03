@@ -36,7 +36,10 @@ import com.example.hotel.service.booking.StayRoomAssignmentQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import jakarta.validation.Valid;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,6 +80,7 @@ public class ReservationPageController {
     private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
     private final ReservationActivityQueryService reservationActivityQueryService;
     private final UiMessages messages;
+    private final org.springframework.beans.factory.ObjectProvider<Clock> clockProvider;
 
     /**
      * Creates the MVC controller with query services for presentation data and the reservation
@@ -96,6 +100,7 @@ public class ReservationPageController {
      * @param prepaymentService prepayment summary of a CONFIRMED Reservation (MANAGE_PAYMENT only)
      * @param reservationActivityQueryService read-only Reservation Operational Timeline (VIEW_BOOKING baseline)
      * @param messageSource localized UI message source
+     * @param clockProvider hotel business clock used to flag a Stay that is past its planned check-out date
      */
     public ReservationPageController(
             ReservationQueryService reservationQueryService,
@@ -111,7 +116,9 @@ public class ReservationPageController {
             com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService,
             com.example.hotel.service.booking.PrepaymentService prepaymentService,
             ReservationActivityQueryService reservationActivityQueryService,
-            org.springframework.context.MessageSource messageSource) {
+            org.springframework.context.MessageSource messageSource,
+            org.springframework.beans.factory.ObjectProvider<Clock> clockProvider) {
+        this.clockProvider = clockProvider;
         this.reservationQueryService = reservationQueryService;
         this.reservationService = reservationService;
         this.guestQueryService = guestQueryService;
@@ -176,6 +183,21 @@ public class ReservationPageController {
     }
 
     /**
+     * Counts the calendar days a CHECKED_IN Reservation is past its planned check-out date. Presentation-only warning:
+     * the business status stays CHECKED_IN.
+     *
+     * @param reservation the Reservation being displayed
+     * @return days overdue, or {@code 0} when the Reservation is not CHECKED_IN or not past its planned check-out
+     */
+    private long overdueDays(ReservationDetailResponse reservation) {
+        if (!"CHECKED_IN".equals(reservation.status()) || reservation.checkOutDate() == null) {
+            return 0;
+        }
+        Clock clock = clockProvider.getIfAvailable(Clock::systemDefaultZone);
+        return Math.max(0, ChronoUnit.DAYS.between(reservation.checkOutDate(), LocalDate.now(clock)));
+    }
+
+    /**
      * Displays one reservation and only the state actions valid for its current status.
      *
      * @param id reservation identifier
@@ -189,6 +211,7 @@ public class ReservationPageController {
         addAuthorizationAttributes(model, authentication);
         ReservationDetailResponse reservation = reservationQueryService.findById(id);
         model.addAttribute("reservation", reservation);
+        model.addAttribute("overdueDays", overdueDays(reservation));
         boolean hasStay = stayQueryService.existsByReservationId(id);
         model.addAttribute("hasStay", hasStay);
         boolean checkedInLifecycle = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
@@ -640,6 +663,7 @@ public class ReservationPageController {
     private void addAuthorizationAttributes(Model model, Authentication authentication) {
         model.addAttribute("canManageBooking", hasAuthority(authentication, "PERM_MANAGE_BOOKING"));
         model.addAttribute("canManageGuest", hasAuthority(authentication, "PERM_MANAGE_GUEST"));
+        model.addAttribute("canManageRoom", hasAuthority(authentication, "PERM_MANAGE_ROOM"));
         model.addAttribute("canCheckIn", hasAuthority(authentication, "PERM_CHECK_IN"));
         model.addAttribute("canCheckOut", hasAuthority(authentication, "PERM_CHECK_OUT"));
         model.addAttribute("canChangeRoom", hasAuthority(authentication, "PERM_CHANGE_ROOM"));

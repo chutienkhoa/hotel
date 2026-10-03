@@ -308,7 +308,8 @@ class RoomChangePageControllerTest {
                 new BigDecimal("5000000"),
                 "VND",
                 false,
-                true));
+                true,
+                0));
         when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of(
                 new RoomChangeCandidateResponse(targetRoomId, "305", "Triple Room", 3, false)));
 
@@ -414,7 +415,37 @@ class RoomChangePageControllerTest {
                 new BigDecimal("5000000"),
                 "VND",
                 currentRoomHasImage,
-                roomChangeOpen);
+                roomChangeOpen,
+                0);
+    }
+
+    /** Confirms Stay Information reuses the Reservation Detail date classes and shows the overdue suffix. */
+    @Test
+    void shouldRenderStayDatesWithSharedClassesAndOverdueSuffix() throws Exception {
+        RoomChangeFormResponse base = openFormView(false);
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(new RoomChangeFormResponse(
+                base.reservationId(), base.reservationNumber(), base.currentRoomId(), base.currentRoomNumber(),
+                base.currentRoomTypeName(), base.currentRoomStatus(), base.checkInDate(), base.checkOutDate(),
+                base.nights(), base.adultCount(), base.childCount(), base.nightlyRate(), base.totalAmount(),
+                base.currency(), false, false, 3));
+
+        mockMvc.perform(get("/reservations/{id}/rooms/{roomId}/change", RESERVATION_ID, ROOM_ID)
+                        .with(user("staff").authorities(changeRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"date-value--check-in\"")))
+                .andExpect(content().string(containsString("class=\"date-value--check-out\"")))
+                .andExpect(content().string(containsString("(3 days overdue)")));
+    }
+
+    /** Confirms no overdue suffix is rendered when the stay is not overdue. */
+    @Test
+    void shouldNotRenderOverdueSuffixWhenNotOverdue() throws Exception {
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
+
+        mockMvc.perform(get("/reservations/{id}/rooms/{roomId}/change", RESERVATION_ID, ROOM_ID)
+                        .with(user("staff").authorities(changeRoomAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("overdue)"))));
     }
 
     /** Builds the CHANGE_ROOM authority. */

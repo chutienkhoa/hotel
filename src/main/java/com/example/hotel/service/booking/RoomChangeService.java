@@ -168,7 +168,10 @@ public class RoomChangeService {
                 openAssignment.getOriginalReservationRoom().getTotalAmount(),
                 reservation.getCurrency(),
                 roomImages.roomIdsWithPrimaryImage(List.of(currentRoom.getId())).contains(currentRoom.getId()),
-                isWithinChangeWindow(today, reservation.getCheckOutDate()));
+                isWithinChangeWindow(today, reservation.getCheckOutDate()),
+                reservation.getStatus() == ReservationStatus.CHECKED_IN
+                        ? OverdueDeparture.overdueDays(reservation.getCheckOutDate(), today)
+                        : 0);
     }
 
     /**

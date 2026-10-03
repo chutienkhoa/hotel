@@ -84,7 +84,8 @@ public class StayRoomAssignmentQueryService {
                         assignment.getAssignedFrom(),
                         assignment.getAssignedTo(),
                         assignment.getReason() == null ? "Initial Check-in" : assignment.getReason().getDisplayName(),
-                        usernamesById.getOrDefault(assignment.getCreatedBy(), "—")))
+                        usernamesById.getOrDefault(assignment.getCreatedBy(), "—"),
+                        assignment.getRoom().getId()))
                 .toList();
     }
 

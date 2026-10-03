@@ -35,6 +35,8 @@ import java.util.UUID;
  * @param firstUnavailableCheckOutDate earliest checkout date within the availability window that conflicts with the
  *     Stay's rooms, or {@code null} when no date in the window conflicts
  * @param availabilityKnownUntil last checkout date covered by the availability window
+ * @param overdueDays calendar days the current planned check-out is before the hotel date (0 when not overdue); describes
+ *     the stay before extension and does not depend on the proposed date
  */
 public record StayExtensionPreviewResponse(
         UUID reservationId,
@@ -59,7 +61,8 @@ public record StayExtensionPreviewResponse(
         BigDecimal resultingAccommodationTotal,
         Folio folio,
         LocalDate firstUnavailableCheckOutDate,
-        LocalDate availabilityKnownUntil) {
+        LocalDate availabilityKnownUntil,
+        long overdueDays) {
 
     /** Outcome of the proposed new check-out date. Read-model only; never persisted. */
     public enum State {

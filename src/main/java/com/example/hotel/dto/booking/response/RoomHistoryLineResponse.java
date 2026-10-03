@@ -11,6 +11,27 @@ import java.time.Instant;
  * @param assignedTo the instant this interval ended, or {@code null} when it is the current room
  * @param reasonDisplay "Initial Check-in" for the seeded assignment, otherwise the Room Change reason
  * @param changedByUsername the username attributed to this assignment
+ * @param roomId the identifier of the physical room, used to link to its Room Detail, or {@code null} when not resolved
  */
 public record RoomHistoryLineResponse(
-        String roomNumber, Instant assignedFrom, Instant assignedTo, String reasonDisplay, String changedByUsername) {}
+        String roomNumber,
+        Instant assignedFrom,
+        Instant assignedTo,
+        String reasonDisplay,
+        String changedByUsername,
+        java.util.UUID roomId) {
+
+    /**
+     * Creates a Room History line without the room identifier, for existing fixtures that predate room links.
+     *
+     * @param roomNumber the physical room occupied during this interval
+     * @param assignedFrom the instant this interval started
+     * @param assignedTo the instant this interval ended, or {@code null} when it is the current room
+     * @param reasonDisplay "Initial Check-in" for the seeded assignment, otherwise the Room Change reason
+     * @param changedByUsername the username attributed to this assignment
+     */
+    public RoomHistoryLineResponse(
+            String roomNumber, Instant assignedFrom, Instant assignedTo, String reasonDisplay, String changedByUsername) {
+        this(roomNumber, assignedFrom, assignedTo, reasonDisplay, changedByUsername, null);
+    }
+}

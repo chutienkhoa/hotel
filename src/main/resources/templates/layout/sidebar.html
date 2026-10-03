@@ -6,50 +6,62 @@
      this fragment gets the backdrop for free, with no per-template edit. -->
 <th:block th:fragment="sidebar">
 <nav aria-label="Main navigation" class="sidebar" id="sidebar-nav" th:aria-label="#{navigation.main.label}">
+    <!-- Desktop-only collapse control (static/js/common/sidebar-collapse.js). Hidden on the mobile drawer, which
+         has its own header toggle. Icons are swapped by aria-expanded in layout.css. -->
+    <div class="sidebar-collapse-row">
+        <button aria-controls="sidebar-nav" aria-expanded="true" class="sidebar-collapse-toggle" id="sidebar-collapse-toggle"
+                th:aria-label="#{navigation.sidebar.collapse}"
+                th:attr="data-label-collapse=#{navigation.sidebar.collapse},data-label-expand=#{navigation.sidebar.expand}"
+                type="button">
+            <!-- Wrapped in spans: th:replace would drop a class placed on the svg itself. -->
+            <span class="sidebar-collapse-icon sidebar-collapse-icon--collapse"><svg th:replace="~{layout/icons :: chevronLeft}"></svg></span>
+            <span class="sidebar-collapse-icon sidebar-collapse-icon--expand"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
+        </button>
+    </div>
+
     <!-- Task33 Dashboard visual polish: the hotel brand (icon + "Sunset House") is shown once, in the
          shared header (layout/header.html), not duplicated here. Dashboard is the sidebar's first item. -->
     <a class="sidebar-nav-link nav-dashboard" th:href="@{/dashboard}" th:if="${canViewReport}">
         <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
-        <span th:text="#{navigation.dashboard}">Dashboard</span>
+        <span class="sidebar-nav-label" th:text="#{navigation.dashboard}">Dashboard</span>
     </a>
 
     <div class="nav-section" th:if="${canCheckIn or canCheckOut or canViewBooking or canManageGuest}">
         <p class="nav-section-label" th:text="#{navigation.section.operations}">Operations</p>
         <a class="sidebar-nav-link nav-front-desk" th:href="@{/front-desk}" th:if="${canCheckIn or canCheckOut}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
-            <span th:text="#{navigation.frontDesk}">Front Desk</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.frontDesk}">Front Desk</span>
         </a>
         <!-- Task33 Batch 1A: transitional only, kept until Batch 3 (Front Desk); not the final contract. -->
         <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
-            <span th:text="#{navigation.checkIn}">Check-in</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.checkIn}">Check-in</span>
         </a>
         <a class="sidebar-nav-link nav-check-out" th:href="@{/check-out}" th:if="${canCheckOut}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
-            <span th:text="#{navigation.checkOut}">Check-out</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.checkOut}">Check-out</span>
         </a>
         <a class="sidebar-nav-link nav-reservations" th:href="@{/reservations}" th:if="${canViewBooking}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
-            <span th:text="#{navigation.reservations}">Reservations</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.reservations}">Reservations</span>
         </a>
         <a class="sidebar-nav-link nav-guests" th:href="@{/guests}" th:if="${canManageGuest}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span th:text="#{navigation.guests}">Guests</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.guests}">Guests</span>
         </a>
     </div>
 
-    <!-- Task33 Batch 1B: final nav contract (spec sec. 7.1a). Rooms is a group label only (no route of
-         its own); Room List is the existing /rooms destination, renamed from the former "Rooms" link. -->
+    <!-- Rooms is a section like Operations/Finance: its items sit directly under its heading. The former
+         section heading and intermediate group label were removed. -->
     <div class="nav-section" th:if="${canManageRoom or canManageHousekeeping}">
-        <p class="nav-section-label" th:text="#{navigation.section.hotel}">Hotel</p>
-        <p class="nav-group-label" th:text="#{navigation.rooms}">Rooms</p>
-        <a class="sidebar-nav-link sidebar-nav-link--nested nav-room-list" th:href="@{/rooms}" th:if="${canManageRoom}">
+        <p class="nav-section-label" th:text="#{navigation.rooms}">Rooms</p>
+        <a class="sidebar-nav-link nav-room-list" th:href="@{/rooms}" th:if="${canManageRoom}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: bed}"></svg></span>
-            <span th:text="#{navigation.roomList}">Room List</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.roomList}">Room List</span>
         </a>
-        <a class="sidebar-nav-link sidebar-nav-link--nested nav-housekeeping" th:href="@{/housekeeping}" th:if="${canManageHousekeeping}">
+        <a class="sidebar-nav-link nav-housekeeping" th:href="@{/housekeeping}" th:if="${canManageHousekeeping}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
-            <span th:text="#{navigation.housekeeping}">Housekeeping</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.housekeeping}">Housekeeping</span>
         </a>
     </div>
 
@@ -59,15 +71,15 @@
         <p class="nav-section-label" th:text="#{navigation.section.finance}">Finance</p>
         <a class="sidebar-nav-link nav-additional-revenues" th:href="@{/additional-revenues}" th:if="${canManageAdditionalRevenue}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: plusCircle}"></svg></span>
-            <span th:text="#{navigation.additionalRevenue}">Additional Revenue</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.additionalRevenue}">Additional Revenue</span>
         </a>
         <a class="sidebar-nav-link nav-expenses" th:href="@{/expenses}" th:if="${canManageExpense}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: minusCircle}"></svg></span>
-            <span th:text="#{navigation.expenses}">Expenses</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.expenses}">Expenses</span>
         </a>
         <a class="sidebar-nav-link nav-reports" th:href="@{/reports}" th:if="${canViewReport}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
-            <span th:text="#{navigation.reports}">Reports</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.reports}">Reports</span>
         </a>
     </div>
 
@@ -77,19 +89,19 @@
         <p class="nav-section-label" th:text="#{navigation.section.administration}">Administration</p>
         <a class="sidebar-nav-link nav-staff" th:href="@{/staff}" th:if="${canManageStaff}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span th:text="#{navigation.staff}">Staff</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.staff}">Staff</span>
         </a>
         <a class="sidebar-nav-link nav-work-records" th:href="@{/staff/daily-work-record}" th:if="${canManageAttendance}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
-            <span th:text="#{navigation.workRecords}">Work Records</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.workRecords}">Work Records</span>
         </a>
         <a class="sidebar-nav-link nav-users" th:href="@{/users}" th:if="${canManageUser}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span th:text="#{navigation.users}">Users</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.users}">Users</span>
         </a>
         <a class="sidebar-nav-link nav-roles" th:href="@{/roles-permissions}" th:if="${canManageUser}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
-            <span th:text="#{navigation.rolesPermissions}">Roles &amp; Permissions</span>
+            <span class="sidebar-nav-label" th:text="#{navigation.rolesPermissions}">Roles &amp; Permissions</span>
         </a>
     </div>
 
