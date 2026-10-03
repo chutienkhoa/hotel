@@ -30,7 +30,8 @@ class ReservationAccompanyingGuestsQueryTest {
         List<ReservationGuest> links = List.of(link(a), link(b), link(c));
         when(repository.findByReservationIdWithGuest(reservationId)).thenReturn(links);
         ReservationQueryService service = new ReservationQueryService(
-                mock(ReservationRepository.class), new ReservationMapper(), repository);
+                mock(ReservationRepository.class), new ReservationMapper(), repository,
+                mock(com.example.hotel.repository.common.AppUserRepository.class));
 
         List<AccompanyingGuestResponse> result = service.findAccompanyingGuests(reservationId);
 

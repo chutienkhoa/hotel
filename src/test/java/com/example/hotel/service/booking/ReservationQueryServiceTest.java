@@ -51,7 +51,9 @@ class ReservationQueryServiceTest {
         when(repository.findRoomNumbersByReservationIdIn(ArgumentMatchers.anyList())).thenReturn(List.of());
         when(mapper.toSummaryResponse(reservation, "")).thenReturn(summary);
 
-        var result = new ReservationQueryService(repository, mapper, mock(com.example.hotel.repository.booking.ReservationGuestRepository.class))
+        var result = new ReservationQueryService(repository, mapper,
+                mock(com.example.hotel.repository.booking.ReservationGuestRepository.class),
+                mock(com.example.hotel.repository.common.AppUserRepository.class))
                 .findPage(new ReservationSearchCriteria(), 1);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
@@ -71,7 +73,9 @@ class ReservationQueryServiceTest {
         ReservationRepository repository = mock(ReservationRepository.class);
         when(repository.findAll(any(Specification.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), Pageable.ofSize(10), 0));
-        ReservationQueryService service = new ReservationQueryService(repository, mock(ReservationMapper.class), mock(com.example.hotel.repository.booking.ReservationGuestRepository.class));
+        ReservationQueryService service = new ReservationQueryService(repository, mock(ReservationMapper.class),
+                mock(com.example.hotel.repository.booking.ReservationGuestRepository.class),
+                mock(com.example.hotel.repository.common.AppUserRepository.class));
 
         ReservationSearchCriteria sorted = new ReservationSearchCriteria();
         sorted.setSort("checkOutDate");

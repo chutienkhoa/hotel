@@ -7,16 +7,18 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/reservations}">Back to reservations</a>
+        <a class="back-link back-link--primary" th:href="@{/reservations}">
+            <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+            <span>Back to reservations</span>
+        </a>
 
         <div class="page-header">
             <div>
-                <h1>Reservation details</h1>
-                <div class="reservation-detail-heading-meta">
+                <h1 class="reservation-detail-heading">
                     <span th:text="${reservation.reservationNumber}">R20260916-000008</span>
                     <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}"
                           th:text="${T(com.example.hotel.entity.booking.ReservationStatus).valueOf(reservation.status).displayName}">Draft</span>
-                </div>
+                </h1>
             </div>
             <div class="action-row">
                 <a class="button button-secondary"
@@ -36,23 +38,43 @@
                    th:text="#{reservation.otaReference.action}">Correct OTA Reference</a>
                 <a class="button button-secondary" id="edit-booking-contact"
                    th:href="@{/reservations/{id}/booking-contact(id=${reservation.id})}"
-                   th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN') and canManageBooking}"
+                   th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED') and canManageBooking}"
                    th:text="#{reservation.contact.action}">Edit Booking Contact</a>
                 <a class="button button-secondary" id="edit-notes"
                    th:href="@{/reservations/{id}/notes(id=${reservation.id})}"
-                   th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN') and canManageBooking}"
+                   th:if="${(reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED') and canManageBooking}"
                    th:text="#{reservation.notesEdit.action}">Edit Notes</a>
                 <a class="button button-secondary" id="record-prepayment"
                    th:href="@{/reservations/{id}/prepayments(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and canManagePayment}"
                    th:text="#{payment.prepayment.action}">Record Prepayment</a>
-                <a class="button button-secondary" id="extend-stay"
+                <a class="button button-outline-primary" id="reservation-change-room"
+                   th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${reservation.id},roomId=${currentRooms[0].roomId})}"
+                   th:if="${reservation.status == 'CHECKED_IN' and canChangeRoom and #lists.size(currentRooms) == 1}">
+                    <svg th:replace="~{layout/icons :: swap}"></svg>
+                    <span th:text="#{reservation.detail.roomDetails.changeRoom}">Change Room</span>
+                </a>
+                <a class="button button-outline-primary" id="extend-stay"
                    th:href="@{/reservations/{id}/stay-extension(id=${reservation.id})}"
-                   th:if="${reservation.status == 'CHECKED_IN' and canExtendStay}"
-                   th:text="#{reservation.stayExtension.action}">Extend Stay</a>
-                <a class="button button-secondary"
+                   th:if="${reservation.status == 'CHECKED_IN' and canExtendStay}">
+                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                    <span th:text="#{reservation.stayExtension.action}">Extend Stay</span>
+                </a>
+                <a class="button button-outline-primary" id="reservation-add-charge"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id})}"
-                   th:if="${canManagePayment and (reservation.status == 'CHECKED_IN' or reservation.status == 'CHECKED_OUT')}">View Folio</a>
+                   th:if="${reservation.status == 'CHECKED_IN' and canManagePayment}">
+                    <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                    <span th:text="#{reservation.detail.action.addCharge}">Add Charge</span>
+                </a>
+                <a class="button button-secondary" id="reservation-folio"
+                   th:href="@{/reservations/{id}/folio(id=${reservation.id})}"
+                   th:if="${canManagePayment and reservation.status == 'CHECKED_OUT'}">View Folio</a>
+                <a class="button button-primary" id="reservation-checkout"
+                   th:href="@{/check-out/{id}(id=${reservation.id})}"
+                   th:if="${reservation.status == 'CHECKED_IN' and canCheckOut}">
+                    <svg th:replace="~{layout/icons :: logout}"></svg>
+                    <span th:text="#{reservation.detail.action.checkout}">Checkout</span>
+                </a>
             </div>
         </div>
 
@@ -60,17 +82,540 @@
         <p class="message message-error message-compact" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
         <div class="reservation-detail">
-            <section aria-labelledby="checkout-readiness-heading" class="card" th:if="${checkoutReadiness}">
-                <h2 id="checkout-readiness-heading">Check-out readiness</h2>
-                <p class="message message-success" th:if="${checkoutReadiness == 'READY'}">
-                    Ready for check-out.
-                </p>
-                <p class="message message-warning" th:if="${checkoutReadiness == 'PAYMENT_REQUIRED'}">
-                    Payment required before check-out.
-                </p>
-            </section>
+            <div class="reservation-detail-hub" th:if="${reservation.status == 'CHECKED_IN'}">
+                <section aria-labelledby="hub-summary-heading" class="card">
+                    <h2 class="visually-hidden" id="hub-summary-heading">Reservation summary</h2>
+                    <div class="hub-summary-strip">
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--green">
+                                <svg th:replace="~{layout/icons :: building}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.source}">Source</p>
+                                <p class="reservation-info-value" th:text="${reservation.source.displayName}">Direct</p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--blue">
+                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.checkIn}">Check-in</p>
+                                <p class="reservation-info-value"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--blue">
+                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.checkOut}">Check-out</p>
+                                <p class="reservation-info-value"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--blue">
+                                <svg th:replace="~{layout/icons :: clock}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.nights}">Nights</p>
+                                <p class="reservation-info-value"
+                                   th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--purple">
+                                <svg th:replace="~{layout/icons :: user}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.guests.title}">Guests</p>
+                                <p class="reservation-info-value"
+                                   th:text="|${reservation.adultCount} adults, ${reservation.childCount} children|">2 adults, 1 children</p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item">
+                            <span class="reservation-info-icon reservation-info-icon--purple">
+                                <svg th:replace="~{layout/icons :: user}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.reservationInfo.createdBy}">Created By</p>
+                                <p class="reservation-info-value" th:text="${reservation.createdByUsername ?: '—'}">admin</p>
+                            </div>
+                        </div>
+                        <div class="hub-summary-item" th:if="${reservation.reservedAt != null}">
+                            <span class="reservation-info-icon reservation-info-icon--blue">
+                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            </span>
+                            <div class="reservation-info-content">
+                                <p class="reservation-info-label" th:text="#{reservation.detail.summary.createdAt}">Created At</p>
+                                <p class="reservation-info-value"><span th:replace="~{layout/datetime :: dateTime(${reservation.reservedAt})}">—</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
 
-            <section aria-labelledby="reservation-info-heading" class="card reservation-detail-section">
+                <nav aria-label="Reservation Detail sections" class="detail-tabs" role="tablist">
+                    <button aria-controls="panel-overview" aria-selected="true" class="detail-tab detail-tab--active"
+                            data-tab-panel="panel-overview" id="tab-overview" role="tab" type="button">
+                        <svg th:replace="~{layout/icons :: note}"></svg>
+                        <span th:text="#{reservation.detail.tabs.overview}">Overview</span>
+                    </button>
+                    <button aria-controls="panel-overview" aria-selected="false" class="detail-tab"
+                            data-tab-panel="panel-overview" data-tab-scroll="folio-charges" id="tab-folio" role="tab" type="button">
+                        <svg th:replace="~{layout/icons :: note}"></svg>
+                        <span th:text="#{reservation.detail.tabs.folio}">Folio</span>
+                    </button>
+                    <button aria-controls="panel-overview" aria-selected="false" class="detail-tab"
+                            data-tab-panel="panel-overview" data-tab-scroll="payments" id="tab-payments" role="tab" type="button">
+                        <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                        <span th:text="#{reservation.detail.tabs.payments}">Payments</span>
+                    </button>
+                    <button aria-controls="panel-room-history" aria-selected="false" class="detail-tab"
+                            data-tab-panel="panel-room-history" id="tab-room-history" role="tab" type="button">
+                        <svg th:replace="~{layout/icons :: clock}"></svg>
+                        <span th:text="#{reservation.detail.tabs.roomHistory}">Room History</span>
+                    </button>
+                    <button aria-controls="panel-overview" aria-selected="false" class="detail-tab"
+                            data-tab-panel="panel-overview" data-tab-scroll="hub-notes-heading" id="tab-notes" role="tab" type="button">
+                        <svg th:replace="~{layout/icons :: note}"></svg>
+                        <span th:text="#{reservation.detail.tabs.notes}">Notes</span>
+                    </button>
+                    <button aria-controls="panel-audit-log" aria-selected="false" class="detail-tab"
+                            data-tab-panel="panel-audit-log" id="tab-audit-log" role="tab" type="button">
+                        <svg th:replace="~{layout/icons :: clock}"></svg>
+                        <span th:text="#{reservation.detail.tabs.auditLog}">Audit Log</span>
+                    </button>
+                </nav>
+
+                <div aria-labelledby="tab-overview" class="detail-tab-panel" id="panel-overview" role="tabpanel">
+                    <div class="hub-info-row">
+                                <section aria-labelledby="guest-info-heading" class="card">
+                                    <div class="hub-card-header">
+                                        <div class="hub-card-header-title">
+                                            <svg th:replace="~{layout/icons :: user}"></svg>
+                                            <h2 id="guest-info-heading" th:text="#{reservation.detail.guestInfo.title}">Guest Information</h2>
+                                        </div>
+                                        <a class="button button-outline-primary button-compact" id="edit-guest-info"
+                                           th:href="@{/guests/{id}(id=${reservation.guestId})}"
+                                           th:if="${canManageGuest}">
+                                            <svg th:replace="~{layout/icons :: edit}"></svg>
+                                            <span th:text="#{common.action.edit}">Edit</span>
+                                        </a>
+                                    </div>
+                                    <dl class="hub-fields">
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.guestInfo.fullName}">Full Name</dt>
+                                            <dd th:text="${guest != null and !#strings.isEmpty(guest.fullName) ? guest.fullName : reservation.guestCode}">Nguyen Van A</dd>
+                                        </div>
+                                        <div class="hub-field" th:if="${guest != null and !#strings.isEmpty(guest.nationality)}">
+                                            <dt th:text="#{reservation.detail.guestInfo.nationality}">Nationality</dt>
+                                            <dd th:text="${guest.nationality}">Vietnam</dd>
+                                        </div>
+                                        <div class="hub-field" th:if="${guest != null and !#strings.isEmpty(guest.phone)}">
+                                            <dt th:text="#{reservation.detail.guestInfo.phone}">Phone</dt>
+                                            <dd th:text="${guest.phone}">+84 912 345 678</dd>
+                                        </div>
+                                        <div class="hub-field" th:if="${guest != null and !#strings.isEmpty(guest.email)}">
+                                            <dt th:text="#{reservation.detail.guestInfo.email}">Email</dt>
+                                            <dd th:text="${guest.email}">guest@example.com</dd>
+                                        </div>
+                                        <div class="hub-field" th:if="${guest != null and guest.dateOfBirth != null}">
+                                            <dt th:text="#{reservation.detail.guestInfo.dateOfBirth}">Date of Birth</dt>
+                                            <dd><span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">—</span></dd>
+                                        </div>
+                                    </dl>
+                                </section>
+
+                                <section aria-labelledby="stay-info-heading" class="card">
+                                    <div class="hub-card-header">
+                                        <div class="hub-card-header-title">
+                                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                            <h2 id="stay-info-heading" th:text="#{reservation.detail.stayInfo.title}">Stay Information</h2>
+                                        </div>
+                                        <a class="button button-outline-primary button-compact" id="edit-stay-info"
+                                           th:href="@{/reservations/{id}/stay-extension(id=${reservation.id})}"
+                                           th:if="${canExtendStay}">
+                                            <svg th:replace="~{layout/icons :: edit}"></svg>
+                                            <span th:text="#{common.action.edit}">Edit</span>
+                                        </a>
+                                    </div>
+                                    <dl class="hub-fields">
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.stayInfo.checkIn}">Check-in Date</dt>
+                                            <dd><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></dd>
+                                        </div>
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.stayInfo.checkOut}">Check-out Date</dt>
+                                            <dd><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></dd>
+                                        </div>
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.stayInfo.nights}">Nights</dt>
+                                            <dd th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</dd>
+                                        </div>
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.guests.adults}">Adults</dt>
+                                            <dd th:text="${reservation.adultCount}">2</dd>
+                                        </div>
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.guests.children}">Children</dt>
+                                            <dd th:text="${reservation.childCount}">1</dd>
+                                        </div>
+                                    </dl>
+                                    <dl class="hub-fields" th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
+                                        <div class="hub-field" id="hub-original-booking-total">
+                                            <dt th:text="#{reservation.stayExtension.originalTotal}">Original Booking Total</dt>
+                                            <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.originalBookingTotal}, ${reservation.currency})}">0 VND</span></dd>
+                                        </div>
+                                        <div class="hub-field" id="hub-extension-amount">
+                                            <dt th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</dt>
+                                            <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.extensionAmount}, ${reservation.currency})}">0 VND</span></dd>
+                                        </div>
+                                        <div class="hub-field" id="hub-current-accommodation-total">
+                                            <dt th:text="#{reservation.stayExtension.currentTotal}">Current Accommodation Total</dt>
+                                            <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.currentAccommodationTotal}, ${reservation.currency})}">0 VND</span></dd>
+                                        </div>
+                                    </dl>
+                                </section>
+
+                                <section aria-labelledby="reservation-summary-info-heading" class="card">
+                                    <div class="hub-card-header">
+                                        <div class="hub-card-header-title">
+                                            <svg th:replace="~{layout/icons :: building}"></svg>
+                                            <h2 id="reservation-summary-info-heading" th:text="#{reservation.detail.reservationInfo.title}">Reservation Information</h2>
+                                        </div>
+                                        <a class="button button-outline-primary button-compact" id="edit-booking-contact"
+                                           th:href="@{/reservations/{id}/booking-contact(id=${reservation.id})}"
+                                           th:if="${canManageBooking}">
+                                            <svg th:replace="~{layout/icons :: edit}"></svg>
+                                            <span th:text="#{common.action.edit}">Edit</span>
+                                        </a>
+                                    </div>
+                                    <dl class="hub-fields">
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.reservationInfo.source}">Source</dt>
+                                            <dd th:text="${reservation.source.displayName}">Direct</dd>
+                                        </div>
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.reservationInfo.externalBookingRef}">External Booking Ref</dt>
+                                            <dd th:text="${#strings.isEmpty(reservation.otaBookingReference) ? '—' : reservation.otaBookingReference}">—</dd>
+                                        </div>
+                                        <div class="hub-field" th:if="${reservation.reservedAt != null}">
+                                            <dt th:text="#{reservation.detail.reservationInfo.reservationDate}">Reservation Date</dt>
+                                            <dd><span th:replace="~{layout/datetime :: dateTime(${reservation.reservedAt})}">—</span></dd>
+                                        </div>
+                                        <div class="hub-field">
+                                            <dt th:text="#{reservation.detail.reservationInfo.createdBy}">Created By</dt>
+                                            <dd th:text="${reservation.createdByUsername ?: '—'}">admin</dd>
+                                        </div>
+                                        <div class="hub-field" th:if="${reservation.updatedAt != null}">
+                                            <dt th:text="#{reservation.detail.reservationInfo.lastUpdated}">Last Updated</dt>
+                                            <dd><span th:replace="~{layout/datetime :: dateTime(${reservation.updatedAt})}">—</span></dd>
+                                        </div>
+                                    </dl>
+                                </section>
+                    </div>
+
+                    <div class="hub-layout">
+                        <div class="hub-main">
+                            <section aria-labelledby="current-rooms-heading" class="card">
+                                <div class="hub-card-header">
+                                    <div class="hub-card-header-title">
+                                        <svg th:replace="~{layout/icons :: bed}"></svg>
+                                        <h2 id="current-rooms-heading" th:text="#{reservation.detail.roomDetails.title}">Room Details</h2>
+                                    </div>
+                                    <a class="button button-outline-primary button-compact" id="room-details-change-room"
+                                       th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${reservation.id},roomId=${currentRooms[0].roomId})}"
+                                       th:if="${canChangeRoom and #lists.size(currentRooms) == 1}">
+                                        <svg th:replace="~{layout/icons :: swap}"></svg>
+                                        <span th:text="#{reservation.detail.roomDetails.changeRoom}">Change Room</span>
+                                    </a>
+                                </div>
+                                <div class="table-wrap">
+                                    <table>
+                                        <thead>
+                                        <tr>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.roomNo}">Room No.</th>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.roomType}">Room Type</th>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.guests}">Guests</th>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.rate}">Rate (VND / Night)</th>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.nights}">Nights</th>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.total}">Total (VND)</th>
+                                            <th scope="col" th:text="#{reservation.detail.roomDetails.status}">Status</th>
+                                            <th class="table-actions" scope="col" th:if="${canChangeRoom and #lists.size(currentRooms) > 1}"></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <tr th:each="room : ${currentRooms}"
+                                            th:with="detail=${currentRoomDetails.get(room.roomId)},pricing=${roomPricingByRoomId.get(room.roomId)}">
+                                            <td th:text="${room.roomNumber}">101</td>
+                                            <td th:text="${detail != null ? detail.roomType.name : '—'}">Double Room</td>
+                                            <td th:text="|${reservation.adultCount} adults, ${reservation.childCount} children|">2 adults, 1 children</td>
+                                            <td class="table-number">
+                                                <th:block th:if="${pricing != null}"><span th:replace="~{layout/money :: amount(${pricing.nightlyRate}, ${reservation.currency})}">0</span></th:block>
+                                                <span th:unless="${pricing != null}">—</span>
+                                            </td>
+                                            <td class="table-number" th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</td>
+                                            <td class="table-number">
+                                                <th:block th:if="${pricing != null}"><span th:replace="~{layout/money :: amount(${pricing.totalAmount}, ${reservation.currency})}">0</span></th:block>
+                                                <span th:unless="${pricing != null}">—</span>
+                                            </td>
+                                            <td>
+                                                <span class="status-badge" th:if="${detail != null}"
+                                                      th:classappend="${' status-badge--' + #strings.toLowerCase(detail.status)}"
+                                                      th:text="${detail.status}">OCCUPIED</span>
+                                                <span th:unless="${detail != null}">—</span>
+                                            </td>
+                                            <td class="table-actions" th:if="${canChangeRoom and #lists.size(currentRooms) > 1}">
+                                                <a class="button button-outline-primary table-action"
+                                                   th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${reservation.id},roomId=${room.roomId})}"
+                                                   th:text="#{reservation.detail.roomDetails.changeRoom}">Change Room</a>
+                                            </td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+
+                            <div id="financial-summary" th:if="${financialSummary != null}">
+                            <section aria-labelledby="folio-charges-heading" class="card" id="folio-charges" th:if="${charges != null}">
+                                <div class="hub-card-header">
+                                    <div class="hub-card-header-title">
+                                        <svg th:replace="~{layout/icons :: note}"></svg>
+                                        <h2 id="folio-charges-heading" th:text="#{reservation.detail.folio.title}">Folio / Charges</h2>
+                                    </div>
+                                    <div class="action-row">
+                                        <a class="button button-outline-primary button-compact" id="folio-add-room-charge"
+                                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
+                                            <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                            <span th:text="#{reservation.detail.folio.addRoomCharge}">Add Room Charge</span>
+                                        </a>
+                                        <a class="button button-outline-primary button-compact" id="folio-add-additional-revenue"
+                                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
+                                            <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                            <span th:text="#{reservation.detail.folio.addAdditionalRevenue}">Add Additional Revenue</span>
+                                        </a>
+                                        <a class="button button-outline-primary button-compact" id="folio-add-adjustment"
+                                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
+                                            <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                            <span th:text="#{reservation.detail.folio.addAdjustment}">Add Adjustment</span>
+                                        </a>
+                                    </div>
+                                </div>
+                                <div class="table-wrap">
+                                    <table>
+                                        <thead>
+                                        <tr>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnDate}">Date</th>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnType}">Type</th>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnQty}">Qty</th>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnUnitPrice}">Unit Price (VND)</th>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnAmount}">Amount (VND)</th>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnAddedBy}">Added By</th>
+                                            <th scope="col" th:text="#{reservation.detail.folio.columnDescription}">Description</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <tr th:each="charge : ${charges}">
+                                            <td><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
+                                            <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">Room Charge</span></td>
+                                            <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">1</td>
+                                            <td class="table-number">
+                                                <th:block th:if="${charge.unitPrice != null}"><span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0</span></th:block>
+                                                <span th:unless="${charge.unitPrice != null}">—</span>
+                                            </td>
+                                            <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${reservation.currency})}">0</span></td>
+                                            <td th:text="${charge.addedByUsername ?: '—'}">admin</td>
+                                            <td th:text="${charge.description ?: '—'}">—</td>
+                                        </tr>
+                                        <tr th:if="${#lists.isEmpty(charges)}">
+                                            <td colspan="7" th:text="#{reservation.detail.folio.empty}">No Charges have been recorded.</td>
+                                        </tr>
+                                        </tbody>
+                                        <tfoot th:if="${financialSummary != null}">
+                                        <tr class="table-total-row">
+                                            <td colspan="4" th:text="#{reservation.detail.folio.totalCharges}">Total Charges (VND)</td>
+                                            <td class="table-number"><span th:replace="~{layout/money :: amount(${financialSummary.totalCharges}, ${reservation.currency})}">0</span></td>
+                                            <td colspan="2"></td>
+                                        </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </section>
+
+                            <section aria-labelledby="payments-heading" class="card" id="payments" th:if="${payments != null}">
+                                <div class="hub-card-header">
+                                    <div class="hub-card-header-title">
+                                        <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                                        <h2 id="payments-heading" th:text="#{reservation.detail.payments.title}">Payments</h2>
+                                    </div>
+                                    <a class="button button-outline-primary button-compact" id="payments-add-payment"
+                                       th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
+                                        <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                        <span th:text="#{reservation.detail.payments.addPayment}">Add Payment</span>
+                                    </a>
+                                </div>
+                                <div class="table-wrap">
+                                    <table>
+                                        <thead>
+                                        <tr>
+                                            <th scope="col" th:text="#{reservation.detail.payments.columnDate}">Date</th>
+                                            <th scope="col" th:text="#{reservation.detail.payments.columnMethod}">Payment Method</th>
+                                            <th scope="col" th:text="#{reservation.detail.payments.columnReference}">Reference No.</th>
+                                            <th scope="col" th:text="#{reservation.detail.payments.columnAmount}">Amount (VND)</th>
+                                            <th scope="col" th:text="#{reservation.detail.payments.columnAddedBy}">Added By</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <tr th:each="payment : ${payments}">
+                                            <td><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
+                                            <td><span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">Cash</span></td>
+                                            <td th:text="${payment.reference ?: '—'}">—</td>
+                                            <td class="table-number"><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${reservation.currency})}">0</span></td>
+                                            <td th:text="${payment.addedByUsername ?: '—'}">admin</td>
+                                        </tr>
+                                        <tr th:if="${#lists.isEmpty(payments)}">
+                                            <td colspan="5" th:text="#{reservation.detail.payments.empty}">No Payments have been recorded.</td>
+                                        </tr>
+                                        </tbody>
+                                        <tfoot th:if="${financialSummary != null}">
+                                        <tr class="table-total-row">
+                                            <td colspan="3" th:text="#{reservation.detail.payments.totalPayments}">Total Payments (VND)</td>
+                                            <td class="table-number"><span th:replace="~{layout/money :: amount(${financialSummary.totalPaidPayments}, ${reservation.currency})}">0</span></td>
+                                            <td></td>
+                                        </tr>
+                                        <tr class="table-total-row table-total-row--outstanding">
+                                            <td colspan="3" th:text="#{reservation.detail.payments.outstanding}">Outstanding Balance (VND)</td>
+                                            <td class="table-number"><span th:replace="~{layout/money :: amount(${financialSummary.outstanding}, ${reservation.currency})}">0</span></td>
+                                            <td></td>
+                                        </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </section>
+                            </div>
+                        </div>
+
+                        <div class="hub-side">
+                            <section aria-labelledby="notes-heading" class="card" id="hub-notes-heading">
+                                <div class="hub-card-header">
+                                    <div class="hub-card-header-title">
+                                        <svg th:replace="~{layout/icons :: note}"></svg>
+                                        <h2 id="notes-heading" th:text="#{reservation.detail.notes.title}">Notes</h2>
+                                    </div>
+                                    <a class="button button-outline-primary button-compact" id="edit-notes"
+                                       th:href="@{/reservations/{id}/notes(id=${reservation.id})}"
+                                       th:if="${canManageBooking}">
+                                        <svg th:replace="~{layout/icons :: edit}"></svg>
+                                        <span th:text="#{reservation.notesEdit.action}">Edit Notes</span>
+                                    </a>
+                                </div>
+                                <div class="hub-note-entry" th:if="${!#strings.isEmpty(reservation.notes)}">
+                                    <p class="hub-note-meta" th:if="${noteUpdatedAt != null}">
+                                        <span th:replace="~{layout/datetime :: dateTime(${noteUpdatedAt})}">—</span>
+                                        <span th:text="${noteUpdatedBy}">admin</span>
+                                    </p>
+                                    <p class="hub-note-text" th:text="${reservation.notes}">—</p>
+                                </div>
+                                <p class="hub-note-text" th:if="${#strings.isEmpty(reservation.notes)}">—</p>
+                            </section>
+
+                            <section aria-labelledby="hub-activity-heading" class="card" id="hub-activity">
+                                <div class="hub-card-header">
+                                    <div class="hub-card-header-title">
+                                        <svg th:replace="~{layout/icons :: clock}"></svg>
+                                        <h2 id="hub-activity-heading" th:text="#{reservation.detail.recentActivity.title}">Recent Activity</h2>
+                                    </div>
+                                </div>
+                                <p th:if="${#lists.isEmpty(activity)}" th:text="#{reservation.activity.empty}">No activity recorded yet.</p>
+                                <ul class="hub-timeline" th:unless="${#lists.isEmpty(activity)}">
+                                    <li class="hub-timeline-item" th:each="item, itemStat : ${activity}">
+                                        <div class="hub-timeline-rail">
+                                            <span class="hub-timeline-dot" aria-hidden="true"></span>
+                                            <span class="hub-timeline-connector" aria-hidden="true" th:unless="${itemStat.last}"></span>
+                                        </div>
+                                        <div class="hub-timeline-content">
+                                            <p class="hub-timeline-label" th:text="${item.label}">Reservation created</p>
+                                            <p class="hub-timeline-meta">
+                                                <span th:replace="~{layout/datetime :: dateTime(${item.occurredAt})}">—</span>
+                                                <span th:text="|by ${item.actorDisplay}|">by admin</span>
+                                            </p>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+
+                <div aria-labelledby="tab-room-history" class="detail-tab-panel" hidden="hidden" id="panel-room-history" role="tabpanel">
+                    <section aria-labelledby="room-history-heading" class="card">
+                        <div class="hub-card-header">
+                            <div class="hub-card-header-title">
+                                <svg th:replace="~{layout/icons :: clock}"></svg>
+                                <h2 id="room-history-heading">Room history</h2>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th scope="col">Room</th>
+                                    <th scope="col">From</th>
+                                    <th scope="col">To</th>
+                                    <th scope="col">Reason</th>
+                                    <th scope="col">Changed by</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="line : ${roomHistory}">
+                                    <td><strong th:text="${line.roomNumber}">101</strong></td>
+                                    <td class="text-muted"><span th:replace="~{layout/datetime :: dateTime(${line.assignedFrom})}">—</span></td>
+                                    <td>
+                                        <span class="status-badge status-badge--current" th:if="${line.assignedTo == null}">Current</span>
+                                        <span class="text-muted" th:unless="${line.assignedTo == null}" th:replace="~{layout/datetime :: dateTime(${line.assignedTo})}">—</span>
+                                    </td>
+                                    <td th:text="${line.reasonDisplay}">Initial Check-in</td>
+                                    <td class="text-muted" th:text="${line.changedByUsername}">staff01</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <div aria-labelledby="tab-audit-log" class="detail-tab-panel" hidden="hidden" id="panel-audit-log" role="tabpanel">
+                    <section aria-labelledby="hub-audit-log-heading" class="card">
+                        <div class="hub-card-header">
+                            <div class="hub-card-header-title">
+                                <svg th:replace="~{layout/icons :: clock}"></svg>
+                                <h2 id="hub-audit-log-heading" th:text="#{reservation.detail.auditLog.title}">Audit Log</h2>
+                            </div>
+                        </div>
+                        <p th:if="${#lists.isEmpty(activity)}" th:text="#{reservation.activity.empty}">No activity recorded yet.</p>
+                        <div class="table-wrap" th:unless="${#lists.isEmpty(activity)}">
+                            <table>
+                                <thead>
+                                <tr>
+                                    <th scope="col" th:text="#{reservation.activity.column.time}">Time</th>
+                                    <th scope="col" th:text="#{reservation.activity.column.actor}">By</th>
+                                    <th scope="col" th:text="#{reservation.activity.column.action}">Activity</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="item : ${activity}">
+                                    <td class="text-muted"><span th:replace="~{layout/datetime :: dateTime(${item.occurredAt})}">—</span></td>
+                                    <td class="text-muted" th:text="${item.actorDisplay}">staff01</td>
+                                    <td th:text="${item.label}">Reservation created</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <section aria-labelledby="reservation-info-heading" class="card reservation-detail-section"
+                     th:unless="${reservation.status == 'CHECKED_IN'}">
                 <div class="reservation-detail-section-header">
                     <div>
                         <h2 id="reservation-info-heading">Reservation information</h2>
@@ -306,48 +851,8 @@
                 </div>
             </section>
 
-            <section aria-labelledby="current-rooms-heading" class="card reservation-detail-section"
-                     th:if="${reservation.status == 'CHECKED_IN'}">
-                <div class="assigned-rooms-header">
-                    <div class="assigned-rooms-header-copy">
-                        <h2 id="current-rooms-heading">Current rooms</h2>
-                        <p>Rooms the guest currently occupies. Booked dates, rates, and totals are unaffected by Room Change.</p>
-                    </div>
-                    <div class="assigned-rooms-meta">
-                        <span>
-                            <strong th:text="${#lists.size(currentRooms)}">1</strong>
-                            <span th:text="${#lists.size(currentRooms) == 1 ? 'room' : 'rooms'}">room</span>
-                        </span>
-                        <span>Total
-                            <strong><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></strong>
-                        </span>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                        <tr>
-                            <th scope="col">Room</th>
-                            <th scope="col">Occupied since</th>
-                            <th scope="col" th:if="${canChangeRoom}"></th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="room : ${currentRooms}">
-                            <td th:text="${room.roomNumber}">101</td>
-                            <td><span th:replace="~{layout/datetime :: dateTime(${room.assignedFrom})}">—</span></td>
-                            <td th:if="${canChangeRoom}">
-                                <a class="button button-secondary"
-                                   th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${reservation.id},roomId=${room.roomId})}">Change Room</a>
-                            </td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
             <section aria-labelledby="room-history-heading" class="card reservation-detail-section"
-                     th:if="${reservation.status == 'CHECKED_IN' or reservation.status == 'CHECKED_OUT'}">
+                     th:if="${reservation.status == 'CHECKED_OUT'}">
                 <div class="reservation-detail-section-header">
                     <div>
                         <h2 id="room-history-heading">Room history</h2>
@@ -477,12 +982,45 @@
                 </div>
             </section>
 
-            <section aria-labelledby="integrity-heading" class="card reservation-detail-section" id="financial-integrity"
-                     th:if="${financialIntegrity != null}">
+            <section aria-labelledby="financial-summary-standalone-heading" class="card reservation-detail-section" id="financial-summary-standalone"
+                     th:if="${financialSummary != null and reservation.status == 'CHECKED_OUT'}">
+                <div class="reservation-detail-section-header">
+                    <div>
+                        <h2 id="financial-summary-standalone-heading" th:text="#{reservation.detail.financialSummary.title}">Financial Summary</h2>
+                    </div>
+                    <div class="action-row">
+                        <a class="button button-secondary"
+                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">View Folio</a>
+                    </div>
+                </div>
+                <div class="card-grid">
+                    <div class="reservation-info-item">
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.detail.financialSummary.totalCharges}">Total Charges</p>
+                            <p class="reservation-info-value"><span th:replace="~{layout/money :: amount(${financialSummary.totalCharges}, ${reservation.currency})}">0 VND</span></p>
+                        </div>
+                    </div>
+                    <div class="reservation-info-item">
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.detail.financialSummary.totalPayments}">Total Payments</p>
+                            <p class="reservation-info-value"><span th:replace="~{layout/money :: amount(${financialSummary.totalPaidPayments}, ${reservation.currency})}">0 VND</span></p>
+                        </div>
+                    </div>
+                    <div class="reservation-info-item">
+                        <div class="reservation-info-content">
+                            <p class="reservation-info-label" th:text="#{reservation.detail.financialSummary.outstanding}">Outstanding Balance</p>
+                            <p class="reservation-info-value"><span th:replace="~{layout/money :: amount(${financialSummary.outstanding}, ${reservation.currency})}">0 VND</span></p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section aria-labelledby="integrity-heading" class="card reservation-detail-section" id="financial-integrity-standalone"
+                     th:if="${financialIntegrity != null and reservation.status == 'CHECKED_OUT'}">
                 <div class="reservation-detail-section-header">
                     <div>
                         <h2 id="integrity-heading" th:text="#{reservation.integrity.title}">Financial Integrity</h2>
-                        <p><span class="status-badge" id="integrity-status"
+                        <p><span class="status-badge" id="integrity-status-standalone"
                                  th:classappend="${financialIntegrity.status == 'MATCHED'} ? 'status-badge--confirmed' : 'status-badge--cancelled'"
                                  th:text="#{'reservation.integrity.' + ${financialIntegrity.status}}">Matched</span></p>
                     </div>
@@ -492,7 +1030,8 @@
                 </ul>
             </section>
 
-            <section aria-labelledby="activity-heading" class="card reservation-detail-section" id="activity">
+            <section aria-labelledby="activity-heading" class="card reservation-detail-section" id="activity"
+                     th:unless="${reservation.status == 'CHECKED_IN'}">
                 <div class="reservation-detail-section-header">
                     <div>
                         <h2 id="activity-heading" th:text="#{reservation.activity.section.title}">Activity</h2>
@@ -520,7 +1059,7 @@
             </section>
 
             <section aria-labelledby="actions-heading" class="card reservation-detail-section actions"
-                     th:if="${reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED' or reservation.status == 'CHECKED_IN'}">
+                     th:if="${reservation.status == 'DRAFT' or reservation.status == 'CONFIRMED'}">
                 <div class="reservation-detail-section-header">
                     <div>
                         <h2 id="actions-heading">Available actions</h2>
@@ -573,15 +1112,6 @@
                         </div>
                         <button class="button button-secondary" type="submit">Mark no-show</button>
                     </form>
-
-                    <form data-confirm-label="Check out" data-confirm-severity="DANGER"
-                          data-confirm-title="Check out reservation" method="post"
-                          th:action="@{/reservations/{id}/check-out(id=${reservation.id})}"
-                          th:attr="data-confirm-message=|Check out reservation ${reservation.reservationNumber}?|"
-                          th:if="${reservation.status == 'CHECKED_IN' and canCheckOut}">
-                        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                        <button class="button button-primary" type="submit">Check-out</button>
-                    </form>
                 </div>
             </section>
         </div>
@@ -589,5 +1119,6 @@
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
+<script defer th:src="@{/js/reservation/detail-tabs.js}"></script>
 </body>
 </html>

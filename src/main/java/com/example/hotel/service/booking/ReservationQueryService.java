@@ -10,9 +10,11 @@ import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.customer.Guest;
+import com.example.hotel.entity.common.AppUser;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ReservationGuestRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
+import com.example.hotel.repository.common.AppUserRepository;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -44,6 +46,7 @@ public class ReservationQueryService {
     private final ReservationRepository reservationRepository;
     private final ReservationMapper reservationMapper;
     private final ReservationGuestRepository reservationGuestRepository;
+    private final AppUserRepository appUserRepository;
 
     /**
      * Creates the query service with the dependencies required to load and map reservations.
@@ -51,13 +54,16 @@ public class ReservationQueryService {
      * @param reservationRepository repository used to load reservations
      * @param reservationMapper mapper used to create response DTOs
      * @param reservationGuestRepository repository used to load Accompanying Guests in one query
+     * @param appUserRepository repository used to resolve the Reservation creator's username for detail display
      */
     public ReservationQueryService(
             ReservationRepository reservationRepository,
             ReservationMapper reservationMapper,
-            ReservationGuestRepository reservationGuestRepository) {
+            ReservationGuestRepository reservationGuestRepository,
+            AppUserRepository appUserRepository) {
         this.reservationRepository = reservationRepository;
         this.reservationMapper = reservationMapper;
+        this.appUserRepository = appUserRepository;
         this.reservationGuestRepository = reservationGuestRepository;
     }
 
@@ -220,7 +226,18 @@ public class ReservationQueryService {
                 contact.name(),
                 contact.phone(),
                 contact.email(),
-                contact.fromPrimaryGuest());
+                contact.fromPrimaryGuest(),
+                resolveUsername(reservation.getCreatedBy()));
+    }
+
+    /**
+     * Resolves one audit user identifier to its display username for Reservation Detail presentation.
+     *
+     * @param userId the audit {@code createdBy} identifier, or {@code null}
+     * @return the matching username, or {@code null} when the identifier is absent or unresolved
+     */
+    private String resolveUsername(UUID userId) {
+        return userId == null ? null : appUserRepository.findById(userId).map(AppUser::getUsername).orElse(null);
     }
 
     /** Retrieves one Reservation in the representation required by the draft edit form. */

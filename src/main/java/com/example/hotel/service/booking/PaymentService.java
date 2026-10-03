@@ -11,12 +11,14 @@ import com.example.hotel.entity.booking.PaymentMethod;
 import com.example.hotel.entity.booking.PaymentStatus;
 import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayStatus;
+import com.example.hotel.entity.common.AppUser;
 import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.mapper.booking.PaymentMapper;
 import com.example.hotel.repository.booking.ChargeRepository;
 import com.example.hotel.repository.booking.PaymentRepository;
 import com.example.hotel.repository.booking.StayRepository;
+import com.example.hotel.repository.common.AppUserRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
@@ -25,7 +27,10 @@ import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -43,6 +48,7 @@ public class PaymentService {
     private final PaymentMapper paymentMapper;
     private final AuditLogRepository auditLogRepository;
     private final Clock clock;
+    private final AppUserRepository appUserRepository;
 
     /**
      * Creates the Payment service with the persistence collaborators required by Payment v1.
@@ -53,6 +59,7 @@ public class PaymentService {
      * @param paymentMapper mapper used to return client-safe Payment responses
      * @param auditLogRepository repository used to write the approved REFUND_PAYMENT audit entry
      * @param clock authoritative hotel business clock used for {@code paidAt}
+     * @param appUserRepository repository used to resolve each Payment's "added by" username for presentation
      */
     public PaymentService(
             PaymentRepository paymentRepository,
@@ -60,13 +67,15 @@ public class PaymentService {
             ChargeRepository chargeRepository,
             PaymentMapper paymentMapper,
             AuditLogRepository auditLogRepository,
-            Clock clock) {
+            Clock clock,
+            AppUserRepository appUserRepository) {
         this.paymentRepository = paymentRepository;
         this.stayRepository = stayRepository;
         this.chargeRepository = chargeRepository;
         this.paymentMapper = paymentMapper;
         this.auditLogRepository = auditLogRepository;
         this.clock = clock;
+        this.appUserRepository = appUserRepository;
     }
 
     /**
@@ -155,9 +164,23 @@ public class PaymentService {
     @Transactional(readOnly = true)
     public List<PaymentResponse> findByStayId(UUID stayId) {
         findStay(stayId);
-        return paymentRepository.findByStayIdOrderByCreatedAtAscIdAsc(stayId).stream()
-                .map(paymentMapper::toResponse)
+        List<Payment> payments = paymentRepository.findByStayIdOrderByCreatedAtAscIdAsc(stayId);
+        Map<UUID, String> addedByUsernames = resolveAddedByUsernames(payments);
+        return payments.stream()
+                .map(payment -> paymentMapper.toResponse(payment, addedByUsernames.get(payment.getCreatedBy())))
                 .toList();
+    }
+
+    /**
+     * Batch-resolves each Payment's "added by" username in one query, avoiding an N+1 lookup per row.
+     *
+     * @param payments Payments whose creator usernames are resolved
+     * @return usernames keyed by the audit {@code createdBy} identifier
+     */
+    private Map<UUID, String> resolveAddedByUsernames(List<Payment> payments) {
+        Set<UUID> userIds = payments.stream().map(Payment::getCreatedBy).collect(Collectors.toSet());
+        return appUserRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(AppUser::getId, AppUser::getUsername));
     }
 
     /**

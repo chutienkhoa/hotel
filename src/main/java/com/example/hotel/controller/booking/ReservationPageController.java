@@ -9,19 +9,26 @@ import com.example.hotel.dto.booking.request.NoShowReservationRequest;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.response.ActivityTimelineItem;
+import com.example.hotel.dto.booking.response.ChargeResponse;
+import com.example.hotel.dto.booking.response.CurrentRoomResponse;
+import com.example.hotel.dto.booking.response.FolioReconciliationResponse;
+import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationActivityEntry;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
+import com.example.hotel.dto.booking.response.ReservationRoomResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
+import com.example.hotel.dto.room.response.RoomResponse;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.ReservationStatus;
+import com.example.hotel.service.booking.ChargeService;
+import com.example.hotel.service.booking.PaymentService;
 import com.example.hotel.service.booking.ReservationActivityQueryService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
-import com.example.hotel.service.booking.StayBalance;
 import com.example.hotel.service.booking.StayBalanceService;
 import com.example.hotel.service.booking.StayExtensionService;
 import com.example.hotel.service.booking.StayQueryService;
@@ -34,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -63,6 +71,8 @@ public class ReservationPageController {
     private final StayBalanceService stayBalanceService;
     private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
     private final StayExtensionService stayExtensionService;
+    private final ChargeService chargeService;
+    private final PaymentService paymentService;
     private final com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
     private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
     private final ReservationActivityQueryService reservationActivityQueryService;
@@ -77,10 +87,12 @@ public class ReservationPageController {
      * @param guestQueryService service used to load guest choices
      * @param roomQueryService service used to load room choices
      * @param stayQueryService service used to resolve a Reservation's Stay
-     * @param stayBalanceService service used to supply non-financial checkout readiness
+     * @param stayBalanceService the single authoritative Outstanding/Total Charges/Total Payments calculation
      * @param stayRoomAssignmentQueryService service used to supply current rooms and Room History
      * @param stayExtensionService service used to supply the extension history and derived accommodation totals
-     * @param folioReconciliationService read-only financial integrity diagnostic
+     * @param chargeService read-only Charge listing for the Folio/Charges presentation (MANAGE_PAYMENT only)
+     * @param paymentService read-only Payment listing for the Payments presentation (MANAGE_PAYMENT only)
+     * @param folioReconciliationService read-only financial integrity diagnostic (CHECKED_OUT standalone section)
      * @param prepaymentService prepayment summary of a CONFIRMED Reservation (MANAGE_PAYMENT only)
      * @param reservationActivityQueryService read-only Reservation Operational Timeline (VIEW_BOOKING baseline)
      * @param messageSource localized UI message source
@@ -94,6 +106,8 @@ public class ReservationPageController {
             StayBalanceService stayBalanceService,
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
             StayExtensionService stayExtensionService,
+            ChargeService chargeService,
+            PaymentService paymentService,
             com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService,
             com.example.hotel.service.booking.PrepaymentService prepaymentService,
             ReservationActivityQueryService reservationActivityQueryService,
@@ -106,6 +120,8 @@ public class ReservationPageController {
         this.stayBalanceService = stayBalanceService;
         this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
         this.stayExtensionService = stayExtensionService;
+        this.chargeService = chargeService;
+        this.paymentService = paymentService;
         this.folioReconciliationService = folioReconciliationService;
         this.prepaymentService = prepaymentService;
         this.reservationActivityQueryService = reservationActivityQueryService;
@@ -175,18 +191,40 @@ public class ReservationPageController {
         model.addAttribute("reservation", reservation);
         boolean hasStay = stayQueryService.existsByReservationId(id);
         model.addAttribute("hasStay", hasStay);
-        addCheckoutReadiness(model, reservation, authentication);
-        addRoomOccupancyAttributes(model, reservation);
         boolean checkedInLifecycle = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
+        StayResponse stay = checkedInLifecycle ? stayQueryService.findByReservationId(id) : null;
+        model.addAttribute("stay", stay);
+        addRoomOccupancyAttributes(model, reservation);
+        model.addAttribute("roomPricingByRoomId", roomPricingByRoomId(reservation));
         model.addAttribute("stayExtensionSummary", checkedInLifecycle ? stayExtensionService.summary(id) : null);
-        // Financial integrity is a diagnostic for users who may already see the folio (MANAGE_PAYMENT).
-        boolean canSeeIntegrity = checkedInLifecycle && hasAuthority(authentication, "PERM_MANAGE_PAYMENT");
-        model.addAttribute("financialIntegrity", canSeeIntegrity ? integrityFor(id) : null);
+        // Detailed Folio financial data (Charges, Payments, totals) is MANAGE_PAYMENT-gated per spec
+        // sec. 8.2: CHECK_OUT alone never grants Charge/Payment/detailed-financial read access.
+        boolean canSeeFinancial = checkedInLifecycle && hasAuthority(authentication, "PERM_MANAGE_PAYMENT");
+        // Financial Integrity (CHECKED_OUT-only presentation) remains an existing diagnostic, unaffected by the
+        // Task33 Batch 3D CHECKED_IN mockup rebuild, which does not include this card.
+        model.addAttribute("financialIntegrity", canSeeFinancial ? integrityFor(stay) : null);
+        model.addAttribute(
+                "financialSummary",
+                canSeeFinancial && stay != null ? stayBalanceService.calculate(stay.id()) : null);
+        model.addAttribute("charges", canSeeFinancial && stay != null ? activeCharges(stay.id()) : null);
+        model.addAttribute("payments", canSeeFinancial && stay != null ? paidPayments(stay.id()) : null);
         model.addAttribute("prepaymentSummary",
                 "CONFIRMED".equals(reservation.status())
                         && hasAuthority(authentication, "PERM_MANAGE_PAYMENT")
                         ? prepaymentService.summary(id) : null);
-        model.addAttribute("activity", resolveActivity(reservationActivityQueryService.findByReservationId(id)));
+        List<ReservationActivityEntry> activityEntries = reservationActivityQueryService.findByReservationId(id);
+        model.addAttribute("activity", resolveActivity(activityEntries));
+        ReservationActivityEntry noteMeta = resolveNoteMeta(activityEntries);
+        model.addAttribute("noteUpdatedAt", noteMeta == null ? null : noteMeta.occurredAt());
+        model.addAttribute("noteUpdatedBy", noteMeta == null ? null : noteMeta.actorDisplay());
+        // The Reservation Detail "hub" (CHECKED_IN) shows operationally useful Guest contact data
+        // already surfaced elsewhere on this same page (the Booking Contact fallback); it is not a
+        // new PERM_MANAGE_GUEST-gated exposure.
+        model.addAttribute(
+                "guest",
+                "CHECKED_IN".equals(reservation.status())
+                        ? guestQueryService.findForReservationCreation(reservation.guestId())
+                        : null);
         return "reservation/detail";
     }
 
@@ -218,9 +256,73 @@ public class ReservationPageController {
         return resolved.equals(key) ? messages.get("reservation.activity.action.unknown") : resolved;
     }
 
-    private com.example.hotel.dto.booking.response.FolioReconciliationResponse integrityFor(UUID reservationId) {
-        var stay = stayQueryService.findByReservationId(reservationId);
+    /**
+     * Resolves the Financial Integrity diagnostic for an already-resolved Stay.
+     *
+     * @param stay the Reservation's Stay, or {@code null} when none is available
+     * @return the reconciliation result, or {@code null} when there is no Stay
+     */
+    private FolioReconciliationResponse integrityFor(StayResponse stay) {
         return stay == null ? null : folioReconciliationService.reconcile(stay.id());
+    }
+
+    /**
+     * Resolves the most recent note-metadata entry (the Reservation's creation or a later notes update), used to
+     * attribute the single real {@code Reservation.notes} value shown in Reservation Detail to a genuine audited
+     * actor and timestamp instead of inventing one.
+     *
+     * @param entries raw Reservation Operational Timeline entries, oldest first
+     * @return the latest matching entry, or {@code null} when none exists
+     */
+    private ReservationActivityEntry resolveNoteMeta(List<ReservationActivityEntry> entries) {
+        ReservationActivityEntry latest = null;
+        for (ReservationActivityEntry entry : entries) {
+            if ("CREATE".equals(entry.action()) || "UPDATE_RESERVATION_NOTES".equals(entry.action())) {
+                latest = entry;
+            }
+        }
+        return latest;
+    }
+
+    /**
+     * Lists the ACTIVE Charges for one Stay, the subset that contributes to the canonical Total Charges figure
+     * ({@link StayBalanceService}), so the Folio/Charges presentation never shows a Charge that the total below it
+     * does not already account for.
+     *
+     * @param stayId owning Stay identifier
+     * @return the Stay's ACTIVE Charges in their existing chronological order
+     */
+    private List<ChargeResponse> activeCharges(UUID stayId) {
+        return chargeService.findByStayId(stayId).stream()
+                .filter(charge -> "ACTIVE".equals(charge.status()))
+                .toList();
+    }
+
+    /**
+     * Lists the PAID Payments for one Stay, the subset that contributes to the canonical Total Payments figure
+     * ({@link StayBalanceService}), so the Payments presentation never shows a Payment that the total below it
+     * does not already account for.
+     *
+     * @param stayId owning Stay identifier
+     * @return the Stay's PAID Payments in their existing chronological order
+     */
+    private List<PaymentResponse> paidPayments(UUID stayId) {
+        return paymentService.findByStayId(stayId).stream()
+                .filter(payment -> "PAID".equals(payment.status()))
+                .toList();
+    }
+
+    /**
+     * Indexes each originally booked room's pricing snapshot by Room identifier, so Room Details can display Rate/
+     * Nights/Total for a currently occupied room that still matches its original booking without re-deriving
+     * pricing in the template.
+     *
+     * @param reservation Reservation detail data
+     * @return the Reservation's booked-room pricing snapshots keyed by Room identifier
+     */
+    private Map<UUID, ReservationRoomResponse> roomPricingByRoomId(ReservationDetailResponse reservation) {
+        return reservation.rooms().stream()
+                .collect(Collectors.toMap(ReservationRoomResponse::roomId, room -> room, (first, second) -> first));
     }
 
     /**
@@ -233,12 +335,30 @@ public class ReservationPageController {
      */
     private void addRoomOccupancyAttributes(Model model, ReservationDetailResponse reservation) {
         boolean hasStay = "CHECKED_IN".equals(reservation.status()) || "CHECKED_OUT".equals(reservation.status());
-        model.addAttribute(
-                "currentRooms",
-                hasStay ? stayRoomAssignmentQueryService.findCurrentRooms(reservation.id()) : List.of());
+        List<CurrentRoomResponse> currentRooms =
+                hasStay ? stayRoomAssignmentQueryService.findCurrentRooms(reservation.id()) : List.of();
+        model.addAttribute("currentRooms", currentRooms);
         model.addAttribute(
                 "roomHistory",
                 hasStay ? stayRoomAssignmentQueryService.findHistory(reservation.id()) : List.of());
+        model.addAttribute("currentRoomDetails", roomDetailsByRoomId(currentRooms));
+    }
+
+    /**
+     * Resolves Room Type and current operational status for each currently occupied room, so
+     * Reservation Detail's Room Details presentation can show them without reimplementing Room
+     * Management's own data.
+     *
+     * @param currentRooms the Stay's currently occupied rooms
+     * @return Room profile data keyed by Room identifier
+     */
+    private Map<UUID, RoomResponse> roomDetailsByRoomId(List<CurrentRoomResponse> currentRooms) {
+        if (currentRooms.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> roomIds = currentRooms.stream().map(CurrentRoomResponse::roomId).toList();
+        return roomQueryService.findAllByIds(roomIds).stream()
+                .collect(java.util.stream.Collectors.toMap(RoomResponse::id, room -> room));
     }
 
     /**
@@ -594,26 +714,6 @@ public class ReservationPageController {
             return label + " date range cannot exceed one calendar year.";
         }
         return null;
-    }
-
-    /**
-     * Adds the approved non-financial checkout-readiness state for a checked-in Reservation.
-     *
-     * @param model model used to render Reservation detail
-     * @param reservation Reservation detail data
-     * @param authentication current browser authentication
-     */
-    private void addCheckoutReadiness(
-            Model model, ReservationDetailResponse reservation, Authentication authentication) {
-        if (!"CHECKED_IN".equals(reservation.status())
-                || !hasAuthority(authentication, "PERM_CHECK_OUT")) {
-            return;
-        }
-        StayResponse stay = stayQueryService.findByReservationId(reservation.id());
-        StayBalance balance = stayBalanceService.calculate(stay.id());
-        model.addAttribute(
-                "checkoutReadiness",
-                balance.outstanding().signum() == 0 ? "READY" : "PAYMENT_REQUIRED");
     }
 
     /**

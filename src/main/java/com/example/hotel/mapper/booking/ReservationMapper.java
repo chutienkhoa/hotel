@@ -71,6 +71,8 @@ public class ReservationMapper {
      * @param effectiveContactEmail the effective Booking Contact email already resolved by the caller
      * @param bookingContactFromPrimaryGuest whether the three effective values above came from the Primary Guest
      *     fallback rather than the Reservation's own Booking Contact snapshot
+     * @param createdByUsername the username of the Reservation's creator, already resolved by the caller from the
+     *     audit {@code createdBy} identifier, or {@code null} when it cannot be resolved
      * @return the reservation detail representation
      */
     public ReservationDetailResponse toDetailResponse(
@@ -79,7 +81,8 @@ public class ReservationMapper {
             String effectiveContactName,
             String effectiveContactPhone,
             String effectiveContactEmail,
-            boolean bookingContactFromPrimaryGuest) {
+            boolean bookingContactFromPrimaryGuest,
+            String createdByUsername) {
         return new ReservationDetailResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
@@ -103,7 +106,10 @@ public class ReservationMapper {
                 bookingContactFromPrimaryGuest,
                 reservation.getCancellationReasonCode(),
                 reservation.getCancellationReasonDetail(),
-                reservation.getNoShowReason());
+                reservation.getNoShowReason(),
+                reservation.getReservedAt(),
+                createdByUsername,
+                reservation.getUpdatedAt());
     }
 
     /**

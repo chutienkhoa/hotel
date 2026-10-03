@@ -59,7 +59,8 @@ class PrepaymentCurrencyPrecisionTest {
             mock(ChargeRepository.class),
             new PaymentMapper(),
             audits,
-            Clock.fixed(Instant.parse("2026-10-10T03:00:00Z"), ZONE));
+            Clock.fixed(Instant.parse("2026-10-10T03:00:00Z"), ZONE),
+            mock(com.example.hotel.repository.common.AppUserRepository.class));
     private final PrepaymentService service = new PrepaymentService(
             reservations,
             stays,

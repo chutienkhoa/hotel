@@ -1,7 +1,8 @@
 "use strict";
 
 /*
- * Regression tests for static/js/common/header-account.js (Task33 Batch 1A header account dropdown).
+ * Regression tests for static/js/common/header-account.js (Task33 Batch 1A header account dropdown,
+ * plus the global header language-switcher popover and its mutual exclusivity with the account menu).
  *
  * Run with: node src/test/js/header-account.test.js
  */
@@ -58,6 +59,27 @@ function loadHeaderAccount({ missing } = {}) {
     vm.runInNewContext(
         fs.readFileSync(SOURCE_PATH, "utf8"), { document: documentStub }, { filename: SOURCE_PATH });
     return { trigger, menu, documentStub };
+}
+
+/** Loads header-account.js against stub nodes for BOTH header dropdowns (language + account). */
+function loadBothHeaderDropdowns() {
+    const languageTrigger = createNode();
+    languageTrigger.setAttribute("aria-expanded", "false");
+    const languageMenu = createNode();
+    const accountTrigger = createNode();
+    accountTrigger.setAttribute("aria-expanded", "false");
+    const accountMenu = createNode();
+    const documentStub = createNode();
+    documentStub.getElementById = (id) => ({
+        "header-language-trigger": languageTrigger,
+        "header-language-menu": languageMenu,
+        "header-account-trigger": accountTrigger,
+        "header-account-menu": accountMenu,
+    }[id] || null);
+
+    vm.runInNewContext(
+        fs.readFileSync(SOURCE_PATH, "utf8"), { document: documentStub }, { filename: SOURCE_PATH });
+    return { languageTrigger, languageMenu, accountTrigger, accountMenu, documentStub };
 }
 
 let failures = 0;
@@ -133,6 +155,65 @@ console.log(" loading against a page missing the trigger or the menu never throw
     loadHeaderAccount({ missing: missingId });
     console.log(`  ok   does not throw when #${missingId} is absent`);
 });
+
+console.log(" the language popover opens and closes exactly like the account menu");
+{
+    const { languageTrigger, languageMenu } = loadBothHeaderDropdowns();
+    languageTrigger.dispatch("click");
+    assertEquals("true", languageTrigger.getAttribute("aria-expanded"), "language trigger aria-expanded becomes true");
+    assertEquals(false, languageMenu.hidden, "language menu is un-hidden");
+
+    languageTrigger.dispatch("click");
+    assertEquals("false", languageTrigger.getAttribute("aria-expanded"), "language trigger aria-expanded returns to false");
+    assertEquals(true, languageMenu.hidden, "language menu is hidden again");
+}
+
+console.log(" opening the language popover closes an already-open account menu");
+{
+    const { languageTrigger, languageMenu, accountTrigger, accountMenu } = loadBothHeaderDropdowns();
+    accountTrigger.dispatch("click");
+    assertEquals(false, accountMenu.hidden, "account menu opens first");
+
+    languageTrigger.dispatch("click");
+    assertEquals(true, accountMenu.hidden, "account menu closes once the language popover opens");
+    assertEquals("false", accountTrigger.getAttribute("aria-expanded"), "account trigger aria-expanded resets");
+    assertEquals(false, languageMenu.hidden, "language menu is now open");
+}
+
+console.log(" opening the account menu closes an already-open language popover");
+{
+    const { languageTrigger, languageMenu, accountTrigger, accountMenu } = loadBothHeaderDropdowns();
+    languageTrigger.dispatch("click");
+    assertEquals(false, languageMenu.hidden, "language popover opens first");
+
+    accountTrigger.dispatch("click");
+    assertEquals(true, languageMenu.hidden, "language popover closes once the account menu opens");
+    assertEquals("false", languageTrigger.getAttribute("aria-expanded"), "language trigger aria-expanded resets");
+    assertEquals(false, accountMenu.hidden, "account menu is now open");
+}
+
+console.log(" Escape closes whichever header dropdown is open");
+{
+    const { languageTrigger, languageMenu, documentStub } = loadBothHeaderDropdowns();
+    languageTrigger.dispatch("click");
+    documentStub.dispatch("keydown", { key: "Escape" });
+    assertEquals(true, languageMenu.hidden, "Escape closes the open language popover");
+    assertEquals(1, languageTrigger.focusCount, "Escape returns focus to the language trigger");
+}
+
+console.log(" clicking outside both open dropdowns closes whichever is open, a click inside does not");
+{
+    const { languageTrigger, languageMenu, documentStub } = loadBothHeaderDropdowns();
+    languageTrigger.dispatch("click");
+
+    const insideTarget = {};
+    languageMenu.containsTargets.add(insideTarget);
+    documentStub.dispatch("click", { target: insideTarget });
+    assertEquals(false, languageMenu.hidden, "a click inside the language menu does not close it");
+
+    documentStub.dispatch("click", { target: {} });
+    assertEquals(true, languageMenu.hidden, "a click outside closes the language popover");
+}
 
 console.log(failures === 0 ? "\nAll header-account.js tests passed." : `\n${failures} header-account.js test(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

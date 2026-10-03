@@ -26,29 +26,45 @@
         <a class="brand" th:href="@{/reservations}" th:text="#{common.app.name}">Sunset House</a>
     </div>
 
-    <div class="header-account" th:if="${currentUsername != null}">
-        <button aria-controls="header-account-menu" aria-expanded="false" aria-haspopup="menu"
-                class="header-account-trigger" id="header-account-trigger" type="button">
-            <span aria-hidden="true" class="header-account-initial"
-                  th:text="${#strings.toUpperCase(#strings.substring(currentUsername, 0, 1))}">A</span>
-            <span class="header-account-name" th:text="${currentUsername}">admin</span>
-            <svg aria-hidden="true" class="header-account-chevron" th:replace="~{layout/icons :: chevronDown}"></svg>
-        </button>
-        <div aria-labelledby="header-account-trigger" class="header-account-menu" hidden
-             id="header-account-menu" role="menu">
-            <div class="header-account-menu-section" role="none">
-                <nav th:replace="~{layout/language :: switcher}"></nav>
+    <div class="site-header-end" th:if="${currentUsername != null}">
+        <!-- Global Task33 header redesign: the language control now sits immediately left of the
+             account avatar, as its own compact flag trigger + popover, instead of living inside the
+             Admin dropdown. Same visibility/toggle pattern as .header-account (hidden-attribute driven,
+             mutually exclusive with it -- see static/js/common/header-account.js). -->
+        <div class="header-language">
+            <button aria-controls="header-language-menu" aria-expanded="false" aria-haspopup="menu"
+                    class="header-language-trigger" id="header-language-trigger"
+                    th:aria-label="#{common.language.label}" type="button">
+                <span aria-hidden="true" class="header-language-flag"
+                      th:text="${#locale.language == 'vi'} ? '🇻🇳' : '🇬🇧'">🇻🇳</span>
+            </button>
+            <div aria-labelledby="header-language-trigger" class="header-language-menu" hidden
+                 id="header-language-menu" role="menu">
+                <div th:replace="~{layout/language :: headerMenu}"></div>
             </div>
-            <form method="post" role="none" th:action="@{/logout}">
-                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                <button class="header-account-logout" role="menuitem" type="submit">
-                    <!-- Deliberately not .sidebar-nav-icon: that class's light-gray color is tuned for the
-                         dark sidebar and would be low-contrast here. No color override is set, so the SVG's
-                         stroke="currentColor" simply follows this (dark-on-light) button's own text color. -->
-                    <span class="header-account-logout-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
-                    <span th:text="#{navigation.logout}">Logout</span>
-                </button>
-            </form>
+        </div>
+
+        <div class="header-account">
+            <button aria-controls="header-account-menu" aria-expanded="false" aria-haspopup="menu"
+                    class="header-account-trigger" id="header-account-trigger" type="button">
+                <span aria-hidden="true" class="header-account-initial"
+                      th:text="${#strings.toUpperCase(#strings.substring(currentUsername, 0, 1))}">A</span>
+                <span class="header-account-name" th:text="${currentUsername}">admin</span>
+                <svg aria-hidden="true" class="header-account-chevron" th:replace="~{layout/icons :: chevronDown}"></svg>
+            </button>
+            <div aria-labelledby="header-account-trigger" class="header-account-menu" hidden
+                 id="header-account-menu" role="menu">
+                <form method="post" role="none" th:action="@{/logout}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <button class="header-account-logout" role="menuitem" type="submit">
+                        <!-- Deliberately not .sidebar-nav-icon: that class's light-gray color is tuned for the
+                             dark sidebar and would be low-contrast here. No color override is set, so the SVG's
+                             stroke="currentColor" simply follows this (dark-on-light) button's own text color. -->
+                        <span class="header-account-logout-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
+                        <span th:text="#{navigation.logout}">Logout</span>
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 </header>

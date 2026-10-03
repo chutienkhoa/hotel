@@ -388,7 +388,7 @@ class ReservationCancellationAndNoShowServiceTest {
         ReflectionTestUtils.setField(reservation, "status", ReservationStatus.CANCELLED);
 
         ReservationDetailResponse response =
-                new ReservationMapper().toDetailResponse(reservation, List.of(), null, null, null, false);
+                new ReservationMapper().toDetailResponse(reservation, List.of(), null, null, null, false, null);
 
         assertEquals("CANCELLED", response.status());
         assertNull(response.cancellationReasonCode());

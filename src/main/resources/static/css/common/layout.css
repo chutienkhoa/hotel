@@ -44,6 +44,13 @@
   --z-header: 20;
   /* Task33 Batch 1B: above the header/sidebar/dropdown, below the native <dialog> top layer. */
   --z-toast: 30;
+  /* Global Task33 icon-size standardization: a small role-based scale so every icon context picks one
+     of these instead of an arbitrary per-rule rem value. Stroke weight itself is not a token -- it is
+     the shared 1.8 baseline already set once on every fragment in layout/icons.html. */
+  --icon-size-sm: 1rem; /* compact/metadata icons, e.g. the inline Guest link chevron */
+  --icon-size-action: 1.125rem; /* buttons, tabs, the Back to Reservations link */
+  --icon-size-section: 1.25rem; /* card/section heading icons (Guest Information, Room Details, ...) */
+  --icon-size-nav: 1.25rem; /* sidebar navigation, header utilities, summary-strip, dropdown rows */
   color: var(--color-text);
   font-family:
     Inter,
@@ -196,6 +203,10 @@ p {
   flex: none;
   justify-content: center;
 }
+.sidebar-nav-icon svg {
+  height: var(--icon-size-nav);
+  width: var(--icon-size-nav);
+}
 .sidebar-nav-link:hover .sidebar-nav-icon,
 .sidebar-nav-link:focus-visible .sidebar-nav-icon {
   color: #fff;
@@ -282,6 +293,12 @@ p {
 .page-description {
   font-size: 0.9375rem;
 }
+.reservation-detail-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
 .reservation-detail-heading-meta {
   align-items: center;
   color: var(--color-muted);
@@ -306,6 +323,23 @@ p {
 .back-link:hover {
   color: var(--color-primary);
   text-decoration: underline;
+}
+/* Task33 CHECKED_IN Reservation Detail: the approved mockup's "Back to Reservations" is Task33
+   primary-blue with a leading arrow icon, not the shared .back-link neutral default used by the
+   other ~37 pages' back links. Opt-in modifier, scoped to this page only. */
+.back-link--primary {
+  color: var(--color-primary);
+  gap: 0.4rem;
+  display: flex;
+  align-items: center;
+}
+.back-link--primary svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.back-link--primary:hover {
+  color: var(--color-primary-hover);
 }
 .breadcrumb {
   align-items: center;
@@ -678,6 +712,7 @@ fieldset,
   font: inherit;
   font-size: 0.875rem;
   font-weight: 700;
+  gap: 0.4rem;
   height: var(--control-height);
   justify-content: center;
   line-height: 1.25;
@@ -687,6 +722,11 @@ fieldset,
     background-color 150ms ease,
     border-color 150ms ease,
     color 150ms ease;
+}
+.button svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
 }
 .button-primary {
   background: var(--color-primary);
@@ -705,6 +745,20 @@ fieldset,
   background: #edf2f7;
   color: var(--color-navy);
 }
+/* Task33 outline-blue secondary action (Edit/Add/Change on the CHECKED_IN Reservation Detail hub):
+   white background, Task33 primary-blue border/text/icon, matching the approved mockup. A distinct
+   opt-in modifier rather than a change to the shared .button-secondary default, so pages/actions
+   outside this approved mockup keep their existing neutral treatment. */
+.button-outline-primary {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.button-outline-primary:hover {
+  background: var(--color-info-surface);
+  border-color: var(--color-primary-hover);
+  color: var(--color-primary-hover);
+}
 .button-danger {
   background: var(--color-danger);
   color: #fff;
@@ -719,6 +773,15 @@ fieldset,
   height: auto;
   min-height: auto;
   padding: var(--space-2);
+}
+/* Compact secondary action placed inside a dense card header (Task33 CHECKED_IN hub) rather than
+   the page-level action-row, so it must not take the same visual weight as a primary hub action. */
+.button-compact {
+  flex: none;
+  font-size: 0.75rem;
+  height: 1.875rem;
+  padding: 0.3rem 0.65rem;
+  white-space: nowrap;
 }
 .button-link:hover {
   background: #eaf1f8;
@@ -882,6 +945,7 @@ td {
   padding: var(--space-3) var(--space-4);
   text-align: left;
   vertical-align: middle;
+  white-space: nowrap;
 }
 th {
   background: var(--color-surface-muted);
@@ -890,6 +954,14 @@ th {
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+/* Shared Task33 table rule: cell values stay on one line (identifiers, names, dates, money, statuses,
+   usernames, counts, descriptions) and the table scrolls horizontally (.table-wrap already sets
+   overflow-x: auto, and table already sets a min-width) instead of wrapping. Opt out only for a
+   column that is genuinely designed to show long multi-line free text (e.g. Notes), with
+   .table-cell-wrap -- not currently used by any Task33 table, but kept available for one that needs it. */
+.table-cell-wrap {
+  white-space: normal;
 }
 table.roles-matrix {
   min-width: 50rem;
@@ -985,12 +1057,12 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 .status-badge--confirmed,
-.status-badge--occupied,
 .status-badge--submitted {
   background: #e5f0fb;
   color: #185fa5;
 }
 .status-badge--checked_in,
+.status-badge--occupied,
 .status-badge--available,
 .status-badge--approved,
 .status-badge--recorded,
@@ -1376,6 +1448,10 @@ legend {
   justify-content: center;
   width: 2.25rem;
 }
+.reservation-info-icon svg {
+  height: var(--icon-size-nav);
+  width: var(--icon-size-nav);
+}
 .reservation-info-icon--blue {
   background: var(--color-info-surface);
   color: var(--color-info);
@@ -1419,6 +1495,266 @@ legend {
 }
 .reservation-info-notes {
   grid-column: 1 / -1;
+}
+/* Task33 CHECKED_IN Reservation Detail hub (spec sec. 9.3.4), pixel-close to
+   docs/specs/evidence/task33/front-desk/reservation-detail-checked-in-final.png: a compact
+   top summary strip, a two-column (main + side) body, and dense label/value field rows instead of
+   the sparse icon-tile component used by the full-width legacy Reservation information card. */
+.hub-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5) var(--space-6);
+}
+.hub-summary-item {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 9rem;
+}
+.hub-summary-item .reservation-info-icon {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+.hub-summary-item .reservation-info-icon svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.hub-summary-item .reservation-info-label {
+  font-size: 0.6875rem;
+}
+.hub-summary-item .reservation-info-value {
+  font-size: 0.875rem;
+  margin-top: 0.125rem;
+}
+.hub-layout {
+  align-items: start;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
+}
+.hub-main,
+.hub-side {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.hub-info-row {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--space-5);
+}
+.hub-card-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.hub-card-header-title {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+.hub-card-header-title svg {
+  color: var(--color-muted);
+  flex: none;
+  height: var(--icon-size-section);
+  width: var(--icon-size-section);
+}
+.hub-card-header h2 {
+  font-size: 0.9375rem;
+  margin-bottom: 0;
+}
+.hub-fields {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.hub-field {
+  align-items: baseline;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+.hub-field:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+/* The Stay Information card renders its Check-in/.../Children rows and its conditional Original
+   Booking Total/Extension Amount/Current Accommodation Total rows as two separate <dl class="hub-fields">
+   blocks. Without this, the ":last-child" rule above strips Children's own separator, leaving no
+   border between it and Original Booking Total even though they must read as one continuous row
+   system. Restores the same border + row padding as every other (non-final) row, only when another
+   .hub-fields block actually follows -- the single-dl case (every other hub-fields card) is untouched. */
+.hub-fields:not(:last-of-type) .hub-field:last-child {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--space-2);
+}
+.hub-field dt {
+  color: var(--color-muted);
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.hub-field dd {
+  color: var(--color-navy);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.hub-field dd.text-muted {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+.hub-note-text {
+  font-size: 0.875rem;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.hub-note-entry {
+  display: grid;
+  gap: var(--space-1);
+}
+.hub-note-meta {
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.75rem;
+  gap: var(--space-2);
+  margin: 0;
+}
+/* Vertical timeline: spacing between events lives on .hub-timeline-content's own margin-bottom (not
+   on .hub-timeline's gap), because a flex item's margin contributes to its row's auto height, which
+   is what .hub-timeline-rail (align-items: stretch) actually stretches to match. .hub-timeline-connector
+   -- a flex:1 sibling of the dot inside that same per-item rail -- then fills the rail's full stretched
+   height, running through that spacing to visually join this event's dot to the next one, without
+   extending past the final event (it is simply not rendered for the last item; see
+   reservation/detail.html). */
+.hub-timeline {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.hub-timeline-item {
+  display: flex;
+  gap: var(--space-3);
+}
+.hub-timeline-rail {
+  align-items: center;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 0.625rem;
+}
+.hub-timeline-dot {
+  background: var(--color-border-strong);
+  border-radius: 999px;
+  flex: none;
+  height: 0.625rem;
+  margin-top: 0.3rem;
+  width: 0.625rem;
+}
+.hub-timeline-item:first-child .hub-timeline-dot {
+  background: var(--color-success);
+}
+.hub-timeline-connector {
+  background: var(--color-border-strong);
+  flex: 1 1 auto;
+  margin-top: 0.25rem;
+  width: 2px;
+}
+.hub-timeline-content {
+  flex: 1;
+  margin-bottom: var(--space-4);
+  min-width: 0;
+}
+.hub-timeline-item:last-child .hub-timeline-content {
+  margin-bottom: 0;
+}
+.hub-timeline-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin: 0;
+}
+.hub-timeline-meta {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  margin: var(--space-1) 0 0;
+}
+.hub-main .card,
+.hub-side .card {
+  min-width: 0;
+  padding: var(--space-4);
+}
+/* The Folio/Charges + Payments wrapper is itself a hub-main grid row; without min-width: 0 its two
+   cards' table content could still bubble up and widen the hub-main track. */
+#financial-summary {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+/* Task33 Batch 3D: the CHECKED_IN Reservation Detail section tab bar. Folio/Payments/Notes stay on
+   the single Overview panel already shown below (a quick-jump anchor scroll via data-tab-scroll);
+   Room History and Audit Log are genuinely separate panels, hidden until their tab is activated, so
+   the default (Overview) view matches the approved mockup with no extra always-visible section. */
+.detail-tabs {
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+.detail-tab {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  gap: 0.4rem;
+  padding: var(--space-3) 0;
+}
+.detail-tab svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.detail-tab:hover {
+  color: var(--color-navy);
+}
+.detail-tab--active {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.detail-tab-panel[hidden] {
+  display: none;
+}
+.table-total-row td {
+  background: var(--color-surface-muted);
+  font-weight: 750;
+}
+.table-total-row--outstanding td {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+@media (max-width: 64rem) {
+  .hub-layout {
+    grid-template-columns: 1fr;
+  }
+  .hub-info-row {
+    grid-template-columns: 1fr;
+  }
 }
 .reservation-info-notes .reservation-info-value {
   font-weight: 500;
@@ -1554,8 +1890,8 @@ legend {
 }
 .passport-document-actions .button svg {
   flex: none;
-  height: 1rem;
-  width: 1rem;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
 }
 .assigned-rooms-header {
   align-items: center;
@@ -1602,8 +1938,8 @@ legend {
   margin-left: var(--space-1);
 }
 .reservation-info-link-icon svg {
-  height: 0.75rem;
-  width: 0.75rem;
+  height: var(--icon-size-sm);
+  width: var(--icon-size-sm);
 }
 .message-compact {
   margin-top: var(--space-3);

@@ -94,6 +94,33 @@ class RoomQueryServiceTest {
         assertEquals(List.of(availableId, assignedId), result.stream().map(room -> room.id()).toList());
     }
 
+    /** Confirms a batch Room lookup maps every found Room and ignores unknown identifiers. */
+    @Test
+    void shouldMapEveryFoundRoomForBatchLookup() {
+        RoomRepository repository = mock(RoomRepository.class);
+        RoomMapper mapper = mock(RoomMapper.class);
+        UUID roomId = UUID.randomUUID();
+        Room room = mock(Room.class);
+        RoomResponse response = new RoomResponse(roomId, "305", null, "3", "OCCUPIED", true);
+        when(repository.findAllById(List.of(roomId))).thenReturn(List.of(room));
+        when(mapper.toResponse(room)).thenReturn(response);
+
+        var result = new RoomQueryService(repository, mapper).findAllByIds(List.of(roomId));
+
+        assertEquals(List.of(response), result);
+    }
+
+    /** Confirms an empty identifier collection returns an empty list without querying the repository. */
+    @Test
+    void shouldReturnEmptyListForNoRoomIdentifiers() {
+        RoomRepository repository = mock(RoomRepository.class);
+
+        var result = new RoomQueryService(repository, mock(RoomMapper.class)).findAllByIds(List.of());
+
+        assertEquals(List.of(), result);
+        verify(repository, never()).findAllById(any());
+    }
+
     private Room room(UUID id, String number, RoomStatus status, boolean active) {
         Room room = Room.create(id, number, null, "1");
         org.springframework.test.util.ReflectionTestUtils.setField(room, "status", status);

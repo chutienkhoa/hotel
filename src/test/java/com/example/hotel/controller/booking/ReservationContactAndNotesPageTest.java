@@ -100,6 +100,12 @@ class ReservationContactAndNotesPageTest {
     private StayExtensionService stayExtensionService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ChargeService chargeService;
+
+    @MockitoBean
+    private com.example.hotel.service.booking.PaymentService paymentService;
+
+    @MockitoBean
     private FolioReconciliationService folioReconciliationService;
 
     @MockitoBean

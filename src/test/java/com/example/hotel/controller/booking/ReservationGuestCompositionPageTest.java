@@ -87,6 +87,12 @@ class ReservationGuestCompositionPageTest {
     private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ChargeService chargeService;
+
+    @MockitoBean
+    private com.example.hotel.service.booking.PaymentService paymentService;
+
+    @MockitoBean
     private com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
 
     @MockitoBean

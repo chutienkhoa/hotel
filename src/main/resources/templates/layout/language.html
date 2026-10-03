@@ -14,5 +14,29 @@
        th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=en'}" th:text="#{common.language.en}"
        th:title="#{common.language.en.title}">EN</a>
 </nav>
+
+<!-- Compact flag-based language popover for the authenticated app-shell header (global Task33 header
+     redesign). Reuses the exact same languageSwitchBase/languageSwitchPath URL mechanism, pms-lang
+     cookie and ?lang= semantics as the plain VI | EN switcher fragment above -- only the presentation
+     differs. The plain switcher above is left untouched: login.html (logged out, no header account
+     area) still renders it standalone. -->
+<div th:fragment="headerMenu">
+    <a class="header-language-option" hreflang="vi" lang="vi" role="menuitem"
+       th:aria-current="${#locale.language == 'vi'} ? 'true'"
+       th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=vi'}">
+        <span aria-hidden="true" class="header-language-option-flag">🇻🇳</span>
+        <span class="header-language-option-label" th:text="#{common.language.vi.title}">Tiếng Việt</span>
+        <svg aria-hidden="true" class="header-language-option-check" th:if="${#locale.language == 'vi'}"
+             th:replace="~{layout/icons :: checkCircle}"></svg>
+    </a>
+    <a class="header-language-option" hreflang="en" lang="en" role="menuitem"
+       th:aria-current="${#locale.language == 'en'} ? 'true'"
+       th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=en'}">
+        <span aria-hidden="true" class="header-language-option-flag">🇬🇧</span>
+        <span class="header-language-option-label" th:text="#{common.language.en.title}">English</span>
+        <svg aria-hidden="true" class="header-language-option-check" th:if="${#locale.language == 'en'}"
+             th:replace="~{layout/icons :: checkCircle}"></svg>
+    </a>
+</div>
 </body>
 </html>

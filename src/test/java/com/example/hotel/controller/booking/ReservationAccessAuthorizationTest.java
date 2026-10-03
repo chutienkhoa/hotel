@@ -97,6 +97,12 @@ class ReservationAccessAuthorizationTest {
     private com.example.hotel.service.booking.StayExtensionService stayExtensionService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ChargeService chargeService;
+
+    @MockitoBean
+    private com.example.hotel.service.booking.PaymentService paymentService;
+
+    @MockitoBean
     private com.example.hotel.service.booking.FolioReconciliationService folioReconciliationService;
 
     @MockitoBean
@@ -340,7 +346,11 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("Payment issue")));
     }
 
-    /** Confirms a payment manager can discover the Folio link for a Reservation with a Stay. */
+    /**
+     * Confirms a payment manager can discover the Folio/Charges entry point for a Reservation with a Stay. The
+     * Task33 Batch 3D strict mockup rebuild replaced the standalone "View Folio" action with the Folio/Charges and
+     * Payments cards' own "Add Charge"/"Add Payment" actions, which link to the same real Folio route.
+     */
     @Test
     void shouldShowFolioLinkToManagePaymentUserForCheckedInReservation() throws Exception {
         stubCheckedInReservation(BigDecimal.ZERO);
@@ -348,19 +358,23 @@ class ReservationAccessAuthorizationTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("manager").authorities(viewAndManagePaymentAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("View Folio")));
+                .andExpect(content().string(containsString("/reservations/" + RESERVATION_ID + "/folio")));
     }
 
-    /** Confirms a check-out-only user receives readiness without detailed Folio financial access. */
+    /**
+     * Confirms a check-out-only user (no MANAGE_PAYMENT) never sees detailed Folio financial data. The Task33
+     * Batch 3D strict mockup rebuild removed the standalone Check-out readiness card (not present in the approved
+     * mockup; the real check-out eligibility check remains enforced on the Check-out Review page), so this test
+     * now covers only the MANAGE_PAYMENT financial-data permission boundary that card never substituted for.
+     */
     @Test
-    void shouldShowNonFinancialReadinessToCheckOutOnlyUser() throws Exception {
+    void shouldHideDetailedFinancialDataFromCheckOutOnlyUser() throws Exception {
         stubCheckedInReservation(BigDecimal.TEN);
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("staff").authorities(viewAndCheckOutAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Payment required before check-out.")))
-                .andExpect(content().string(not(containsString("View Folio"))))
+                .andExpect(content().string(not(containsString("/reservations/" + RESERVATION_ID + "/folio"))))
                 .andExpect(content().string(not(containsString("Total Charges"))));
     }
 

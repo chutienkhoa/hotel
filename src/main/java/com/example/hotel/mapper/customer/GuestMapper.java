@@ -59,7 +59,8 @@ public class GuestMapper {
                 fullName(guest),
                 guest.getEmail(),
                 guest.getPhone(),
-                guest.getNationality());
+                guest.getNationality(),
+                guest.getDateOfBirth());
     }
 
     /**

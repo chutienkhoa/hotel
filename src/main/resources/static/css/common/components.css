@@ -51,6 +51,12 @@
   display: none;
 }
 
+.header-nav-toggle-icon-open svg,
+.header-nav-toggle-icon-close svg {
+  height: var(--icon-size-nav);
+  width: var(--icon-size-nav);
+}
+
 .header-nav-toggle[aria-expanded="true"] .header-nav-toggle-icon-open {
   display: none;
 }
@@ -60,8 +66,93 @@
 }
 
 /* ---------------------------------------------------------------------------------------------------
-   Header: account area (moved out of the sidebar footer, see templates/layout/header.html)
+   Header: right-side utility cluster (language + account), see templates/layout/header.html
    --------------------------------------------------------------------------------------------------- */
+
+.site-header-end {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--space-3);
+}
+
+/* Global Task33 header redesign: a compact flag trigger immediately left of the account avatar,
+   opening a popover built the same way as .header-account-menu (hidden-attribute driven; see
+   static/js/common/header-account.js, which also keeps this and .header-account mutually exclusive). */
+.header-language {
+  flex: none;
+  position: relative;
+}
+
+.header-language-trigger {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  height: var(--control-height);
+  justify-content: center;
+  padding: 0;
+  width: var(--control-height);
+}
+
+.header-language-trigger:hover,
+.header-language-trigger:focus-visible {
+  background: rgb(255 255 255 / 10%);
+}
+
+.header-language-flag {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.header-language-menu {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  margin-top: var(--space-2);
+  min-width: 11rem;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: var(--z-dropdown);
+}
+
+.header-language-option {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  text-decoration: none;
+}
+
+.header-language-option:hover,
+.header-language-option:focus-visible {
+  background: var(--color-surface-muted);
+}
+
+.header-language-option-flag {
+  flex: none;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.header-language-option-label {
+  flex: 1;
+}
+
+.header-language-option-check {
+  color: var(--color-success);
+  flex: none;
+  height: var(--icon-size-sm);
+  width: var(--icon-size-sm);
+}
 
 .header-account {
   flex: none;
@@ -113,7 +204,9 @@
 .header-account-chevron {
   color: #9fb3c8;
   flex: none;
+  height: var(--icon-size-sm);
   transition: transform 0.15s ease-in-out;
+  width: var(--icon-size-sm);
 }
 
 .header-account-trigger[aria-expanded="true"] .header-account-chevron {
@@ -137,15 +230,6 @@
   z-index: var(--z-dropdown);
 }
 
-.header-account-menu-section {
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-3);
-}
-
-.header-account-menu-section .language-switch {
-  color: var(--color-text);
-}
-
 .header-account-logout {
   align-items: center;
   background: transparent;
@@ -166,6 +250,10 @@
   display: flex;
   flex: none;
   justify-content: center;
+}
+.header-account-logout-icon svg {
+  height: var(--icon-size-nav);
+  width: var(--icon-size-nav);
 }
 
 .header-account-logout:hover,

@@ -154,7 +154,8 @@ class CrossCurrencySettlementTest {
                 charges,
                 new PaymentMapper(),
                 mock(AuditLogRepository.class),
-                Clock.fixed(Instant.parse("2026-10-10T03:00:00Z"), ZONE));
+                Clock.fixed(Instant.parse("2026-10-10T03:00:00Z"), ZONE),
+                mock(com.example.hotel.repository.common.AppUserRepository.class));
         return service.recordPaid(
                 stayId,
                 new PaymentCreateRequest(amount, tender, exchangeRate, PaymentMethod.CASH, null));

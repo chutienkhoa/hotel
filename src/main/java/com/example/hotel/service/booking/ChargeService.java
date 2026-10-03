@@ -7,10 +7,12 @@ import com.example.hotel.dto.booking.response.ChargeResponse;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.common.AdditionalRevenue;
 import com.example.hotel.entity.common.AdditionalRevenueCategory;
+import com.example.hotel.entity.common.AppUser;
 import com.example.hotel.entity.common.AuditLog;
 import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.repository.common.AdditionalRevenueCategoryRepository;
 import com.example.hotel.repository.common.AdditionalRevenueRepository;
+import com.example.hotel.repository.common.AppUserRepository;
 import com.example.hotel.repository.common.AuditLogRepository;
 import java.time.Clock;
 import com.example.hotel.entity.booking.ChargeStatus;
@@ -24,7 +26,10 @@ import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -44,6 +49,7 @@ public class ChargeService {
     private final AuditLogRepository auditLogRepository;
     private final StayBalanceService stayBalanceService;
     private final Clock clock;
+    private final AppUserRepository appUserRepository;
 
     /**
      * Creates the Charge service with its required persistence and mapping collaborators.
@@ -54,6 +60,7 @@ public class ChargeService {
      * @param auditLogRepository repository used to write the approved RECORD_CHARGE audit entry
      * @param stayBalanceService the single authoritative Outstanding calculation, used by the Charge void
      *     negative-balance guard so the folio invariant is never re-implemented here
+     * @param appUserRepository repository used to resolve each Charge's "added by" username for presentation
      */
     public ChargeService(
             ChargeRepository chargeRepository,
@@ -63,7 +70,8 @@ public class ChargeService {
             AdditionalRevenueCategoryRepository additionalRevenueCategories,
             AuditLogRepository auditLogRepository,
             StayBalanceService stayBalanceService,
-            Clock clock) {
+            Clock clock,
+            AppUserRepository appUserRepository) {
         this.chargeRepository = chargeRepository;
         this.stayRepository = stayRepository;
         this.chargeMapper = chargeMapper;
@@ -72,6 +80,7 @@ public class ChargeService {
         this.auditLogRepository = auditLogRepository;
         this.stayBalanceService = stayBalanceService;
         this.clock = clock;
+        this.appUserRepository = appUserRepository;
 }
 
     /**
@@ -264,9 +273,23 @@ public class ChargeService {
     @Transactional(readOnly = true)
     public List<ChargeResponse> findByStayId(UUID stayId) {
         findStay(stayId);
-        return chargeRepository.findByStayIdOrderByChargedAtAscIdAsc(stayId).stream()
-                .map(chargeMapper::toResponse)
+        List<Charge> charges = chargeRepository.findByStayIdOrderByChargedAtAscIdAsc(stayId);
+        Map<UUID, String> addedByUsernames = resolveAddedByUsernames(charges);
+        return charges.stream()
+                .map(charge -> chargeMapper.toResponse(charge, addedByUsernames.get(charge.getCreatedBy())))
                 .toList();
+    }
+
+    /**
+     * Batch-resolves each Charge's "added by" username in one query, avoiding an N+1 lookup per row.
+     *
+     * @param charges Charges whose creator usernames are resolved
+     * @return usernames keyed by the audit {@code createdBy} identifier
+     */
+    private Map<UUID, String> resolveAddedByUsernames(List<Charge> charges) {
+        Set<UUID> userIds = charges.stream().map(Charge::getCreatedBy).collect(Collectors.toSet());
+        return appUserRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(AppUser::getId, AppUser::getUsername));
     }
 
     /**

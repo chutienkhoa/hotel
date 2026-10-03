@@ -850,7 +850,8 @@ class ChargeServiceTest {
                 additionalRevenues, categories,
                 auditLogRepository,
                 stayBalanceService,
-                java.time.Clock.fixed(java.time.Instant.parse("2026-09-20T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
+                java.time.Clock.fixed(java.time.Instant.parse("2026-09-20T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")),
+                mock(com.example.hotel.repository.common.AppUserRepository.class));
     }
 
     /** Creates a RECORDED Additional Revenue linked to the given Charge, as ChargeService itself would. */

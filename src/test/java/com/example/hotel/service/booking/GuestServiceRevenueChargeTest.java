@@ -72,7 +72,8 @@ class GuestServiceRevenueChargeTest {
         return new ChargeService(charges, stays, new ChargeMapper(), revenues, categories,
                 mock(com.example.hotel.repository.common.AuditLogRepository.class),
                 balances,
-                Clock.fixed(Instant.parse("2026-09-20T03:00:00Z"), ZONE));
+                Clock.fixed(Instant.parse("2026-09-20T03:00:00Z"), ZONE),
+                mock(com.example.hotel.repository.common.AppUserRepository.class));
     }
 
     private Stay stay(String currency, StayStatus status) {

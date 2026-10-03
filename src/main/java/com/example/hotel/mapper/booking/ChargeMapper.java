@@ -15,6 +15,18 @@ public class ChargeMapper {
      * @return client-safe Charge response
      */
     public ChargeResponse toResponse(Charge charge) {
+        return toResponse(charge, null);
+    }
+
+    /**
+     * Maps one Charge entity to its response representation, including the "added by" username already resolved
+     * by the caller (batch-resolved to avoid an N+1 lookup per row).
+     *
+     * @param charge source Charge
+     * @param addedByUsername the username of the staff member who recorded the Charge, or {@code null}
+     * @return client-safe Charge response
+     */
+    public ChargeResponse toResponse(Charge charge, String addedByUsername) {
         return new ChargeResponse(
                 charge.getId(),
                 charge.getStay().getId(),
@@ -25,6 +37,7 @@ public class ChargeMapper {
                 charge.getAmount(),
                 charge.getChargedAt(),
                 charge.getStatus().name(),
-                charge.getVoidReason());
+                charge.getVoidReason(),
+                addedByUsername);
     }
 }

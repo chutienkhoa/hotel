@@ -15,6 +15,18 @@ public class PaymentMapper {
      * @return client-safe Payment response
      */
     public PaymentResponse toResponse(Payment payment) {
+        return toResponse(payment, null);
+    }
+
+    /**
+     * Maps one Payment entity to its response representation, including the "added by" username already resolved
+     * by the caller (batch-resolved to avoid an N+1 lookup per row).
+     *
+     * @param payment source Payment
+     * @param addedByUsername the username of the staff member who recorded the Payment, or {@code null}
+     * @return client-safe Payment response
+     */
+    public PaymentResponse toResponse(Payment payment, String addedByUsername) {
         return new PaymentResponse(
                 payment.getId(),
                 payment.getStay() == null ? null : payment.getStay().getId(),
@@ -27,6 +39,7 @@ public class PaymentMapper {
                 payment.getPaidAt(),
                 payment.getReference(),
                 payment.getRefundReason(),
-                payment.getVoidReason());
+                payment.getVoidReason(),
+                addedByUsername);
     }
 }

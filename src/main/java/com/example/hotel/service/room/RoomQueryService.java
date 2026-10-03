@@ -78,6 +78,22 @@ public class RoomQueryService {
     }
 
     /**
+     * Retrieves the client-safe Room profile (Room Type and current operational status included) for a known set
+     * of Room identifiers, used to enrich an already-resolved current-room list without reimplementing Room
+     * Management's own data. Unknown identifiers are ignored.
+     *
+     * @param roomIds Room identifiers, possibly empty
+     * @return the matching Room profiles, in no particular order
+     */
+    @Transactional(readOnly = true)
+    public List<RoomResponse> findAllByIds(Collection<UUID> roomIds) {
+        if (roomIds == null || roomIds.isEmpty()) {
+            return List.of();
+        }
+        return roomRepository.findAllById(roomIds).stream().map(roomMapper::toResponse).toList();
+    }
+
+    /**
      * Retrieves one database-backed page of Rooms matching every supplied optional filter.
      *
      * @param criteria normalized optional Room list filters

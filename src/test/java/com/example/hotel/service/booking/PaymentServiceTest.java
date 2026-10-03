@@ -1278,7 +1278,8 @@ class PaymentServiceTest {
             AuditLogRepository auditLogRepository,
             Clock clock) {
         return new PaymentService(
-                paymentRepository, stayRepository, chargeRepository, new PaymentMapper(), auditLogRepository, clock);
+                paymentRepository, stayRepository, chargeRepository, new PaymentMapper(), auditLogRepository, clock,
+                mock(com.example.hotel.repository.common.AppUserRepository.class));
     }
 
     /** Establishes the authenticated user used for Payment audit attribution. */

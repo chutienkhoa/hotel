@@ -98,12 +98,18 @@ class AppShellTest {
                 .andExpect(content().string(containsString("<span class=\"header-nav-toggle-icon-close\">")));
     }
 
-    /** Confirms the header account dropdown exposes the username, language switcher, and logout form. */
+    /**
+     * Confirms the header account dropdown exposes the username and logout form only. The global
+     * header language-switcher redesign moved the language control out of this dropdown into its own
+     * compact flag trigger/popover immediately left of the avatar (see
+     * {@link #shouldRenderHeaderLanguageSwitcherOutsideTheAccountDropdown()}), so the Admin dropdown
+     * must no longer contain it.
+     */
     @Test
     void shouldRenderHeaderAccountDropdown() throws Exception {
         when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
 
-        mockMvc.perform(get("/dashboard").with(user("an.le").authorities(everyNavigationAuthority())))
+        String body = mockMvc.perform(get("/dashboard").with(user("an.le").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"header-account-trigger\"")))
                 .andExpect(content().string(containsString("aria-haspopup=\"menu\"")))
@@ -114,8 +120,37 @@ class AppShellTest {
                 // Bare boolean `hidden` (not hidden="hidden"), so it never collides with the Reservation
                 // form's own conditional hidden="hidden" OTA-reference-field toggling elsewhere on the page.
                 .andExpect(content().string(containsString("class=\"header-account-menu\" hidden")))
-                .andExpect(content().string(containsString("class=\"language-switch\"")))
-                .andExpect(content().string(containsString("action=\"/logout\"")));
+                .andExpect(content().string(containsString("action=\"/logout\"")))
+                .andReturn().getResponse().getContentAsString();
+
+        String accountMenu = body.substring(
+                body.indexOf("id=\"header-account-menu\""), body.indexOf("</header>"));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                accountMenu.contains("language-switch"),
+                "the Admin dropdown must no longer contain the VI | EN language switcher");
+    }
+
+    /**
+     * Confirms the global header language switcher now lives as its own compact flag control,
+     * immediately left of the account avatar, outside the Admin dropdown -- opening a popover with
+     * both languages, the active one marked, built on the existing pms-lang/?lang= mechanism.
+     */
+    @Test
+    void shouldRenderHeaderLanguageSwitcherOutsideTheAccountDropdown() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"header-language-trigger\"")))
+                .andExpect(content().string(containsString("aria-haspopup=\"menu\"")))
+                .andExpect(content().string(containsString("aria-controls=\"header-language-menu\"")))
+                .andExpect(content().string(containsString("class=\"header-language-flag\"")))
+                .andExpect(content().string(containsString("id=\"header-language-menu\"")))
+                .andExpect(content().string(containsString("class=\"header-language-menu\" hidden")))
+                .andExpect(content().string(containsString("lang=vi")))
+                .andExpect(content().string(containsString("lang=en")))
+                .andExpect(content().string(containsString(">Tiếng Việt<")))
+                .andExpect(content().string(containsString(">English<")));
     }
 
     /**
