@@ -2,8 +2,10 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.RoomChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.booking.response.RoomChangeCandidateResponse;
+import com.example.hotel.dto.booking.response.RoomChangeFormResponse;
 import com.example.hotel.dto.booking.response.RoomChangeReviewResponse;
-import com.example.hotel.dto.room.response.RoomLookupResponse;
+import com.example.hotel.dto.booking.response.RoomChangeReviewRoom;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.booking.RoomChangeReason;
@@ -11,6 +13,7 @@ import com.example.hotel.entity.booking.Stay;
 import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.entity.common.AuditLog;
+import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.entity.room.RoomStatus;
 import com.example.hotel.mapper.booking.ReservationMapper;
@@ -21,16 +24,20 @@ import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
+import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.service.room.RoomAvailabilityService;
+import com.example.hotel.service.room.RoomImageService;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -53,6 +60,7 @@ public class RoomChangeService {
     private final AuditLogRepository audits;
     private final ReservationMapper reservationMapper;
     private final RoomAvailabilityService roomAvailability;
+    private final RoomImageService roomImages;
     private final Clock clock;
 
     /**
@@ -65,6 +73,7 @@ public class RoomChangeService {
      * @param audits repository used to write the existing-style CHANGE_ROOM audit entry
      * @param reservationMapper mapper used to build the Reservation response returned on success
      * @param roomAvailability shared lifecycle-aware booking-availability primitive used for the target room
+     * @param roomImages read-only access to Room primary images for the Change Room screen
      * @param clock authoritative hotel business clock
      */
     public RoomChangeService(
@@ -75,8 +84,10 @@ public class RoomChangeService {
             AuditLogRepository audits,
             ReservationMapper reservationMapper,
             RoomAvailabilityService roomAvailability,
+            RoomImageService roomImages,
             Clock clock) {
         this.roomAvailability = roomAvailability;
+        this.roomImages = roomImages;
         this.reservations = reservations;
         this.stays = stays;
         this.assignments = assignments;
@@ -97,7 +108,7 @@ public class RoomChangeService {
      * @return active Rooms available for the remainder of that lineage's planned stay
      */
     @Transactional(readOnly = true)
-    public List<RoomLookupResponse> candidateRooms(UUID reservationId, UUID currentRoomId) {
+    public List<RoomChangeCandidateResponse> candidateRooms(UUID reservationId, UUID currentRoomId) {
         StayRoomAssignment openAssignment = openAssignmentOrThrow(reservationId, currentRoomId);
         LocalDate today = LocalDate.now(clock);
         // CURRENT planned departure (moves with Stay Extension); the original booking dates are not used here.
@@ -110,11 +121,76 @@ public class RoomChangeService {
                 .toList();
         Set<UUID> conflicted = roomAvailability.conflictedRoomIds(
                 candidates.stream().map(Room::getId).toList(), today, plannedCheckOutDate);
-        return candidates.stream()
+        List<Room> eligible = candidates.stream()
                 .filter(room -> !conflicted.contains(room.getId()))
-                .map(room -> new RoomLookupResponse(
-                        room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive()))
                 .toList();
+        Set<UUID> withImage = roomImages.roomIdsWithPrimaryImage(eligible.stream().map(Room::getId).toList());
+        return eligible.stream()
+                .map(room -> new RoomChangeCandidateResponse(
+                        room.getId(),
+                        room.getRoomNumber(),
+                        room.getRoomType().getName(),
+                        room.getRoomType().getCapacity(),
+                        withImage.contains(room.getId())))
+                .toList();
+    }
+
+    /**
+     * Builds the read-only context for the Room Change form: the currently occupied room from its open
+     * assignment, the Stay's planned occupancy, and the booked pricing snapshot of that room's lineage.
+     * Nothing is persisted, and pricing is only displayed, never recalculated.
+     *
+     * @param reservationId Reservation identifier
+     * @param currentRoomId the room currently occupied, being replaced
+     * @return the form context for that occupied room
+     * @throws ResponseStatusException if the current room is not the Stay's open assignment or the Stay is not
+     *     CHECKED_IN
+     */
+    @Transactional(readOnly = true)
+    public RoomChangeFormResponse formView(UUID reservationId, UUID currentRoomId) {
+        StayRoomAssignment openAssignment = openAssignmentOrThrow(reservationId, currentRoomId);
+        Reservation reservation = openAssignment.getStay().getReservation();
+        Room currentRoom = openAssignment.getRoom();
+        LocalDate today = LocalDate.now(clock);
+        return new RoomChangeFormResponse(
+                reservation.getId(),
+                reservation.getReservationNumber(),
+                currentRoom.getId(),
+                currentRoom.getRoomNumber(),
+                currentRoom.getRoomType().getName(),
+                currentRoom.getStatus().name(),
+                reservation.getCheckInDate(),
+                reservation.getCheckOutDate(),
+                (int) ChronoUnit.DAYS.between(reservation.getCheckInDate(), reservation.getCheckOutDate()),
+                reservation.getAdultCount(),
+                reservation.getChildCount(),
+                openAssignment.getOriginalReservationRoom().getNightlyRate(),
+                openAssignment.getOriginalReservationRoom().getTotalAmount(),
+                reservation.getCurrency(),
+                roomImages.roomIdsWithPrimaryImage(List.of(currentRoom.getId())).contains(currentRoom.getId()),
+                isWithinChangeWindow(today, reservation.getCheckOutDate()));
+    }
+
+    /**
+     * Returns the replacement-room image shown on the Change Room screen. Only the Stay's current room and the
+     * current eligible replacement candidates are served, so an authorized user cannot read an arbitrary Room's
+     * image through this boundary. The image itself is resolved through the existing Room image storage.
+     *
+     * @param reservationId Reservation identifier
+     * @param currentRoomId the room currently occupied, being replaced
+     * @param roomId the Room whose primary image is requested
+     * @return the primary image of that Room
+     * @throws ResponseStatusException if the Room is not part of this Change Room workflow or has no primary image
+     */
+    @Transactional(readOnly = true)
+    public RoomImageFile changeRoomImage(UUID reservationId, UUID currentRoomId, UUID roomId) {
+        openAssignmentOrThrow(reservationId, currentRoomId);
+        boolean inWorkflow = roomId.equals(currentRoomId)
+                || candidateRooms(reservationId, currentRoomId).stream().anyMatch(c -> c.id().equals(roomId));
+        if (!inWorkflow) {
+            throw notFound("Room image");
+        }
+        return roomImages.loadPrimaryImage(roomId).orElseThrow(() -> notFound("Room image"));
     }
 
     /**
@@ -134,18 +210,59 @@ public class RoomChangeService {
         if (currentRoomId.equals(request.targetRoomId())) {
             throw bad("Replacement room must be different from the current room");
         }
+        requireWithinChangeWindow(LocalDate.now(clock), reservation.getCheckOutDate());
         Room currentRoom = openAssignment.getRoom();
         Room targetRoom = roomOrThrow(request.targetRoomId());
+        Set<UUID> withImage = roomImages.roomIdsWithPrimaryImage(List.of(currentRoom.getId(), targetRoom.getId()));
         return new RoomChangeReviewResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
-                currentRoom.getId(),
-                currentRoom.getRoomNumber(),
-                targetRoom.getId(),
-                targetRoom.getRoomNumber(),
+                guestName(reservation.getGuest()),
+                reservation.getCheckInDate(),
+                reservation.getCheckOutDate(),
+                (int) ChronoUnit.DAYS.between(reservation.getCheckInDate(), reservation.getCheckOutDate()),
+                reservation.getAdultCount(),
+                reservation.getChildCount(),
+                // Resulting statuses mirror changeRoom: the vacated room is released to DIRTY, the replacement is occupied.
+                reviewRoom(currentRoom, withImage, RoomStatus.DIRTY),
+                reviewRoom(targetRoom, withImage, RoomStatus.OCCUPIED),
                 request.reason(),
-                request.notes(),
-                reservation.getCheckOutDate());
+                request.notes());
+    }
+
+    /**
+     * Builds one room's Review display data from the already-loaded room and its image lookup.
+     *
+     * @param room the room being displayed
+     * @param withImage identifiers of the rooms that have a primary image
+     * @param resultingStatus the status the room will have after the change is confirmed
+     * @return the room's Review display data
+     */
+    private static RoomChangeReviewRoom reviewRoom(Room room, Set<UUID> withImage, RoomStatus resultingStatus) {
+        return new RoomChangeReviewRoom(
+                room.getId(),
+                room.getRoomNumber(),
+                room.getRoomType().getName(),
+                room.getRoomType().getCapacity(),
+                room.getStatus().name(),
+                resultingStatus.name(),
+                withImage.contains(room.getId()));
+    }
+
+    /**
+     * Joins the guest's first and last name the same way the Guest lookup displays them, skipping blank parts.
+     *
+     * @param guest the primary guest of the reservation
+     * @return the display name, or an empty string when neither part is recorded
+     */
+    private static String guestName(Guest guest) {
+        if (guest == null) {
+            return "";
+        }
+        return Stream.of(guest.getFirstName(), guest.getLastName())
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .collect(Collectors.joining(" "));
     }
 
     /**
@@ -189,11 +306,7 @@ public class RoomChangeService {
         }
         LocalDate plannedCheckOutDate = reservation.getCheckOutDate();
         LocalDate today = LocalDate.now(clock);
-        if (!today.isBefore(plannedCheckOutDate)) {
-            throw conflict(
-                    "Room Change is not allowed on or after the planned check-out date; "
-                            + "use check-out or a stay extension instead");
-        }
+        requireWithinChangeWindow(today, plannedCheckOutDate);
 
         List<UUID> roomIds = List.of(currentRoomId, targetRoomId).stream().sorted().toList();
         List<Room> lockedRooms = rooms.lockAllByIdIn(roomIds);
@@ -254,6 +367,34 @@ public class RoomChangeService {
                 "Room " + targetRoom.getRoomNumber()));
 
         return reservationMapper.toResponse(reservation);
+    }
+
+    /**
+     * Single source of the Room Change date window: Room Change is allowed only while the business date is strictly
+     * before the Stay's current planned check-out. Used by both the Change Room form and {@link #changeRoom}, so the
+     * screen and the service can never disagree; the service check remains the authoritative gate.
+     *
+     * @param today the authoritative hotel business date
+     * @param plannedCheckOutDate the Reservation's current planned check-out date
+     * @return whether Room Change is currently permitted by the date window
+     */
+    private static boolean isWithinChangeWindow(LocalDate today, LocalDate plannedCheckOutDate) {
+        return today.isBefore(plannedCheckOutDate);
+    }
+
+    /**
+     * Rejects Room Change outside the date window with the same rule the form uses.
+     *
+     * @param today the authoritative hotel business date
+     * @param plannedCheckOutDate the Reservation's current planned check-out date
+     * @throws ResponseStatusException if the date window does not permit Room Change
+     */
+    private void requireWithinChangeWindow(LocalDate today, LocalDate plannedCheckOutDate) {
+        if (!isWithinChangeWindow(today, plannedCheckOutDate)) {
+            throw conflict(
+                    "Room Change is not allowed on or after the planned check-out date; "
+                            + "use check-out or a stay extension instead");
+        }
     }
 
     /** Loads the open assignment for the current room, or rejects with a 409/404 as appropriate. */

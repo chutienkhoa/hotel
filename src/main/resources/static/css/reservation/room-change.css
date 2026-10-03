@@ -1,0 +1,666 @@
+/* Task33 Batch 3E: Change Room (front desk, after check-in), pixel-close to
+   docs/specs/evidence/task33/front-desk/change-room-final.png. Every rule is scoped under .room-change so the
+   shared Reservation Detail and check-in styles are untouched. */
+
+/* Horizontal content inset, shared by the page content and the bottom action bar so their edges always line up.
+   Matches the .content gutter in layout.css at each breakpoint. */
+.room-change {
+  --room-change-inset: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* Main content has no padding of its own: the page wrapper below owns the inset, so the bottom action bar can
+     span the full main-content width and reach the bottom edge of the page. */
+  padding: 0;
+}
+
+/* Page content: the shell's content inset (the same values as .content in layout.css). */
+.room-change-page {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: var(--space-6) var(--room-change-inset) 0;
+}
+
+@media (max-width: 64rem) {
+  .room-change {
+    --room-change-inset: var(--space-5);
+  }
+
+  .room-change-page {
+    padding: var(--space-5) var(--room-change-inset) 0;
+  }
+}
+
+/* Keeps the shell's vertical rhythm between the page's direct children, which the wrapper now contains. */
+.room-change-page > * + * {
+  margin-top: var(--space-6);
+}
+
+/* Task33 icon system: this page uses a slightly stronger stroke than the shared 1.8 so the small icons read clearly. */
+.room-change svg {
+  stroke-width: 2.2;
+}
+
+.room-change-back {
+  margin-bottom: var(--space-2);
+}
+
+.room-change-back svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.room-change-header {
+  margin-bottom: var(--space-4);
+}
+
+.room-change-header h1 {
+  font-size: 2rem;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.room-change-header p {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  margin: var(--space-1) 0 0;
+}
+
+/* Three-step indicator: step 1 is the active blue marker, later steps are grey (spec 8.3 wizard pattern). */
+.room-change-steps {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+}
+
+.room-change-step {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.room-change-step:not(:last-child)::after {
+  background: var(--color-border-strong);
+  content: "";
+  height: 1px;
+  margin: 0 var(--space-4);
+  width: 6rem;
+}
+
+.room-change-step__marker {
+  align-items: center;
+  background: #cbd5e1;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 700;
+  flex: none;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.room-change-step--current,
+.room-change-step--complete {
+  color: var(--color-primary);
+}
+
+.room-change-step--current .room-change-step__marker,
+.room-change-step--complete .room-change-step__marker {
+  background: var(--color-primary);
+}
+
+.room-change-grid {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+/* Blocked (Room Change not eligible): one compact column sized to its content, no equal-height right column. */
+.room-change-grid--blocked {
+  grid-template-columns: minmax(0, 34rem);
+}
+
+/* Eligible state (desktop): the Available Rooms card takes the height of the left column. contain: size keeps the
+   card's own content from growing the row, so only its candidate list scrolls and the header stays fixed. */
+@media (min-width: 901px) {
+  .room-change-card--rooms {
+    contain: size;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .room-change-card--rooms .room-change-candidates {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-inline-end: var(--space-1);
+  }
+
+  .room-change-card--rooms > .room-change-card__header {
+    flex: none;
+  }
+}
+
+.room-change-column {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.room-change-card {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+/* Icon and heading share one grid row, so the icon centres on the heading line; the subtitle sits in the row below,
+   indented to the heading's column. No per-icon offsets. */
+.room-change-card__header {
+  align-content: start;
+  align-items: center;
+  column-gap: var(--space-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.room-change-card__header > svg {
+  color: var(--color-primary);
+  flex: none;
+}
+
+.room-change-card__header h2 {
+  font-size: 1.0625rem;
+  margin: 0;
+}
+
+.room-change-card__subtitle {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  grid-column: 2;
+  margin: var(--space-1) 0 0;
+}
+
+/* Section icons (card headers, step markers): the top of the 20-22px section range. */
+.room-change-card__header > svg,
+.room-change-step__marker svg {
+  height: 1.375rem;
+  width: 1.375rem;
+}
+
+/* Room photo. Real RoomImage data is not exposed on this page (the file route requires MANAGE_ROOM), so the
+   photo slot shows a neutral bed icon instead of a fake photo. */
+/* Photo frame: a fixed mockup-proportioned box. A real image fills it with object-fit: cover, so the photo
+   is cropped rather than stretched and the card keeps its size. The neutral bed icon is the fallback. */
+.room-change-photo {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-border-strong);
+  display: flex;
+  flex: none;
+  height: 8.25rem;
+  justify-content: center;
+  overflow: hidden;
+  width: 11rem;
+}
+
+.room-change-photo img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.room-change-photo svg {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.room-change-photo--small {
+  height: 4.5rem;
+  width: 6.5rem;
+}
+
+.room-change-photo--small svg {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+
+/* Key/value facts: bordered rows with a muted label column, mirroring the mockup tables. */
+.room-change-facts {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.room-change-facts > div {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: minmax(7.5rem, 0.9fr) minmax(0, 1.1fr);
+  min-height: 2.125rem;
+}
+
+.room-change-facts > div:last-child {
+  border-bottom: 0;
+}
+
+.room-change-facts dt {
+  align-self: stretch;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: var(--space-1) var(--space-3);
+}
+
+.room-change-facts dd {
+  color: var(--color-navy);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: var(--space-1) var(--space-3);
+}
+
+.room-change-facts dd .status-badge {
+  font-size: 0.75rem;
+}
+
+.room-change-current {
+  align-items: flex-start;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.room-change-details {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.room-change-details .form-field {
+  margin: 0;
+}
+
+/* Available rooms: one card per candidate, the whole row is the radio label so the selection is one click. */
+.room-change-candidates {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.room-change-candidate__label {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  padding: var(--space-2) var(--space-3);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.room-change-candidate__label:hover {
+  border-color: var(--color-border-strong);
+}
+
+.room-change-candidate:has(.room-change-candidate__radio:checked) .room-change-candidate__label {
+  background: var(--color-info-surface);
+  border: 2px solid var(--color-primary);
+  padding: calc(var(--space-2) - 1px) calc(var(--space-3) - 1px);
+}
+
+.room-change-candidate__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.room-change-candidate__number {
+  color: var(--color-navy);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.room-change-candidate__type {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.room-change-candidate__meta {
+  align-items: center;
+  color: var(--color-muted);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: var(--space-1);
+}
+
+.room-change-candidate__meta svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+/* Native radio kept for keyboard and screen-reader semantics; restyled as the blue selection marker. */
+.room-change-candidate__radio {
+  accent-color: var(--color-primary);
+  height: 1.25rem;
+  margin: 0;
+  width: 1.25rem;
+}
+
+/* The global input:focus ring draws a rectangle around this radio; drop it here only and show keyboard focus on the card. */
+.room-change-candidate__radio:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+.room-change-candidate:has(.room-change-candidate__radio:focus-visible) .room-change-candidate__label {
+  outline: 3px solid rgb(23 105 170 / 35%);
+  outline-offset: 2px;
+}
+
+.room-change-empty {
+  margin: 0;
+}
+
+/* Legitimate blocked state: no candidate selection and no Next action; Cancel remains the only exit. */
+.room-change-card--blocked .room-change-card__header > svg {
+  color: var(--color-warning);
+}
+
+/* Review Change (step 2): the Current -> New comparison is the primary focus. Each side shows the room, its type and
+   capacity, its status today, and the status the confirmation will give it. */
+.room-change-compare {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.room-change-compare__room {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.room-change-compare__room--new {
+  background: var(--color-info-surface);
+  border-color: var(--color-primary);
+}
+
+.room-change-compare__label {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.room-change-compare__photo {
+  height: 9.5rem;
+  max-width: 17rem;
+  width: 100%;
+}
+
+.room-change-compare__number {
+  color: var(--color-navy);
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.room-change-compare__type {
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.9375rem;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.room-change-compare__capacity {
+  align-items: center;
+  color: var(--color-muted);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: var(--space-1);
+}
+
+.room-change-compare__capacity svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+.room-change-compare__state,
+.room-change-compare__result {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.room-change-compare__result {
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-top: auto;
+  padding-top: var(--space-2);
+  width: 100%;
+}
+
+.room-change-compare__arrow {
+  align-items: center;
+  align-self: center;
+  color: var(--color-primary);
+  display: inline-flex;
+  justify-content: center;
+}
+
+.room-change-compare__arrow svg {
+  height: var(--icon-size-section);
+  width: var(--icon-size-section);
+}
+
+/* Stay Information and Change Details: two cards side by side where space permits. */
+/* Both cards stretch to the taller card's height. Inside each card the header and table keep their natural height
+   (align-content / align-self start), so any extra height stays as empty space below the table, not inside its rows. */
+.room-change-review-pair {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.room-change-review-pair > .room-change-card {
+  align-content: start;
+}
+
+.room-change-review-pair > .room-change-card > .room-change-facts {
+  align-self: start;
+}
+
+.room-change-facts--review dd {
+  overflow-wrap: anywhere;
+}
+
+.room-change-facts__notes {
+  white-space: pre-line;
+}
+
+/* What will happen: informational list, one icon and one line per effect. */
+.room-change-effects {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A wrapped effect keeps its icon on the first line: the row aligns to its top, and the icon sits in a 1.5rem line-high
+   box (the 18px glyph is centred by padding), so it shares the first line's centre instead of the whole block's. */
+.room-change-effects__item {
+  align-items: flex-start;
+  color: var(--color-text);
+  display: flex;
+  font-size: 0.9375rem;
+  gap: var(--space-2);
+  line-height: 1.5rem;
+}
+
+.room-change-effects__item > svg {
+  box-sizing: border-box;
+  color: var(--color-primary);
+  flex: none;
+  height: 1.5rem;
+  padding: 0.1875rem;
+  width: 1.5rem;
+}
+
+.room-change-effects__text {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* Inline status pills sit on the same 1.5rem line as the sentence; the shared badge is control-height otherwise. */
+.room-change-effects__text .status-badge {
+  height: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .room-change-review-pair {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Bottom action bar: the outer element is the full-width background (no padding); the inner element insets the
+   buttons by the same --room-change-inset as the page content, so Cancel and Next sit on the content edges. */
+.room-change-actions {
+  background: #f4f7fb;
+  /* border-top: 1px solid var(--color-border); */
+  bottom: 0;
+  /* box-shadow: 0 -4px 12px rgb(16 42 67 / 6%); */
+  position: sticky;
+  z-index: 5;
+  margin: var(--space-5) 0 0;
+}
+
+.room-change-actions__inner {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding-block: var(--space-4);
+  padding-inline: var(--room-change-inset);
+}
+
+.room-change-actions .button {
+  height: 2.75rem;
+  min-width: 10rem;
+  padding: 0.625rem var(--space-4);
+}
+
+.room-change-actions .button-primary svg {
+  margin-left: var(--space-1);
+}
+
+@media (max-width: 900px) {
+  .room-change-steps {
+    width: 100%;
+  }
+
+  .room-change-step {
+    flex: 1 1 auto;
+    font-size: 0.8125rem;
+    gap: var(--space-1);
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .room-change-step:not(:last-child)::after {
+    flex: 1 1 var(--space-3);
+    margin: 0 var(--space-2);
+    width: auto;
+  }
+
+  .room-change-step__marker {
+    height: 1.875rem;
+    width: 1.875rem;
+  }
+
+  .room-change-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-change-current {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-change-current .room-change-photo {
+    height: 10rem;
+    width: 100%;
+  }
+
+  .room-change-compare {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: stretch;
+  }
+
+  .room-change-compare__arrow {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .room-change-actions__inner {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .room-change-actions .button,
+  .room-change-actions form {
+    width: 100%;
+  }
+}

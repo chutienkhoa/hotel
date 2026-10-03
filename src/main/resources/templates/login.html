@@ -4,7 +4,6 @@
 <body class="login-page">
 <main aria-labelledby="login-heading" class="login-panel">
     <h1 id="login-heading" th:text="#{auth.login.title}">Sign in</h1>
-    <nav th:replace="~{layout/language :: switcher}"></nav>
 
     <p class="message message-error" th:if="${param.error}" th:text="#{auth.login.error}">
         Invalid username or password.

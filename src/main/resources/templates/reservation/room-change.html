@@ -1,64 +1,219 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Change Room')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/reservation/room-change.css'">
+<head th:replace="~{layout/base :: head(#{reservation.roomChange.title})}"></head>
 <body>
 <div class="app-shell page-reservations">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <a class="back-link" th:href="@{/reservations/{id}(id=${reservationId})}">Back to reservation</a>
+    <main class="content room-change">
+        <div class="room-change-page">
+        <a class="back-link back-link--primary room-change-back" th:href="@{/reservations/{id}(id=${reservationId})}">
+            <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+            <span th:if="${currentRoom != null}"
+                  th:text="#{reservation.roomChange.backToReservation(${currentRoom.reservationNumber})}">Back to Reservation</span>
+            <span th:unless="${currentRoom != null}" th:text="#{reservation.roomChange.title}">Change Room</span>
+        </a>
 
-        <div class="page-header">
+        <div class="page-header room-change-header">
             <div>
-                <h1>Change Room</h1>
-                <p>Select a replacement room available for the remaining planned stay of the current room only.</p>
+                <h1 th:text="#{reservation.roomChange.title}">Change Room</h1>
+                <p th:text="#{reservation.roomChange.subtitle}">Select a new room for the guest.</p>
             </div>
         </div>
 
+        <ol class="room-change-steps" th:aria-label="#{reservation.roomChange.title}">
+            <li class="room-change-step room-change-step--current" aria-current="step">
+                <span class="room-change-step__marker">1</span>
+                <span class="room-change-step__label" th:text="#{reservation.roomChange.step.select}">Select New Room</span>
+            </li>
+            <li class="room-change-step">
+                <span class="room-change-step__marker">2</span>
+                <span class="room-change-step__label" th:text="#{reservation.roomChange.step.review}">Review Change</span>
+            </li>
+            <li class="room-change-step">
+                <span class="room-change-step__marker">3</span>
+                <span class="room-change-step__label" th:text="#{reservation.roomChange.step.confirm}">Confirm</span>
+            </li>
+        </ol>
+
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <form class="form-card" method="post"
+        <form class="room-change-form" id="room-change-form" method="post"
               th:action="@{/reservations/{id}/rooms/{roomId}/change/review(id=${reservationId},roomId=${roomId})}"
               th:object="${roomChangeForm}">
-            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
-                Please correct the highlighted fields.
-            </p>
+            <p class="message message-error" th:if="${#fields.hasAnyErrors()}"
+               th:text="#{reservation.roomChange.error.fields}">Please correct the highlighted fields.</p>
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
 
-            <div class="form-field">
-                <label for="targetRoomId">Replacement room</label>
-                <select id="targetRoomId" required th:field="*{targetRoomId}">
-                    <option value="">Select a room</option>
-                    <option th:each="room : ${candidateRooms}" th:text="${room.roomNumber}" th:value="${room.id}">101</option>
-                </select>
-                <p class="field-error" th:errors="*{targetRoomId}"></p>
-                <p class="form-hint" th:if="${#lists.isEmpty(candidateRooms)}">
-                    No rooms are available for the remainder of this room's planned stay.
-                </p>
+            <div class="room-change-grid"
+                 th:classappend="${currentRoom != null and !currentRoom.roomChangeOpen} ? 'room-change-grid--blocked' : ''">
+                <div class="room-change-column">
+                    <section class="card room-change-card" th:if="${currentRoom != null}" aria-labelledby="room-change-current-heading">
+                        <header class="room-change-card__header">
+                            <svg th:replace="~{layout/icons :: bed}"></svg>
+                            <h2 id="room-change-current-heading" th:text="#{reservation.roomChange.current.title}">Current Room Information</h2>
+                        </header>
+                        <div class="room-change-current">
+                            <div class="room-change-photo">
+                                <img th:if="${currentRoom.currentRoomHasImage}"
+                                     th:alt="#{reservation.roomChange.image.alt(${currentRoom.currentRoomNumber})}"
+                                     th:src="@{/reservations/{id}/rooms/{currentId}/change/images/{roomId}(id=${reservationId},currentId=${roomId},roomId=${currentRoom.currentRoomId})}" />
+                                <th:block th:unless="${currentRoom.currentRoomHasImage}">
+                                    <svg th:replace="~{layout/icons :: bed}"></svg>
+                                </th:block>
+                            </div>
+                            <dl class="room-change-facts">
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.roomNo}">Room No.</dt>
+                                    <dd th:text="${currentRoom.currentRoomNumber}">101</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.roomType}">Room Type</dt>
+                                    <dd th:text="${currentRoom.currentRoomTypeName}">Double Room</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.status}">Current Status</dt>
+                                    <dd>
+                                        <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(currentRoom.currentRoomStatus)}"
+                                              th:text="${currentRoom.currentRoomStatus}">OCCUPIED</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.guests}">Guests</dt>
+                                    <dd th:text="#{reservation.roomChange.guests.value(${currentRoom.adultCount}, ${currentRoom.childCount})}">2 adults, 1 child</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.rate}">Current Rate</dt>
+                                    <dd><span th:replace="~{layout/money :: amount(${currentRoom.nightlyRate}, ${currentRoom.currency})}">0 VND</span></dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.nights}">Nights</dt>
+                                    <dd th:text="${currentRoom.nights}">3</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.total}">Current Total</dt>
+                                    <dd><span th:replace="~{layout/money :: amount(${currentRoom.totalAmount}, ${currentRoom.currency})}">0 VND</span></dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </section>
+
+                    <section class="card room-change-card" th:if="${currentRoom != null}" aria-labelledby="room-change-stay-heading">
+                        <header class="room-change-card__header">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <h2 id="room-change-stay-heading" th:text="#{reservation.roomChange.stay.title}">Stay Information</h2>
+                        </header>
+                        <dl class="room-change-facts room-change-facts--stay">
+                            <div>
+                                <dt th:text="#{reservation.roomChange.field.checkIn}">Check-in Date</dt>
+                                <dd><span th:replace="~{layout/datetime :: date(${currentRoom.checkInDate})}">—</span></dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{reservation.roomChange.field.checkOut}">Check-out Date</dt>
+                                <dd><span th:replace="~{layout/datetime :: date(${currentRoom.checkOutDate})}">—</span></dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{reservation.roomChange.field.nights}">Nights</dt>
+                                <dd th:text="${currentRoom.nights}">3</dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{reservation.roomChange.field.guests}">Guests</dt>
+                                <dd th:text="#{reservation.roomChange.guests.value(${currentRoom.adultCount}, ${currentRoom.childCount})}">2 adults, 1 child</dd>
+                            </div>
+                        </dl>
+                    </section>
+
+                    <section class="card room-change-card room-change-card--blocked" id="room-change-blocked"
+                             aria-labelledby="room-change-blocked-heading"
+                             th:if="${currentRoom != null and !currentRoom.roomChangeOpen}">
+                        <header class="room-change-card__header">
+                            <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                            <h2 id="room-change-blocked-heading" th:text="#{reservation.roomChange.blocked.title}">Room Change is not available</h2>
+                            <p class="room-change-card__subtitle" th:text="#{reservation.roomChange.blocked.message}">Room Change is not allowed on or after the planned check-out date.</p>
+                        </header>
+                    </section>
+
+                    <section class="card room-change-card" aria-labelledby="room-change-details-heading"
+                             th:unless="${currentRoom != null and !currentRoom.roomChangeOpen}">
+                        <header class="room-change-card__header">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <h2 id="room-change-details-heading" th:text="#{reservation.roomChange.details.title}">Change Details</h2>
+                        </header>
+                        <div class="room-change-details">
+                            <div class="form-field">
+                                <label for="reason" th:text="#{reservation.roomChange.field.reason}">Reason</label>
+                                <select id="reason" th:field="*{reason}">
+                                    <option value="" th:text="#{reservation.roomChange.field.reasonPlaceholder}">Select a reason</option>
+                                    <option th:each="reasonOption : ${reasons}" th:text="${reasonOption}" th:value="${reasonOption}">GUEST_REQUEST</option>
+                                </select>
+                                <p class="field-error" th:errors="*{reason}"></p>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="notes" th:text="#{reservation.roomChange.field.notes}">Notes</label>
+                                <textarea id="notes" maxlength="2000" rows="3" th:field="*{notes}"></textarea>
+                                <p class="field-error" th:errors="*{notes}"></p>
+                                <p class="form-hint" th:text="#{reservation.roomChange.field.notesHint}">Required when reason is OTHER.</p>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <section class="card room-change-card room-change-card--rooms" aria-labelledby="room-change-rooms-heading"
+                         th:unless="${currentRoom != null and !currentRoom.roomChangeOpen}">
+                    <header class="room-change-card__header">
+                        <svg th:replace="~{layout/icons :: bed}"></svg>
+                        <h2 id="room-change-rooms-heading" th:text="#{reservation.roomChange.rooms.title}">Available Rooms</h2>
+                        <p class="room-change-card__subtitle" th:text="#{reservation.roomChange.rooms.subtitle}">Select a new room for the guest.</p>
+                    </header>
+
+                    <p class="form-hint room-change-empty" th:if="${#lists.isEmpty(candidateRooms)}"
+                       th:text="#{reservation.roomChange.rooms.empty}">No rooms are available for the remainder of this room planned stay.</p>
+
+                    <ul class="room-change-candidates" th:unless="${#lists.isEmpty(candidateRooms)}">
+                        <li class="room-change-candidate" th:each="room : ${candidateRooms}">
+                            <label class="room-change-candidate__label" th:for="'target-room-' + ${room.id}">
+                                <span class="room-change-photo room-change-photo--small">
+                                    <img th:if="${room.hasPrimaryImage}"
+                                         th:alt="#{reservation.roomChange.image.alt(${room.roomNumber})}"
+                                         th:src="@{/reservations/{id}/rooms/{currentId}/change/images/{roomId}(id=${reservationId},currentId=${roomId},roomId=${room.id})}" />
+                                    <th:block th:unless="${room.hasPrimaryImage}">
+                                        <svg th:replace="~{layout/icons :: bed}"></svg>
+                                    </th:block>
+                                </span>
+                                <span class="room-change-candidate__body">
+                                    <span class="room-change-candidate__number" th:text="${room.roomNumber}">201</span>
+                                    <span class="room-change-candidate__type" th:text="${room.roomTypeName}">Double Room</span>
+                                    <span class="room-change-candidate__meta" th:if="${room.capacity != null}"
+                                          th:title="#{reservation.roomChange.rooms.capacity}">
+                                        <svg th:replace="~{layout/icons :: user}"></svg>
+                                        <span th:text="${room.capacity}">3</span>
+                                    </span>
+                                </span>
+                                <input class="room-change-candidate__radio" required th:field="*{targetRoomId}"
+                                       th:id="'target-room-' + ${room.id}" th:value="${room.id}" type="radio" />
+                            </label>
+                        </li>
+                    </ul>
+                    <p class="field-error" th:errors="*{targetRoomId}"></p>
+                </section>
             </div>
 
-            <div class="form-field">
-                <label for="reason">Reason</label>
-                <select id="reason" required th:field="*{reason}">
-                    <option value="">Select a reason</option>
-                    <option th:each="reasonOption : ${reasons}" th:text="${reasonOption}" th:value="${reasonOption}">GUEST_REQUEST</option>
-                </select>
-                <p class="field-error" th:errors="*{reason}"></p>
-            </div>
-
-            <div class="form-field">
-                <label for="notes">Notes</label>
-                <textarea id="notes" maxlength="2000" rows="3" th:field="*{notes}"></textarea>
-                <p class="field-error" th:errors="*{notes}"></p>
-                <p class="form-hint">Required when reason is OTHER.</p>
-            </div>
-
-            <div class="form-actions">
-                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservationId})}">Cancel</a>
-                <button class="button button-primary" type="submit">Review Room Change</button>
-            </div>
         </form>
+        </div>
+
+        <div class="room-change-actions">
+            <div class="room-change-actions__inner">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${reservationId})}"
+                   th:text="#{reservation.roomChange.action.cancel}">Cancel</a>
+                <button class="button button-primary" form="room-change-form" th:disabled="${#lists.isEmpty(candidateRooms)}" th:unless="${currentRoom != null and !currentRoom.roomChangeOpen}" type="submit">
+                    <span th:text="#{reservation.roomChange.action.next}">Next: Review Change</span>
+                    <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+                </button>
+            </div>
+        </div>
     </main>
 </div>
 </body>

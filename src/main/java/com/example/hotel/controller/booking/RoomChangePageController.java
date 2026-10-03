@@ -2,14 +2,24 @@ package com.example.hotel.controller.booking;
 
 import com.example.hotel.dto.booking.request.RoomChangeRequest;
 import com.example.hotel.dto.booking.response.Response;
+import com.example.hotel.dto.booking.response.RoomChangeCandidateResponse;
+import com.example.hotel.dto.booking.response.RoomChangeFormResponse;
 import com.example.hotel.dto.booking.response.RoomChangeReviewResponse;
-import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.RoomChangeReason;
+import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.service.booking.RoomChangeService;
 import jakarta.validation.Valid;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -31,14 +41,17 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class RoomChangePageController {
 
     private final RoomChangeService roomChangeService;
+    private final MessageSource messageSource;
 
     /**
-     * Creates the Room Change MVC controller with its collaborator.
+     * Creates the Room Change MVC controller with its collaborators.
      *
      * @param roomChangeService service implementing the Room Change operational flow
+     * @param messageSource resolves the localized post-confirmation feedback
      */
-    public RoomChangePageController(RoomChangeService roomChangeService) {
+    public RoomChangePageController(RoomChangeService roomChangeService, MessageSource messageSource) {
         this.roomChangeService = roomChangeService;
+        this.messageSource = messageSource;
     }
 
     /**
@@ -117,8 +130,14 @@ public class RoomChangePageController {
             return "reservation/room-change";
         }
         try {
+            // Read the room numbers before the change so the success feedback can name both rooms; the read is
+            // read-only and runs the same checks changeRoom repeats under lock.
+            RoomChangeReviewResponse summary = roomChangeService.review(reservationId, roomId, roomChangeForm);
             Response response = roomChangeService.changeRoom(reservationId, roomId, roomChangeForm);
-            redirectAttributes.addFlashAttribute("successMessage", "Room changed successfully.");
+            redirectAttributes.addFlashAttribute("successMessage", messageSource.getMessage(
+                    "reservation.roomChange.success",
+                    new Object[] {summary.currentRoom().roomNumber(), summary.targetRoom().roomNumber()},
+                    LocaleContextHolder.getLocale()));
             return "redirect:/reservations/" + response.id();
         } catch (ResponseStatusException exception) {
             model.addAttribute("errorMessage", safeMessage(exception));
@@ -128,7 +147,33 @@ public class RoomChangePageController {
     }
 
     /**
-     * Adds the Room Change form's lookup data: replacement-room candidates and approved reasons.
+     * Serves the primary image of the current room or one current replacement candidate, for display on the Change
+     * Room screen only. Read-only: it grants no room mutation, and the file stays in private storage.
+     *
+     * @param reservationId Reservation identifier
+     * @param currentRoomId the room currently occupied, being replaced
+     * @param roomId the Room whose primary image is requested; must be part of this Change Room workflow
+     * @return the Room's primary image with its validated content type and safe inline header
+     */
+    @GetMapping("/reservations/{reservationId}/rooms/{currentRoomId}/change/images/{roomId}")
+    @PreAuthorize("hasAuthority('PERM_CHANGE_ROOM')")
+    public ResponseEntity<Resource> roomImage(
+            @PathVariable UUID reservationId, @PathVariable UUID currentRoomId, @PathVariable UUID roomId) {
+        RoomImageFile image = roomChangeService.changeRoomImage(reservationId, currentRoomId, roomId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline()
+                                .filename(image.originalFilename(), StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .body(image.resource());
+    }
+
+    /**
+     * Adds the Room Change form's data: the current room context, replacement-room candidates, and approved
+     * reasons.
      *
      * @param model model used to render the form
      * @param reservationId Reservation identifier
@@ -140,13 +185,20 @@ public class RoomChangePageController {
         model.addAttribute("roomId", roomId);
         model.addAttribute("roomChangeForm", roomChangeForm);
         model.addAttribute("reasons", RoomChangeReason.values());
-        List<RoomLookupResponse> candidateRooms;
+        RoomChangeFormResponse currentRoom = null;
+        List<RoomChangeCandidateResponse> candidateRooms;
         try {
-            candidateRooms = roomChangeService.candidateRooms(reservationId, roomId);
+            currentRoom = roomChangeService.formView(reservationId, roomId);
+            // Candidates are listed only while the date window is open (fail closed without the form context);
+            // a closed window shows a blocked state instead. The service still re-checks every operation.
+            candidateRooms = currentRoom != null && currentRoom.roomChangeOpen()
+                    ? roomChangeService.candidateRooms(reservationId, roomId)
+                    : List.of();
         } catch (ResponseStatusException exception) {
             candidateRooms = List.of();
             model.addAttribute("errorMessage", safeMessage(exception));
         }
+        model.addAttribute("currentRoom", currentRoom);
         model.addAttribute("candidateRooms", candidateRooms);
     }
 

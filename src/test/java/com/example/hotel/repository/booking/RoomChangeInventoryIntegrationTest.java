@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.example.hotel.dto.booking.request.RoomChangeRequest;
+import com.example.hotel.dto.booking.response.RoomChangeCandidateResponse;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.RoomChangeReason;
 import com.example.hotel.repository.room.RoomRepository;
@@ -188,7 +189,7 @@ class RoomChangeInventoryIntegrationTest {
         checkedIn(heldByOtherStay, today, today.plusDays(2));
 
         List<UUID> candidates = roomChangeService.candidateRooms(reservationOf(stay), a).stream()
-                .map(RoomLookupResponse::id).toList();
+                .map(RoomChangeCandidateResponse::id).toList();
 
         assertTrue(candidates.contains(free));
         assertFalse(candidates.contains(confirmedElsewhere));

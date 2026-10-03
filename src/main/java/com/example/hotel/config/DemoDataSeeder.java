@@ -135,7 +135,7 @@ public class DemoDataSeeder {
      */
     private void seedOccupancyAndInventoryHistory(
             JdbcTemplate jdbcTemplate, UUID auditUserId, LocalDate today, Timestamp now) {
-        seedStayRoomAssignments(jdbcTemplate, auditUserId);
+        seedStayRoomAssignments(jdbcTemplate, auditUserId, now);
         seedRoomInventoryHistory(jdbcTemplate, auditUserId, today, now);
     }
 
@@ -146,7 +146,7 @@ public class DemoDataSeeder {
      * ReservationRoom. A CHECKED_IN row is skipped if its Room already has an open assignment, and a
      * CHECKED_OUT row is skipped if its interval would be empty, so constraints are never weakened.
      */
-    private void seedStayRoomAssignments(JdbcTemplate jdbcTemplate, UUID auditUserId) {
+    private void seedStayRoomAssignments(JdbcTemplate jdbcTemplate, UUID auditUserId, Timestamp now) {
         List<Map<String, Object>> stays = jdbcTemplate.queryForList(
                 "SELECT s.id AS stay_id, s.status AS status, s.actual_check_in_at AS checked_in_at, "
                         + "s.actual_check_out_at AS checked_out_at, s.created_at AS created_at, "
@@ -177,14 +177,36 @@ public class DemoDataSeeder {
                 }
             }
             UUID reservationRoomId = (UUID) stay.get("reservation_room_id");
+            Timestamp assignedFrom = checkedOutAt == null
+                    ? Timestamp.from(demoOpenAssignmentStart(checkedInAt.toInstant(), now.toInstant()))
+                    : checkedInAt;
             jdbcTemplate.update(
                     "INSERT INTO stay_room_assignment (id, stay_id, room_id, original_reservation_room_id, "
                             + "assigned_from, assigned_to, reason, notes, created_at, created_by, updated_at, "
                             + "updated_by) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)",
                     deterministicId(PREFIX + "ASSIGNMENT-" + reservationRoomId), stay.get("stay_id"), roomId,
-                    reservationRoomId, checkedInAt, checkedOutAt, stay.get("created_at"), auditUserId,
+                    reservationRoomId, assignedFrom, checkedOutAt, stay.get("created_at"), auditUserId,
                     stay.get("updated_at"), auditUserId);
         }
+    }
+
+    /**
+     * Returns when a demo open StayRoomAssignment starts. A demo CHECKED_IN Stay can carry a check-in time that is
+     * later than the moment the data is seeded (for example 14:00 on the check-in date while seeding at 10:30). A
+     * Room Change made after seeding would then close the interval before it opened, which the database rejects.
+     * In that case the demo interval starts at the beginning of the same business day: the stay's date and
+     * occupancy are unchanged and the interval stays temporally valid. Otherwise the check-in time is kept as-is.
+     * This is demo seeding only; real StayRoomAssignment semantics are unchanged.
+     *
+     * @param checkedInAt the Stay's seeded actual check-in instant
+     * @param seededAt the instant at which the demo data is being seeded
+     * @return the instant the demo open assignment starts
+     */
+    static Instant demoOpenAssignmentStart(Instant checkedInAt, Instant seededAt) {
+        if (checkedInAt.isAfter(seededAt)) {
+            return checkedInAt.atZone(BUSINESS_ZONE).toLocalDate().atStartOfDay(BUSINESS_ZONE).toInstant();
+        }
+        return checkedInAt;
     }
 
     /**

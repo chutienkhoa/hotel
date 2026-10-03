@@ -59,18 +59,35 @@ class DemoDataSeederInventoryHistoryIntegrationTest {
             assertNotNull(row.get("anchor"), "every seeded stay needs an assignment");
             assertEquals(row.get("rr_id"), row.get("anchor"));
             assertEquals(row.get("rr_room"), row.get("a_room"));
-            assertEquals(row.get("s_in"), row.get("a_from"));
             if ("CHECKED_IN".equals(row.get("stay_status"))) {
                 sawIn = true;
                 assertEquals(null, row.get("a_to"));
+                Instant checkedIn = ((Timestamp) row.get("s_in")).toInstant();
+                Instant openFrom = ((Timestamp) row.get("a_from")).toInstant();
+                if (checkedIn.isAfter(CLOCK.instant())) {
+                    // A future check-in time is clamped to the start of its business day (see demoOpenAssignmentStart).
+                    assertEquals(checkedIn.atZone(ZONE).toLocalDate().atStartOfDay(ZONE).toInstant(), openFrom);
+                } else {
+                    assertEquals(checkedIn, openFrom);
+                }
             } else {
                 sawOut = true;
+                assertEquals(row.get("s_in"), row.get("a_from"));
                 assertEquals(row.get("s_out"), row.get("a_to"));
             }
         }
         assertTrue(sawIn && sawOut);
         assertEquals(0, count(jdbc, "SELECT COUNT(*) FROM (SELECT room_id FROM stay_room_assignment "
                 + "WHERE assigned_to IS NULL GROUP BY room_id HAVING COUNT(*) > 1) d"));
+    }
+
+    /** Confirms every seeded open assignment started before the seeding instant, so a demo Room Change can close it. */
+    @Test
+    void shouldSeedOpenAssignmentsTemporallyValidBeforeSeedingInstant() {
+        JdbcTemplate jdbc = seededDatabase();
+
+        assertEquals(0, count(jdbc, "SELECT COUNT(*) FROM stay_room_assignment WHERE assigned_to IS NULL "
+                + "AND assigned_from >= TIMESTAMPTZ '2026-09-15T00:00:00Z'"));
     }
 
     /** Confirms every demo Room has one contiguous RECORDED history covering the demo window with one open period. */

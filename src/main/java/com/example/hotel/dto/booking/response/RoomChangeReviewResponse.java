@@ -9,21 +9,27 @@ import java.util.UUID;
  *
  * @param reservationId the reservation identifier
  * @param reservationNumber the external reservation number
- * @param currentRoomId the room currently occupied, being replaced
- * @param currentRoomNumber the current room's display number
- * @param targetRoomId the selected replacement room
- * @param targetRoomNumber the replacement room's display number
+ * @param guestName the primary guest's display name, or an empty string when none is recorded
+ * @param checkInDate the reservation's check-in date
+ * @param plannedCheckOutDate the lineage's remaining planned check-out boundary
+ * @param nights the number of nights between check-in and planned check-out
+ * @param adultCount the number of adults on the reservation
+ * @param childCount the number of children on the reservation
+ * @param currentRoom the room currently occupied, being replaced
+ * @param targetRoom the selected replacement room
  * @param reason the submitted Room Change reason
  * @param notes the submitted optional notes
- * @param plannedCheckOutDate the lineage's remaining planned check-out boundary
  */
 public record RoomChangeReviewResponse(
         UUID reservationId,
         String reservationNumber,
-        UUID currentRoomId,
-        String currentRoomNumber,
-        UUID targetRoomId,
-        String targetRoomNumber,
+        String guestName,
+        LocalDate checkInDate,
+        LocalDate plannedCheckOutDate,
+        int nights,
+        int adultCount,
+        int childCount,
+        RoomChangeReviewRoom currentRoom,
+        RoomChangeReviewRoom targetRoom,
         RoomChangeReason reason,
-        String notes,
-        LocalDate plannedCheckOutDate) {}
+        String notes) {}

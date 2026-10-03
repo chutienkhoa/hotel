@@ -12,9 +12,11 @@ import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
@@ -203,6 +205,36 @@ public class RoomImageService {
                         HttpStatus.NOT_FOUND, "room.image.error.notFound", "Room image not found."));
         return new RoomImageFile(
                 storageService.load(image.getStorageKey()), image.getContentType(), image.getOriginalFilename());
+    }
+
+    /**
+     * Loads the Room's current primary image through the same private storage and metadata as {@link #loadImage},
+     * for read-only display in a workflow that is already authorized for that Room. Returns empty when the Room has no
+     * image, so callers can show the approved fallback instead.
+     *
+     * @param roomId Room identifier
+     * @return the primary image, when one exists
+     */
+    @Transactional(readOnly = true)
+    public Optional<RoomImageFile> loadPrimaryImage(UUID roomId) {
+        return roomImageRepository
+                .findByRoomIdAndPrimaryTrue(roomId)
+                .map(image -> new RoomImageFile(
+                        storageService.load(image.getStorageKey()), image.getContentType(), image.getOriginalFilename()));
+    }
+
+    /**
+     * Reports which of the given Rooms currently have a primary image, using one query.
+     *
+     * @param roomIds Room identifiers to check
+     * @return the identifiers whose Room has a primary image; empty when none do
+     */
+    @Transactional(readOnly = true)
+    public Set<UUID> roomIdsWithPrimaryImage(Collection<UUID> roomIds) {
+        if (roomIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(roomImageRepository.findRoomIdsWithPrimaryImage(roomIds));
     }
 
     /**

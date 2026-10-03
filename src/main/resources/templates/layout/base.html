@@ -12,6 +12,8 @@
     <link rel="stylesheet" th:href="@{/css/vendor/flatpickr-4.6.13.min.css}" />
     <link rel="stylesheet" th:href="@{/css/common/layout.css}" />
     <link rel="stylesheet" th:href="@{/css/common/components.css}" />
+    <!-- Optional domain stylesheet, set by a page with th:with="pageStylesheet=..." on its html element. -->
+    <link rel="stylesheet" th:if="${pageStylesheet}" th:href="@{${pageStylesheet}}" />
     <script defer th:src="@{/js/common/i18n.js}"></script>
     <script defer th:src="@{/js/vendor/flatpickr-4.6.13.min.js}"></script>
     <script defer th:src="@{/js/common/date-picker.js}"></script>
