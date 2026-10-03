@@ -1,7 +1,10 @@
 package com.example.hotel.service.booking;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -14,6 +17,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hotel.dto.booking.request.StayExtensionRequest;
+import com.example.hotel.dto.booking.response.StayExtensionPreviewResponse;
+import com.example.hotel.dto.booking.response.StayExtensionPreviewResponse.State;
+import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Reservation;
@@ -25,6 +31,7 @@ import com.example.hotel.entity.booking.StayExtensionRoom;
 import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.StayStatus;
 import com.example.hotel.entity.common.AuditLog;
+import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
 import com.example.hotel.exception.StayExtensionException;
 import com.example.hotel.exception.StayExtensionException.Reason;
@@ -39,6 +46,7 @@ import com.example.hotel.repository.common.AuditLogRepository;
 import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.service.room.RoomAvailabilityService;
+import com.example.hotel.service.room.RoomImageService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -54,9 +62,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Verifies the Stay Extension rules with mocked persistence: state, dates, lineage rate, charges, audit, locking. */
 class StayExtensionServiceTest {
@@ -75,6 +86,8 @@ class StayExtensionServiceTest {
     private final StayExtensionRoomRepository extensionRooms = mock(StayExtensionRoomRepository.class);
     private final AuditLogRepository audits = mock(AuditLogRepository.class);
     private final RoomAvailabilityService availability = mock(RoomAvailabilityService.class);
+    private final StayBalanceService balance = mock(StayBalanceService.class);
+    private final RoomImageService roomImages = mock(RoomImageService.class);
     private final UUID actor = UUID.randomUUID();
 
     private Reservation reservation;
@@ -91,13 +104,14 @@ class StayExtensionServiceTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(new CurrentUser(actor, "manager"), null));
         return new StayExtensionService(reservations, stays, assignments, rooms, charges, extensions, extensionRooms,
-                audits, new ReservationMapper(), availability, mock(StayBalanceService.class),
+                audits, new ReservationMapper(), availability, balance, roomImages,
                 Clock.fixed(today.atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
     }
 
     /** Builds a CHECKED_IN reservation with one line per given rate and stubs every repository. */
     private void checkedIn(String... rates) {
-        reservation = new Reservation(UUID.randomUUID(), "R20260920-000001", null, CHECK_IN, CHECK_OUT, "VND", null);
+        Guest guest = Guest.create(UUID.randomUUID(), "G-1", "Ann", "Lee", null, null, null, null, null);
+        reservation = new Reservation(UUID.randomUUID(), "R20260920-000001", guest, CHECK_IN, CHECK_OUT, "VND", null);
         for (int index = 0; index < rates.length; index++) {
             Room room = Room.create(UUID.randomUUID(), "20" + (index + 1), null, "2");
             ReservationRoom line = new ReservationRoom(reservation, room, CHECK_IN, CHECK_OUT, new BigDecimal(rates[index]));
@@ -118,6 +132,7 @@ class StayExtensionServiceTest {
         UUID id = reservation.getId();
         when(reservations.findById(id)).thenReturn(Optional.of(reservation));
         when(stays.findByReservationIdForUpdate(id)).thenReturn(Optional.of(stay));
+        when(stays.findByReservationId(id)).thenReturn(Optional.of(stay));
         when(assignments.findOpenByStayIdWithLineage(stay.getId())).thenAnswer(invocation -> List.copyOf(open));
         when(rooms.lockAllByIdIn(anyList())).thenAnswer(invocation -> open.stream().map(StayRoomAssignment::getRoom).toList());
         when(availability.conflictedRoomIds(any(), any(), any(), any())).thenReturn(Set.of());
@@ -388,7 +403,7 @@ class StayExtensionServiceTest {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(new CurrentUser(actor, "manager"), null));
         StayExtensionService gated = new StayExtensionService(reservations, stays, assignments, rooms, charges, extensions,
-                extensionRooms, audits, new ReservationMapper(), availability, balance,
+                extensionRooms, audits, new ReservationMapper(), availability, balance, mock(RoomImageService.class),
                 Clock.fixed(LocalDate.of(2026, 9, 21).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
 
         gated.extend(reservation.getId(), request(CHECK_OUT, LocalDate.of(2026, 9, 24)));
@@ -404,5 +419,182 @@ class StayExtensionServiceTest {
         assertThrows(IllegalStateException.class, () -> reservation.extendCheckOut(CHECK_OUT.minusDays(1)));
         ReflectionTestUtils.setField(reservation, "status", ReservationStatus.CONFIRMED);
         assertThrows(IllegalStateException.class, () -> reservation.extendCheckOut(CHECK_OUT.plusDays(1)));
+    }
+
+    /** Confirms the Select preview counts nights half-open and prices them at the lineage rate, with no folio by default. */
+    @Test
+    void shouldPreviewAnAvailableExtensionWithNightsAndTheOriginalRate() {
+        checkedIn("1000000");
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), CHECK_OUT.plusDays(2), false);
+
+        assertEquals(State.AVAILABLE, preview.state());
+        assertTrue(preview.isAvailable());
+        assertEquals(2, preview.currentNights());
+        assertEquals(2, preview.additionalNights());
+        assertEquals(4, preview.resultingNights());
+        assertEquals(0, new BigDecimal("2000000").compareTo(preview.extensionAmount()));
+        assertEquals(0, RATE.compareTo(preview.rooms().get(0).nightlyRate()));
+        assertEquals(0, new BigDecimal("2000000").compareTo(preview.rooms().get(0).amount()));
+        assertNull(preview.folio());
+    }
+
+    /** Confirms a date that is not after the current check-out, or is before today, is INVALID_DATE with no charge. */
+    @Test
+    void shouldPreviewAnInvalidDateWithoutAnyCharge() {
+        checkedIn("1000000");
+
+        StayExtensionPreviewResponse notAfter = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), CHECK_OUT, false);
+        StayExtensionPreviewResponse beforeToday = service(LocalDate.of(2026, 9, 25))
+                .preview(reservation.getId(), LocalDate.of(2026, 9, 24), false);
+
+        assertEquals(State.INVALID_DATE, notAfter.state());
+        assertEquals(0, notAfter.additionalNights());
+        assertNull(notAfter.extensionAmount());
+        assertNull(notAfter.rooms().get(0).amount());
+        assertEquals(State.INVALID_DATE, beforeToday.state());
+        assertEquals(LocalDate.of(2026, 9, 25), beforeToday.earliestNewCheckOutDate());
+    }
+
+    /** Confirms no selected date is NOT_SELECTED, and never a priced or available state. */
+    @Test
+    void shouldPreviewNotSelectedWhenNoDateIsGiven() {
+        checkedIn("1000000");
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21)).preview(reservation.getId(), null, false);
+
+        assertEquals(State.NOT_SELECTED, preview.state());
+        assertFalse(preview.isAvailable());
+        assertNull(preview.extensionAmount());
+    }
+
+    /** Confirms an inventory conflict is reported per room, while the amount stays informational and nothing is written. */
+    @Test
+    void shouldPreviewARoomConflictAsBlockedAndFlagTheRoom() {
+        checkedIn("1000000");
+        UUID roomId = open.get(0).getRoom().getId();
+        when(availability.conflictedRoomIds(any(), eq(CHECK_OUT), eq(CHECK_OUT.plusDays(2)), eq(stay.getId())))
+                .thenReturn(Set.of(roomId));
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), CHECK_OUT.plusDays(2), false);
+
+        assertEquals(State.ROOM_CONFLICT, preview.state());
+        assertFalse(preview.isAvailable());
+        assertTrue(preview.rooms().get(0).conflicted());
+        verify(extensions, never()).save(any());
+        verify(charges, never()).save(any());
+    }
+
+    /** Confirms the Select screen shows the room that is current now, while the rate still comes from the lineage. */
+    @Test
+    void shouldPreviewTheCurrentRoomAfterARoomChangeAtTheLineageRate() {
+        checkedIn("1000000");
+        Room roomB = Room.create(UUID.randomUUID(), "305", null, "3");
+        open.clear();
+        open.add(new StayRoomAssignment(stay, roomB, lines.get(0), Instant.parse("2026-09-21T03:00:00Z"), null, null));
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), CHECK_OUT.plusDays(1), false);
+
+        assertEquals("305", preview.rooms().get(0).roomNumber());
+        assertEquals(roomB.getId(), preview.rooms().get(0).roomId());
+        assertEquals(0, RATE.compareTo(preview.rooms().get(0).nightlyRate()));
+    }
+
+    /** Confirms the folio impact uses the StayBalance figures and adds the extension to the projected outstanding. */
+    @Test
+    void shouldIncludeTheFolioImpactFromTheStayBalanceWhenRequested() {
+        checkedIn("1000000");
+        when(balance.calculate(stay.getId())).thenReturn(new StayBalance(
+                new BigDecimal("3000000"), new BigDecimal("500000"), new BigDecimal("2500000")));
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), CHECK_OUT.plusDays(2), true);
+
+        assertEquals(0, new BigDecimal("2500000").compareTo(preview.folio().outstanding()));
+        assertEquals(0, new BigDecimal("4500000").compareTo(preview.folio().projectedOutstanding()));
+    }
+
+    /** Confirms Review accepts only an available extension and, like Select, never writes. */
+    @Test
+    void shouldReviewAnAvailableExtensionWithoutWriting() {
+        checkedIn("1000000");
+
+        StayExtensionPreviewResponse review = service(LocalDate.of(2026, 9, 21))
+                .review(reservation.getId(), request(CHECK_OUT, CHECK_OUT.plusDays(2)), false);
+
+        assertTrue(review.isAvailable());
+        assertEquals(CHECK_OUT, reservation.getCheckOutDate());
+        verify(extensions, never()).save(any());
+        verify(charges, never()).save(any());
+        verify(audits, never()).save(any());
+    }
+
+    /** Confirms Review rejects a stale request, an invalid date, and a conflict with the same reasons as Confirm. */
+    @Test
+    void shouldReviewRejectStaleInvalidAndConflictedProposals() {
+        checkedIn("1000000");
+        StayExtensionService service = service(LocalDate.of(2026, 9, 21));
+
+        StayExtensionException stale = assertThrows(StayExtensionException.class,
+                () -> service.review(reservation.getId(), request(CHECK_OUT.minusDays(1), CHECK_OUT.plusDays(2)), false));
+        StayExtensionException invalid = assertThrows(StayExtensionException.class,
+                () -> service.review(reservation.getId(), request(CHECK_OUT, CHECK_OUT), false));
+        when(availability.conflictedRoomIds(any(), any(), any(), any())).thenReturn(Set.of(open.get(0).getRoom().getId()));
+        StayExtensionException conflict = assertThrows(StayExtensionException.class,
+                () -> service.review(reservation.getId(), request(CHECK_OUT, CHECK_OUT.plusDays(2)), false));
+
+        assertEquals(Reason.STALE_CHECK_OUT_DATE, stale.getExtensionReason());
+        assertEquals(Reason.INVALID_NEW_CHECK_OUT_DATE, invalid.getExtensionReason());
+        assertEquals(Reason.INVENTORY_CONFLICT, conflict.getExtensionReason());
+        assertEquals("201", conflict.getArguments().get(0));
+    }
+
+    /** Confirms the current-room image is served only for a room currently assigned to the active Stay. */
+    @Test
+    void shouldServeTheImageOnlyForACurrentRoom() {
+        checkedIn("1000000");
+        UUID roomId = open.get(0).getRoom().getId();
+        RoomImageFile image = new RoomImageFile(new ByteArrayResource("img".getBytes()), "image/jpeg", "room.jpg");
+        when(roomImages.loadPrimaryImage(roomId)).thenReturn(Optional.of(image));
+        StayExtensionService service = service(LocalDate.of(2026, 9, 21));
+
+        assertSame(image, service.currentRoomImage(reservation.getId(), roomId));
+        ResponseStatusException notCurrent = assertThrows(ResponseStatusException.class,
+                () -> service.currentRoomImage(reservation.getId(), UUID.randomUUID()));
+        assertEquals(HttpStatus.NOT_FOUND, notCurrent.getStatusCode());
+    }
+
+    /** Confirms the calendar's first unavailable checkout is the earliest date whose interval conflicts, found over the window. */
+    @Test
+    void shouldFindTheFirstUnavailableCheckOutInTheWindow() {
+        checkedIn("1000000");
+        UUID roomId = open.get(0).getRoom().getId();
+        LocalDate firstConflict = CHECK_OUT.plusDays(4);
+        when(availability.conflictedRoomIds(any(), any(), any(), any())).thenAnswer(invocation -> {
+            LocalDate out = invocation.getArgument(2);
+            return out.isBefore(firstConflict) ? Set.of() : Set.of(roomId);
+        });
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), null, false);
+
+        assertEquals(firstConflict, preview.firstUnavailableCheckOutDate());
+        assertEquals(CHECK_OUT.plusDays(62), preview.availabilityKnownUntil());
+    }
+
+    /** Confirms no conflict in the window leaves the first unavailable date empty, so every window date is known free. */
+    @Test
+    void shouldReportNoUnavailableDateWhenTheWindowIsFree() {
+        checkedIn("1000000");
+
+        StayExtensionPreviewResponse preview = service(LocalDate.of(2026, 9, 21))
+                .preview(reservation.getId(), null, false);
+
+        assertNull(preview.firstUnavailableCheckOutDate());
+        assertEquals(CHECK_OUT.plusDays(62), preview.availabilityKnownUntil());
     }
 }

@@ -1,64 +1,334 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/reservation/stay-extension.css'">
 <head th:replace="~{layout/base :: head(#{reservation.stayExtension.title})}"></head>
 <body>
 <div class="app-shell page-reservations">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <a class="back-link" th:href="@{/reservations/{id}(id=${context.reservationId})}" th:text="#{reservation.stayExtension.back}">Back to reservation</a>
-        <div class="page-header">
-            <div>
-                <h1 th:text="#{reservation.stayExtension.title}">Extend Stay</h1>
-                <p th:text="#{reservation.stayExtension.description}">Move the planned check-out to a later date.</p>
+    <main class="content stay-extension">
+        <div class="stay-extension-page">
+            <a class="back-link back-link--primary stay-extension-back" th:href="@{/reservations/{id}(id=${preview.reservationId})}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{reservation.stayExtension.backToReservation(${preview.reservationNumber})}">Back to Reservation</span>
+            </a>
+
+            <div class="page-header stay-extension-header">
+                <div>
+                    <h1 th:text="#{reservation.stayExtension.title}">Extend Stay</h1>
+                    <p th:text="#{reservation.stayExtension.subtitle}">Extend the guest's stay by selecting a new check-out date.</p>
+                </div>
+            </div>
+
+            <ol class="stay-extension-steps" th:aria-label="#{reservation.stayExtension.title}">
+                <li class="stay-extension-step stay-extension-step--current" aria-current="step">
+                    <span class="stay-extension-step__marker">1</span>
+                    <span class="stay-extension-step__label" th:text="#{reservation.stayExtension.step.select}">Select Extension</span>
+                </li>
+                <li class="stay-extension-step">
+                    <span class="stay-extension-step__marker">2</span>
+                    <span class="stay-extension-step__label" th:text="#{reservation.stayExtension.step.review}">Review Charges</span>
+                </li>
+                <li class="stay-extension-step">
+                    <span class="stay-extension-step__marker">3</span>
+                    <span class="stay-extension-step__label" th:text="#{reservation.stayExtension.step.confirm}">Confirm</span>
+                </li>
+            </ol>
+
+            <p class="message message-error stay-extension-message" role="alert" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <div class="stay-extension-grid">
+                <!-- Grid: Current Stay and Rate on the left, the Select card on the right (spanning both rows), and the
+                     summary on the row below. -->
+                    <section class="card stay-extension-card stay-extension-zone--current" aria-labelledby="stay-extension-current-heading">
+                        <header class="stay-extension-card__header">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <h2 id="stay-extension-current-heading" th:text="#{reservation.stayExtension.current.title}">Current Stay Information</h2>
+                        </header>
+                        <div class="stay-extension-current">
+                            <div class="stay-extension-photo">
+                                <img th:if="${!#lists.isEmpty(preview.rooms) and preview.rooms[0].hasPrimaryImage}"
+                                     th:alt="#{reservation.stayExtension.image.alt(${preview.rooms[0].roomNumber})}"
+                                     th:src="@{/reservations/{id}/stay-extension/rooms/{roomId}/image(id=${preview.reservationId},roomId=${preview.rooms[0].roomId})}" />
+                                <th:block th:unless="${!#lists.isEmpty(preview.rooms) and preview.rooms[0].hasPrimaryImage}">
+                                    <svg th:replace="~{layout/icons :: bed}"></svg>
+                                </th:block>
+                            </div>
+                            <dl class="stay-extension-facts">
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.guest}">Guest</dt>
+                                    <dd><span th:text="${preview.guestName}">Guest</span> <span class="stay-extension-muted" th:text="'(' + ${preview.guestCode} + ')'">(G-1)</span></dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.roomNo}">Room No.</dt>
+                                    <dd>
+                                        <span th:each="room, stat : ${preview.rooms}">
+                                            <span th:text="${room.roomNumber}">101</span><span th:unless="${stat.last}">, </span>
+                                        </span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.roomType}">Room Type</dt>
+                                    <dd>
+                                        <span th:each="room, stat : ${preview.rooms}">
+                                            <span th:text="${room.roomTypeName == null ? '—' : room.roomTypeName}">Double Room</span><span th:unless="${stat.last}">, </span>
+                                        </span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.checkIn}">Check-in Date</dt>
+                                    <dd><span th:replace="~{layout/datetime :: date(${preview.checkInDate})}">—</span></dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.currentCheckOut}">Current Check-out</dt>
+                                    <dd id="stay-extension-current-checkout"><span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span></dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.currentNights}">Current Nights</dt>
+                                    <dd th:text="#{reservation.stayExtension.nightCount(${preview.currentNights})}">3 nights</dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.stayExtension.field.guests}">Guests</dt>
+                                    <dd th:text="#{reservation.stayExtension.guests.value(${preview.adultCount}, ${preview.childCount})}">2 adults, 1 child</dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </section>
+
+                    <section class="card stay-extension-card stay-extension-zone--rate" aria-labelledby="stay-extension-rate-heading">
+                        <header class="stay-extension-card__header">
+                            <svg th:replace="~{layout/icons :: coins}"></svg>
+                            <h2 id="stay-extension-rate-heading" th:text="#{reservation.stayExtension.rate.title}">Rate Information</h2>
+                        </header>
+                        <p class="stay-extension-note">
+                            <svg th:replace="~{layout/icons :: info}"></svg>
+                            <span th:text="#{reservation.stayExtension.rate.note}">The original nightly rate is used. Rooms and rates cannot be changed here.</span>
+                        </p>
+                        <div class="stay-extension-table-scroll">
+<div class="stay-extension-live" data-live="rates">
+<table class="stay-extension-table" id="stay-extension-rates">
+                            <thead>
+                            <tr>
+                                <th scope="col" th:text="#{reservation.stayExtension.field.roomNo}">Room No.</th>
+                                <th scope="col" class="stay-extension-num" th:text="#{reservation.stayExtension.field.nightlyRate}">Nightly rate</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="room : ${preview.rooms}" th:attr="data-nightly-rate=${room.nightlyRate.toPlainString()}">
+                                <td th:text="${room.roomNumber}">101</td>
+                                <td class="stay-extension-num">
+                                    <span th:replace="~{layout/money :: rate(${room.nightlyRate})}">1,200,000</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td th:text="#{reservation.stayExtension.field.additionalNights}">Additional nights</td>
+                                <td class="stay-extension-num">
+                                    <span th:text="${preview.additionalNights}" id="stay-extension-additional-nights">0</span>
+                                    <span class="stay-extension-unit" th:text="#{reservation.stayExtension.nightUnit(${preview.additionalNights})}">nights</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                            <tfoot>
+                            <tr class="stay-extension-table__total">
+                                <th scope="row" th:text="#{reservation.stayExtension.field.additionalCharges}">Additional Charges</th>
+                                <td class="stay-extension-num" id="stay-extension-charge-preview">
+                                    <th:block th:if="${preview.extensionAmount != null}">
+                                        <span th:replace="~{layout/money :: amount(${preview.extensionAmount}, ${preview.currency})}">0 VND</span>
+                                    </th:block>
+                                    <span th:if="${preview.extensionAmount == null}" class="stay-extension-muted">—</span>
+                                </td>
+                            </tr>
+                            </tfoot>
+                        </table>
+</div>
+</div>
+                    </section>
+
+
+                    <section class="card stay-extension-card stay-extension-card--select stay-extension-zone--select" aria-labelledby="stay-extension-select-heading">
+                        <header class="stay-extension-card__header">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <h2 id="stay-extension-select-heading" th:text="#{reservation.stayExtension.select.title}">Select New Check-out Date</h2>
+                        </header>
+
+                        <div class="stay-extension-select-grid">
+                        <div class="stay-extension-select-grid__calendar">
+                        <form class="stay-extension-date-form" method="get"
+                              th:action="@{/reservations/{id}/stay-extension(id=${preview.reservationId})}">
+                            <div class="stay-extension-calendar">
+                                <label class="visually-hidden" for="newCheckOutDate" th:text="#{reservation.stayExtension.select.label}">New check-out date</label>
+                                <input class="js-stay-extension-calendar" id="newCheckOutDate" name="newCheckOutDate" type="date"
+                                       th:value="${preview.requestedCheckOutDate == null ? '' : #temporals.format(preview.requestedCheckOutDate, 'yyyy-MM-dd')}"
+                                       th:attr="min=${#temporals.format(preview.earliestNewCheckOutDate, 'yyyy-MM-dd')},data-min-date=${#temporals.format(preview.earliestNewCheckOutDate, 'yyyy-MM-dd')},data-current-checkout=${#temporals.format(preview.currentCheckOutDate, 'yyyy-MM-dd')},data-first-unavailable=${preview.firstUnavailableCheckOutDate == null ? '' : #temporals.format(preview.firstUnavailableCheckOutDate, 'yyyy-MM-dd')},data-available-until=${#temporals.format(preview.availabilityKnownUntil, 'yyyy-MM-dd')},data-unit-one=#{reservation.stayExtension.nightUnit(1)},data-unit-other=#{reservation.stayExtension.nightUnit(2)},data-checking-text=#{reservation.stayExtension.state.checking},data-check-failed-text=#{reservation.stayExtension.state.checkFailed}" />
+                                <noscript>
+                                    <button class="button button-secondary stay-extension-date-form__submit" type="submit" th:text="#{reservation.stayExtension.select.apply}">Show extension</button>
+                                </noscript>
+                            </div>
+                        </form>
+                        </div>
+
+                        <div class="stay-extension-select-grid__panel">
+                        <ul class="stay-extension-legend" th:aria-label="#{reservation.stayExtension.legend.label}">
+                            <li class="stay-extension-legend__item stay-extension-legend__item--current">
+                                <span class="stay-extension-legend__swatch" aria-hidden="true"></span>
+                                <span class="stay-extension-legend__text stay-extension-legend__text--row">
+                                    <span th:text="#{reservation.stayExtension.legend.current}">Current check-out date</span>
+                                    <span class="stay-extension-legend__date"><span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span></span>
+                                </span>
+                            </li>
+                            <li class="stay-extension-legend__item stay-extension-legend__item--available">
+                                <span class="stay-extension-legend__swatch" aria-hidden="true"></span>
+                                <span class="stay-extension-legend__text">
+                                    <span th:text="#{reservation.stayExtension.legend.available}">Available for extension</span>
+                                </span>
+                            </li>
+                            <li class="stay-extension-legend__item stay-extension-legend__item--extension">
+                                <span class="stay-extension-legend__swatch" aria-hidden="true"></span>
+                                <span class="stay-extension-legend__text">
+                                    <span th:text="#{reservation.stayExtension.legend.extensionNights}">Selected extension nights</span>
+                                </span>
+                            </li>
+                            <li class="stay-extension-legend__item stay-extension-legend__item--unavailable">
+                                <span class="stay-extension-legend__swatch" aria-hidden="true"></span>
+                                <span class="stay-extension-legend__text">
+                                    <span th:text="#{reservation.stayExtension.legend.unavailable}">Not available</span>
+                                    <span class="stay-extension-legend__hint" th:text="#{reservation.stayExtension.legend.unavailableHint}">(Conflicting bookings or room unavailable)</span>
+                                </span>
+                            </li>
+                        </ul>
+
+                        <div class="stay-extension-live" data-live="selection">
+                        <div class="stay-extension-selected">
+                            <span class="stay-extension-selected__label" th:text="#{reservation.stayExtension.select.selected}">Selected New Check-out Date</span>
+                            <span class="stay-extension-selected__box">
+                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                <span class="stay-extension-selected__value" id="stay-extension-selected-date">
+                                    <th:block th:if="${preview.requestedCheckOutDate != null}">
+                                        <span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate})}">—</span>
+                                    </th:block>
+                                    <span th:if="${preview.requestedCheckOutDate == null}" class="stay-extension-muted" th:text="#{reservation.stayExtension.select.none}">None selected</span>
+                                </span>
+                            </span>
+                        </div>
+
+                        <div class="stay-extension-nights" id="stay-extension-nights-panel">
+                            <span class="stay-extension-nights__label" th:text="#{reservation.stayExtension.field.additionalNights}">Additional Nights</span>
+                            <span class="stay-extension-nights__value">
+                                <span th:text="${preview.additionalNights}">0</span>
+                                <span class="stay-extension-nights__unit" th:text="#{reservation.stayExtension.nightUnit(${preview.additionalNights})}">nights</span>
+                            </span>
+                            <span class="stay-extension-nights__range" th:if="${preview.additionalNights > 0}">
+                                <span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span>
+                                –
+                                <span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate.minusDays(1)})}">—</span>
+                            </span>
+                        </div>
+
+
+</div>
+                        </div>
+                        </div>
+                        <div class="stay-extension-live" data-live="availability">
+                        <div class="stay-extension-state" th:classappend="'stay-extension-state--' + ${#strings.toLowerCase(preview.state.name())}"
+                             role="status" id="stay-extension-state">
+                            <span class="stay-extension-state__badge" th:text="#{${'reservation.stayExtension.state.badge.' + preview.state.name()}}">NOT SELECTED</span>
+                            <p class="stay-extension-state__text" th:switch="${preview.state.name()}">
+                                <span th:case="'NOT_SELECTED'" th:text="#{reservation.stayExtension.state.notSelected}">Select a new check-out date.</span>
+                                <span th:case="'AVAILABLE'" th:text="#{reservation.stayExtension.state.available}">All current rooms are available for these dates.</span>
+                                <span th:case="'INVALID_DATE'" th:text="#{reservation.stayExtension.state.invalidDate(${#temporals.format(preview.currentCheckOutDate, 'dd/MM/yyyy')}, ${#temporals.format(preview.earliestNewCheckOutDate, 'dd/MM/yyyy')})}">The date is invalid.</span>
+                                <span th:case="'ROOM_CONFLICT'" th:text="#{reservation.stayExtension.state.roomConflict}">This room is not available for the selected extension.</span>
+                            </p>
+                            <ul class="stay-extension-state__rooms" th:if="${preview.state.name() == 'ROOM_CONFLICT'}">
+                                <li th:each="room : ${preview.rooms}" th:if="${room.conflicted}">
+                                    <span th:text="#{reservation.stayExtension.state.roomLabel(${room.roomNumber})}">Room 101 is not available</span>
+                                    <a class="button button-outline-primary stay-extension-state__change" th:if="${canChangeRoom}"
+                                       th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${preview.reservationId},roomId=${room.roomId})}"
+                                       th:text="#{reservation.stayExtension.changeRoom}">Change Room</a>
+                                </li>
+                            </ul>
+                            <p class="stay-extension-state__hint" th:if="${preview.state.name() == 'ROOM_CONFLICT' and !canChangeRoom}"
+                               th:text="#{reservation.stayExtension.state.askManager}">Ask a manager or authorized staff member to change the room.</p>
+                        </div>
+
+                        <p class="stay-extension-note" th:unless="${preview.state.name() == 'ROOM_CONFLICT'}">
+                            <svg th:replace="~{layout/icons :: info}"></svg>
+                            <span th:text="#{reservation.stayExtension.changeRoomHint}">To move the guest to another room, use Change Room. Stay Extension keeps the current room.</span>
+                        </p>
+                        </div>
+                    </section>
+
+                    <section class="card stay-extension-card stay-extension-zone--summary" aria-labelledby="stay-extension-summary-heading">
+                        <header class="stay-extension-card__header">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <h2 id="stay-extension-summary-heading" th:text="#{reservation.stayExtension.summary.title}">New Stay Summary (After Extension)</h2>
+                        </header>
+                        <div class="stay-extension-live" data-live="summary">
+<div class="stay-extension-table-scroll">
+<table class="stay-extension-table stay-extension-table--summary">
+                            <tbody>
+                            <tr>
+                                <th scope="row" th:text="#{reservation.stayExtension.field.checkIn}">Check-in Date</th>
+                                <td><span th:replace="~{layout/datetime :: date(${preview.checkInDate})}">—</span></td>
+                            </tr>
+                            <tr>
+                                <th scope="row" th:text="#{reservation.stayExtension.field.newCheckOut}">New Check-out Date</th>
+                                <td>
+                                    <th:block th:if="${preview.requestedCheckOutDate != null}">
+                                        <span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate})}">—</span>
+                                    </th:block>
+                                    <span th:if="${preview.requestedCheckOutDate == null}" class="stay-extension-muted">—</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row" th:text="#{reservation.stayExtension.field.totalNights}">Total Nights</th>
+                                <td>
+                                    <span th:text="${preview.resultingNights}">5</span>
+                                    <span class="stay-extension-badge stay-extension-badge--added" th:if="${preview.additionalNights > 0}"
+                                          th:text="#{reservation.stayExtension.addedNights(${preview.additionalNights})}">+2 nights</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row" th:text="#{reservation.stayExtension.field.roomNo}">Room No.</th>
+                                <td>
+                                    <span th:each="room, stat : ${preview.rooms}">
+                                        <span th:text="${room.roomNumber}">101</span><span th:unless="${stat.last}">, </span>
+                                    </span>
+                                    <span class="stay-extension-muted" th:text="#{reservation.stayExtension.sameRoom}">(Same room)</span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th scope="row" th:text="#{reservation.stayExtension.field.guests}">Guests</th>
+                                <td th:text="#{reservation.stayExtension.guests.value(${preview.adultCount}, ${preview.childCount})}">2 adults, 1 child</td>
+                            </tr>
+                            </tbody>
+                        </table>
+</div>
+</div>
+                    </section>
             </div>
         </div>
 
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
-
-        <dl class="detail-list" id="extension-context">
-            <dt th:text="#{reservation.stayExtension.reservation}">Reservation</dt>
-            <dd th:text="${context.reservationNumber}">R20260916-000001</dd>
-            <dt th:text="#{reservation.stayExtension.primaryGuest}">Primary Guest</dt>
-            <dd th:text="${context.guestName + ' (' + context.guestCode + ')'}">Guest</dd>
-            <dt th:text="#{reservation.stayExtension.currentCheckOut}">Current Check-out</dt>
-            <dd id="extension-current-checkout"><span th:replace="~{layout/datetime :: date(${context.currentCheckOutDate})}">—</span></dd>
-            <dt th:text="#{reservation.stayExtension.currentRooms}">Current room(s)</dt>
-            <dd>
-                <div th:each="room : ${context.rooms}">
-                    <span th:text="${room.roomNumber}">101</span> —
-                    <span th:text="#{reservation.stayExtension.rate}">Original booked nightly rate</span>:
-                    <span th:replace="~{layout/money :: amount(${room.nightlyRate}, ${context.currency})}">0 VND</span>
-                </div>
-            </dd>
-            <th:block th:if="${context.outstanding != null}">
-                <dt th:text="#{reservation.stayExtension.outstanding}">Current outstanding balance</dt>
-                <dd id="extension-outstanding"><span th:replace="~{layout/money :: amount(${context.outstanding}, ${context.currency})}">0 VND</span></dd>
-            </th:block>
-        </dl>
-
-        <form class="form-card" method="post" th:action="@{/reservations/{id}/stay-extension(id=${context.reservationId})}"
-              th:object="${stayExtensionForm}">
-            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-            <input name="expectedCurrentCheckOutDate" th:value="${context.currentCheckOutDate}" type="hidden" />
-
-            <div class="form-grid reservation-details-grid">
-                <div class="form-field">
-                    <label for="newCheckOutDate" th:text="#{reservation.stayExtension.newCheckOut} + ' *'">New Check-out Date *</label>
-                    <input class="js-date-picker" id="newCheckOutDate" name="newCheckOutDate" required type="text"
-                           th:value="${stayExtensionForm.newCheckOutDate == null ? '' : #temporals.format(stayExtensionForm.newCheckOutDate, 'yyyy-MM-dd')}" />
-                    <p class="reservation-info-secondary" th:text="#{reservation.stayExtension.newCheckOutHint(${#temporals.format(context.earliestNewCheckOutDate, 'dd/MM/yyyy')})}">Must be after the earlier date.</p>
-                    <p class="field-error" th:errors="*{newCheckOutDate}"></p>
+        <div class="stay-extension-actions">
+            <div class="stay-extension-actions__inner">
+                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${preview.reservationId})}"
+                   th:text="#{common.action.cancel}">Cancel</a>
+                <div class="stay-extension-live" data-live="actions">
+                <form class="stay-extension-actions__next" method="post"
+                      th:action="@{/reservations/{id}/stay-extension/review(id=${preview.reservationId})}">
+                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                    <input name="expectedCurrentCheckOutDate" type="hidden"
+                           th:value="${#temporals.format(preview.currentCheckOutDate, 'yyyy-MM-dd')}" />
+                    <input name="newCheckOutDate" type="hidden"
+                           th:value="${preview.requestedCheckOutDate == null ? '' : #temporals.format(preview.requestedCheckOutDate, 'yyyy-MM-dd')}" />
+                    <button class="button button-primary" id="stay-extension-next" type="submit"
+                            th:disabled="${!preview.available}" th:text="#{reservation.stayExtension.action.next}">Next: Review Charges</button>
+                </form>
                 </div>
             </div>
-
-            <div class="form-actions">
-                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${context.reservationId})}" th:text="#{common.action.cancel}">Cancel</a>
-                <button class="button button-primary" th:text="#{reservation.stayExtension.submit}" type="submit">Extend Stay</button>
-            </div>
-        </form>
+        </div>
     </main>
 </div>
+<script defer th:src="@{/js/reservation/stay-extension.js}"></script>
 </body>
 </html>

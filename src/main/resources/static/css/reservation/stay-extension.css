@@ -1,0 +1,1080 @@
+/* Task33 Batch 3F: Extend Stay (Select Extension and Review Charges), composed after
+   docs/specs/evidence/task33/front-desk/extend-stay-final.png and extend-stay-review-charges-final.png. Every rule is
+   scoped under .stay-extension so the shared Reservation Detail and Change Room styles are untouched. */
+
+/* Horizontal content inset, shared by the page content and the bottom action bar so their edges always line up. */
+.stay-extension {
+  --stay-extension-inset: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+}
+
+.stay-extension-page {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: var(--space-6) var(--stay-extension-inset) 0;
+}
+
+.stay-extension-page > * + * {
+  margin-top: var(--space-6);
+}
+
+/* Icons read as weighted glyphs next to their headings, not as light hairlines. */
+.stay-extension svg {
+  stroke-width: 2.2;
+}
+
+.stay-extension-back svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.stay-extension-back {
+  margin-bottom: var(--space-2);
+}
+
+.stay-extension-header {
+  margin-bottom: var(--space-4);
+}
+
+/* The title block may shrink to the viewport and wrap its subtitle; otherwise a long subtitle widens the page on phones. */
+.stay-extension-header > div {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.stay-extension-header h1 {
+  font-size: 2rem;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.stay-extension-header p {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  margin: var(--space-1) 0 0;
+}
+
+/* Three-step indicator. Step 1 is active on Select, step 1 is complete (check) on Review. */
+.stay-extension-steps {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+}
+
+.stay-extension-step {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.stay-extension-step:not(:last-child)::after {
+  background: var(--color-border-strong);
+  content: "";
+  height: 1px;
+  margin: 0 var(--space-4);
+  width: 6rem;
+}
+
+.stay-extension-step__marker {
+  align-items: center;
+  background: #cbd5e1;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  flex: none;
+  font-weight: 700;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+
+.stay-extension-step__marker svg {
+  height: 1.375rem;
+  width: 1.375rem;
+}
+
+.stay-extension-step--current,
+.stay-extension-step--complete {
+  color: var(--color-primary);
+}
+
+.stay-extension-step--current .stay-extension-step__marker,
+.stay-extension-step--complete .stay-extension-step__marker {
+  background: var(--color-primary);
+}
+
+.stay-extension-message {
+  margin: 0;
+}
+
+/* Two columns on desktop; each column stacks its own cards so card heights follow their content. */
+/* Step 1 grid. Current Stay and Rate form the left column; the Select card spans both of those rows on the right, so
+   its bottom edge is the same line as the Rate card's bottom edge. The summary starts the next row, on the left. Items
+   stretch to their row, so no spacer is needed to make the two sides line up. */
+.stay-extension-grid {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+}
+
+.stay-extension-grid > .stay-extension-zone--current {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.stay-extension-grid > .stay-extension-zone--rate {
+  align-self: stretch;
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.stay-extension-grid > .stay-extension-zone--select {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.stay-extension-grid > .stay-extension-zone--summary {
+  grid-column: 1;
+  grid-row: 3;
+}
+
+
+.stay-extension-card {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+/* Icon and heading share one grid row so the icon centres on the heading line. */
+.stay-extension-card__header {
+  align-items: center;
+  column-gap: var(--space-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.stay-extension-card__header > svg {
+  color: var(--color-primary);
+  flex: none;
+  height: 1.375rem;
+  width: 1.375rem;
+}
+
+.stay-extension-card__header h2 {
+  font-size: 1.0625rem;
+  margin: 0;
+}
+
+.stay-extension-muted {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.stay-extension-note {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.875rem;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.stay-extension-note svg {
+  color: var(--color-primary);
+  flex: none;
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+/* Current stay: room photo beside the key/value facts. */
+.stay-extension-current {
+  align-items: start;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 11rem minmax(0, 1fr);
+}
+
+.stay-extension-photo {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-border-strong);
+  display: flex;
+  height: 8.25rem;
+  justify-content: center;
+  overflow: hidden;
+  width: 11rem;
+}
+
+.stay-extension-photo img {
+  display: block;
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.stay-extension-photo svg {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.stay-extension-facts {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.stay-extension-facts > div {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1.1fr);
+  min-height: 2.125rem;
+}
+
+.stay-extension-facts > div:last-child {
+  border-bottom: 0;
+}
+
+.stay-extension-facts dt {
+  align-self: stretch;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  padding: var(--space-1) var(--space-3);
+}
+
+.stay-extension-facts dd {
+  color: var(--color-navy);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: var(--space-1) var(--space-3);
+}
+
+/* Review uses the facts list full-width, without the photo column. */
+.stay-extension-facts--stacked > div {
+  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
+}
+
+/* Bordered tables with a muted first column, shared by Rate, Summary, Charges, Stay comparison and Folio. */
+.stay-extension-table-scroll {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+/* min-width: 0 overrides the shared 38rem table minimum, which is sized for full-width list pages and would push these
+   card tables past their card edge. Values still stay on one line, and a table that is still too wide scrolls inside
+   .stay-extension-table-scroll. */
+.stay-extension-table {
+  border: 1px solid var(--color-border);
+  border-collapse: collapse;
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.stay-extension-table th,
+.stay-extension-table td {
+  border-bottom: 1px solid var(--color-border);
+  height: 2.25rem;
+  padding: var(--space-1) var(--space-3);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.stay-extension-table thead th {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Body and footer row labels are sentence case; the global th style would otherwise uppercase them. */
+.stay-extension-table tbody th,
+.stay-extension-table tfoot th {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  width: 42%;
+}
+
+.stay-extension-table td {
+  color: var(--color-navy);
+  font-weight: 600;
+}
+
+.stay-extension-table tbody tr:last-child th,
+.stay-extension-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.stay-extension-table tfoot th,
+.stay-extension-table tfoot td {
+  border-bottom: 0;
+}
+
+.stay-extension-table__total th,
+.stay-extension-table__total td {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+  font-size: 1.0625rem;
+  font-weight: 800;
+}
+
+.stay-extension-table__total th {
+  font-size: 0.9375rem;
+}
+
+.stay-extension-num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.stay-extension-unit {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  margin-left: var(--space-1);
+}
+
+.stay-extension-nowrap {
+  white-space: nowrap;
+}
+
+.stay-extension-arrow {
+  color: var(--color-primary);
+  padding-inline: var(--space-1);
+  text-align: center;
+  width: 2.25rem;
+}
+
+.stay-extension-arrow svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+.stay-extension-table__after {
+  background: #f1f7ff;
+  color: var(--color-navy);
+}
+
+.stay-extension-table--compare thead .stay-extension-table__after {
+  background: #e4efff;
+  color: var(--color-primary);
+}
+
+.stay-extension-table--folio tfoot th,
+.stay-extension-table--folio tfoot td {
+  border-top: 1px solid var(--color-border);
+}
+
+/* The summary card is narrow on phones, so its values may wrap instead of pushing the card wider. */
+.stay-extension-table--summary td {
+  white-space: normal;
+}
+
+.stay-extension-badge {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 700;
+  height: 1.375rem;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  vertical-align: middle;
+}
+
+.stay-extension-badge--added {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+
+/* Select New Check-out Date: the calendar is a real flatpickr inline calendar bound to the date input. Without
+   JavaScript the native date input and the noscript submit button remain. */
+.flatpickr-days {
+  margin-bottom: 0.35rem;
+}
+
+.stay-extension-date-form {
+  margin: 0;
+}
+
+.stay-extension-calendar {
+  min-width: 0;
+}
+
+.stay-extension-calendar--enhanced > input.js-stay-extension-calendar {
+  display: none;
+}
+
+.stay-extension-calendar .flatpickr-calendar.inline {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: none;
+  width: 100%;
+}
+
+.stay-extension-calendar .flatpickr-innerContainer,
+.stay-extension-calendar .flatpickr-rContainer,
+.stay-extension-calendar .flatpickr-days,
+.stay-extension-calendar .dayContainer {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.stay-extension-calendar .dayContainer {
+  justify-content: space-between;
+  padding: var(--space-1) 0;
+}
+
+.stay-extension-calendar .flatpickr-day {
+  border-radius: var(--radius-sm);
+  flex-basis: 14.2857%;
+  max-width: 14.2857%;
+}
+
+.stay-extension-calendar .flatpickr-day.today {
+  border-color: var(--color-primary);
+}
+
+/* Selected New Check-out Date: label above a bordered box with the calendar icon, as in the approved composition. */
+.stay-extension-selected {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.stay-extension-selected__label {
+  color: var(--color-navy);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.stay-extension-selected__box {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: var(--space-3);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+}
+
+.stay-extension-selected__box > svg {
+  color: var(--color-primary);
+  flex: none;
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.stay-extension-selected__value {
+  color: var(--color-navy);
+  font-size: 1.0625rem;
+  font-weight: 700;
+}
+
+.stay-extension-nights {
+  align-items: center;
+  background: #f1f7ff;
+  border: 1px solid #b9d4fb;
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: var(--space-3);
+}
+
+.stay-extension-nights__label {
+  color: var(--color-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
+  grid-column: 1 / -1;
+}
+
+.stay-extension-nights__value {
+  align-items: baseline;
+  color: var(--color-primary);
+  display: inline-flex;
+  font-size: 2rem;
+  font-weight: 800;
+  gap: var(--space-2);
+  line-height: 1;
+}
+
+.stay-extension-nights__unit {
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.stay-extension-nights__range {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  justify-self: end;
+  text-align: right;
+}
+
+/* Availability state. Colour is never the only signal: each state has a text badge and a sentence. */
+.stay-extension-state {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.stay-extension-state__badge {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 800;
+  height: 1.5rem;
+  justify-self: start;
+  letter-spacing: 0.03em;
+  padding: 0 var(--space-3);
+}
+
+.stay-extension-state__text {
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  margin: 0;
+}
+
+.stay-extension-state--available {
+  background: var(--color-success-surface);
+  border-color: #b7e0c4;
+}
+
+.stay-extension-state--available .stay-extension-state__badge {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.stay-extension-state--room_conflict {
+  background: var(--color-danger-surface);
+  border-color: #f2b8b5;
+}
+
+.stay-extension-state--room_conflict .stay-extension-state__badge {
+  background: var(--color-danger);
+  color: #fff;
+}
+
+.stay-extension-state--invalid_date {
+  background: var(--color-warning-surface);
+  border-color: #f3d48a;
+}
+
+.stay-extension-state--invalid_date .stay-extension-state__badge {
+  background: var(--color-warning);
+  color: #fff;
+}
+
+.stay-extension-state--not_selected .stay-extension-state__badge {
+  background: #cbd5e1;
+  color: #fff;
+}
+
+.stay-extension-state__rooms {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stay-extension-state__rooms li {
+  align-items: center;
+  color: var(--color-danger);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.stay-extension-state__change {
+  height: 2.25rem;
+  padding: 0.375rem var(--space-3);
+}
+
+.stay-extension-state__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Bottom action bar: full-bleed like Change Room, but placed at the end of the content as in the approved mockups, so
+   it never covers the last rows of a card. Secondary action left, primary right. */
+.stay-extension-actions {
+  background: #f4f7fb;
+  margin: var(--space-5) 0 0;
+}
+
+.stay-extension-actions__inner {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding-block: var(--space-4);
+  padding-inline: var(--stay-extension-inset);
+}
+
+.stay-extension-actions__end {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+
+.stay-extension-actions__end form {
+  margin: 0;
+}
+
+.stay-extension-actions .button {
+  height: 2.75rem;
+  min-width: 10rem;
+  padding: 0.625rem var(--space-4);
+}
+
+.stay-extension-actions .button-primary svg {
+  margin-left: var(--space-1);
+}
+
+.stay-extension-actions .button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Tablet and phone: columns collapse, tables scroll inside their card, the action bar stacks full-width. */
+@media (max-width: 64rem) {
+  .stay-extension {
+    --stay-extension-inset: var(--space-5);
+  }
+
+  .stay-extension-page {
+    padding: var(--space-5) var(--stay-extension-inset) 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .stay-extension-steps {
+    width: 100%;
+  }
+
+  .stay-extension-step {
+    flex: 1 1 auto;
+    font-size: 0.8125rem;
+    gap: var(--space-1);
+    min-width: 0;
+    white-space: normal;
+  }
+
+  .stay-extension-step:not(:last-child)::after {
+    flex: 1 1 var(--space-3);
+    margin: 0 var(--space-2);
+    width: auto;
+  }
+
+  .stay-extension-step__marker {
+    height: 1.875rem;
+    width: 1.875rem;
+  }
+
+  .stay-extension-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stay-extension-current {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .stay-extension-photo {
+    height: 10rem;
+    width: 100%;
+  }
+
+  .stay-extension-facts > div,
+  .stay-extension-facts--stacked > div {
+    grid-template-columns: minmax(6.5rem, 0.8fr) minmax(0, 1.2fr);
+  }
+
+  .stay-extension-actions__inner {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .stay-extension-actions__end {
+    flex-direction: column-reverse;
+    width: 100%;
+  }
+
+  .stay-extension-actions .button,
+  .stay-extension-actions form,
+  .stay-extension-actions__end form {
+    width: 100%;
+  }
+
+  .stay-extension-actions .button {
+    min-width: 0;
+  }
+}
+
+/* Live regions are replaced in place after a date change; display: contents keeps their children in the same grid
+   and flex flow, so the approved layout is unchanged. */
+.stay-extension-live {
+  display: contents;
+}
+
+/* While the server confirms a new date: the selection is already shown, the state is neutral, and Next is disabled.
+   The conflict links and hints are hidden until the server's state replaces them. */
+.stay-extension-state.stay-extension-state--pending {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+}
+
+.stay-extension-state--pending .stay-extension-state__badge,
+.stay-extension-state--pending .stay-extension-state__rooms,
+.stay-extension-state--pending .stay-extension-state__hint {
+  display: none;
+}
+
+/* Calendar and information panel: two columns on desktop. The calendar takes the larger share, as in the approved
+   evidence (about 55 / 45), and both columns start at the same top edge. */
+.stay-extension-select-grid {
+  align-items: start;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+.stay-extension-select-grid__calendar,
+.stay-extension-select-grid__panel {
+  min-width: 0;
+}
+
+.stay-extension-select-grid__panel {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+/* Legend: swatch and label on one line, the same visual language as the calendar states. */
+.stay-extension-legend {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-2);
+}
+
+.stay-extension-legend__item {
+  align-items: start;
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: 1.125rem minmax(0, 1fr);
+}
+
+.stay-extension-legend__swatch {
+  border: 1px solid transparent;
+  border-radius: 4px;
+  height: 1.125rem;
+  margin-top: 0.125rem;
+  width: 1.125rem;
+}
+
+.stay-extension-legend__text {
+  color: var(--color-text);
+  display: grid;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: 0.125rem;
+}
+
+/* Current check-out legend item: label on the left, date on the right, on one baseline. */
+.stay-extension-legend__text--row {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.stay-extension-legend__date {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.stay-extension-legend__hint {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.stay-extension-legend__item--current .stay-extension-legend__swatch {
+  background: #dbeafe;
+  border-color: var(--color-primary);
+}
+
+.stay-extension-legend__item--available .stay-extension-legend__swatch {
+  background: #e8f6ee;
+  border-color: #9fd8b5;
+}
+
+.stay-extension-legend__item--unavailable .stay-extension-legend__swatch {
+  background: #eef1f5;
+  border-color: #cdd5df;
+}
+
+/* Calendar day states. Current checkout is distinct from both the selected new date and the extension states. */
+.stay-extension-calendar .flatpickr-current-month {
+  font-size: 1rem;
+  font-weight: 700;
+  justify-content: center;
+}
+
+.stay-extension-calendar .flatpickr-monthDropdown-months {
+  appearance: none;
+  background: transparent;
+  font-weight: 700;
+}
+
+.stay-extension-calendar .flatpickr-day.stay-extension-day--current,
+.stay-extension-calendar .flatpickr-day.flatpickr-disabled.stay-extension-day--current {
+  background: #dbeafe;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.stay-extension-calendar .flatpickr-day.stay-extension-day--available {
+  background: #e8f6ee;
+  border-color: #cfeadb;
+  color: var(--color-text);
+}
+
+.stay-extension-calendar .flatpickr-day.stay-extension-day--unavailable,
+.stay-extension-calendar .flatpickr-day.flatpickr-disabled.stay-extension-day--unavailable {
+  background: #eef1f5;
+  color: #9aa6b5;
+  cursor: not-allowed;
+}
+
+/* The selected new date stays the strongest state, so it is always the primary-blue cell. */
+.stay-extension-calendar .flatpickr-day.selected,
+.stay-extension-calendar .flatpickr-day.selected:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Selected extension nights: soft amber from the day after the current checkout up to the selected date. Cells touch
+   and drop their rounded corners so the span reads as one period. The current checkout is never part of this state. */
+.stay-extension-calendar .flatpickr-day.stay-extension-day--extension {
+  background: #fdf0c4;
+  border-color: #fdf0c4;
+  border-radius: 0;
+  color: #7a5a00;
+}
+
+.stay-extension-legend__item--extension .stay-extension-legend__swatch {
+  background: #fdf0c4;
+  border-color: #e7b736;
+}
+
+/* The requested conflicting date keeps the selected blue; the availability block below explains why it cannot be confirmed. */
+.stay-extension-calendar .flatpickr-day.stay-extension-day--requested.stay-extension-day--unavailable {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .stay-extension-select-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Phone and tablet portrait: the cards return to natural stacked height, in document order. The zone classes are
+     named explicitly because their placement rules are more specific than a generic child selector. */
+  .stay-extension-grid > .stay-extension-zone--current,
+  .stay-extension-grid > .stay-extension-zone--rate,
+  .stay-extension-grid > .stay-extension-zone--select,
+  .stay-extension-grid > .stay-extension-zone--summary {
+    align-self: start;
+    grid-column: auto;
+    grid-row: auto;
+  }
+}
+
+/* Review: a two-column top band (reservation context and the stay before and after), then full-width Charges and
+   Folio Impact. Equal columns start at the same top edge and keep their own height. */
+.stay-extension-review {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.stay-extension-review-top {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.stay-extension-review-top > .card,
+.stay-extension-review > .card {
+  min-width: 0;
+}
+
+/* Folio: the projected outstanding is the strongest financial result in the card. */
+.stay-extension-table--folio .stay-extension-table__total th,
+.stay-extension-table--folio .stay-extension-table__total td {
+  font-size: 1.25rem;
+}
+
+@media (max-width: 900px) {
+  .stay-extension-review-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Phone: the stay comparison and the folio keep every value on screen by fixing the columns and letting labels wrap. */
+  .stay-extension-table--compare,
+  .stay-extension-table--folio {
+    table-layout: fixed;
+  }
+
+  .stay-extension-table--compare th,
+  .stay-extension-table--compare td,
+  .stay-extension-table--folio th,
+  .stay-extension-table--folio td {
+    padding-inline: var(--space-2);
+    white-space: normal;
+  }
+
+  .stay-extension-table--compare {
+    font-size: 0.8125rem;
+  }
+
+  .stay-extension-table--compare th:nth-child(1) {
+    width: 34%;
+  }
+
+  .stay-extension-table--compare th:nth-child(2),
+  .stay-extension-table--compare th:nth-child(4) {
+    width: 30%;
+  }
+
+  .stay-extension-table--compare th:nth-child(3) {
+    width: 6%;
+  }
+
+  .stay-extension-table--folio tfoot .stay-extension-table__total th,
+  .stay-extension-table--folio tfoot .stay-extension-table__total td {
+    font-size: 1rem;
+  }
+}
+
+/* Review: the right side of the top band stacks Updated Stay Information and the compact Extension Summary. Each card
+   keeps its natural height; the column is not stretched to match the Reservation card. */
+.stay-extension-review-side {
+  align-content: start;
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.stay-extension-summary {
+  gap: var(--space-2);
+}
+
+/* "+N nights" is the strongest element, the date range is secondary, and the charge uses the positive total style. */
+.stay-extension-summary__nights {
+  color: var(--color-navy);
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.stay-extension-summary__range {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.stay-extension-summary__range svg {
+  color: var(--color-primary);
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+
+.stay-extension-summary__amount {
+  align-items: baseline;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-1) 0 0;
+  padding-top: var(--space-2);
+}
+
+.stay-extension-summary__caption {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.stay-extension-summary__amount > span:last-child {
+  color: var(--color-success);
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+/* Folio amounts sit right-aligned in their value column. */
+.stay-extension-table--folio .stay-extension-num {
+  text-align: right;
+}
+

@@ -2,8 +2,9 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.dto.booking.request.StayExtensionRequest;
 import com.example.hotel.dto.booking.response.Response;
-import com.example.hotel.dto.booking.response.StayExtensionFormResponse;
+import com.example.hotel.dto.booking.response.StayExtensionPreviewResponse;
 import com.example.hotel.dto.booking.response.StayExtensionSummaryResponse;
+import com.example.hotel.dto.room.response.RoomImageFile;
 import com.example.hotel.entity.booking.Charge;
 import com.example.hotel.entity.booking.ChargeType;
 import com.example.hotel.entity.booking.Reservation;
@@ -31,6 +32,7 @@ import com.example.hotel.repository.room.RoomRepository;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.security.SessionUserPrincipal;
 import com.example.hotel.service.room.RoomAvailabilityService;
+import com.example.hotel.service.room.RoomImageService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -58,6 +60,9 @@ public class StayExtensionService {
 
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
+    /** Days after the current planned check-out covered by the calendar's availability states (about two months). */
+    private static final int AVAILABILITY_WINDOW_DAYS = 62;
+
     private final ReservationRepository reservations;
     private final StayRepository stays;
     private final StayRoomAssignmentRepository assignments;
@@ -69,6 +74,7 @@ public class StayExtensionService {
     private final ReservationMapper reservationMapper;
     private final RoomAvailabilityService roomAvailability;
     private final StayBalanceService stayBalanceService;
+    private final RoomImageService roomImages;
     private final Clock clock;
 
     /**
@@ -85,6 +91,7 @@ public class StayExtensionService {
      * @param reservationMapper response mapper
      * @param roomAvailability shared inventory primitive
      * @param stayBalanceService outstanding balance for the form (only when the caller may see it)
+     * @param roomImages primary room images for the read-only screens
      * @param clock authoritative hotel business clock
      */
     public StayExtensionService(
@@ -99,6 +106,7 @@ public class StayExtensionService {
             ReservationMapper reservationMapper,
             RoomAvailabilityService roomAvailability,
             StayBalanceService stayBalanceService,
+            RoomImageService roomImages,
             Clock clock) {
         this.reservations = reservations;
         this.stays = stays;
@@ -111,19 +119,24 @@ public class StayExtensionService {
         this.reservationMapper = reservationMapper;
         this.roomAvailability = roomAvailability;
         this.stayBalanceService = stayBalanceService;
+        this.roomImages = roomImages;
         this.clock = clock;
     }
 
     /**
-     * Builds the read-only context of the Extend Stay form. Nothing is locked or changed.
+     * Builds the read-only Select Extension model for one proposed new check-out date. Nothing is locked or changed.
+     * An invalid date or a room conflict is reported as a {@link StayExtensionPreviewResponse.State}, not thrown, so the
+     * screen can explain it; only an ineligible Reservation/Stay is thrown.
      *
      * @param reservationId Reservation identifier
-     * @param includeOutstanding whether the caller may see payment data (the outstanding balance is then included)
-     * @return the form context
+     * @param requestedCheckOutDate proposed new check-out date, or {@code null} when none has been selected
+     * @param includeOutstanding whether the caller may see payment data (folio impact is then included)
+     * @return the preview model
      * @throws StayExtensionException if the Reservation/Stay is not extendable
      */
     @Transactional(readOnly = true)
-    public StayExtensionFormResponse form(UUID reservationId, boolean includeOutstanding) {
+    public StayExtensionPreviewResponse preview(
+            UUID reservationId, LocalDate requestedCheckOutDate, boolean includeOutstanding) {
         Reservation reservation = load(reservationId);
         Stay stay = requireActiveStay(reservation, stays.findByReservationId(reservationId));
         List<StayRoomAssignment> open = assignments.findOpenByStayIdWithLineage(stay.getId());
@@ -131,25 +144,142 @@ public class StayExtensionService {
             throw new StayExtensionException(Reason.NO_CURRENT_ROOM, "Stay has no current room");
         }
         LocalDate today = LocalDate.now(clock);
-        LocalDate next = reservation.getCheckOutDate().plusDays(1);
+        LocalDate previous = reservation.getCheckOutDate();
+        LocalDate next = previous.plusDays(1);
         LocalDate earliest = next.isBefore(today) ? today : next;
+        LocalDate checkIn = reservation.getCheckInDate();
+        boolean valid = isValidNewCheckOut(previous, requestedCheckOutDate, today);
+        List<UUID> roomIds = open.stream().map(a -> a.getRoom().getId()).toList();
+        Set<UUID> conflicted = valid
+                ? roomAvailability.conflictedRoomIds(roomIds, previous, requestedCheckOutDate, stay.getId())
+                : Set.of();
+        Set<UUID> withImage = roomImages.roomIdsWithPrimaryImage(roomIds);
+        long additionalNights = valid ? ChronoUnit.DAYS.between(previous, requestedCheckOutDate) : 0;
+
+        BigDecimal extensionAmount = null;
+        List<StayExtensionPreviewResponse.Room> lines = new ArrayList<>();
+        for (StayRoomAssignment assignment : open) {
+            Room room = assignment.getRoom();
+            ReservationRoom lineage = assignment.getOriginalReservationRoom();
+            BigDecimal amount = valid ? lineage.getNightlyRate().multiply(BigDecimal.valueOf(additionalNights)) : null;
+            if (amount != null) {
+                extensionAmount = extensionAmount == null ? amount : extensionAmount.add(amount);
+            }
+            lines.add(new StayExtensionPreviewResponse.Room(
+                    room.getId(),
+                    room.getRoomNumber(),
+                    room.getRoomType() == null ? null : room.getRoomType().getName(),
+                    lineage.getNightlyRate(),
+                    amount,
+                    conflicted.contains(room.getId()),
+                    withImage.contains(room.getId())));
+        }
+
+        StayExtensionPreviewResponse.State state = requestedCheckOutDate == null
+                ? StayExtensionPreviewResponse.State.NOT_SELECTED
+                : !valid
+                        ? StayExtensionPreviewResponse.State.INVALID_DATE
+                        : conflicted.isEmpty()
+                                ? StayExtensionPreviewResponse.State.AVAILABLE
+                                : StayExtensionPreviewResponse.State.ROOM_CONFLICT;
+
+        // Accommodation totals reuse the extension summary so the figures match Reservation Detail exactly.
+        BigDecimal accommodation = summary(reservationId).currentAccommodationTotal();
+        BigDecimal added = extensionAmount == null ? BigDecimal.ZERO : extensionAmount;
+
+        StayExtensionPreviewResponse.Folio folio = null;
+        if (includeOutstanding) {
+            StayBalance balance = stayBalanceService.calculate(stay.getId());
+            folio = new StayExtensionPreviewResponse.Folio(
+                    balance.totalCharges(),
+                    balance.totalPaidPayments(),
+                    balance.outstanding(),
+                    DepartureReadinessRules.outstanding(balance.totalCharges().add(added), balance.totalPaidPayments()));
+        }
         Guest guest = reservation.getGuest();
-        List<StayExtensionFormResponse.Line> lines = open.stream()
-                .map(a -> new StayExtensionFormResponse.Line(
-                        a.getRoom().getRoomNumber(),
-                        a.getRoom().getRoomType() == null ? null : a.getRoom().getRoomType().getName(),
-                        a.getOriginalReservationRoom().getNightlyRate()))
-                .toList();
-        return new StayExtensionFormResponse(
+        LocalDate availabilityKnownUntil = previous.plusDays(AVAILABILITY_WINDOW_DAYS);
+        LocalDate firstUnavailable = firstUnavailableCheckOut(roomIds, previous, availabilityKnownUntil, stay.getId());
+        return new StayExtensionPreviewResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
                 (guest.getFirstName() + " " + guest.getLastName()).trim(),
                 guest.getGuestCode(),
+                reservation.getSource(),
+                reservation.getAdultCount(),
+                reservation.getChildCount(),
                 reservation.getCurrency(),
-                reservation.getCheckOutDate(),
+                checkIn,
+                previous,
                 earliest,
-                lines,
-                includeOutstanding ? stayBalanceService.calculate(stay.getId()).outstanding() : null);
+                requestedCheckOutDate,
+                state,
+                ChronoUnit.DAYS.between(checkIn, previous),
+                additionalNights,
+                ChronoUnit.DAYS.between(checkIn, valid ? requestedCheckOutDate : previous),
+                List.copyOf(lines),
+                extensionAmount,
+                accommodation,
+                accommodation.add(added),
+                folio,
+                firstUnavailable,
+                availabilityKnownUntil);
+    }
+
+    /**
+     * Validates a proposed extension for the Review step without locking or writing. It applies the same staleness,
+     * date and availability rules as {@link #extend}, so a rejected proposal is reported through the same reasons; the
+     * final Confirm still re-validates under lock and does not trust this result.
+     *
+     * @param reservationId Reservation identifier
+     * @param request expected current check-out and requested new check-out
+     * @param includeOutstanding whether the caller may see payment data
+     * @return the preview of an extension that may be confirmed
+     * @throws StayExtensionException if the Stay changed, the date is invalid, or any room conflicts
+     */
+    @Transactional(readOnly = true)
+    public StayExtensionPreviewResponse review(
+            UUID reservationId, StayExtensionRequest request, boolean includeOutstanding) {
+        StayExtensionPreviewResponse preview = preview(reservationId, request.newCheckOutDate(), includeOutstanding);
+        if (request.expectedCurrentCheckOutDate() == null
+                || !preview.currentCheckOutDate().equals(request.expectedCurrentCheckOutDate())) {
+            throw new StayExtensionException(Reason.STALE_CHECK_OUT_DATE, "Planned check-out changed; reload and retry");
+        }
+        if (preview.state() == StayExtensionPreviewResponse.State.AVAILABLE) {
+            return preview;
+        }
+        if (preview.state() == StayExtensionPreviewResponse.State.ROOM_CONFLICT) {
+            String numbers = preview.rooms().stream()
+                    .filter(StayExtensionPreviewResponse.Room::conflicted)
+                    .map(StayExtensionPreviewResponse.Room::roomNumber)
+                    .collect(Collectors.joining(", "));
+            throw new StayExtensionException(Reason.INVENTORY_CONFLICT, "Room is already booked for these dates", numbers);
+        }
+        throw new StayExtensionException(
+                Reason.INVALID_NEW_CHECK_OUT_DATE,
+                "New check-out must be after " + preview.currentCheckOutDate() + " and not before "
+                        + LocalDate.now(clock),
+                preview.currentCheckOutDate().format(DATE_FORMAT),
+                LocalDate.now(clock).format(DATE_FORMAT));
+    }
+
+    /**
+     * Returns the primary image of a current room of an active Stay, for the read-only extension screens only.
+     *
+     * @param reservationId Reservation identifier
+     * @param roomId a room currently assigned to the Stay
+     * @return the room's primary image
+     * @throws ResponseStatusException if the room is not a current room of the Stay or has no primary image
+     */
+    @Transactional(readOnly = true)
+    public RoomImageFile currentRoomImage(UUID reservationId, UUID roomId) {
+        Stay stay = requireActiveStay(load(reservationId), stays.findByReservationId(reservationId));
+        boolean current = assignments.findOpenByStayIdWithLineage(stay.getId()).stream()
+                .anyMatch(a -> a.getRoom().getId().equals(roomId));
+        if (!current) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Room image");
+        }
+        return roomImages.loadPrimaryImage(roomId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room image"));
     }
 
     /**
@@ -232,9 +362,8 @@ public class StayExtensionService {
         }
         LocalDate today = LocalDate.now(clock);
         LocalDate newDate = request.newCheckOutDate();
-        // Approved rule: strictly later than the current planned check-out AND not before hotel today. An overdue stay
-        // may therefore extend exactly to today; the period is always [previous, new).
-        if (newDate == null || !newDate.isAfter(previous) || newDate.isBefore(today)) {
+        // The period is always [previous, new); an overdue stay may therefore extend exactly to today.
+        if (!isValidNewCheckOut(previous, newDate, today)) {
             throw new StayExtensionException(
                     Reason.INVALID_NEW_CHECK_OUT_DATE,
                     "New check-out must be after " + previous + " and not before " + today,
@@ -309,6 +438,45 @@ public class StayExtensionService {
                 "checkOut=" + newDate + "; nights=" + nights + "; extensionId=" + extension.getId() + "; rooms=["
                         + detail + "]; total=" + total.toPlainString()));
         return reservationMapper.toResponse(reservation);
+    }
+
+    /**
+     * Finds the earliest checkout date in {@code (previous, windowEnd]} that the Stay's rooms cannot take. A later
+     * checkout only extends the interval {@code [previous, out)}, so conflict is monotone and a binary search suffices.
+     *
+     * @param roomIds current rooms of the Stay
+     * @param previous current planned check-out
+     * @param windowEnd last checkout date of the window
+     * @param stayId the Stay whose own allocation is ignored
+     * @return the first conflicting checkout date, or {@code null} when none conflicts within the window
+     */
+    private LocalDate firstUnavailableCheckOut(List<UUID> roomIds, LocalDate previous, LocalDate windowEnd, UUID stayId) {
+        if (roomAvailability.conflictedRoomIds(roomIds, previous, windowEnd, stayId).isEmpty()) {
+            return null;
+        }
+        LocalDate low = previous.plusDays(1);
+        LocalDate high = windowEnd;
+        while (low.isBefore(high)) {
+            LocalDate mid = low.plusDays(ChronoUnit.DAYS.between(low, high) / 2);
+            if (roomAvailability.conflictedRoomIds(roomIds, previous, mid, stayId).isEmpty()) {
+                low = mid.plusDays(1);
+            } else {
+                high = mid;
+            }
+        }
+        return low;
+    }
+
+    /**
+     * The approved date rule: strictly later than the current planned check-out AND not before hotel today.
+     *
+     * @param previous current planned check-out
+     * @param newDate requested planned check-out, possibly {@code null}
+     * @param today authoritative hotel date
+     * @return {@code true} when the requested date may be confirmed
+     */
+    private static boolean isValidNewCheckOut(LocalDate previous, LocalDate newDate, LocalDate today) {
+        return newDate != null && newDate.isAfter(previous) && !newDate.isBefore(today);
     }
 
     private StayExtensionSummaryResponse.Event toEvent(StayExtension event, List<StayExtensionSummaryResponse.Line> lines) {
