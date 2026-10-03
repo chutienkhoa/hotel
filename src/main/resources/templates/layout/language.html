@@ -19,23 +19,30 @@
      redesign). Reuses the exact same languageSwitchBase/languageSwitchPath URL mechanism, pms-lang
      cookie and ?lang= semantics as the plain VI | EN switcher fragment above -- only the presentation
      differs. The plain switcher above is left untouched: login.html (logged out, no header account
-     area) still renders it standalone. -->
+     area) still renders it standalone.
+     Active state comes from the request's resolved locale (#locale). Every row carries the same circular
+     indicator; the active one is filled and holds a check. The condition sits on a wrapping span, not on the
+     svg: th:replace replaces its host tag, which would otherwise drop the th:if and show a check on both rows. -->
 <div th:fragment="headerMenu">
     <a class="header-language-option" hreflang="vi" lang="vi" role="menuitem"
        th:aria-current="${#locale.language == 'vi'} ? 'true'"
        th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=vi'}">
         <span aria-hidden="true" class="header-language-option-flag">🇻🇳</span>
         <span class="header-language-option-label" th:text="#{common.language.vi.title}">Tiếng Việt</span>
-        <svg aria-hidden="true" class="header-language-option-check" th:if="${#locale.language == 'vi'}"
-             th:replace="~{layout/icons :: checkCircle}"></svg>
+        <span aria-hidden="true" class="header-language-option-indicator"
+              th:classappend="${#locale.language == 'vi'} ? 'is-active'">
+            <th:block th:if="${#locale.language == 'vi'}"><svg th:replace="~{layout/icons :: check}"></svg></th:block>
+        </span>
     </a>
     <a class="header-language-option" hreflang="en" lang="en" role="menuitem"
        th:aria-current="${#locale.language == 'en'} ? 'true'"
        th:href="${(languageSwitchPath != null ? languageSwitchPath + '?' : languageSwitchBase) + 'lang=en'}">
         <span aria-hidden="true" class="header-language-option-flag">🇬🇧</span>
         <span class="header-language-option-label" th:text="#{common.language.en.title}">English</span>
-        <svg aria-hidden="true" class="header-language-option-check" th:if="${#locale.language == 'en'}"
-             th:replace="~{layout/icons :: checkCircle}"></svg>
+        <span aria-hidden="true" class="header-language-option-indicator"
+              th:classappend="${#locale.language == 'en'} ? 'is-active'">
+            <th:block th:if="${#locale.language == 'en'}"><svg th:replace="~{layout/icons :: check}"></svg></th:block>
+        </span>
     </a>
 </div>
 </body>

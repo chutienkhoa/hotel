@@ -1,7 +1,61 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
 <body>
-<!-- Fragment-only template for the Front Desk workspace; rendered only through th:replace. -->
+<!-- Fragment-only template for the Front Desk workspace; rendered only through th:replace. The guest, rooms and
+     plannedDeparture fragments are shared with the Dashboard's arrival and departure tables and stay unchanged. -->
+
+<!-- Card header for one view: title and subtitle on the left, result count and pagination above the table on the right. -->
+<th:block th:fragment="resultsHeader(title, description, page, label)">
+    <div class="front-desk-results__header">
+        <div class="front-desk-results__heading">
+            <h2 th:text="${title}">Today's Arrivals</h2>
+            <p th:text="${description}">Confirmed reservations with arrival date today or earlier, not yet checked in.</p>
+        </div>
+        <div class="results-toolbar">
+            <p><span th:replace="~{layout/table :: resultSummary(${page})}">Showing 1&#8211;10 of 0</span></p>
+            <th:block th:replace="~{front-desk/fragments :: pager(${page}, ${label})}"></th:block>
+        </div>
+    </div>
+</th:block>
+
+<!-- Front Desk paginator. Unlike the shared layout/table pagination it is always rendered, so a single page keeps the
+     same shape: Previous and Next are disabled at the ends, and page numbers exist only for pages that exist. Links
+     keep view, search, sort and direction through tablePageBase. -->
+<nav th:fragment="pager(page, label)" class="pagination front-desk-pagination" th:aria-label="${label}">
+    <a class="pagination__segment pagination__segment--icon front-desk-pagination__prev" th:if="${!page.first}"
+       th:href="${tablePageBase + 'page=' + (page.number - 1)}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.previous}">Previous</span>
+    </a>
+    <span class="pagination__segment pagination__segment--icon pagination__segment--disabled front-desk-pagination__prev"
+          aria-disabled="true" th:if="${page.first}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.previous}">Previous</span>
+    </span>
+    <th:block th:if="${page.totalPages > 0}">
+        <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+            <span aria-current="page" class="pagination__segment pagination__segment--current"
+                  th:if="${pageNumber == page.number}" th:text="${pageNumber + 1}">1</span>
+            <a class="pagination__segment" th:unless="${pageNumber == page.number}"
+               th:href="${tablePageBase + 'page=' + pageNumber}" th:text="${pageNumber + 1}">2</a>
+        </th:block>
+        <span class="pagination__segment pagination__segment--ellipsis"
+              th:if="${paginationEndPage + 1 < page.totalPages - 1}">...</span>
+        <a class="pagination__segment" th:if="${paginationEndPage < page.totalPages - 1}"
+           th:href="${tablePageBase + 'page=' + (page.totalPages - 1)}" th:text="${page.totalPages}">2</a>
+    </th:block>
+    <a class="pagination__segment pagination__segment--icon front-desk-pagination__next" th:if="${!page.last}"
+       th:href="${tablePageBase + 'page=' + (page.number + 1)}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.next}">Next</span>
+    </a>
+    <span class="pagination__segment pagination__segment--icon pagination__segment--disabled front-desk-pagination__next"
+          aria-disabled="true" th:if="${page.last}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.next}">Next</span>
+    </span>
+</nav>
+
 <th:block th:fragment="guest(row)">
     <strong th:if="${row.guestName != null}" th:text="${row.guestName}">Nguyen Van An</strong>
     <span th:classappend="${row.guestName != null} ? 'front-desk-secondary'" th:text="${row.guestCode}">G-000123</span>
@@ -22,53 +76,82 @@
     <span class="status-badge" th:if="${!row.overdue and row.plannedCheckOutDate == hotelToday}" th:text="#{reservation.frontDesk.today}">Today</span>
 </th:block>
 
+<!-- Front Desk room cell: room number, then its room type on a second line. The blockers are shown in the Status cell. -->
+<th:block th:fragment="roomList(rooms)">
+    <div class="front-desk-room" th:each="room : ${rooms}">
+        <strong th:text="${room.roomNumber}">101</strong>
+        <span class="front-desk-secondary" th:text="${room.roomTypeName}">Single</span>
+    </div>
+</th:block>
+
+<!-- Front Desk planned checkout cell: the date, then the overdue days in red or a Today note. -->
+<th:block th:fragment="plannedCheckout(row, hotelToday)">
+    <span th:replace="~{layout/datetime :: date(${row.plannedCheckOutDate})}">—</span>
+    <span class="front-desk-overdue" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueDays(${row.overdueDays})}">Overdue 1 day</span>
+    <span class="front-desk-secondary" th:if="${!row.overdue and row.plannedCheckOutDate == hotelToday}" th:text="#{reservation.frontDesk.today}">Today</span>
+</th:block>
+
+<!-- Sortable column header shared by the Front Desk tables. The whole label and its icon form one link, and aria-sort
+     reports the active state. Sorting re-runs the query over the full filtered result before pagination. -->
+<th th:fragment="sortColumn(label, key)" scope="col" class="front-desk-sortable"
+    th:classappend="${tableSortKey == key} ? 'front-desk-sortable--active'"
+    th:attr="aria-sort=${tableSortKey == key ? (tableSortDir == 'asc' ? 'ascending' : 'descending') : 'none'}">
+    <a class="front-desk-sort" th:href="${tableSortBase + 'sort=' + key + '&amp;dir=' + (tableSortKey == key and tableSortDir == 'asc' ? 'desc' : 'asc')}"
+       th:attr="aria-label=#{reservation.frontDesk.sort.by(${label})}">
+        <span class="front-desk-sort__label" th:text="${label}">Column</span>
+        <span class="front-desk-sort__icon" aria-hidden="true">
+            <th:block th:if="${tableSortKey != key}"><svg th:replace="~{layout/icons :: sortNeutral}"></svg></th:block>
+            <th:block th:if="${tableSortKey == key and tableSortDir == 'asc'}"><svg th:replace="~{layout/icons :: sortAsc}"></svg></th:block>
+            <th:block th:if="${tableSortKey == key and tableSortDir == 'desc'}"><svg th:replace="~{layout/icons :: sortDesc}"></svg></th:block>
+        </span>
+    </a>
+</th>
+
 <th:block th:fragment="arrivalTable(rows)">
-    <div class="table-wrap" th:unless="${#lists.isEmpty(rows)}">
-        <table>
+    <div class="table-wrap front-desk-table-wrap">
+        <table class="front-desk-table front-desk-table--arrivals">
             <thead>
             <tr>
-                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
-                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
-                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.arrival}, 'checkInDate')}"></th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.arrival}, 'checkInDate')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'status')}"></th>
                 <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="row : ${rows}" th:classappend="${row.overdue} ? 'housekeeping-row-urgent'">
+            <tr th:each="row : ${rows}">
                 <td th:text="${row.reservationNumber}">R-1</td>
                 <td>
                     <th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block>
-                    <span class="front-desk-secondary" id="arrival-contact-phone" th:if="${row.contactPhone}"
-                          th:text="${row.contactPhone}">0900000000</span>
                 </td>
-                <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+                <td>
+                    <span th:replace="~{layout/datetime :: date(${row.checkInDate})}">—</span>
+                    <span class="front-desk-overdue" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueArrival}">Overdue Arrival</span>
+                    <span class="front-desk-secondary" th:unless="${row.overdue}" th:text="#{reservation.frontDesk.today}">Today</span>
+                </td>
+                <td><th:block th:replace="~{front-desk/fragments :: roomList(${row.rooms})}"></th:block></td>
                 <td>
                     <span th:text="${row.source.displayName}">Direct</span>
                     <span class="front-desk-secondary" th:if="${row.otaBookingReference}" th:text="${row.otaBookingReference}">BK-1</span>
                 </td>
                 <td>
-                    <span th:replace="~{layout/datetime :: date(${row.checkInDate})}">—</span>
-                    <span class="status-badge housekeeping-urgent" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueArrival}">Overdue Arrival</span>
-                    <span class="status-badge" th:unless="${row.overdue}" th:text="#{reservation.frontDesk.today}">Today</span>
+                    <span class="status-badge front-desk-status"
+                          th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'">
+                        <th:block th:if="${row.readiness.state.name() == 'READY'}"><svg th:replace="~{layout/icons :: checkCircle}"></svg></th:block>
+                        <th:block th:unless="${row.readiness.state.name() == 'READY'}"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></th:block>
+                        <span th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
+                    </span>
+                    <ul class="front-desk-reasons" th:if="${!row.readiness.blockers().isEmpty()}">
+                        <li th:each="issue : ${row.readiness.blockers()}"
+                            th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.messageArgument(0)},${issue.messageArgument(1)})}">Room 101 needs cleaning</li>
+                    </ul>
                 </td>
                 <td>
-                    <span class="status-badge"
-                          th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'"
-                          th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
-                    <div th:each="issue : ${row.readiness.blockers()}">
-                        <span th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.messageArgument(0)},${issue.messageArgument(1)})}">Room 101 needs cleaning</span>
-                    </div>
-                </td>
-                <td>
-                    <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                    <a class="button button-primary front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
                        th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkIn}">Review</a>
-                    <a class="button button-secondary" th:href="@{/housekeeping}"
-                       th:if="${row.housekeepingRelated and canManageHousekeeping}" th:text="#{reservation.frontDesk.action.housekeeping}">Housekeeping</a>
-                    <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
-                       th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
                 </td>
             </tr>
             </tbody>
@@ -77,46 +160,105 @@
 </th:block>
 
 <th:block th:fragment="departureTable(rows)">
-    <div class="table-wrap" th:unless="${#lists.isEmpty(rows)}">
-        <table>
+    <div class="table-wrap front-desk-table-wrap">
+        <table class="front-desk-table front-desk-table--departures">
             <thead>
             <tr>
-                <th scope="col" th:text="#{reservation.frontDesk.column.rooms}">Rooms</th>
-                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
-                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
-                <th th:replace="~{layout/table :: sortHeader(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.readiness}">Readiness</th>
-                <th scope="col" th:if="${canManagePayment}" th:text="#{reservation.frontDesk.column.balance}">Balance</th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'status')}"></th>
+                <th:block th:if="${canManagePayment}"><th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.balance}, 'outstanding')}"></th></th:block>
                 <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
             </tr>
             </thead>
             <tbody>
-            <tr th:each="row : ${rows}" th:classappend="${row.overdue} ? 'housekeeping-row-urgent'">
-                <td><th:block th:replace="~{front-desk/fragments :: rooms(${row.rooms})}"></th:block></td>
+            <tr th:each="row : ${rows}">
+                <td><th:block th:replace="~{front-desk/fragments :: roomList(${row.rooms})}"></th:block></td>
                 <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
                 <td th:text="${row.reservationNumber}">R-1</td>
-                <td><th:block th:replace="~{front-desk/fragments :: plannedDeparture(${row})}"></th:block></td>
+                <td><th:block th:replace="~{front-desk/fragments :: plannedCheckout(${row}, ${hotelToday})}"></th:block></td>
+                <td th:text="${row.nights}">4</td>
+                <td th:text="${row.source.displayName}">Direct</td>
                 <td>
-                    <span class="status-badge"
-                          th:classappend="${row.paymentRequired} ? 'status-badge--out_of_order' : 'status-badge--available'"
-                          th:text="${row.paymentRequired} ? #{reservation.frontDesk.paymentRequired} : #{reservation.frontDesk.readyForCheckout}">Ready</span>
+                    <div class="front-desk-stack">
+                        <span class="status-badge front-desk-status status-badge--out_of_order" th:if="${row.overdue}">
+                            <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                            <span th:text="#{reservation.frontDesk.overdueDeparture}">Overdue Departure</span>
+                        </span>
+                        <span class="status-badge front-desk-status status-badge--out_of_order" th:if="${row.paymentRequired}">
+                            <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                            <span th:text="#{reservation.frontDesk.paymentRequired}">Payment Required</span>
+                        </span>
+                        <span class="status-badge front-desk-status status-badge--available" th:unless="${row.overdue or row.paymentRequired}">
+                            <svg th:replace="~{layout/icons :: checkCircle}"></svg>
+                            <span th:text="#{reservation.frontDesk.readyForCheckout}">Ready for Checkout</span>
+                        </span>
+                    </div>
                 </td>
                 <td th:if="${canManagePayment}">
                     <span th:replace="~{layout/money :: amount(${row.outstanding}, ${row.currency})}">0 VND</span>
+                    <span class="front-desk-balance--outstanding" th:if="${row.paymentRequired}" th:text="#{reservation.frontDesk.balance.outstanding}">Outstanding</span>
+                    <span class="front-desk-balance--settled" th:unless="${row.paymentRequired}" th:text="#{reservation.frontDesk.balance.settled}">Settled</span>
                 </td>
                 <td>
-                    <a class="button button-primary" th:href="@{/check-out/{id}(id=${row.reservationId})}"
+                    <a class="button button-primary front-desk-action" th:href="@{/check-out/{id}(id=${row.reservationId})}"
                        th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkOut}">Review</a>
-                    <a class="button button-secondary" th:href="@{/reservations/{id}/folio(id=${row.reservationId})}"
-                       th:if="${canManagePayment}" th:text="#{reservation.frontDesk.action.folio}">Folio</a>
-                    <a class="button button-secondary" th:href="@{/reservations/{id}(id=${row.reservationId})}"
-                       th:if="${canViewBooking}" th:text="#{reservation.frontDesk.action.openReservation}">Open</a>
-                    <a class="button button-secondary" th:href="@{/reservations/{id}/stay-extension(id=${row.reservationId})}"
-                       th:if="${canExtendStay}" th:text="#{reservation.stayExtension.action}">Extend Stay</a>
                 </td>
             </tr>
             </tbody>
         </table>
+    </div>
+</th:block>
+
+<th:block th:fragment="inHouseTable(rows)">
+    <div class="table-wrap front-desk-table-wrap">
+        <table class="front-desk-table front-desk-table--in-house">
+            <thead>
+            <tr>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.checkedIn}, 'checkedIn')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
+                <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${rows}">
+                <td><th:block th:replace="~{front-desk/fragments :: roomList(${row.rooms})}"></th:block></td>
+                <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                <td th:text="${row.reservationNumber}">R-1</td>
+                <td><span th:replace="~{layout/datetime :: dateTime(${row.actualCheckInAt})}">—</span></td>
+                <td><th:block th:replace="~{front-desk/fragments :: plannedCheckout(${row}, ${hotelToday})}"></th:block></td>
+                <td th:text="${row.nights}">4</td>
+                <td th:text="${row.source.displayName}">Direct</td>
+                <td>
+                    <a class="button button-primary front-desk-action" th:if="${canViewBooking}"
+                       th:href="@{/reservations/{id}(id=${row.reservationId})}" th:text="#{common.action.view}">View</a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</th:block>
+<!-- Booking Source filter shared by the Front Desk views: options are the real BookingSource values. -->
+<th:block th:fragment="sourceFilter(sources, selected)">
+    <div class="front-desk-filter">
+        <label for="frontDeskSource" th:text="#{reservation.frontDesk.filter.source}">Source</label>
+        <div class="front-desk-control">
+            <select id="frontDeskSource" name="source">
+                <option value="" th:selected="${selected == null}" th:text="#{reservation.frontDesk.filter.allSources}">All sources</option>
+                <option th:each="bookingSource : ${sources}" th:value="${bookingSource.name()}"
+                        th:selected="${selected == bookingSource.name()}" th:text="${bookingSource.displayName}">Direct</option>
+            </select>
+            <span class="front-desk-control__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+        </div>
     </div>
 </th:block>
 </body>

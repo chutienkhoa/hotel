@@ -61,7 +61,10 @@ public final class TableSorts {
             Map.of(
                     "reservationNumber", "reservationNumber",
                     "guestName", "guestName",
-                    "checkInDate", "checkInDate"),
+                    "checkInDate", "checkInDate",
+                    "room", "room",
+                    "source", "source",
+                    "status", "status"),
             Sort.by(Sort.Order.asc("checkInDate"), Sort.Order.asc("reservationNumber")),
             List.of(Sort.Order.asc("reservationNumber")));
 
@@ -70,7 +73,12 @@ public final class TableSorts {
             Map.of(
                     "reservationNumber", "reservationNumber",
                     "guestName", "guestName",
-                    "plannedCheckOutDate", "plannedCheckOutDate"),
+                    "plannedCheckOutDate", "plannedCheckOutDate",
+                    "room", "room",
+                    "nights", "nights",
+                    "source", "source",
+                    "status", "status",
+                    "outstanding", "outstanding"),
             Sort.by(Sort.Order.asc("plannedCheckOutDate"), Sort.Order.asc("reservationNumber")),
             List.of(Sort.Order.asc("reservationNumber")));
 
@@ -80,7 +88,10 @@ public final class TableSorts {
                     "reservationNumber", "reservationNumber",
                     "guestName", "guestName",
                     "room", "room",
-                    "plannedCheckOutDate", "plannedCheckOutDate"),
+                    "plannedCheckOutDate", "plannedCheckOutDate",
+                    "checkedIn", "actualCheckInAt",
+                    "nights", "nights",
+                    "source", "source"),
             Sort.by(Sort.Order.asc("room"), Sort.Order.asc("reservationNumber")),
             List.of(Sort.Order.asc("reservationNumber")));
 

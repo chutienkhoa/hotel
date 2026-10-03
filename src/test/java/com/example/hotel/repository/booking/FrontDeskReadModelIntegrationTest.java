@@ -8,14 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.example.hotel.dto.booking.request.FrontDeskSearchCriteria;
 import com.example.hotel.dto.booking.request.PaymentCreateRequest;
 import com.example.hotel.dto.booking.request.ReservationDateChangeRequest;
+import com.example.hotel.dto.booking.request.StayExtensionRequest;
 import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
 import com.example.hotel.dto.booking.response.FrontDeskStayRow;
+import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.PaymentCurrency;
 import com.example.hotel.entity.booking.PaymentMethod;
 import com.example.hotel.security.CurrentUser;
 import com.example.hotel.service.booking.FrontDeskQueryService;
 import com.example.hotel.service.booking.PaymentService;
 import com.example.hotel.service.booking.ReservationService;
+import com.example.hotel.service.booking.StayExtensionService;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -43,6 +46,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class FrontDeskReadModelIntegrationTest {
 
     private static final UUID SINGLE_ROOM_TYPE_ID = UUID.fromString("00000000-0000-0000-0000-000000000201");
+    private static final UUID DOUBLE_ROOM_TYPE_ID = UUID.fromString("00000000-0000-0000-0000-000000000202");
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -55,6 +59,9 @@ class FrontDeskReadModelIntegrationTest {
 
     @Autowired
     private PaymentService paymentService;
+
+    @Autowired
+    private StayExtensionService stayExtension;
 
     @Autowired
     private Clock clock;
@@ -207,6 +214,18 @@ class FrontDeskReadModelIntegrationTest {
         assertEquals(List.of("FD-NEW"), row.rooms().stream().map(room -> room.roomNumber()).toList());
     }
 
+    /** Confirms a Stay row carries the Reservation's booking source and its full stay length, not the elapsed nights. */
+    @Test
+    void shouldExposeBookingSourceAndFullStayLengthOnStayRows() {
+        UUID reservation = add("R-NIGHTS", "CONFIRMED", today.minusDays(1), today.plusDays(2), "FN-1");
+        reservationService.checkIn(reservation);
+
+        FrontDeskStayRow row = frontDesk.inHouse().get(0);
+
+        assertEquals(BookingSource.DIRECT, row.source());
+        assertEquals(3L, row.nights());
+    }
+
     /**
      * Confirms the Batch 3A paged Arrivals method ({@link FrontDeskQueryService#arrivals(FrontDeskSearchCriteria, int)})
      * selects exactly the same business population, in the same order, as the original {@link FrontDeskQueryService#arrivals()}
@@ -236,6 +255,90 @@ class FrontDeskReadModelIntegrationTest {
                 .map(FrontDeskArrivalRow::reservationNumber).toList();
 
         assertEquals(List.of("R-ALPHA"), filtered);
+    }
+
+    /** Confirms In-house shows the NEW planned checkout after a Stay Extension, never the original one. */
+    @Test
+    void shouldShowExtendedPlannedCheckoutForInHouseStay() {
+        UUID reservation = add("R-EXTENDED", "CONFIRMED", today, today.plusDays(2), "FX-EXT");
+        reservationService.checkIn(reservation);
+
+        stayExtension.extend(reservation, new StayExtensionRequest(today.plusDays(2), today.plusDays(4)));
+
+        FrontDeskStayRow row = frontDesk.inHouse().get(0);
+        assertEquals(today.plusDays(4), row.plannedCheckOutDate());
+        assertEquals(4L, row.nights());
+        assertFalse(row.overdue());
+    }
+
+    /** Confirms a checked-in stay whose planned checkout is before the hotel date is flagged overdue, with its days. */
+    @Test
+    void shouldFlagCheckedInStayOverdueWhenPlannedCheckoutIsBeforeToday() {
+        UUID reservation = add("R-LATE-STAY", "CONFIRMED", today.minusDays(3), today.minusDays(1), "FO-LATE");
+        reservationService.checkIn(reservation);
+
+        FrontDeskStayRow row = frontDesk.inHouse().get(0);
+        assertTrue(row.overdue());
+        assertEquals(1L, row.overdueDays());
+    }
+
+    /**
+     * Confirms the In-house Room Type filter follows the room the guest occupies after a Room Change: the booked
+     * Single room no longer matches, the open Double assignment does.
+     */
+    @Test
+    void shouldFilterInHouseRoomTypeByCurrentRoomAfterRoomChange() {
+        UUID reservation = add("R-TYPE-MOVED", "CONFIRMED", today, today.plusDays(2), "FT-OLD");
+        reservationService.checkIn(reservation);
+        UUID newRoom = roomOfType("FT-NEW", DOUBLE_ROOM_TYPE_ID);
+        UUID stay = jdbc.queryForObject("SELECT id FROM stay WHERE reservation_id = ?", UUID.class, reservation);
+        UUID lineId = jdbc.queryForObject("SELECT id FROM reservation_room WHERE reservation_id = ?", UUID.class, reservation);
+        jdbc.update("UPDATE stay_room_assignment SET assigned_to = now() WHERE stay_id = ?", stay);
+        jdbc.update("INSERT INTO stay_room_assignment (id, stay_id, room_id, original_reservation_room_id, assigned_from, "
+                + "assigned_to, created_at, created_by, updated_at, updated_by) VALUES (?, ?, ?, ?, now(), NULL, now(), ?, now(), ?)",
+                UUID.randomUUID(), stay, newRoom, lineId, user, user);
+
+        assertEquals(List.of("R-TYPE-MOVED"), inHouseByRoomType(DOUBLE_ROOM_TYPE_ID));
+        assertEquals(List.of(), inHouseByRoomType(SINGLE_ROOM_TYPE_ID));
+    }
+
+    /**
+     * Confirms a Departures checkout-date filter uses the planned checkout after a Stay Extension: a stay that was
+     * overdue and is extended to today leaves OVERDUE and joins TODAY.
+     */
+    @Test
+    void shouldFilterDeparturesByExtendedCheckoutDate() {
+        UUID reservation = add("R-EXT-DEP", "CONFIRMED", today.minusDays(2), today.minusDays(1), "FE-DEP");
+        reservationService.checkIn(reservation);
+        FrontDeskSearchCriteria overdue = new FrontDeskSearchCriteria();
+        overdue.setCheckoutDate("OVERDUE");
+        FrontDeskSearchCriteria dueToday = new FrontDeskSearchCriteria();
+        dueToday.setCheckoutDate("TODAY");
+        assertEquals(List.of("R-EXT-DEP"), departuresFiltered(overdue));
+
+        stayExtension.extend(reservation, new StayExtensionRequest(today.minusDays(1), today));
+
+        assertEquals(List.of(), departuresFiltered(overdue));
+        assertEquals(List.of("R-EXT-DEP"), departuresFiltered(dueToday));
+        assertEquals(today, frontDesk.inHouse().get(0).plannedCheckOutDate());
+    }
+
+    private List<String> inHouseByRoomType(UUID roomType) {
+        FrontDeskSearchCriteria criteria = new FrontDeskSearchCriteria();
+        criteria.setRoomType(roomType.toString());
+        return frontDesk.inHouse(criteria, 0).getContent().stream().map(FrontDeskStayRow::reservationNumber).toList();
+    }
+
+    private List<String> departuresFiltered(FrontDeskSearchCriteria criteria) {
+        return frontDesk.departures(true, criteria, 0).getContent().stream()
+                .map(FrontDeskStayRow::reservationNumber).toList();
+    }
+
+    private UUID roomOfType(String number, UUID roomType) {
+        jdbc.update("INSERT INTO room (id, room_number, room_type_id, status, active, created_at, created_by, updated_at, updated_by) "
+                + "VALUES (?, ?, ?, 'OCCUPIED', TRUE, now(), ?, now(), ?) ON CONFLICT (room_number) DO UPDATE SET room_type_id = EXCLUDED.room_type_id",
+                UUID.randomUUID(), number, roomType, user, user);
+        return jdbc.queryForObject("SELECT id FROM room WHERE room_number = ?", UUID.class, number);
     }
 
     private UUID add(String number, String status, LocalDate in, LocalDate out, String roomNumber) {

@@ -154,6 +154,95 @@ class AppShellTest {
     }
 
     /**
+     * Confirms the active language is taken from the request's resolved locale: with Vietnamese current, only the
+     * Vietnamese row is marked active (filled indicator and aria-current), and the English row is not.
+     */
+    @Test
+    void shouldMarkVietnameseAsTheActiveHeaderLanguage() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        String body = mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority()))
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String vi = languageOption(body, "vi");
+        String en = languageOption(body, "en");
+        org.junit.jupiter.api.Assertions.assertTrue(vi.contains("header-language-option-indicator is-active"), vi);
+        org.junit.jupiter.api.Assertions.assertTrue(vi.contains("aria-current=\"true\""), vi);
+        org.junit.jupiter.api.Assertions.assertFalse(en.contains("is-active"), en);
+        org.junit.jupiter.api.Assertions.assertFalse(en.contains("aria-current"), en);
+    }
+
+    /** Confirms that switching the request locale to English moves the active marker to the English row. */
+    @Test
+    void shouldMarkEnglishAsTheActiveHeaderLanguage() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        String body = mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority()))
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "en")))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String vi = languageOption(body, "vi");
+        String en = languageOption(body, "en");
+        org.junit.jupiter.api.Assertions.assertTrue(en.contains("header-language-option-indicator is-active"), en);
+        org.junit.jupiter.api.Assertions.assertTrue(en.contains("aria-current=\"true\""), en);
+        org.junit.jupiter.api.Assertions.assertFalse(vi.contains("is-active"), vi);
+        org.junit.jupiter.api.Assertions.assertFalse(vi.contains("aria-current"), vi);
+    }
+
+    /**
+     * Confirms the header clock is an empty, hidden slot filled by the browser script: no server-rendered time, no
+     * live region, and it sits immediately before the language control.
+     */
+    @Test
+    void shouldRenderClientClockSlotWithoutServerTime() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        String body = mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("class=\"header-clock\" id=\"header-clock\" hidden")))
+                .andExpect(content().string(containsString("<time id=\"header-clock-time\"></time>")))
+                .andExpect(content().string(containsString("/js/common/client-clock.js")))
+                .andExpect(content().string(not(containsString("aria-live"))))
+                .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertTrue(
+                body.indexOf("id=\"header-clock\"") < body.indexOf("id=\"header-language-trigger\""),
+                "the clock must sit immediately left of the language control");
+    }
+
+    /** Confirms the header has exactly one language control, so the flag popover is the only switcher in the shell. */
+    @Test
+    void shouldRenderExactlyOneHeaderLanguageControl() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        String body = mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String header = body.substring(body.indexOf("<header"), body.indexOf("</header>"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, countOccurrences(header, "id=\"header-language-trigger\""));
+        org.junit.jupiter.api.Assertions.assertEquals(1, countOccurrences(header, "id=\"header-language-menu\""));
+        org.junit.jupiter.api.Assertions.assertFalse(header.contains("language-switch"));
+    }
+
+    /** Returns one language row of the header popover, from its menuitem link to the closing tag. */
+    private static String languageOption(String body, String lang) {
+        int start = body.indexOf("hreflang=\"" + lang + "\" lang=\"" + lang + "\" role=\"menuitem\"");
+        return body.substring(start, body.indexOf("</a>", start));
+    }
+
+    private static int countOccurrences(String body, String token) {
+        int count = 0;
+        for (int index = body.indexOf(token); index >= 0; index = body.indexOf(token, index + token.length())) {
+            count++;
+        }
+        return count;
+    }
+
+    /**
      * Confirms the transitional Check-in/Check-out links Batch 1A left unchanged still render, and that
      * Batch 1B's final HOTEL nesting is in place: "Rooms" is a non-link group label (no {@code
      * sidebar-nav-link} class, per spec sec. 7.1a) with Room List/Housekeeping as its linked children.

@@ -1,0 +1,426 @@
+/* Task33 Batch 3A-R: Front Desk (Arrivals, In-house, Departures), reconciled to the approved evidence in
+   docs/specs/evidence/task33/front-desk/front-desk-{arrivals,in-house,departures}-final.png. Every rule is scoped
+   under .front-desk (the page's main element) so the shared shell, Reservation Detail and Change Room are untouched. */
+
+.front-desk {
+  min-width: 0;
+}
+/* Task33 spacing: about 1.5rem between the major Front Desk sections. */
+.front-desk > * + * {
+  margin-top: var(--space-5);
+}
+
+/* View tabs: underline navigation with a coloured icon chip, matching the approved mockup. */
+.front-desk-tabs {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-6);
+  overflow-x: auto;
+}
+.front-desk-tab {
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  color: var(--color-muted);
+  display: inline-flex;
+  flex: none;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  gap: var(--space-2);
+  margin-bottom: -1px;
+  padding: var(--space-2) 0 var(--space-3);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.front-desk-tab:hover {
+  color: var(--color-navy);
+}
+.front-desk-tab[aria-current="page"] {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.front-desk-tab__icon {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: none;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+.front-desk-tab__icon svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.front-desk-tab--arrivals .front-desk-tab__icon {
+  background: var(--color-info-surface);
+  color: var(--color-primary);
+}
+.front-desk-tab--in-house .front-desk-tab__icon {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.front-desk-tab--departures .front-desk-tab__icon {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+
+/* Page-level Check-in Guest CTA in the header's upper-right corner (approved mockup). */
+.front-desk .page-header .front-desk-header-action {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Filter bar (approved Arrivals mockup): one bordered row of Search, Arrival date, Readiness, Source and Clear. Search is
+   the widest field and Clear sits at the far right. Other views keep the same bar with Search and Clear only. */
+.front-desk-search {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-3) var(--space-4);
+}
+.front-desk-search__form {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+/* Arrivals proportions from the approved mockup: Search is the widest field (about 30% of the bar), then Arrival date,
+   Readiness and Source at roughly 17%, 16% and 17%. */
+.front-desk-search__form--arrivals {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 0.95fr) minmax(0, 1fr) auto;
+}
+/* In-house: Search, Room Type and Source in one row, Clear at the far right. */
+.front-desk-search__form--in-house {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+/* Departures: Search, Checkout date, Status and Source in one row, Clear at the far right. */
+.front-desk-search__form--departures {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr) auto;
+}
+/* Hidden submit button: keeps Enter in the search field working. It must draw nothing, not even default button padding. */
+.front-desk-search__form > .visually-hidden {
+  border: 0;
+  padding: 0;
+}
+.front-desk-filter {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.front-desk-filter > label {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.front-desk-control {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+.front-desk-control > input,
+.front-desk-control > select {
+  height: var(--control-height);
+  min-height: var(--control-height);
+  width: 100%;
+}
+.front-desk-control > select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 2.25rem;
+  text-overflow: ellipsis;
+}
+/* Leading icon (search, calendar) and trailing select chevron: absolutely placed, vertically centred on the control. */
+.front-desk-control__lead,
+.front-desk-control__chevron {
+  align-items: center;
+  bottom: 0;
+  color: var(--color-muted);
+  display: flex;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+}
+.front-desk-control__lead {
+  left: var(--space-3);
+}
+.front-desk-control__chevron {
+  right: var(--space-3);
+}
+.front-desk-control__lead svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.front-desk-control__chevron svg {
+  height: 1rem;
+  width: 1rem;
+}
+.front-desk-control > input[type="search"],
+.front-desk-control > select.front-desk-select--dated {
+  padding-left: calc(var(--space-3) + var(--icon-size-action) + var(--space-2));
+}
+.front-desk-search__clear {
+  align-self: end;
+  justify-self: end;
+  white-space: nowrap;
+}
+/* Results card: heading on the left, result count and pagination above the table on the right. */
+.front-desk-results {
+  min-width: 0;
+}
+.front-desk-results__header {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  justify-content: space-between;
+}
+.front-desk-results__heading h2 {
+  font-size: 1.25rem;
+  line-height: 1.25;
+  margin: 0 0 var(--space-1);
+}
+.front-desk-results__heading p {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+/* Result count stacked above the pager, both right-aligned, so the pair stays compact in the card's top-right corner. */
+.front-desk-results .results-toolbar {
+  align-items: flex-end;
+  flex: none;
+  flex-direction: column;
+  gap: var(--space-2);
+  justify-content: flex-start;
+  margin-left: auto;
+}
+.front-desk-results .results-toolbar > p {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+/* Pager: separate square controls with a small gap. Icon-only Previous/Next, the active page filled, and the
+   unavailable direction muted with no hover feedback. Scoped under .front-desk-pagination to beat the shared
+   joined-segment rules in layout.css. */
+.front-desk .front-desk-pagination {
+  gap: var(--space-1);
+}
+.front-desk .front-desk-pagination .pagination__segment {
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+}
+.front-desk .front-desk-pagination .pagination__segment + .pagination__segment {
+  border-left: 1px solid var(--color-border-strong);
+}
+.front-desk .front-desk-pagination .pagination__segment--icon {
+  padding: 0;
+  width: var(--control-height);
+}
+.front-desk-pagination svg {
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+.front-desk-pagination__prev svg {
+  transform: scaleX(-1);
+}
+.front-desk .front-desk-pagination .pagination__segment--disabled {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+.front-desk .front-desk-pagination .pagination__segment--disabled:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+}
+
+/* Table: one-line cells; the table scrolls horizontally inside its .table-wrap rather than wrapping. */
+.front-desk-table-wrap {
+  margin-top: var(--space-4);
+}
+.front-desk-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 0;
+}
+.front-desk-table th,
+.front-desk-table td {
+  padding: var(--space-3);
+  white-space: nowrap;
+}
+/* Headers may break onto two lines, and only when the table is narrower than its content (auto layout expands
+   columns to fit when there is room), so a long header never forces the table wider than it needs to be. */
+.front-desk-table thead th {
+  white-space: normal;
+}
+/* Sortable headers: the label and its sort icon are one link. Icon and text are vertically centred with the same gap in
+   every table; the active column is marked by colour only, so the header height never changes. */
+.front-desk-sort {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  gap: var(--space-2);
+  text-decoration: none;
+  white-space: normal;
+}
+.front-desk-sort:hover .front-desk-sort__label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.front-desk-sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.front-desk-sort__label {
+  line-height: 1.25;
+}
+.front-desk-sort__icon {
+  align-items: center;
+  color: var(--color-muted);
+  display: inline-flex;
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+.front-desk-sort__icon svg {
+  height: 1rem;
+  width: 1rem;
+}
+.front-desk-sortable--active .front-desk-sort__label {
+  color: var(--color-navy);
+}
+.front-desk-sortable--active .front-desk-sort__icon {
+  color: var(--color-primary);
+}
+.front-desk-table .front-desk-action {
+  white-space: nowrap;
+}
+/* The Action column is always the last column. When the table is wider than its scroll container, it stays pinned
+   to the right edge so the row's one primary action is reachable at any width. It only moves when the table
+   overflows; when the table fits, it sits in its normal position. It draws no separator of its own: the column
+   reads as part of the same table. */
+.front-desk-table th:last-child,
+.front-desk-table td:last-child {
+  background: var(--color-surface);
+  position: sticky;
+  right: 0;
+  z-index: 1;
+}
+.front-desk-table thead th:last-child {
+  background: var(--color-surface-muted);
+  z-index: 2;
+}
+.front-desk-table .button svg,
+.front-desk-table .status-badge svg {
+  flex: none;
+}
+
+/* Room cell: the room number, then its type (.front-desk-secondary) on the next line. */
+.front-desk-room + .front-desk-room {
+  margin-top: var(--space-2);
+}
+.front-desk-overdue {
+  color: var(--color-danger);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* Status: one readiness pill, plus the blockers that keep a row from being ready. Pills stack in the Departures cell. */
+.front-desk .front-desk-status {
+  gap: 0.375rem;
+  height: auto;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.5rem;
+}
+.front-desk .front-desk-status svg {
+  height: 1rem;
+  width: 1rem;
+}
+.front-desk-stack {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.front-desk-reasons {
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  list-style: none;
+  margin: var(--space-1) 0 0;
+  max-width: 22rem;
+  padding: 0;
+  white-space: normal;
+}
+
+/* Outstanding (Departures only, PERM_MANAGE_PAYMENT): the amount above, a status label below. */
+.front-desk-balance--outstanding,
+.front-desk-balance--settled {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+.front-desk-balance--outstanding {
+  color: var(--color-danger);
+}
+.front-desk-balance--settled {
+  color: var(--color-success);
+}
+
+/* Task33 icon rule for this page: slightly stronger strokes than the shared 1.8 so the small icons read clearly. */
+.front-desk svg {
+  stroke-width: 2.2;
+}
+
+@media (max-width: 64rem) {
+  .front-desk-results .results-toolbar {
+    margin-left: 0;
+  }
+  /* Tablet: Search takes a full row, the three selects share the next row, and Clear sits under them at the right. */
+  .front-desk-search__form--arrivals,
+  .front-desk-search__form--in-house {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .front-desk-search__form--departures {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .front-desk-filter--search {
+    grid-column: 1 / -1;
+  }
+  .front-desk-search__clear {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 40rem) {
+  .front-desk-results .results-toolbar {
+    align-items: flex-start;
+  }
+  .front-desk-tabs {
+    gap: var(--space-4);
+  }
+  .front-desk-tab__icon {
+    display: none;
+  }
+  /* Mobile: every control stacks at full width in the order Search, Arrival date, Readiness, Source, Clear. */
+  .front-desk-search__form,
+  .front-desk-search__form--arrivals,
+  .front-desk-search__form--in-house,
+  .front-desk-search__form--departures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .front-desk-search__clear {
+    justify-self: stretch;
+    text-align: center;
+  }
+}

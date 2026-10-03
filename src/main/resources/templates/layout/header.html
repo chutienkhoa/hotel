@@ -27,6 +27,15 @@
     </div>
 
     <div class="site-header-end" th:if="${currentUsername != null}">
+        <!-- Task33 header clock: the browser's local time, filled in by static/js/common/client-clock.js. Rendered
+             empty and hidden so the server never supplies a time; it stays hidden if JavaScript does not run.
+             The label is visually hidden text, not a live region, so the minute ticks are not announced. -->
+        <div class="header-clock" id="header-clock" hidden>
+            <span aria-hidden="true" class="header-clock-icon"><svg th:replace="~{layout/icons :: clock}"></svg></span>
+            <span class="visually-hidden" th:text="#{common.clock.label}">Current time</span>
+            <time id="header-clock-time"></time>
+        </div>
+
         <!-- Global Task33 header redesign: the language control now sits immediately left of the
              account avatar, as its own compact flag trigger + popover, instead of living inside the
              Admin dropdown. Same visibility/toggle pattern as .header-account (hidden-attribute driven,
@@ -50,7 +59,9 @@
                 <span aria-hidden="true" class="header-account-initial"
                       th:text="${#strings.toUpperCase(#strings.substring(currentUsername, 0, 1))}">A</span>
                 <span class="header-account-name" th:text="${currentUsername}">admin</span>
-                <svg aria-hidden="true" class="header-account-chevron" th:replace="~{layout/icons :: chevronDown}"></svg>
+                <!-- Wrapped in a span: th:replace would drop a class placed on the svg itself, so the chevron's
+                     size, colour and open-state rotation would never apply. -->
+                <span aria-hidden="true" class="header-account-chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
             </button>
             <div aria-labelledby="header-account-trigger" class="header-account-menu" hidden
                  id="header-account-menu" role="menu">

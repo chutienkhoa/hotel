@@ -232,10 +232,12 @@ class DashboardPageControllerTest {
                 LocalDate.of(2026, 9, 16), false, false, readiness, List.of(room), false, "0900000000");
         FrontDeskStayRow stayRow = new FrontDeskStayRow(
                 RESERVATION_ID, "RSV-0003", "James Brown", "G-0003", List.of(room),
-                Instant.parse("2026-09-14T07:00:00Z"), LocalDate.of(2026, 9, 18), false, 0L, false, false, null, "VND");
+                Instant.parse("2026-09-14T07:00:00Z"), LocalDate.of(2026, 9, 18), false, 0L, false, false, null, "VND",
+                BookingSource.DIRECT, 4L);
         FrontDeskStayRow departureRow = new FrontDeskStayRow(
                 RESERVATION_ID, "RSV-0004", "William Clark", "G-0004", List.of(room),
-                Instant.parse("2026-09-13T07:00:00Z"), LocalDate.of(2026, 9, 16), false, 0L, false, false, null, "VND");
+                Instant.parse("2026-09-13T07:00:00Z"), LocalDate.of(2026, 9, 16), false, 0L, false, false, null, "VND",
+                BookingSource.DIRECT, 3L);
         ReservationSummaryResponse recent = new ReservationSummaryResponse(
                 RESERVATION_ID, "RSV-0002", "Emma Wilson", "102", "CONFIRMED", BookingSource.BOOKING_COM, null,
                 LocalDate.of(2026, 9, 20), LocalDate.of(2026, 9, 22), null, "VND");

@@ -5,7 +5,9 @@ import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.booking.request.FrontDeskSearchCriteria;
 import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
 import com.example.hotel.dto.booking.response.FrontDeskStayRow;
+import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.service.booking.FrontDeskQueryService;
+import com.example.hotel.service.room.RoomTypeQueryService;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.data.domain.Page;
@@ -32,14 +34,17 @@ public class FrontDeskPageController {
     private static final String IN_HOUSE = "in-house";
 
     private final FrontDeskQueryService queryService;
+    private final RoomTypeQueryService roomTypeQueryService;
 
     /**
      * Creates the controller.
      *
      * @param queryService read model for the workspace
+     * @param roomTypeQueryService RoomType list for the In-house Room Type filter
      */
-    public FrontDeskPageController(FrontDeskQueryService queryService) {
+    public FrontDeskPageController(FrontDeskQueryService queryService, RoomTypeQueryService roomTypeQueryService) {
         this.queryService = queryService;
+        this.roomTypeQueryService = roomTypeQueryService;
     }
 
     /**
@@ -72,9 +77,8 @@ public class FrontDeskPageController {
         model.addAttribute("view", selected);
         model.addAttribute("canArrivals", canArrivals);
         model.addAttribute("canStays", canStays);
-        model.addAttribute("canChangeRoom", has(authentication, "PERM_CHANGE_ROOM"));
-        model.addAttribute("canExtendStay", has(authentication, "PERM_EXTEND_STAY"));
         model.addAttribute("hotelToday", queryService.hotelToday());
+        model.addAttribute("bookingSources", BookingSource.values());
         return switch (selected) {
             case ARRIVALS -> showArrivals(searchCriteria, requestedPage, model);
             case DEPARTURES -> showDepartures(searchCriteria, requestedPage, model, authentication);
@@ -83,7 +87,8 @@ public class FrontDeskPageController {
     }
 
     /**
-     * Loads one page of Arrivals and adds the Needs-Attention/Ready split and pagination attributes.
+     * Loads one page of Arrivals and adds the pagination attributes. The page keeps the service's default
+     * needs-attention/overdue-first order in a single table.
      *
      * @param searchCriteria normalized optional search/sort state
      * @param requestedPage requested zero-based page number
@@ -101,16 +106,14 @@ public class FrontDeskPageController {
             return redirect;
         }
         model.addAttribute("arrivalsPage", arrivalsPage);
-        model.addAttribute("attentionArrivals", arrivalsPage.getContent().stream().filter(FrontDeskArrivalRow::needsAttention).toList());
-        model.addAttribute("readyArrivals", arrivalsPage.getContent().stream().filter(row -> !row.needsAttention()).toList());
+        model.addAttribute("clearSortQuery", sortQuery(sortKey, sortDir));
         PaginationSupport.populate(model, arrivalsPage, "/front-desk", filters, sortKey, sortDir);
         return "front-desk/index";
     }
 
     /**
-     * Loads one page of Departures and adds the Needs-Attention/Ready split and pagination attributes. Outstanding
-     * amount visibility still follows {@code PERM_MANAGE_PAYMENT} exactly as before (§9.2.4); this method only adds
-     * search/sort/pagination on top.
+     * Loads one page of Departures and adds the pagination attributes. Outstanding amount visibility still follows
+     * {@code PERM_MANAGE_PAYMENT} exactly as before (§9.2.4); this method only adds search/sort/pagination on top.
      *
      * @param searchCriteria normalized optional search/sort state
      * @param requestedPage requested zero-based page number
@@ -120,10 +123,12 @@ public class FrontDeskPageController {
      */
     private String showDepartures(
             FrontDeskSearchCriteria searchCriteria, int requestedPage, Model model, Authentication authentication) {
-        Page<FrontDeskStayRow> departuresPage =
-                queryService.departures(has(authentication, "PERM_MANAGE_PAYMENT"), searchCriteria, requestedPage);
-        String sortKey = TableSorts.FRONT_DESK_DEPARTURES.key(searchCriteria.getSort(), searchCriteria.getDir());
-        String sortDir = TableSorts.FRONT_DESK_DEPARTURES.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        boolean canMoney = has(authentication, "PERM_MANAGE_PAYMENT");
+        Page<FrontDeskStayRow> departuresPage = queryService.departures(canMoney, searchCriteria, requestedPage);
+        // Outstanding is a money column: without MANAGE_PAYMENT it is neither sortable nor echoed back in the links.
+        String sort = !canMoney && "outstanding".equals(searchCriteria.getSort()) ? null : searchCriteria.getSort();
+        String sortKey = TableSorts.FRONT_DESK_DEPARTURES.key(sort, searchCriteria.getDir());
+        String sortDir = TableSorts.FRONT_DESK_DEPARTURES.activeDirection(sort, searchCriteria.getDir());
         Map<String, String> filters = filters(DEPARTURES, searchCriteria);
         String redirect = PaginationSupport.redirectWhenOutOfRange(
                 departuresPage, requestedPage, "/front-desk", filters, sortKey, sortDir);
@@ -131,8 +136,7 @@ public class FrontDeskPageController {
             return redirect;
         }
         model.addAttribute("departuresPage", departuresPage);
-        model.addAttribute("attentionDepartures", departuresPage.getContent().stream().filter(FrontDeskStayRow::needsAttention).toList());
-        model.addAttribute("readyDepartures", departuresPage.getContent().stream().filter(row -> !row.needsAttention()).toList());
+        model.addAttribute("clearSortQuery", sortQuery(sortKey, sortDir));
         PaginationSupport.populate(model, departuresPage, "/front-desk", filters, sortKey, sortDir);
         return "front-desk/index";
     }
@@ -156,6 +160,8 @@ public class FrontDeskPageController {
             return redirect;
         }
         model.addAttribute("inHousePage", inHousePage);
+        model.addAttribute("clearSortQuery", sortQuery(sortKey, sortDir));
+        model.addAttribute("roomTypes", roomTypeQueryService.findAll());
         PaginationSupport.populate(model, inHousePage, "/front-desk", filters, sortKey, sortDir);
         return "front-desk/index";
     }
@@ -167,11 +173,35 @@ public class FrontDeskPageController {
      * @param searchCriteria normalized optional search/sort state
      * @return the filters to echo on every pagination/sort link for this view
      */
+    /**
+     * Builds the sort part of a Clear link. Clear removes the filters and returns to page 1, but keeps the active sort so
+     * the user's ordering survives a filter reset. Sort keys are whitelisted, so they are safe to echo.
+     *
+     * @param sortKey validated sort key, or {@code null} when no valid sort is active
+     * @param sortDir validated direction for {@code sortKey}
+     * @return {@code &sort=…&dir=…} for an active sort, otherwise an empty string
+     */
+    private static String sortQuery(String sortKey, String sortDir) {
+        return sortKey == null ? "" : "&sort=" + sortKey + "&dir=" + sortDir;
+    }
+
     private Map<String, String> filters(String view, FrontDeskSearchCriteria searchCriteria) {
         Map<String, String> filters = new LinkedHashMap<>();
         filters.put("view", view);
         if (searchCriteria.getSearch() != null) {
             filters.put("search", searchCriteria.getSearch());
+        }
+        if (ARRIVALS.equals(view)) {
+            filters.put("arrivalDate", searchCriteria.getArrivalDate());
+            filters.put("readiness", searchCriteria.getReadiness());
+            filters.put("source", searchCriteria.getSource());
+        } else if (IN_HOUSE.equals(view)) {
+            filters.put("roomType", searchCriteria.getRoomType());
+            filters.put("source", searchCriteria.getSource());
+        } else if (DEPARTURES.equals(view)) {
+            filters.put("checkoutDate", searchCriteria.getCheckoutDate());
+            filters.put("status", searchCriteria.getStatus());
+            filters.put("source", searchCriteria.getSource());
         }
         return filters;
     }

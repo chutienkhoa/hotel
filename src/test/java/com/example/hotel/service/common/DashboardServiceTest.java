@@ -262,6 +262,6 @@ class DashboardServiceTest {
     private FrontDeskStayRow stayRow(Instant actualCheckInAt, LocalDate plannedCheckOutDate) {
         return new FrontDeskStayRow(
                 UUID.randomUUID(), "RSV-STAY", "Guest", "G-1", List.of(), actualCheckInAt, plannedCheckOutDate,
-                false, 0L, false, false, null, "VND");
+                false, 0L, false, false, null, "VND", BookingSource.DIRECT, 0L);
     }
 }

@@ -1,5 +1,6 @@
 package com.example.hotel.dto.booking.response;
 
+import com.example.hotel.entity.booking.BookingSource;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -22,6 +23,8 @@ import java.util.UUID;
  * @param needsAttention {@code true} when overdue or payment is required
  * @param outstanding outstanding amount, only for users allowed to see money, otherwise {@code null}
  * @param currency Reservation currency
+ * @param source booking source of the Reservation
+ * @param nights full length of the stay in nights, from the Reservation check-in date to its check-out date
  */
 public record FrontDeskStayRow(
         UUID reservationId,
@@ -36,4 +39,6 @@ public record FrontDeskStayRow(
         boolean paymentRequired,
         boolean needsAttention,
         BigDecimal outstanding,
-        String currency) {}
+        String currency,
+        BookingSource source,
+        long nights) {}

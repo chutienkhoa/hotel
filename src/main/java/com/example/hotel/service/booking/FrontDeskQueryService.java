@@ -7,10 +7,12 @@ import com.example.hotel.dto.booking.response.ArrivalIssueCode;
 import com.example.hotel.dto.booking.response.ArrivalIssueSeverity;
 import com.example.hotel.dto.booking.response.ArrivalReadiness;
 import com.example.hotel.dto.booking.response.ArrivalReadinessIssue;
+import com.example.hotel.dto.booking.response.ArrivalReadinessState;
 import com.example.hotel.dto.booking.response.CheckInTiming;
 import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
 import com.example.hotel.dto.booking.response.FrontDeskRoomResponse;
 import com.example.hotel.dto.booking.response.FrontDeskStayRow;
+import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.booking.Stay;
@@ -29,8 +31,10 @@ import com.example.hotel.entity.booking.PaymentStatus;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.function.Function;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -60,32 +64,7 @@ public class FrontDeskQueryService {
     /** Page size used by every paged Front Desk view (Batch 3A), consistent with the other list screens. */
     private static final int FRONT_DESK_PAGE_SIZE = 10;
 
-    /** Allow-listed in-memory comparators for the Arrivals sortable columns, keyed by {@link TableSorts#FRONT_DESK_ARRIVALS}. */
-    private static final Map<String, Comparator<FrontDeskArrivalRow>> ARRIVAL_SORTS = Map.of(
-            "reservationNumber", Comparator.comparing(FrontDeskArrivalRow::reservationNumber),
-            "guestName", Comparator.comparing(
-                            (FrontDeskArrivalRow row) -> row.guestName() == null ? "" : row.guestName(),
-                            String.CASE_INSENSITIVE_ORDER)
-                    .thenComparing(FrontDeskArrivalRow::reservationNumber),
-            "checkInDate", Comparator.comparing(FrontDeskArrivalRow::checkInDate)
-                    .thenComparing(FrontDeskArrivalRow::reservationNumber));
 
-    /**
-     * Allow-listed in-memory comparators for the Departures/In-house sortable columns, keyed by
-     * {@link TableSorts#FRONT_DESK_DEPARTURES} and {@link TableSorts#FRONT_DESK_IN_HOUSE}. Both views share this
-     * single map: each view's own whitelist already restricts which of these keys it accepts.
-     */
-    private static final Map<String, Comparator<FrontDeskStayRow>> STAY_SORTS = Map.of(
-            "reservationNumber", Comparator.comparing(FrontDeskStayRow::reservationNumber),
-            "guestName", Comparator.comparing(
-                            (FrontDeskStayRow row) -> row.guestName() == null ? "" : row.guestName(),
-                            String.CASE_INSENSITIVE_ORDER)
-                    .thenComparing(FrontDeskStayRow::reservationNumber),
-            "plannedCheckOutDate", Comparator.comparing(FrontDeskStayRow::plannedCheckOutDate)
-                    .thenComparing(FrontDeskStayRow::reservationNumber),
-            "room", Comparator.comparing(
-                            (FrontDeskStayRow row) -> row.rooms().isEmpty() ? "" : row.rooms().get(0).roomNumber())
-                    .thenComparing(FrontDeskStayRow::reservationNumber));
 
     private final ReservationRepository reservations;
     private final StayRepository stays;
@@ -182,8 +161,54 @@ public class FrontDeskQueryService {
      */
     @Transactional(readOnly = true)
     public Page<FrontDeskArrivalRow> arrivals(FrontDeskSearchCriteria criteria, int page) {
-        List<FrontDeskArrivalRow> matching = filterArrivals(arrivals(), criteria.getSearch());
+        List<FrontDeskArrivalRow> matching = filterArrivalFacets(filterArrivals(arrivals(), criteria.getSearch()), criteria);
         return paginate(sortArrivals(matching, criteria.getSort(), criteria.getDir()), page);
+    }
+
+    /**
+     * Narrows an Arrivals list by the optional date, readiness and source filters. Each filter reads a value the row
+     * already carries: the date filter uses the same overdue timing as the Overdue Arrival badge, readiness uses the
+     * derived {@link ArrivalReadinessState} shown in the Status column, and source uses the Reservation's
+     * {@link BookingSource}. An absent or unrecognized value applies no filter.
+     *
+     * @param rows the search-filtered Arrivals rows, in default order
+     * @param criteria normalized request state holding the optional filter values
+     * @return the rows matching every supplied filter, in their original relative order
+     */
+    private List<FrontDeskArrivalRow> filterArrivalFacets(List<FrontDeskArrivalRow> rows, FrontDeskSearchCriteria criteria) {
+        ArrivalDateFilter date = parse(ArrivalDateFilter.class, criteria.getArrivalDate());
+        ArrivalReadinessState state = parse(ArrivalReadinessState.class, criteria.getReadiness());
+        BookingSource source = parse(BookingSource.class, criteria.getSource());
+        return rows.stream()
+                .filter(row -> date == null || (date == ArrivalDateFilter.OVERDUE) == row.overdue())
+                .filter(row -> state == null || row.readiness().state() == state)
+                .filter(row -> source == null || row.source() == source)
+                .toList();
+    }
+
+    /**
+     * Returns the enum constant named by a request value.
+     *
+     * @param type enum type to parse
+     * @param value raw request value, possibly {@code null}
+     * @param <E> enum type
+     * @return the matching constant, or {@code null} when the value is absent or not a constant of the type
+     */
+    private static <E extends Enum<E>> E parse(Class<E> type, String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    /** Arrivals date filter values: {@code TODAY} (not yet overdue) and {@code OVERDUE} (check-in date has passed). */
+    private enum ArrivalDateFilter {
+        TODAY,
+        OVERDUE
     }
 
     /**
@@ -222,9 +247,11 @@ public class FrontDeskQueryService {
      */
     @Transactional(readOnly = true)
     public Page<FrontDeskStayRow> departures(boolean includeAmounts, FrontDeskSearchCriteria criteria, int page) {
-        List<FrontDeskStayRow> matching = filterStays(departures(includeAmounts), criteria.getSearch());
+        List<FrontDeskStayRow> matching = filterDepartureFacets(
+                filterStays(departures(includeAmounts), criteria.getSearch()), criteria, hotelToday());
         return paginate(
-                sortStays(matching, TableSorts.FRONT_DESK_DEPARTURES, criteria.getSort(), criteria.getDir()), page);
+                sortStays(matching, TableSorts.FRONT_DESK_DEPARTURES, criteria.getSort(), criteria.getDir(), includeAmounts),
+                page);
     }
 
     /**
@@ -257,9 +284,9 @@ public class FrontDeskQueryService {
      */
     @Transactional(readOnly = true)
     public Page<FrontDeskStayRow> inHouse(FrontDeskSearchCriteria criteria, int page) {
-        List<FrontDeskStayRow> matching = filterStays(inHouse(), criteria.getSearch());
+        List<FrontDeskStayRow> matching = filterInHouseFacets(filterStays(inHouse(), criteria.getSearch()), criteria);
         return paginate(
-                sortStays(matching, TableSorts.FRONT_DESK_IN_HOUSE, criteria.getSort(), criteria.getDir()), page);
+                sortStays(matching, TableSorts.FRONT_DESK_IN_HOUSE, criteria.getSort(), criteria.getDir(), false), page);
     }
 
     private List<FrontDeskStayRow> toStayRows(List<Stay> source, LocalDate today, boolean withBalance, boolean includeAmounts) {
@@ -271,7 +298,8 @@ public class FrontDeskQueryService {
         for (StayRoomAssignment assignment : assignments.findOpenByStayIdInWithRoom(stayIds)) {
             Room room = assignment.getRoom();
             roomsByStay.computeIfAbsent(assignment.getStay().getId(), key -> new ArrayList<>()).add(
-                    new FrontDeskRoomResponse(room.getId(), room.getRoomNumber(), room.getRoomType().getName(), null));
+                    new FrontDeskRoomResponse(room.getId(), room.getRoomNumber(), room.getRoomType().getId(),
+                            room.getRoomType().getName(), null));
         }
         Map<UUID, BigDecimal> chargeTotals = withBalance ? totals(charges.sumAmountByStayIdIn(stayIds)) : Map.of();
         Map<UUID, BigDecimal> paidTotals = withBalance
@@ -302,7 +330,9 @@ public class FrontDeskQueryService {
                     paymentRequired,
                     withBalance && (overdue || paymentRequired),
                     includeAmounts ? outstanding : null,
-                    reservation.getCurrency()));
+                    reservation.getCurrency(),
+                    reservation.getSource(),
+                    ChronoUnit.DAYS.between(reservation.getCheckInDate(), reservation.getCheckOutDate())));
         }
         return rows;
     }
@@ -316,7 +346,8 @@ public class FrontDeskQueryService {
         }
         List<FrontDeskRoomResponse> roomRows = rooms.stream()
                 .map(room -> new FrontDeskRoomResponse(
-                        room.getId(), room.getRoomNumber(), room.getRoomType().getName(), blockerByRoom.get(room.getId())))
+                        room.getId(), room.getRoomNumber(), room.getRoomType().getId(), room.getRoomType().getName(),
+                        blockerByRoom.get(room.getId())))
                 .toList();
         boolean housekeeping = blockerByRoom.values().stream()
                 .anyMatch(code -> code == ArrivalIssueCode.ROOM_DIRTY || code == ArrivalIssueCode.ROOM_CLEANING);
@@ -409,11 +440,10 @@ public class FrontDeskQueryService {
         if (key == null) {
             return rows;
         }
-        Comparator<FrontDeskArrivalRow> comparator = ARRIVAL_SORTS.get(key);
         boolean descending = "desc".equals(TableSorts.FRONT_DESK_ARRIVALS.activeDirection(sort, dir));
-        List<FrontDeskArrivalRow> sorted = new ArrayList<>(rows);
-        sorted.sort(descending ? comparator.reversed() : comparator);
-        return sorted;
+        return rows.stream()
+                .sorted(arrivalColumn(key, descending).thenComparing(FrontDeskArrivalRow::reservationNumber))
+                .toList();
     }
 
     /**
@@ -431,6 +461,85 @@ public class FrontDeskQueryService {
         }
         String needle = search.toLowerCase(Locale.ROOT);
         return rows.stream().filter(row -> matchesStay(row, needle)).toList();
+    }
+
+    /**
+     * Narrows In-house rows by the optional Room Type and Source filters. Room Type matches the CURRENT Room of the
+     * Stay (its open StayRoomAssignment), so a guest who has been moved is filtered by the room they occupy now.
+     * An absent or unrecognized value applies no filter.
+     *
+     * @param rows the search-filtered In-house rows, in default order
+     * @param criteria normalized request state holding the optional filter values
+     * @return the rows matching every supplied filter, in their original relative order
+     */
+    private List<FrontDeskStayRow> filterInHouseFacets(List<FrontDeskStayRow> rows, FrontDeskSearchCriteria criteria) {
+        UUID roomTypeId = parseUuid(criteria.getRoomType());
+        BookingSource source = parse(BookingSource.class, criteria.getSource());
+        return rows.stream()
+                .filter(row -> roomTypeId == null
+                        || row.rooms().stream().anyMatch(room -> roomTypeId.equals(room.roomTypeId())))
+                .filter(row -> source == null || row.source() == source)
+                .toList();
+    }
+
+    /**
+     * Narrows Departures rows by the optional checkout-date, status and Source filters. Every value is read from the
+     * row, which already carries the current planned checkout (Reservation.checkOutDate, so an extended stay uses its
+     * new date), the overdue flag and the payment-required flag computed by the existing readiness rules. Nothing is
+     * recomputed here, and no new Reservation status is introduced.
+     *
+     * @param rows the search-filtered Departures rows, in default order
+     * @param criteria normalized request state holding the optional filter values
+     * @param today the hotel date
+     * @return the rows matching every supplied filter, in their original relative order
+     */
+    private List<FrontDeskStayRow> filterDepartureFacets(
+            List<FrontDeskStayRow> rows, FrontDeskSearchCriteria criteria, LocalDate today) {
+        DepartureCheckoutFilter date = parse(DepartureCheckoutFilter.class, criteria.getCheckoutDate());
+        DepartureStatusFilter status = parse(DepartureStatusFilter.class, criteria.getStatus());
+        BookingSource source = parse(BookingSource.class, criteria.getSource());
+        return rows.stream()
+                .filter(row -> date == null || switch (date) {
+                    case TODAY -> row.plannedCheckOutDate().isEqual(today);
+                    case OVERDUE -> row.plannedCheckOutDate().isBefore(today);
+                })
+                .filter(row -> status == null || switch (status) {
+                    case OVERDUE -> row.overdue();
+                    case PAYMENT_REQUIRED -> row.paymentRequired();
+                    case READY -> !row.overdue() && !row.paymentRequired();
+                })
+                .filter(row -> source == null || row.source() == source)
+                .toList();
+    }
+
+    /**
+     * Parses a request value as a RoomType identifier.
+     *
+     * @param value raw request value, possibly {@code null}
+     * @return the identifier, or {@code null} when absent or malformed
+     */
+    private static UUID parseUuid(String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
+    }
+
+    /** Departures checkout-date filter values, relative to the hotel date: {@code TODAY} or {@code OVERDUE}. */
+    private enum DepartureCheckoutFilter {
+        TODAY,
+        OVERDUE
+    }
+
+    /** Departures status filter values, from the existing readiness facts: ready, overdue or payment required. */
+    private enum DepartureStatusFilter {
+        READY,
+        OVERDUE,
+        PAYMENT_REQUIRED
     }
 
     /**
@@ -460,16 +569,114 @@ public class FrontDeskQueryService {
      * @return the rows in the requested order, or unchanged when no valid sort was requested
      */
     private List<FrontDeskStayRow> sortStays(
-            List<FrontDeskStayRow> rows, SortWhitelist whitelist, String sort, String dir) {
+            List<FrontDeskStayRow> rows, SortWhitelist whitelist, String sort, String dir, boolean includeAmounts) {
         String key = whitelist.key(sort, dir);
-        if (key == null) {
+        // Outstanding is a money column: it is sortable only for users who may see it, otherwise the default order applies.
+        if (key == null || ("outstanding".equals(key) && !includeAmounts)) {
             return rows;
         }
-        Comparator<FrontDeskStayRow> comparator = STAY_SORTS.get(key);
         boolean descending = "desc".equals(whitelist.activeDirection(sort, dir));
-        List<FrontDeskStayRow> sorted = new ArrayList<>(rows);
-        sorted.sort(descending ? comparator.reversed() : comparator);
-        return sorted;
+        return rows.stream()
+                .sorted(stayColumn(key, descending).thenComparing(FrontDeskStayRow::reservationNumber))
+                .toList();
+    }
+
+    /**
+     * Maps one Arrivals sort key to its column value. Every column sorts by the value the screen shows, or by the
+     * underlying value where the displayed text would sort wrongly (dates, not formatted strings). Status uses the
+     * same rank as the default Arrivals order, so it is the derived readiness/overdue state and no stored status.
+     *
+     * @param key a key already validated against {@link TableSorts#FRONT_DESK_ARRIVALS}
+     * @param descending whether the column sorts descending
+     * @return the comparator for that column, with nulls last in both directions
+     */
+    private static Comparator<FrontDeskArrivalRow> arrivalColumn(String key, boolean descending) {
+        return switch (key) {
+            case "reservationNumber" -> column(FrontDeskArrivalRow::reservationNumber, Comparator.naturalOrder(), descending);
+            case "guestName" -> column(FrontDeskArrivalRow::guestName, String.CASE_INSENSITIVE_ORDER, descending);
+            case "checkInDate" -> column(FrontDeskArrivalRow::checkInDate, Comparator.naturalOrder(), descending);
+            case "room" -> column(FrontDeskQueryService::arrivalRoomNumber, Comparator.naturalOrder(), descending);
+            case "source" -> column(FrontDeskQueryService::arrivalSourceLabel, Comparator.naturalOrder(), descending);
+            case "status" -> column(FrontDeskQueryService::arrivalRank, Comparator.naturalOrder(), descending);
+            default -> throw new IllegalArgumentException("Unsupported Arrivals sort key: " + key);
+        };
+    }
+
+    private static String arrivalRoomNumber(FrontDeskArrivalRow row) {
+        return primaryRoomNumber(row.rooms());
+    }
+
+    private static String arrivalSourceLabel(FrontDeskArrivalRow row) {
+        return sourceLabel(row.source());
+    }
+
+    private static String stayRoomNumber(FrontDeskStayRow row) {
+        return primaryRoomNumber(row.rooms());
+    }
+
+    private static String staySourceLabel(FrontDeskStayRow row) {
+        return sourceLabel(row.source());
+    }
+
+    /**
+     * Maps one Departures/In-house sort key to its column value; see {@link #arrivalColumn(String, boolean)}. Room uses
+     * the CURRENT rooms of the row (open StayRoomAssignments, never the originally booked lines), Nights and
+     * Outstanding compare numerically, Status uses the same rank as the default Departures order.
+     *
+     * @param key a key already validated against the view's whitelist
+     * @param descending whether the column sorts descending
+     * @return the comparator for that column, with nulls last in both directions
+     */
+    private static Comparator<FrontDeskStayRow> stayColumn(String key, boolean descending) {
+        return switch (key) {
+            case "reservationNumber" -> column(FrontDeskStayRow::reservationNumber, Comparator.naturalOrder(), descending);
+            case "guestName" -> column(FrontDeskStayRow::guestName, String.CASE_INSENSITIVE_ORDER, descending);
+            case "room" -> column(FrontDeskQueryService::stayRoomNumber, Comparator.naturalOrder(), descending);
+            case "plannedCheckOutDate" -> column(FrontDeskStayRow::plannedCheckOutDate, Comparator.naturalOrder(), descending);
+            case "checkedIn" -> column(FrontDeskStayRow::actualCheckInAt, Comparator.naturalOrder(), descending);
+            case "nights" -> column(FrontDeskStayRow::nights, Comparator.naturalOrder(), descending);
+            case "source" -> column(FrontDeskQueryService::staySourceLabel, Comparator.naturalOrder(), descending);
+            case "status" -> column(FrontDeskQueryService::departureRank, Comparator.naturalOrder(), descending);
+            case "outstanding" -> column(FrontDeskStayRow::outstanding, Comparator.naturalOrder(), descending);
+            default -> throw new IllegalArgumentException("Unsupported Front Desk sort key: " + key);
+        };
+    }
+
+    /**
+     * Builds one column comparator. Nulls sort last whether the column is ascending or descending, so a missing value
+     * never jumps to the top when the direction flips.
+     *
+     * @param key extracts the column value from a row
+     * @param order the value ordering (natural or case-insensitive)
+     * @param descending whether the column sorts descending
+     * @param <T> row type
+     * @param <K> column value type
+     * @return the null-safe comparator for the column
+     */
+    private static <T, K> Comparator<T> column(Function<T, K> key, Comparator<K> order, boolean descending) {
+        Comparator<K> ordered = descending ? order.reversed() : order;
+        return Comparator.comparing(key, Comparator.nullsLast(ordered));
+    }
+
+    /**
+     * Returns the Room number used for the Room column: the lowest current Room number of the row, so a multi-room row
+     * sorts the same way regardless of the order its rooms were loaded in.
+     *
+     * @param rooms the row's current Rooms
+     * @return the lowest room number, or {@code null} when the row has no Room
+     */
+    private static String primaryRoomNumber(List<FrontDeskRoomResponse> rooms) {
+        return rooms.stream().map(FrontDeskRoomResponse::roomNumber).min(Comparator.naturalOrder()).orElse(null);
+    }
+
+    /**
+     * Returns the staff-facing Source label, sorted alphabetically as the screen shows it.
+     *
+     * @param source Reservation source, possibly {@code null}
+     * @return the display label, or {@code null} when absent
+     */
+    private static String sourceLabel(BookingSource source) {
+        return source == null ? null : source.getDisplayName();
     }
 
     /**

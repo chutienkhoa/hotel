@@ -76,6 +76,42 @@
   gap: var(--space-3);
 }
 
+/* Client clock (HH:mm, browser-local): same control height as the flag and avatar so it centres on that row.
+   The [hidden] rule is needed because display: flex would otherwise override the hidden attribute. */
+.header-clock {
+  align-items: center;
+  color: #fff;
+  display: flex;
+  flex: none;
+  font-size: 1rem;
+  /* Fixed-width digits so the seconds ticking over never shift the header. */
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  gap: var(--space-1);
+  height: var(--control-height);
+  line-height: 1;
+  white-space: nowrap;
+}
+.header-clock[hidden] {
+  display: none;
+}
+/* Phones: the brand wraps and the account controls need the room, so the clock yields and the flag, avatar and
+   name stay. The time is still visible on tablet and desktop widths. */
+@media (max-width: 30rem) {
+  .header-clock {
+    display: none;
+  }
+}
+.header-clock-icon {
+  color: #cfdbe8;
+  display: inline-flex;
+  flex: none;
+}
+.header-clock-icon svg {
+  height: 0.9375rem;
+  width: 0.9375rem;
+}
+
 /* Global Task33 header redesign: a compact flag trigger immediately left of the account avatar,
    opening a popover built the same way as .header-account-menu (hidden-attribute driven; see
    static/js/common/header-account.js, which also keeps this and .header-account mutually exclusive). */
@@ -147,11 +183,29 @@
   flex: 1;
 }
 
-.header-language-option-check {
-  color: var(--color-success);
+/* Selected-state indicator: a circle on every row. Inactive is an outlined empty circle; the active locale is
+   filled blue with a white check. Both rows share the same height, so the indicator never changes row size. */
+.header-language-option-indicator {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-strong);
+  border-radius: 50%;
+  box-sizing: border-box;
+  color: #fff;
+  display: flex;
   flex: none;
-  height: var(--icon-size-sm);
-  width: var(--icon-size-sm);
+  height: 1.25rem;
+  justify-content: center;
+  width: 1.25rem;
+}
+.header-language-option-indicator.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.header-language-option-indicator svg {
+  height: 0.75rem;
+  stroke-width: 2.4;
+  width: 0.75rem;
 }
 
 .header-account {
@@ -203,9 +257,12 @@
 
 .header-account-chevron {
   color: #9fb3c8;
+  display: inline-flex;
   flex: none;
-  height: var(--icon-size-sm);
   transition: transform 0.15s ease-in-out;
+}
+.header-account-chevron svg {
+  height: var(--icon-size-sm);
   width: var(--icon-size-sm);
 }
 
