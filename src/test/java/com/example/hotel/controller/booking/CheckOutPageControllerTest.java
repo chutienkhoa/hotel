@@ -56,6 +56,9 @@ class CheckOutPageControllerTest {
     private ReservationService reservationService;
 
     @MockitoBean
+    private com.example.hotel.service.customer.GuestQueryService guestQueryService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms a user with CHECK_OUT can access the Check-out search page. */
@@ -109,7 +112,7 @@ class CheckOutPageControllerTest {
                 .andExpect(content().string(containsString("id=\"overdue-departure\"")))
                 .andExpect(content().string(containsString("2 days overdue")))
                 .andExpect(content().string(containsString("id=\"overdue-extend-stay\"")))
-                .andExpect(content().string(not(containsString("Confirm check-out"))));
+                .andExpect(content().string(not(containsString("id=\"confirm-checkout\""))));
     }
 
     /** Confirms MANAGE_BOOKING alone (without EXTEND_STAY) does not show the extend action. */
@@ -162,8 +165,11 @@ class CheckOutPageControllerTest {
 
         mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Payment required before check-out.")))
-                .andExpect(content().string(not(containsString("Confirm Check-out</button>"))));
+                .andExpect(content().string(containsString("Not ready for checkout")))
+                .andExpect(content().string(containsString("Cannot proceed to checkout")))
+                .andExpect(content().string(containsString("id=\"confirm-checkout-disabled\"")))
+                .andExpect(content().string(not(containsString("id=\"confirm-checkout\""))))
+                .andExpect(content().string(not(containsString("/confirm\""))));
     }
 
     /** Confirms an eligible Review renders the Confirm Check-out action. */
@@ -173,19 +179,31 @@ class CheckOutPageControllerTest {
 
         mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Confirm Check-out</button>")));
+                .andExpect(content().string(containsString("id=\"confirm-checkout\"")))
+                .andExpect(content().string(containsString("action=\"/check-out/" + RESERVATION_ID + "/confirm\"")))
+                .andExpect(content().string(not(containsString("id=\"confirm-checkout-disabled\""))));
     }
 
-    /** Confirms the Review Guest tile shows only the Guest Code, never a full profile field. */
+    /** Confirms the Guest Information card shows the supported guest fields, and that the page still renders without a profile. */
     @Test
-    void shouldShowOnlyGuestCodeOnReview() throws Exception {
+    void shouldShowSupportedGuestFieldsOnReview() throws Exception {
         when(checkOutQueryService.review(RESERVATION_ID)).thenReturn(review(true, "READY"));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(new com.example.hotel.dto.customer.response.GuestLookupResponse(
+                GUEST_ID, "GUEST-001", "Nguyen Van A", "a@example.com", "0901234567", "Vietnam", LocalDate.of(2000, 10, 4), "P0012345"));
 
         mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("GUEST-001")))
-                .andExpect(content().string(not(containsString("Nguyen Van A"))))
-                .andExpect(content().string(not(containsString("Vietnam"))));
+                .andExpect(content().string(containsString("Nguyen Van A")))
+                .andExpect(content().string(containsString("Vietnam")))
+                .andExpect(content().string(containsString("0901234567")))
+                .andExpect(content().string(containsString("a@example.com")))
+                .andExpect(content().string(containsString("04/10/2000")))
+                .andExpect(content().string(containsString("P0012345")));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(null);
+        mockMvc.perform(get("/check-out/{id}", RESERVATION_ID).with(user("staff").authorities(checkOutAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("GUEST-001")));
     }
 
     /** Confirms the Confirm Check-out POST requires CSRF like every other mutating action. */

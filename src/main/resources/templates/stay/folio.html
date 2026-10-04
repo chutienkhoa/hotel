@@ -31,7 +31,7 @@
                 </div>
                 <div class="folio-header__actions" th:if="${checkoutReviewAvailable}">
                     <a class="button button-outline-primary" th:href="@{/check-out/{id}(id=${reservation.id})}">
-                        <svg th:replace="~{layout/icons :: checkCircle}"></svg>
+                        <svg th:replace="~{layout/icons :: logout}"></svg>
                         <span th:text="#{payment.folio.actions.checkoutReview}">Checkout Review</span>
                     </a>
                 </div>

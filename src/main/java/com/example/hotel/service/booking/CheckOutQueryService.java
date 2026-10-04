@@ -2,6 +2,7 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
+import com.example.hotel.dto.booking.response.CheckOutFinancialSummary;
 import com.example.hotel.dto.booking.response.CheckOutListItemResponse;
 import com.example.hotel.dto.booking.response.CheckOutReviewResponse;
 import com.example.hotel.dto.booking.response.CurrentRoomResponse;
@@ -33,6 +34,9 @@ public class CheckOutQueryService {
     private final StayQueryService stayQueryService;
     private final StayRoomAssignmentQueryService stayRoomAssignmentQueryService;
     private final StayBalanceService stayBalanceService;
+    private final com.example.hotel.service.room.RoomQueryService roomQueryService;
+    private final ChargeService chargeService;
+    private final PaymentService paymentService;
     private final java.time.Clock clock;
 
     /**
@@ -42,17 +46,27 @@ public class CheckOutQueryService {
      * @param stayQueryService service used to resolve the Reservation's Stay
      * @param stayRoomAssignmentQueryService service used to read current (open) room assignments
      * @param stayBalanceService service used to calculate the authoritative Outstanding balance
+     * @param roomQueryService service used to resolve the current rooms' Room Type
+     * @param chargeService service used to list the Stay's Charges
+     * @param paymentService service used to list the Stay's Payments
+     * @param clock hotel business clock
      */
     public CheckOutQueryService(
             ReservationQueryService reservationQueryService,
             StayQueryService stayQueryService,
             StayRoomAssignmentQueryService stayRoomAssignmentQueryService,
             StayBalanceService stayBalanceService,
+            com.example.hotel.service.room.RoomQueryService roomQueryService,
+            ChargeService chargeService,
+            PaymentService paymentService,
             java.time.Clock clock) {
         this.reservationQueryService = reservationQueryService;
         this.stayQueryService = stayQueryService;
         this.stayRoomAssignmentQueryService = stayRoomAssignmentQueryService;
         this.stayBalanceService = stayBalanceService;
+        this.roomQueryService = roomQueryService;
+        this.chargeService = chargeService;
+        this.paymentService = paymentService;
         this.clock = clock;
     }
 
@@ -119,7 +133,52 @@ public class CheckOutQueryService {
                 stay.actualCheckInAt(),
                 readiness,
                 overdueDays,
-                today);
+                today,
+                reservation.source(),
+                reservation.otaBookingReference(),
+                reservation.adultCount(),
+                reservation.childCount(),
+                reservation.reservedAt(),
+                roomTypeLabel(currentRooms));
+    }
+
+    /**
+     * Builds the read-only financial context of the Check-out Review from the same authoritative sources as the
+     * Folio: totals from {@link StayBalanceService}, rows from the Charge and Payment services. The caller must
+     * only request it for a viewer holding {@code MANAGE_PAYMENT}; this method adds no authorization of its own.
+     *
+     * @param reservationId Reservation identifier
+     * @return the totals and rows for the Reservation's Stay
+     */
+    @Transactional(readOnly = true)
+    public CheckOutFinancialSummary financialSummary(UUID reservationId) {
+        ReservationDetailResponse reservation = reservationQueryService.findById(reservationId);
+        StayResponse stay = stayQueryService.findByReservationId(reservationId);
+        StayBalance balance = stayBalanceService.calculate(stay.id());
+        return new CheckOutFinancialSummary(
+                balance.totalCharges(),
+                balance.totalPaidPayments(),
+                balance.outstanding(),
+                reservation.currency(),
+                chargeService.findByStayId(stay.id()),
+                paymentService.findByStayId(stay.id()),
+                stayRoomAssignmentQueryService.findCurrentRoomRates(reservationId));
+    }
+
+    /**
+     * Joins the distinct Room Types of the Stay's CURRENT rooms, so a Room Change is reflected.
+     *
+     * @param currentRooms rooms currently occupied by the Stay
+     * @return comma-separated Room Type names, or {@code null} when there is no current room
+     */
+    private String roomTypeLabel(List<CurrentRoomResponse> currentRooms) {
+        if (currentRooms.isEmpty()) {
+            return null;
+        }
+        return roomQueryService.findAllByIds(currentRooms.stream().map(CurrentRoomResponse::roomId).toList()).stream()
+                .map(room -> room.roomType().name())
+                .distinct()
+                .collect(Collectors.joining(", "));
     }
 
     /**

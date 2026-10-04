@@ -1,0 +1,383 @@
+/* Checkout Review (templates/check-out/review.html). Scoped to .check-out-review; tokens, cards, buttons, badges and the
+   folio detail tabs come from layout.css / components.css, and the look follows the Check-in Review. */
+
+.check-out-review {
+  min-width: 0;
+}
+.cor-page {
+  align-items: start;
+  column-gap: var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 30%);
+  row-gap: var(--space-4);
+}
+.cor-page > * {
+  min-width: 0;
+}
+.cor-back,
+.cor-title,
+.cor-tabs,
+.cor-full {
+  grid-column: 1 / -1;
+}
+.cor-back {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-2);
+  justify-self: start;
+  margin: 0;
+}
+.cor-back svg {
+  height: 1rem;
+  width: 1rem;
+}
+.cor-title h1 {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+}
+.cor-title .page-description {
+  margin: var(--space-1) 0 0;
+}
+.cor-tabs {
+  margin: 0;
+}
+.cor-main,
+.cor-side {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.cor-card {
+  margin: 0;
+  padding: var(--space-4);
+}
+.cor-card h2 {
+  align-items: center;
+  display: flex;
+  font-size: 1rem;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+/* One shared section-icon rule: every heading icon on this page has the same size, stroke weight and gap. */
+.cor-card h2 svg {
+  color: var(--color-primary);
+  flex: none;
+  height: 1.375rem;
+  stroke-width: 2.2;
+  width: 1.375rem;
+}
+.cor-card__head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.cor-card__head h2 {
+  margin: 0;
+}
+
+/* Label / value facts. Labels are muted, values dark, as in the approved mockup. */
+.cor-facts {
+  display: grid;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+.cor-facts > div {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(6.5rem, 8.5rem) minmax(0, 1fr);
+}
+.cor-facts dt {
+  color: var(--color-muted);
+}
+.cor-facts dd {
+  font-weight: 500;
+  margin: 0;
+}
+.cor-stay {
+  align-items: start;
+  display: grid;
+  gap: var(--space-4) var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cor-facts--rooms {
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-5);
+}
+.cor-cols {
+  align-items: start;
+  display: grid;
+  gap: var(--space-2) var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cor-facts--side {
+  border-left: 1px solid var(--color-border);
+  padding-left: var(--space-5);
+}
+.cor-wrap {
+  overflow-wrap: anywhere;
+}
+.cor-flag {
+  font-size: 1.125rem;
+  line-height: 1;
+  margin-inline-end: var(--space-1);
+  vertical-align: -0.1em;
+}
+.cor-rate {
+  display: block;
+}
+.cor-room + .cor-room::before {
+  content: ", ";
+}
+.cor-note {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+/* Tables: Charges and Payments share one four-column geometry (colgroup classes), so their column edges line up
+   vertically across the two cards. Narrow screens scroll the table inside .table-wrap instead of squeezing it. */
+.cor-table {
+  min-width: 34rem;
+  table-layout: fixed;
+  width: 100%;
+}
+.cor-col--1 {
+  width: 27%;
+}
+.cor-col--2 {
+  width: 31%;
+}
+.cor-col--3 {
+  width: 18%;
+}
+.cor-col--4 {
+  width: 24%;
+}
+.cor-table th,
+.cor-table td {
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.cor-table .table-number {
+  text-align: right;
+  white-space: nowrap;
+}
+.cor-table .cor-center {
+  text-align: center;
+}
+.cor-row--inactive {
+  color: var(--color-muted);
+}
+.cor-row--inactive .table-number {
+  text-decoration: line-through;
+}
+
+/* Notices (not checked in, overdue). */
+.cor-notice {
+  background: var(--color-danger-surface);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+.cor-notice h2 {
+  color: var(--color-danger);
+  font-size: 1rem;
+  margin: 0 0 var(--space-2);
+}
+.cor-notice p {
+  margin: var(--space-2) 0 0;
+}
+.cor-overdue-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: var(--space-3) 0 0;
+}
+.cor-overdue-dates dt {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+.cor-overdue-dates dd {
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Readiness card: the most important state on the screen. Blocked is red, ready is green; the label never relies on colour alone. */
+.cor-readiness {
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+.cor-readiness--blocked {
+  background: var(--color-danger-surface);
+  border-color: var(--color-danger);
+}
+.cor-readiness--ready {
+  background: var(--color-success-surface);
+  border-color: var(--color-success);
+}
+.cor-readiness__top {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-3);
+}
+.cor-readiness__icon svg {
+  display: block;
+  height: 2.5rem;
+  stroke-width: 2.2;
+  width: 2.5rem;
+}
+.cor-readiness--blocked .cor-readiness__icon,
+.cor-readiness--blocked .cor-readiness__label,
+.cor-readiness--blocked .cor-readiness__title {
+  color: var(--color-danger);
+}
+.cor-readiness--ready .cor-readiness__icon,
+.cor-readiness--ready .cor-readiness__label {
+  color: var(--color-success);
+}
+.cor-readiness__label {
+  font-weight: 700;
+  margin: 0;
+}
+.cor-readiness__amount {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin: var(--space-1) 0;
+  overflow-wrap: anywhere;
+}
+.cor-readiness__state {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  margin: 0;
+  text-transform: uppercase;
+}
+.cor-readiness__box {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
+}
+.cor-readiness__box p {
+  margin: 0 0 var(--space-2);
+}
+.cor-readiness__title {
+  font-weight: 700;
+}
+.cor-readiness__cta {
+  gap: var(--space-2);
+  justify-content: center;
+  width: 100%;
+}
+.cor-readiness__cta svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+/* Checklist */
+.cor-checklist {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cor-checklist li {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-3);
+}
+.cor-checklist li div {
+  display: grid;
+}
+.cor-checklist li div span {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+.cor-check__icon {
+  align-items: center;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  flex: none;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+.cor-check__icon svg {
+  display: block;
+  height: 15px;
+  stroke-width: 2.75;
+  width: 15px;
+}
+.cor-check--ok .cor-check__icon {
+  background: var(--color-success);
+}
+.cor-check--fail .cor-check__icon {
+  background: var(--color-danger);
+}
+.cor-check--fail strong {
+  color: var(--color-danger);
+}
+
+/* Final action */
+.cor-action form {
+  margin: 0;
+}
+.cor-action__button {
+  gap: var(--space-2);
+  justify-content: center;
+  min-height: 2.75rem;
+  width: 100%;
+}
+.cor-action__button svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.cor-action__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.cor-action__hint {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: var(--space-2) 0 0;
+}
+
+/* Tablet and mobile: one column in the order notice, guest/stay, charges, payments, readiness, checklist, action. */
+@media (max-width: 64rem) {
+  .cor-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cor-stay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cor-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cor-facts--side {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .cor-facts--rooms {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+    padding: var(--space-3) 0 0;
+  }
+}
+@media (max-width: 40rem) {
+  .cor-facts > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}

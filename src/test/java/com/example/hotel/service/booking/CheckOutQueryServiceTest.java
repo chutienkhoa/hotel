@@ -140,6 +140,7 @@ class CheckOutQueryServiceTest {
         // planned check-out is 19/09; hotel today is 21/09
         CheckOutQueryService overdue = new CheckOutQueryService(
                 reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService,
+                mock(com.example.hotel.service.room.RoomQueryService.class), mock(ChargeService.class), mock(PaymentService.class),
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-21T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
 
         CheckOutReviewResponse review = overdue.review(RESERVATION_ID);
@@ -319,6 +320,57 @@ class CheckOutQueryServiceTest {
         assertEquals(STAY_ID, stayIdCaptor.getValue());
     }
 
+    private final com.example.hotel.service.room.RoomQueryService roomQueryService =
+            mock(com.example.hotel.service.room.RoomQueryService.class);
+    private final ChargeService chargeService = mock(ChargeService.class);
+    private final PaymentService paymentService = mock(PaymentService.class);
+
+    /** Confirms the financial summary takes its totals from StayBalanceService and its rows from the Stay's Charges/Payments. */
+    @Test
+    void shouldBuildFinancialSummaryFromTheAuthoritativeBalanceAndFolioRows() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
+        when(stayBalanceService.calculate(STAY_ID))
+                .thenReturn(new StayBalance(new BigDecimal("6400000"), new BigDecimal("4000000"), new BigDecimal("2400000")));
+
+        com.example.hotel.dto.booking.response.CheckOutFinancialSummary summary = service(
+                reservationQueryService, stayQueryService, mock(StayRoomAssignmentQueryService.class), stayBalanceService)
+                .financialSummary(RESERVATION_ID);
+
+        assertEquals(new BigDecimal("2400000"), summary.outstanding());
+        assertEquals(new BigDecimal("6400000"), summary.totalCharges());
+        assertEquals(new BigDecimal("4000000"), summary.totalPaidPayments());
+        verify(chargeService).findByStayId(STAY_ID);
+        verify(paymentService).findByStayId(STAY_ID);
+    }
+
+    /** Confirms the Review exposes the Stay summary fields and the CURRENT rooms' Room Type, not the booked one. */
+    @Test
+    void shouldExposeSourceGuestCountsAndCurrentRoomTypeOnReview() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService assignments = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
+        when(assignments.findCurrentRooms(RESERVATION_ID)).thenReturn(List.of(currentRoom("305")));
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
+        com.example.hotel.dto.room.response.RoomResponse room = mock(com.example.hotel.dto.room.response.RoomResponse.class);
+        com.example.hotel.dto.room.response.RoomTypeResponse type = mock(com.example.hotel.dto.room.response.RoomTypeResponse.class);
+        when(type.name()).thenReturn("Twin Room");
+        when(room.roomType()).thenReturn(type);
+        when(roomQueryService.findAllByIds(any())).thenReturn(List.of(room));
+
+        CheckOutReviewResponse review = service(reservationQueryService, stayQueryService, assignments, stayBalanceService)
+                .review(RESERVATION_ID);
+
+        assertEquals("Twin Room", review.roomTypeLabel());
+        assertEquals(BookingSource.DIRECT, review.source());
+    }
+
     /** Creates the query service under test. */
     private CheckOutQueryService service(
             ReservationQueryService reservationQueryService,
@@ -327,6 +379,7 @@ class CheckOutQueryServiceTest {
             StayBalanceService stayBalanceService) {
         return new CheckOutQueryService(
                 reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService,
+                roomQueryService, chargeService, paymentService,
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-19T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 

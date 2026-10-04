@@ -38,21 +38,25 @@ public class CheckOutPageController {
     private final com.example.hotel.common.i18n.UiMessages messages;
     private final CheckOutQueryService checkOutQueryService;
     private final ReservationService reservationService;
+    private final com.example.hotel.service.customer.GuestQueryService guestQueryService;
 
     /**
      * Creates the Check-out MVC controller with its collaborators.
      *
      * @param checkOutQueryService service implementing the Check-out operational search/Review reads
      * @param reservationService service holding the authoritative checkOut lifecycle operation
+     * @param guestQueryService read model for the Guest Information card
      * @param messageSource message source for localized rejections
      */
     public CheckOutPageController(
             CheckOutQueryService checkOutQueryService,
             ReservationService reservationService,
+            com.example.hotel.service.customer.GuestQueryService guestQueryService,
             org.springframework.context.MessageSource messageSource) {
         this.messages = new com.example.hotel.common.i18n.UiMessages(messageSource);
         this.checkOutQueryService = checkOutQueryService;
         this.reservationService = reservationService;
+        this.guestQueryService = guestQueryService;
     }
 
     /**
@@ -101,6 +105,7 @@ public class CheckOutPageController {
      *
      * @param id Reservation identifier
      * @param model model used to render the Review page
+     * @param authentication current browser authentication
      * @return the Check-out Review template name
      */
     @GetMapping("/{id}")
@@ -108,9 +113,13 @@ public class CheckOutPageController {
     public String review(@PathVariable UUID id, Model model, org.springframework.security.core.Authentication authentication) {
         CheckOutReviewResponse review = checkOutQueryService.review(id);
         model.addAttribute("review", review);
+        model.addAttribute("summaryGuest", guestQueryService.findForReservationCreation(review.guestId()));
         // EXTEND_STAY is the only gate of Stay Extension; never granted implicitly by the template.
-        model.addAttribute("canExtendStay", authentication.getAuthorities().stream()
-                .anyMatch(authority -> "PERM_EXTEND_STAY".equals(authority.getAuthority())));
+        model.addAttribute("canExtendStay", hasAuthority(authentication, "PERM_EXTEND_STAY"));
+        // Charges, payments and every amount need MANAGE_PAYMENT; CHECK_OUT alone only sees the READY / NOT READY state.
+        if (hasAuthority(authentication, "PERM_MANAGE_PAYMENT")) {
+            model.addAttribute("financial", checkOutQueryService.financialSummary(id));
+        }
         return "check-out/review";
     }
 
@@ -137,6 +146,10 @@ public class CheckOutPageController {
             redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
             return "redirect:/check-out/" + id;
         }
+    }
+
+    private static boolean hasAuthority(org.springframework.security.core.Authentication authentication, String authority) {
+        return authentication.getAuthorities().stream().anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 
     /**

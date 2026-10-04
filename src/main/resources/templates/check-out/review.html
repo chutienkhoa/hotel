@@ -1,47 +1,81 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Check-out Review')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/front-desk/check-out-review.css'">
+<head th:replace="~{layout/base :: head(#{checkout.review.title})}"></head>
 <body>
 <div class="app-shell page-check-out">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <a class="back-link" th:href="@{/check-out}">Back to Check-out</a>
+    <!-- Read-only review. Readiness comes from the server (StayBalanceService + the overdue rule); this template only shows it.
+         Charges, payments and every amount are rendered only when the viewer holds MANAGE_PAYMENT (financial != null). -->
+    <main class="content check-out-review"
+          th:with="isCheckedIn=${review.status == 'CHECKED_IN'},
+                   overdue=${review.status == 'CHECKED_IN' and review.overdueDays > 0},
+                   paymentDue=${review.readiness != 'READY'},
+                   ready=${review.eligibleForCheckOut},
+                   currency=${financial != null ? financial.currency : null}">
+        <div class="cor-page">
+            <a class="back-link back-link--primary cor-back" th:if="${canViewBooking}" th:href="@{/reservations/{id}(id=${review.reservationId})}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{checkout.review.back.reservation(${review.reservationNumber})}">Back to Reservation</span>
+            </a>
+            <a class="back-link back-link--primary cor-back" th:unless="${canViewBooking}" th:href="@{/front-desk(view='departures')}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{checkout.review.back.frontDesk}">Back to Front Desk</span>
+            </a>
 
-        <div class="page-header">
-            <div>
-                <h1>Check-out Review</h1>
-                <div class="reservation-detail-heading-meta">
-                    <span th:text="${review.reservationNumber}">R20260917-000009</span>
-                    <span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(review.status)}" th:text="${review.status}">CHECKED_IN</span>
-                </div>
+            <div class="cor-title">
+                <h1>
+                    <span th:text="#{checkout.review.heading(${review.reservationNumber})}">Checkout Review</span>
+                    <span th:replace="~{layout/enum :: badge('reservationStatus', ${review.status}, ${'status-badge--' + #strings.toLowerCase(review.status)})}">CHECKED_IN</span>
+                    <!-- Same readiness as the card below, repeated here so it stays visible first on narrow screens. -->
+                    <span class="status-badge" id="readiness-chip" th:if="${isCheckedIn}"
+                          th:classappend="${ready} ? 'status-badge--available' : 'status-badge--out_of_order'"
+                          th:text="${ready} ? #{checkout.review.status.ready} : #{checkout.review.status.notReady}">Ready for checkout</span>
+                </h1>
+                <p class="page-description" th:text="${financial != null} ? #{checkout.review.subtitle} : #{checkout.review.subtitle.noFinancial}">Review all charges and payments before checkout.</p>
             </div>
-            <div class="action-row">
-                <a class="button button-secondary" th:href="@{/reservations/{id}/folio(id=${review.reservationId})}"
-                   th:if="${canManagePayment}">View Folio</a>
-            </div>
-        </div>
 
-        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+            <nav aria-label="Folio sections" class="detail-tabs cor-tabs" th:if="${financial != null}">
+                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId})}">
+                    <svg th:replace="~{layout/icons :: note}"></svg><span th:text="#{payment.folio.tab.overview}">Overview</span>
+                </a>
+                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='charges')}">
+                    <svg th:replace="~{layout/icons :: coins}"></svg><span th:text="#{payment.folio.tab.charges}">Charges</span>
+                </a>
+                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='payments')}">
+                    <svg th:replace="~{layout/icons :: creditCard}"></svg><span th:text="#{payment.folio.tab.payments}">Payments</span>
+                </a>
+                <span aria-current="page" class="detail-tab detail-tab--active">
+                    <svg th:replace="~{layout/icons :: logout}"></svg><span th:text="#{checkout.review.tab.checkout}">Checkout</span>
+                </span>
+            </nav>
 
-        <div class="reservation-detail">
-            <section class="check-in-review-blocked" th:if="${review.status != 'CHECKED_IN'}">
-                <h2>This reservation is not available for check-out.</h2>
-                <p th:text="${'Current status: ' + review.status + '. Only CHECKED_IN reservations can be checked out.'}">Current status</p>
+            <p class="message message-success cor-full" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="message message-error cor-full" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <section class="cor-notice cor-full" th:unless="${isCheckedIn}">
+                <h2 th:text="#{checkout.review.notAvailable.title}">This reservation is not available for check-out.</h2>
+                <p th:text="#{checkout.review.notAvailable.message(${review.status})}">Current status</p>
             </section>
 
-            <section class="check-in-review-blocked" id="overdue-departure" th:if="${review.status == 'CHECKED_IN' and review.overdueDays > 0}">
+            <section class="cor-notice cor-full" id="overdue-departure" th:if="${overdue}">
                 <h2 th:text="#{reservation.checkout.overdue.title}">Overdue Departure</h2>
                 <p th:text="#{reservation.checkout.overdue.blocked(${review.overdueDays})}">Check-out is blocked.</p>
-                <dl class="detail-list">
-                    <dt th:text="#{reservation.checkout.overdue.plannedCheckout}">Planned checkout</dt>
-                    <dd><span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span></dd>
-                    <dt th:text="#{reservation.checkout.overdue.today}">Today</dt>
-                    <dd><span th:replace="~{layout/datetime :: date(${review.hotelToday})}">—</span></dd>
-                    <dt th:text="#{reservation.checkout.overdue.days}">Overdue days</dt>
-                    <dd th:text="${review.overdueDays}">1</dd>
+                <dl class="cor-overdue-dates">
+                    <div>
+                        <dt th:text="#{reservation.checkout.overdue.plannedCheckout}">Planned checkout</dt>
+                        <dd><span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span></dd>
+                    </div>
+                    <div>
+                        <dt th:text="#{reservation.checkout.overdue.today}">Today</dt>
+                        <dd><span th:replace="~{layout/datetime :: date(${review.hotelToday})}">—</span></dd>
+                    </div>
+                    <div>
+                        <dt th:text="#{reservation.checkout.overdue.days}">Overdue days</dt>
+                        <dd th:text="${review.overdueDays}">1</dd>
+                    </div>
                 </dl>
                 <p th:text="#{reservation.checkout.overdue.explain}">Extend the stay.</p>
                 <p th:if="${canExtendStay}">
@@ -52,114 +86,293 @@
                 <p id="overdue-ask-manager" th:unless="${canExtendStay}" th:text="#{reservation.checkout.overdue.askManager}">Ask a manager.</p>
             </section>
 
-            <section class="check-in-review-blocked" th:if="${review.status == 'CHECKED_IN' and review.readiness != 'READY'}">
-                <h2>Payment required before check-out.</h2>
-                <p>Outstanding balance must be zero before this reservation can be checked out.</p>
-                <p th:if="${canManagePayment}">
-                    <a th:href="@{/reservations/{id}/folio(id=${review.reservationId})}">View Folio</a> to record or confirm payment.
-                </p>
-            </section>
-
-            <section aria-labelledby="check-out-info-heading" class="card reservation-detail-section">
-                <div class="reservation-detail-section-header">
-                    <div>
-                        <h2 id="check-out-info-heading">Reservation information</h2>
-                        <p>Read-only. Guest, rooms, dates, and readiness cannot be changed here.</p>
+            <div class="cor-main">
+                <!-- Guest Information: the same supported fields and order as the Check-in Review (no avatar, no passport image). -->
+                <section aria-labelledby="cor-guest-heading" class="card cor-card" id="guest-information"
+                         th:with="nationality=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(summaryGuest?.nationality)}">
+                    <h2 id="cor-guest-heading"><svg th:replace="~{layout/icons :: user}"></svg><span th:text="#{checkout.review.guest.title}">Guest Information</span></h2>
+                    <div class="cor-cols">
+                        <dl class="cor-facts">
+                            <div th:if="${summaryGuest != null and !#strings.isEmpty(summaryGuest.fullName)}">
+                                <dt th:text="#{checkin.review.guest.name}">Full Name</dt>
+                                <dd th:text="${summaryGuest.fullName}">Chu Khoa</dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkout.review.guest.code}">Guest Code</dt>
+                                <dd>
+                                    <a class="record-link" th:if="${canManageGuest}" th:href="@{/guests/{id}(id=${review.guestId})}" th:text="${review.guestCode}">G-1</a>
+                                    <span th:unless="${canManageGuest}" th:text="${review.guestCode}">G-1</span>
+                                </dd>
+                            </div>
+                            <th:block th:if="${summaryGuest != null}">
+                                <div>
+                                    <dt th:text="#{checkin.review.guest.nationality}">Nationality</dt>
+                                    <dd>
+                                        <span aria-hidden="true" class="cor-flag" th:if="${nationality.flag != null}" th:text="${nationality.flag}"></span>
+                                        <span th:text="${#strings.isEmpty(summaryGuest.nationality) ? '—' : summaryGuest.nationality}">Vietnam</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{checkin.review.guest.phone}">Phone</dt>
+                                    <dd th:text="${#strings.isEmpty(summaryGuest.phone) ? '—' : summaryGuest.phone}">—</dd>
+                                </div>
+                            </th:block>
+                        </dl>
+                        <dl class="cor-facts cor-facts--side" th:if="${summaryGuest != null}">
+                            <div>
+                                <dt th:text="#{checkin.review.guest.email}">Email</dt>
+                                <dd class="cor-wrap" th:text="${#strings.isEmpty(summaryGuest.email) ? '—' : summaryGuest.email}">—</dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkin.review.guest.dateOfBirth}">Date of birth</dt>
+                                <dd><span th:replace="~{layout/datetime :: date(${summaryGuest.dateOfBirth})}">—</span></dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</dt>
+                                <dd class="cor-wrap" id="guest-id-document" th:text="${#strings.isEmpty(summaryGuest.idDocumentNumber) ? '—' : summaryGuest.idDocumentNumber}">—</dd>
+                            </div>
+                        </dl>
                     </div>
-                </div>
+                </section>
 
-                <div class="reservation-info-grid">
-                    <div class="reservation-info-item">
-                        <span class="reservation-info-icon reservation-info-icon--blue">
-                            <svg th:replace="~{layout/icons :: user}"></svg>
-                        </span>
-                        <div class="reservation-info-content">
-                            <p class="reservation-info-label">Guest</p>
-                            <a class="reservation-info-value reservation-info-link"
-                               th:href="@{/guests/{id}(id=${review.guestId})}" th:if="${canManageGuest}">
-                                <span th:text="${review.guestCode}">GUEST-001</span>
-                                <span class="reservation-info-link-icon"><svg th:replace="~{layout/icons :: chevronRight}"></svg></span>
-                            </a>
-                            <p class="reservation-info-value" th:text="${review.guestCode}" th:unless="${canManageGuest}">GUEST-001</p>
-                        </div>
+                <section aria-labelledby="cor-stay-heading" class="card cor-card">
+                    <h2 id="cor-stay-heading"><svg th:replace="~{layout/icons :: calendar}"></svg><span th:text="#{checkout.review.stay.title}">Stay Information</span></h2>
+                    <div class="cor-stay">
+                        <dl class="cor-facts">
+                            <div>
+                                <dt th:text="#{checkout.review.stay.reservationNo}">Reservation No.</dt>
+                                <dd th:text="${review.reservationNumber}">R-1</dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkout.review.stay.checkIn}">Check-in Date</dt>
+                                <dd><span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span></dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkout.review.stay.actualCheckIn}">Actual Check-in</dt>
+                                <dd><span th:replace="~{layout/datetime :: dateTime(${review.actualCheckInAt})}">—</span></dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkout.review.stay.checkOut}">Check-out Date</dt>
+                                <dd><span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span></dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkout.review.stay.nights}">Nights</dt>
+                                <dd th:text="${review.nights()}">5</dd>
+                            </div>
+                        </dl>
+                        <dl class="cor-facts cor-facts--rooms">
+                            <div>
+                                <dt th:text="#{checkout.review.stay.roomNo}">Room No.</dt>
+                                <dd>
+                                    <span th:each="room : ${review.currentRooms}" class="cor-room" th:text="${room.roomNumber}">101</span>
+                                    <span th:if="${#lists.isEmpty(review.currentRooms)}">—</span>
+                                </dd>
+                            </div>
+                            <div th:if="${!#strings.isEmpty(review.roomTypeLabel)}">
+                                <dt th:text="#{checkout.review.stay.roomType}">Room Type</dt>
+                                <dd th:text="${review.roomTypeLabel}">Double Room</dd>
+                            </div>
+                            <!-- Rate row: the booked price snapshot of each current room; an amount, so MANAGE_PAYMENT only. -->
+                            <div th:if="${financial != null and !#maps.isEmpty(financial.currentRoomRates)}">
+                                <dt th:text="#{checkout.review.stay.roomRate}">Room Rate</dt>
+                                <dd>
+                                    <span class="cor-rate" th:each="room : ${review.currentRooms}" th:if="${financial.currentRoomRates.get(room.roomId) != null}">
+                                        <span th:if="${#lists.size(review.currentRooms) > 1}" th:text="${room.roomNumber + ' · '}">101 · </span>
+                                        <span th:replace="~{layout/money :: amount(${financial.currentRoomRates.get(room.roomId)}, ${currency})}">0 VND</span>
+                                        <span th:text="#{checkout.review.stay.perNight}">/ night</span>
+                                    </span>
+                                </dd>
+                            </div>
+                            <div>
+                                <dt th:text="#{checkout.review.stay.guests}">Guests</dt>
+                                <dd th:text="#{checkout.review.stay.guests.value(${review.adultCount}, ${review.childCount})}">2 adults, 1 child</dd>
+                            </div>
+                            <div th:if="${review.source != null}">
+                                <dt th:text="#{checkout.review.stay.source}">Source</dt>
+                                <dd th:text="${review.source.displayName}">Direct</dd>
+                            </div>
+                            <div th:if="${!#strings.isEmpty(review.otaBookingReference)}">
+                                <dt th:text="#{checkout.review.stay.otaRef}">OTA Ref</dt>
+                                <dd class="cor-wrap" th:text="${review.otaBookingReference}">123456</dd>
+                            </div>
+                        </dl>
                     </div>
+                </section>
 
-                    <div class="reservation-info-item">
-                        <span class="reservation-info-icon reservation-info-icon--green">
-                            <svg th:replace="~{layout/icons :: building}"></svg>
-                        </span>
-                        <div class="reservation-info-content">
-                            <p class="reservation-info-label">Current Rooms</p>
-                            <p class="reservation-info-value" th:each="room : ${review.currentRooms}" th:text="${room.roomNumber}">305</p>
-                            <p class="reservation-info-value" th:if="${#lists.isEmpty(review.currentRooms)}">—</p>
-                        </div>
+                <section aria-labelledby="cor-charges-heading" class="card cor-card" id="charges-summary" th:if="${financial != null}">
+                    <div class="cor-card__head">
+                        <h2 id="cor-charges-heading"><svg th:replace="~{layout/icons :: note}"></svg><span th:text="#{checkout.review.charges.title}">Charges Summary</span></h2>
+                        <a class="button button-outline-primary button-compact" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='charges')}"
+                           th:text="#{checkout.review.charges.viewAll}">View All Charges</a>
                     </div>
+                    <p class="empty-state" th:if="${#lists.isEmpty(financial.charges)}" th:text="#{payment.folio.charges.empty}">No charges recorded yet.</p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(financial.charges)}">
+                        <table class="cor-table">
+                            <colgroup>
+                                <col class="cor-col cor-col--1" />
+                                <col class="cor-col cor-col--2" />
+                                <col class="cor-col cor-col--3" />
+                                <col class="cor-col cor-col--4" />
+                            </colgroup>
+                            <thead>
+                            <tr>
+                                <th scope="col" th:text="#{payment.folio.column.type}">Type</th>
+                                <th scope="col" th:text="#{payment.folio.column.description}">Description</th>
+                                <th class="cor-center" scope="col" th:text="#{payment.folio.column.quantity}">Qty</th>
+                                <th class="table-number" scope="col" th:text="#{payment.folio.column.amount}">Amount</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="charge : ${financial.charges}" th:classappend="${charge.status != 'ACTIVE'} ? 'cor-row--inactive'">
+                                <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></td>
+                                <td>
+                                    <span th:text="${charge.description ?: '—'}">Description</span>
+                                    <span class="status-badge" th:if="${charge.status != 'ACTIVE'}" th:classappend="${'status-badge--' + #strings.toLowerCase(charge.status)}"
+                                          th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Voided</span>
+                                </td>
+                                <td class="cor-center" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">1</td>
+                                <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${currency})}">0 VND</span></td>
+                            </tr>
+                            </tbody>
+                            <tfoot>
+                            <tr class="table-total-row">
+                                <td colspan="3" th:text="#{checkout.review.charges.total(${currency})}">Total Charges</td>
+                                <td class="table-number"><span th:replace="~{layout/money :: amount(${financial.totalCharges}, ${currency})}">0 VND</span></td>
+                            </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </section>
 
-                    <div class="reservation-info-item">
-                        <span class="reservation-info-icon reservation-info-icon--blue">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                <section aria-labelledby="cor-payments-heading" class="card cor-card" id="payments-summary" th:if="${financial != null}">
+                    <div class="cor-card__head">
+                        <h2 id="cor-payments-heading"><svg th:replace="~{layout/icons :: creditCard}"></svg><span th:text="#{checkout.review.payments.title}">Payments Summary</span></h2>
+                        <a class="button button-outline-primary button-compact" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='payments')}"
+                           th:text="#{checkout.review.payments.viewAll}">View All Payments</a>
+                    </div>
+                    <p class="empty-state" th:if="${#lists.isEmpty(financial.payments)}" th:text="#{payment.folio.payments.empty}">No payments recorded yet.</p>
+                    <div class="table-wrap" th:unless="${#lists.isEmpty(financial.payments)}">
+                        <table class="cor-table">
+                            <colgroup>
+                                <col class="cor-col cor-col--1" />
+                                <col class="cor-col cor-col--2" />
+                                <col class="cor-col cor-col--3" />
+                                <col class="cor-col cor-col--4" />
+                            </colgroup>
+                            <thead>
+                            <tr>
+                                <th scope="col" th:text="#{payment.folio.column.date}">Date</th>
+                                <th scope="col" th:text="#{payment.folio.column.method}">Method</th>
+                                <th class="cor-center" scope="col" th:text="#{payment.folio.column.reference}">Reference</th>
+                                <th class="table-number" scope="col" th:text="#{payment.folio.column.applied}">Amount</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="payment : ${financial.payments}" th:classappend="${payment.status != 'PAID'} ? 'cor-row--inactive'">
+                                <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
+                                <td>
+                                    <span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">CASH</span>
+                                    <th:block th:if="${payment.status != 'PAID'}"><span th:replace="~{layout/enum :: badge('paymentStatus', ${payment.status}, ${'status-badge--' + #strings.toLowerCase(payment.status)})}">VOIDED</span></th:block>
+                                </td>
+                                <td class="table-reference cor-center" th:text="${payment.reference ?: '—'}">—</td>
+                                <td class="table-number">
+                                    <span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${currency})}">0 VND</span>
+                                    <span class="cor-note" th:if="${payment.currency != currency}"
+                                          th:text="#{checkout.review.payments.tender(${payment.currency})}">Paid as USD</span>
+                                </td>
+                            </tr>
+                            </tbody>
+                            <tfoot>
+                            <tr class="table-total-row">
+                                <td colspan="3" th:text="#{checkout.review.payments.total(${currency})}">Total Payments</td>
+                                <td class="table-number"><span th:replace="~{layout/money :: amount(${financial.totalPaidPayments}, ${currency})}">0 VND</span></td>
+                            </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <aside class="cor-side">
+                <!-- Readiness. NOT READY whenever the server says the stay is not eligible (open payment, overdue, wrong status). -->
+                <section class="cor-readiness" id="checkout-readiness"
+                         th:classappend="${ready} ? 'cor-readiness--ready' : 'cor-readiness--blocked'"
+                         th:attr="data-readiness=${ready ? 'READY' : 'NOT_READY'}">
+                    <div class="cor-readiness__top">
+                        <span class="cor-readiness__icon">
+                            <th:block th:if="${ready}"><svg th:replace="~{layout/icons :: checkCircle}"></svg></th:block>
+                            <th:block th:unless="${ready}"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></th:block>
                         </span>
-                        <div class="reservation-info-content">
-                            <p class="reservation-info-label">Check-in</p>
-                            <p class="reservation-info-value">
-                                <span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span>
+                        <div>
+                            <p class="cor-readiness__label" th:text="#{checkout.review.outstanding.title}">Outstanding Balance</p>
+                            <p class="cor-readiness__amount" id="outstanding-amount" th:if="${financial != null}">
+                                <span th:replace="~{layout/money :: amount(${financial.outstanding}, ${currency})}">0 VND</span>
                             </p>
+                            <p class="cor-readiness__state" id="readiness-state" th:text="${ready} ? #{checkout.review.status.ready} : #{checkout.review.status.notReady}">Ready for checkout</p>
                         </div>
                     </div>
-
-                    <div class="reservation-info-item">
-                        <span class="reservation-info-icon reservation-info-icon--blue">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
-                        </span>
-                        <div class="reservation-info-content">
-                            <p class="reservation-info-label">Planned Check-out</p>
-                            <p class="reservation-info-value">
-                                <span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span>
-                            </p>
-                        </div>
+                    <div class="cor-readiness__box" th:unless="${ready}">
+                        <p class="cor-readiness__title" th:text="#{checkout.review.outstanding.cannotProceed}">Cannot proceed to checkout</p>
+                        <p th:if="${isCheckedIn and paymentDue}" th:text="${financial != null} ? #{checkout.review.outstanding.settle} : #{checkout.review.outstanding.settleByAuthorized}">Please settle the outstanding balance.</p>
+                        <p th:if="${overdue and !paymentDue}" th:text="#{checkout.review.outstanding.overdue}">Resolve the overdue departure first.</p>
+                        <a class="button button-primary cor-readiness__cta" id="go-to-payments"
+                           th:if="${isCheckedIn and paymentDue and financial != null}"
+                           th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='payments')}">
+                            <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                            <span th:text="#{checkout.review.outstanding.goToPayments}">Go to Payments</span>
+                        </a>
                     </div>
+                    <p class="cor-readiness__box cor-readiness__box--ok" th:if="${ready}" th:text="#{checkout.review.outstanding.ready}">All conditions are met.</p>
+                </section>
 
-                    <div class="reservation-info-item">
-                        <span class="reservation-info-icon reservation-info-icon--purple">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
-                        </span>
-                        <div class="reservation-info-content">
-                            <p class="reservation-info-label">Actual Check-in</p>
-                            <p class="reservation-info-value">
-                                <span th:replace="~{layout/datetime :: dateTime(${review.actualCheckInAt})}">—</span>
-                            </p>
-                        </div>
-                    </div>
+                <!-- Checklist: only the real checkout gates, each decided by the server. -->
+                <section aria-labelledby="cor-checklist-heading" class="card cor-card">
+                    <h2 id="cor-checklist-heading"><svg th:replace="~{layout/icons :: clipboardCheck}"></svg><span th:text="#{checkout.review.checklist.title}">Checkout Checklist</span></h2>
+                    <ul class="cor-checklist">
+                        <li th:classappend="${isCheckedIn} ? 'cor-check--ok' : 'cor-check--fail'">
+                            <span class="cor-check__icon"><th:block th:if="${isCheckedIn}"><svg th:replace="~{layout/icons :: check}"></svg></th:block><th:block th:unless="${isCheckedIn}"><svg th:replace="~{layout/icons :: exclamation}"></svg></th:block></span>
+                            <div>
+                                <strong th:text="#{checkout.review.checklist.checkedIn}">Reservation is checked in</strong>
+                                <span th:text="${isCheckedIn} ? #{checkout.review.checklist.checkedIn.ok} : #{checkout.review.checklist.checkedIn.fail(${review.status})}">The stay is open.</span>
+                            </div>
+                        </li>
+                        <li th:classappend="${!overdue} ? 'cor-check--ok' : 'cor-check--fail'">
+                            <span class="cor-check__icon"><th:block th:if="${!overdue}"><svg th:replace="~{layout/icons :: check}"></svg></th:block><th:block th:unless="${!overdue}"><svg th:replace="~{layout/icons :: exclamation}"></svg></th:block></span>
+                            <div>
+                                <strong th:text="#{checkout.review.checklist.onTime}">Departure is not overdue</strong>
+                                <span th:text="${!overdue} ? #{checkout.review.checklist.onTime.ok} : #{checkout.review.checklist.onTime.fail(${review.overdueDays})}">Planned check-out is today or later.</span>
+                            </div>
+                        </li>
+                        <li th:classappend="${!paymentDue} ? 'cor-check--ok' : 'cor-check--fail'">
+                            <span class="cor-check__icon"><th:block th:if="${!paymentDue}"><svg th:replace="~{layout/icons :: check}"></svg></th:block><th:block th:unless="${!paymentDue}"><svg th:replace="~{layout/icons :: exclamation}"></svg></th:block></span>
+                            <div>
+                                <strong th:text="#{checkout.review.checklist.balance}">Outstanding balance is zero</strong>
+                                <span th:text="${!paymentDue} ? #{checkout.review.checklist.balance.ok} : #{checkout.review.checklist.balance.fail}">Nothing left to pay.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </section>
 
-                    <div class="reservation-info-item">
-                        <span class="reservation-info-icon reservation-info-icon--amber">
-                            <svg th:replace="~{layout/icons :: coins}"></svg>
-                        </span>
-                        <div class="reservation-info-content">
-                            <p class="reservation-info-label">Readiness</p>
-                            <p class="reservation-info-value">
-                                <span class="status-badge" th:classappend="${review.readiness == 'READY' ? ' status-badge--current' : ' status-badge--no_show'}"
-                                      th:text="${review.readiness == 'READY' ? 'Ready' : 'Payment required'}">Ready</span>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section aria-labelledby="check-out-confirm-heading" class="card reservation-detail-section actions" th:if="${review.eligibleForCheckOut}">
-                <div class="reservation-detail-section-header">
-                    <div>
-                        <h2 id="check-out-confirm-heading">Confirm check-out</h2>
-                    </div>
-                </div>
-                <form data-confirm-label="Confirm Check-out" data-confirm-severity="DANGER"
-                      data-confirm-title="Confirm check-out" method="post"
-                      th:action="@{/check-out/{id}/confirm(id=${review.reservationId})}"
-                      th:attr="data-confirm-message=|Check out reservation ${review.reservationNumber}?|">
-                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-                    <button class="button button-primary" type="submit">Confirm Check-out</button>
-                </form>
-            </section>
+                <!-- Final action. Eligible: a real POST form behind the confirmation dialog. Otherwise a disabled control and no form. -->
+                <section class="cor-action">
+                    <form data-confirm-severity="DANGER" method="post" th:if="${review.eligibleForCheckOut}"
+                          th:action="@{/check-out/{id}/confirm(id=${review.reservationId})}"
+                          th:attr="data-confirm-label=#{checkout.review.action.confirm},data-confirm-title=#{checkout.review.confirm.title},data-confirm-message=#{checkout.review.confirm.message(${review.reservationNumber})}">
+                        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                        <button class="button button-primary cor-action__button" id="confirm-checkout" type="submit">
+                            <svg th:replace="~{layout/icons :: logout}"></svg>
+                            <span th:text="#{checkout.review.action.confirm}">Confirm Checkout</span>
+                        </button>
+                    </form>
+                    <th:block th:unless="${review.eligibleForCheckOut}">
+                        <button class="button button-primary cor-action__button" disabled id="confirm-checkout-disabled" type="button">
+                            <svg th:replace="~{layout/icons :: logout}"></svg>
+                            <span th:text="#{checkout.review.action.confirm}">Confirm Checkout</span>
+                        </button>
+                        <p class="cor-action__hint" th:text="#{checkout.review.action.hint}">Checkout will be enabled when every condition above is met.</p>
+                    </th:block>
+                </section>
+            </aside>
         </div>
     </main>
 

@@ -64,6 +64,26 @@ public class StayRoomAssignmentQueryService {
     }
 
     /**
+     * Returns the nightly rate of each CURRENT room, keyed by Room identifier. The rate is the price snapshot of the
+     * originally booked ReservationRoom line the assignment descends from (a Room Change keeps it), so no rate is
+     * recalculated here.
+     *
+     * @param reservationId Reservation identifier
+     * @return current Room identifier to nightly rate; empty before Check-in
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, java.math.BigDecimal> findCurrentRoomRates(UUID reservationId) {
+        java.util.Map<UUID, java.math.BigDecimal> rates = new java.util.LinkedHashMap<>();
+        stays.findByReservationId(reservationId)
+                .map(Stay::getId)
+                .map(assignments::findOpenByStayId)
+                .orElseGet(List::of)
+                .forEach(assignment -> rates.put(
+                        assignment.getRoom().getId(), assignment.getOriginalReservationRoom().getNightlyRate()));
+        return rates;
+    }
+
+    /**
      * Lists the complete chronological Room History for a Reservation's Stay, grouped by lineage
      * (originally booked room) and ordered by time within each lineage, or an empty list before
      * Check-in.
