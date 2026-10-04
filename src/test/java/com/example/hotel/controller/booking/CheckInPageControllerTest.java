@@ -314,12 +314,13 @@ class CheckInPageControllerTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** Confirms the sidebar renders the Check-in link only when the user has CHECK_IN. */
+    /** Confirms Check-in is reached through Front Desk: no global Check-in item, Front Desk present, and the page stays under Front Desk. */
     @Test
-    void shouldRenderCheckInSidebarLinkOnlyWithCheckInPermission() throws Exception {
+    void shouldNotRenderGlobalCheckInSidebarLinkButKeepFrontDesk() throws Exception {
         mockMvc.perform(get("/check-in").with(user("staff").authorities(checkInAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-in\"")));
+                .andExpect(content().string(not(containsString("nav-check-in"))))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-front-desk\"")));
     }
 
     /** Confirms the OTA entry form has no Currency selector: VND is fixed and USD is never offered. */
@@ -1335,7 +1336,7 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString(
                         "src=\"/rooms/" + ROOM_ID + "/images/" + imageId + "/file\"")));
         summaryPage(checkInAuthority())
-                .andExpect(content().string(not(containsString("/images/"))))
+                .andExpect(content().string(not(containsString("/rooms/" + ROOM_ID + "/images/"))))
                 .andExpect(content().string(containsString("No room image")));
     }
 

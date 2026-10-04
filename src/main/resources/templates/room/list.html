@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Rooms')}"></head>
+<head th:replace="~{layout/base :: head(#{navigation.rooms})}"></head>
 <body>
 <div class="app-shell page-rooms">
     <header th:replace="~{layout/header :: header}"></header>

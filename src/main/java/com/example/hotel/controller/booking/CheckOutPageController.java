@@ -3,6 +3,7 @@ package com.example.hotel.controller.booking;
 import com.example.hotel.common.TableSorts;
 import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
+import com.example.hotel.dto.booking.response.CheckOutCompleteResponse;
 import com.example.hotel.dto.booking.response.CheckOutListItemResponse;
 import com.example.hotel.dto.booking.response.CheckOutReviewResponse;
 import com.example.hotel.service.booking.CheckOutQueryService;
@@ -124,6 +125,36 @@ public class CheckOutPageController {
     }
 
     /**
+     * Displays the read-only Checkout Complete screen. Only a CHECKED_OUT Reservation is represented: any other
+     * status is sent back to the Review, which explains why the Reservation cannot be checked out.
+     *
+     * @param id Reservation identifier
+     * @param model model used to render the page
+     * @param authentication current browser authentication
+     * @return the Checkout Complete template name, or a redirect to the Review
+     */
+    @GetMapping("/{id}/complete")
+    @PreAuthorize("hasAuthority('PERM_CHECK_OUT')")
+    public String complete(@PathVariable UUID id, Model model, org.springframework.security.core.Authentication authentication) {
+        CheckOutCompleteResponse complete;
+        try {
+            complete = checkOutQueryService.complete(id);
+        } catch (ResponseStatusException exception) {
+            if (exception.getStatusCode() == HttpStatus.CONFLICT) {
+                return "redirect:/check-out/" + id;
+            }
+            throw exception;
+        }
+        model.addAttribute("complete", complete);
+        model.addAttribute("summaryGuest", guestQueryService.findForReservationCreation(complete.guestId()));
+        // Charges, payments and every amount need MANAGE_PAYMENT, exactly as on the Review.
+        if (hasAuthority(authentication, "PERM_MANAGE_PAYMENT")) {
+            model.addAttribute("financial", checkOutQueryService.financialSummary(id));
+        }
+        return "check-out/complete";
+    }
+
+    /**
      * Submits the explicit human confirmation for a Reservation's Check-out, delegating entirely
      * to the existing authoritative {@link ReservationService#checkOut}. Every precondition
      * (Reservation/Stay status, Outstanding, current Room state) is re-validated independently by
@@ -132,16 +163,15 @@ public class CheckOutPageController {
      *
      * @param id Reservation identifier
      * @param redirectAttributes attributes used to show post-redirect feedback
-     * @return a redirect to the Check-out queue on success, so Staff can process the next
-     *     departing guest, or back to Review on failure
+     * @return a redirect (Post/Redirect/Get) to the Checkout Complete screen on success, or back to
+     *     Review on failure
      */
     @PostMapping("/{id}/confirm")
     @PreAuthorize("hasAuthority('PERM_CHECK_OUT')")
     public String confirm(@PathVariable UUID id, RedirectAttributes redirectAttributes) {
         try {
             reservationService.checkOut(id);
-            redirectAttributes.addFlashAttribute("successMessage", "Check-out completed successfully.");
-            return "redirect:/check-out";
+            return "redirect:/check-out/" + id + "/complete";
         } catch (ResponseStatusException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", safeMessage(exception));
             return "redirect:/check-out/" + id;

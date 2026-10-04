@@ -2,10 +2,12 @@ package com.example.hotel.service.booking;
 
 import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
+import com.example.hotel.dto.booking.response.CheckOutCompleteResponse;
 import com.example.hotel.dto.booking.response.CheckOutFinancialSummary;
 import com.example.hotel.dto.booking.response.CheckOutListItemResponse;
 import com.example.hotel.dto.booking.response.CheckOutReviewResponse;
 import com.example.hotel.dto.booking.response.CurrentRoomResponse;
+import com.example.hotel.dto.booking.response.ReservationActivityEntry;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.StayResponse;
@@ -16,8 +18,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Orchestrates the Check-out operational search/queue and Review screens strictly by reusing
@@ -37,6 +41,7 @@ public class CheckOutQueryService {
     private final com.example.hotel.service.room.RoomQueryService roomQueryService;
     private final ChargeService chargeService;
     private final PaymentService paymentService;
+    private final ReservationActivityQueryService reservationActivityQueryService;
     private final java.time.Clock clock;
 
     /**
@@ -49,6 +54,7 @@ public class CheckOutQueryService {
      * @param roomQueryService service used to resolve the current rooms' Room Type
      * @param chargeService service used to list the Stay's Charges
      * @param paymentService service used to list the Stay's Payments
+     * @param reservationActivityQueryService service used to read the actor of the CHECK_OUT audit entry
      * @param clock hotel business clock
      */
     public CheckOutQueryService(
@@ -59,6 +65,7 @@ public class CheckOutQueryService {
             com.example.hotel.service.room.RoomQueryService roomQueryService,
             ChargeService chargeService,
             PaymentService paymentService,
+            ReservationActivityQueryService reservationActivityQueryService,
             java.time.Clock clock) {
         this.reservationQueryService = reservationQueryService;
         this.stayQueryService = stayQueryService;
@@ -67,6 +74,7 @@ public class CheckOutQueryService {
         this.roomQueryService = roomQueryService;
         this.chargeService = chargeService;
         this.paymentService = paymentService;
+        this.reservationActivityQueryService = reservationActivityQueryService;
         this.clock = clock;
     }
 
@@ -155,6 +163,10 @@ public class CheckOutQueryService {
         ReservationDetailResponse reservation = reservationQueryService.findById(reservationId);
         StayResponse stay = stayQueryService.findByReservationId(reservationId);
         StayBalance balance = stayBalanceService.calculate(stay.id());
+        // A CHECKED_OUT Stay has no open assignment left: its rates come from the rooms released at checkout.
+        java.util.Map<UUID, java.math.BigDecimal> roomRates = ReservationStatus.CHECKED_OUT.name().equals(reservation.status())
+                ? stayRoomAssignmentQueryService.findFinalRoomRates(reservationId)
+                : stayRoomAssignmentQueryService.findCurrentRoomRates(reservationId);
         return new CheckOutFinancialSummary(
                 balance.totalCharges(),
                 balance.totalPaidPayments(),
@@ -162,7 +174,59 @@ public class CheckOutQueryService {
                 reservation.currency(),
                 chargeService.findByStayId(stay.id()),
                 paymentService.findByStayId(stay.id()),
-                stayRoomAssignmentQueryService.findCurrentRoomRates(reservationId));
+                roomRates);
+    }
+
+    /**
+     * Builds the read-only Checkout Complete screen of a CHECKED_OUT Reservation. Nothing is mutated and nothing is
+     * recalculated: status, Stay times, released rooms and the CHECK_OUT actor are read from their existing sources.
+     *
+     * @param reservationId Reservation identifier
+     * @return the Checkout Complete data
+     * @throws ResponseStatusException {@code CONFLICT} when the Reservation is not CHECKED_OUT
+     */
+    @Transactional(readOnly = true)
+    public CheckOutCompleteResponse complete(UUID reservationId) {
+        ReservationDetailResponse reservation = reservationQueryService.findById(reservationId);
+        if (!ReservationStatus.CHECKED_OUT.name().equals(reservation.status())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Reservation is not checked out");
+        }
+        StayResponse stay = stayQueryService.findByReservationId(reservationId);
+        List<CurrentRoomResponse> finalRooms = stayRoomAssignmentQueryService.findFinalRooms(reservationId);
+        java.util.Map<UUID, com.example.hotel.dto.room.response.RoomResponse> roomsById = roomQueryService
+                .findAllByIds(finalRooms.stream().map(CurrentRoomResponse::roomId).toList()).stream()
+                .collect(Collectors.toMap(com.example.hotel.dto.room.response.RoomResponse::id, room -> room));
+        List<CheckOutCompleteResponse.CheckedOutRoom> rooms = finalRooms.stream()
+                .map(room -> {
+                    com.example.hotel.dto.room.response.RoomResponse detail = roomsById.get(room.roomId());
+                    return new CheckOutCompleteResponse.CheckedOutRoom(
+                            room.roomId(),
+                            room.roomNumber(),
+                            detail == null || detail.roomType() == null ? null : detail.roomType().name(),
+                            detail == null ? null : detail.status());
+                })
+                .toList();
+        String checkedOutBy = reservationActivityQueryService.findByReservationId(reservationId).stream()
+                .filter(entry -> "CHECK_OUT".equals(entry.action()))
+                .reduce((first, second) -> second)
+                .map(ReservationActivityEntry::actorDisplay)
+                .filter(actor -> !"—".equals(actor))
+                .orElse(null);
+        return new CheckOutCompleteResponse(
+                reservation.id(),
+                reservation.reservationNumber(),
+                reservation.status(),
+                stay.status(),
+                reservation.guestId(),
+                reservation.guestCode(),
+                rooms,
+                reservation.checkInDate(),
+                reservation.checkOutDate(),
+                stay.actualCheckInAt(),
+                stay.actualCheckOutAt(),
+                checkedOutBy,
+                reservation.adultCount(),
+                reservation.childCount());
     }
 
     /**

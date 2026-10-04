@@ -70,6 +70,14 @@ class LoginRedirectSecurityTest {
                 .andExpect(redirectedUrl("/dashboard"));
     }
 
+    /** Confirms the hotel icon is public at the URL browsers probe by themselves, so an anonymous tab never gets a login redirect for it. */
+    @Test
+    void shouldServeFaviconAnonymously() throws Exception {
+        mockMvc.perform(get("/favicon.ico")).andExpect(status().isOk());
+        mockMvc.perform(get("/images/branding/sunset-hotel-favicon.png?v=2")).andExpect(status().isOk());
+        mockMvc.perform(get("/images/branding/sunset-hotel-apple-touch-icon.png")).andExpect(status().isOk());
+    }
+
     /** Confirms a failed login stays on the login page. */
     @Test
     void shouldStayOnLoginWhenCredentialsAreInvalid() throws Exception {

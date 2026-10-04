@@ -98,6 +98,21 @@ class FrontDeskPageControllerTest {
         when(queryService.inHouse(any(), anyInt())).thenReturn(new PageImpl<>(List.of(stayRow(rooms, false, false, null))));
     }
 
+    /** Confirms each tab exposes its keyboard shortcut (data, ARIA and localized title) and the handler script is loaded. */
+    @Test
+    void shouldExposeTabShortcuts() throws Exception {
+        mockMvc.perform(get("/front-desk").with(perm("PERM_CHECK_IN", "PERM_CHECK_OUT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-shortcut=\"1\" aria-keyshortcuts=\"Control+1\"")))
+                .andExpect(content().string(containsString("data-shortcut=\"2\" aria-keyshortcuts=\"Control+2\"")))
+                .andExpect(content().string(containsString("data-shortcut=\"3\" aria-keyshortcuts=\"Control+3\"")))
+                .andExpect(content().string(containsString("Shortcut: Ctrl+1")))
+                .andExpect(content().string(containsString("/js/common/tab-shortcuts.js")));
+        mockMvc.perform(get("/front-desk").with(perm("PERM_CHECK_IN", "PERM_CHECK_OUT"))
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("Phím tắt: Ctrl+2")));
+    }
+
     /** Confirms CHECK_IN alone opens Front Desk on Arrivals and shows no Departures/In-house tab or data. */
     @Test
     void shouldShowOnlyArrivalsToCheckInUser() throws Exception {
@@ -261,7 +276,7 @@ class FrontDeskPageControllerTest {
     @Test
     void shouldRenderVietnameseCheckInGuestCta() throws Exception {
         mockMvc.perform(get("/front-desk").with(perm("PERM_CHECK_IN")).cookie(new Cookie("pms-lang", "vi")))
-                .andExpect(content().string(containsString("Nhận phòng khách")));
+                .andExpect(content().string(containsString("Khách nhận phòng")));
     }
 
     /** Confirms a ready multi-room arrival is one row with both rooms, and a blocked room shows its issue. */

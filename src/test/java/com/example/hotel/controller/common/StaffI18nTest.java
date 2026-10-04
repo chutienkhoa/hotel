@@ -90,8 +90,8 @@ class StaffI18nTest {
                 .andExpect(content().string(containsString("Mã nhân viên, tên, số điện thoại, email, chức vụ")))
                 .andExpect(content().string(containsString(">Đang hoạt động<")))
                 .andExpect(content().string(containsString(">Ngừng hoạt động<")))
-                // Task33 Batch 1A renamed the brand to Sunset House (see common.app.name), unchanged by locale.
-                .andExpect(content().string(containsString("<title>Nhân viên | Sunset House</title>")))
+                // Task33 Batch 1A titles start with the untranslated brand "Sunset Hotel" (layout/base.html), unchanged by locale.
+                .andExpect(content().string(containsString("<title>Sunset Hotel | Nhân viên</title>")))
                 // shared sidebar / account
                 .andExpect(content().string(containsString("Quản trị")))
                 .andExpect(content().string(containsString("Đăng xuất")))

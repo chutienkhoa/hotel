@@ -1,4 +1,4 @@
-/* Checkout Review (templates/check-out/review.html). Scoped to .check-out-review; tokens, cards, buttons, badges and the
+/* Checkout Review and Checkout Complete (templates/check-out/review.html, complete.html; the .cop-* rules at the end). Scoped to .check-out-review; tokens, cards, buttons, badges and the
    folio detail tabs come from layout.css / components.css, and the look follows the Check-in Review. */
 
 .check-out-review {
@@ -140,6 +140,16 @@
   font-size: 0.8125rem;
   font-weight: 400;
 }
+/* Tender note of a payment made in another currency: the shared soft blue, secondary to the applied amount. */
+.cor-note--tender {
+  color: var(--color-date-check-in);
+}
+
+/* Void status of a charge: compact secondary text on its own line under the amount, right-aligned like it. */
+.cor-note--void {
+  color: var(--color-danger);
+  margin-top: 2px;
+}
 
 /* Tables: Charges and Payments share one four-column geometry (colgroup classes), so their column edges line up
    vertically across the two cards. Narrow screens scroll the table inside .table-wrap instead of squeezing it. */
@@ -165,6 +175,17 @@
   overflow-wrap: anywhere;
   vertical-align: top;
 }
+/* Charge description: wraps at word boundaries, at most two lines, then an ellipsis (the full text is the title
+   tooltip). It stays inside its fixed-width column, so it can never run into Qty or Amount. */
+.cor-table .cor-desc {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  white-space: normal;
+}
 .cor-table .table-number {
   text-align: right;
   white-space: nowrap;
@@ -176,6 +197,13 @@
   color: var(--color-muted);
 }
 .cor-row--inactive .table-number {
+  text-decoration: line-through;
+}
+/* A charge's amount cell holds the amount and the void note: only the amount is struck through. */
+.cor-row--inactive .cor-amount {
+  text-decoration: none;
+}
+.cor-row--inactive .cor-amount > span:first-child {
   text-decoration: line-through;
 }
 
@@ -379,5 +407,270 @@
   .cor-facts > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
+  }
+}
+
+/* Checkout Complete. Same page grid, cards and table geometry as the Review; only the result-specific pieces follow. */
+.cop-banner {
+  align-items: center;
+  background: var(--color-success-surface);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+}
+.cop-banner__icon {
+  color: var(--color-success);
+  display: inline-flex;
+  flex: none;
+}
+.cop-banner__icon svg {
+  height: 2.25rem;
+  width: 2.25rem;
+}
+.cop-banner__text {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.cop-banner__text h2 {
+  color: var(--color-success);
+  font-size: 1.25rem;
+  margin: 0;
+}
+.cop-banner__text p {
+  color: var(--color-muted);
+  margin: var(--space-1) 0 0;
+}
+.cop-banner__when {
+  color: var(--color-muted);
+  display: grid;
+  font-size: 0.875rem;
+  justify-items: end;
+  text-align: right;
+}
+.cop-banner__when strong {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.cop-summary {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.cop-tile {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+}
+.cop-tile > div {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-width: 0;
+}
+.cop-tile__icon {
+  color: var(--color-primary);
+  flex: none;
+}
+.cop-tile__icon svg {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+.cop-tile__label,
+.cop-tile__sub {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+.cop-tile__value {
+  font-size: 1.125rem;
+}
+.cop-tile__period {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.cop-pair {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.cop-pair > * {
+  min-width: 0;
+}
+.cop-pair .cor-card {
+  height: 100%;
+}
+.cop-facts > div {
+  grid-template-columns: minmax(5.5rem, 7rem) minmax(0, 1fr);
+}
+#stay-information .cop-facts > div {
+  grid-template-columns: minmax(9rem, max-content) minmax(0, 1fr);
+}
+.cor-card h3 {
+  align-items: center;
+  display: flex;
+  font-size: 0.9375rem;
+  gap: var(--space-2);
+  margin: 0;
+}
+.cor-card h3 svg {
+  color: var(--color-primary);
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+.cop-totals {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--space-4);
+}
+.cop-total {
+  align-items: center;
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+}
+.cop-total > div {
+  display: grid;
+  min-width: 0;
+}
+.cop-total__icon svg {
+  height: 2rem;
+  width: 2rem;
+}
+.cop-total__label {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+.cop-total__value {
+  font-size: 1.375rem;
+  overflow-wrap: anywhere;
+}
+.cop-total--charges {
+  background: var(--color-info-surface);
+}
+.cop-total--charges .cop-total__icon {
+  color: var(--color-primary);
+}
+.cop-total--payments,
+.cop-total--outstanding {
+  background: var(--color-success-surface);
+}
+.cop-total--payments .cop-total__icon,
+.cop-total--outstanding .cop-total__icon {
+  color: var(--color-success);
+}
+.cop-pair--tables {
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Charges and Payments each take a full row, so the shared column geometry is widened for the long cells:
+   Type / Date, Description / Method (with its status badge), Qty / Reference, Amount / Applied. */
+.cop-table {
+  min-width: 40rem;
+}
+.cop-table .cor-col--1 {
+  width: 20%;
+}
+.cop-table .cor-col--2 {
+  width: 38%;
+}
+.cop-table .cor-col--3 {
+  width: 16%;
+}
+.cop-table .cor-col--4 {
+  width: 26%;
+}
+.cop-table .status-badge {
+  margin-left: var(--space-2);
+}
+
+/* Stay Information: labels never wrap (the column grows to the longest label), date values take the shared
+   check-in / check-out colours from layout.css. */
+#stay-information .cop-facts dt {
+  white-space: nowrap;
+}
+
+.cop-post {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cop-post__item {
+  align-items: flex-start;
+  background: var(--color-success-surface);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+.cop-post__icon {
+  color: var(--color-success);
+  flex: none;
+}
+.cop-post__icon svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+.cop-post__item > div {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  min-width: 0;
+}
+.cop-post__item > div > span {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+.cop-actions {
+  display: grid;
+  gap: var(--space-2);
+}
+.cop-actions .button {
+  gap: var(--space-2);
+  justify-content: center;
+  width: 100%;
+}
+.cop-actions .button svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+@media (max-width: 80rem) {
+  .cop-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 64rem) {
+  .cop-pair,
+  .cop-totals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 40rem) {
+  .cop-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cop-banner__when {
+    justify-items: start;
+    text-align: left;
+  }
+  .cop-facts > div,
+  #stay-information .cop-facts > div {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

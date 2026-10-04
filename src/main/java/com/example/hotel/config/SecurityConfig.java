@@ -126,7 +126,7 @@ public class SecurityConfig {
                 .securityMatcher("/**")
                 .authenticationProvider(sessionAuthenticationProvider)
                 .authorizeHttpRequests(authorization -> authorization
-                        .requestMatchers("/login", "/css/**", "/js/**", "/images/**")
+                        .requestMatchers("/login", "/favicon.ico", "/css/**", "/js/**", "/images/**")
                         .permitAll()
                         .anyRequest()
                         .authenticated())

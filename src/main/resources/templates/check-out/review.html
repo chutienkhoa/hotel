@@ -38,13 +38,19 @@
             </div>
 
             <nav aria-label="Folio sections" class="detail-tabs cor-tabs" th:if="${financial != null}">
-                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId})}">
+                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId})}"
+                   data-shortcut="1" aria-keyshortcuts="Control+1"
+                   th:title="#{payment.folio.tab.overview} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+1')}">
                     <svg th:replace="~{layout/icons :: note}"></svg><span th:text="#{payment.folio.tab.overview}">Overview</span>
                 </a>
-                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='charges')}">
+                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='charges')}"
+                   data-shortcut="2" aria-keyshortcuts="Control+2"
+                   th:title="#{payment.folio.tab.charges} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+2')}">
                     <svg th:replace="~{layout/icons :: coins}"></svg><span th:text="#{payment.folio.tab.charges}">Charges</span>
                 </a>
-                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='payments')}">
+                <a class="detail-tab" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='payments')}"
+                   data-shortcut="3" aria-keyshortcuts="Control+3"
+                   th:title="#{payment.folio.tab.payments} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+3')}">
                     <svg th:replace="~{layout/icons :: creditCard}"></svg><span th:text="#{payment.folio.tab.payments}">Payments</span>
                 </a>
                 <span aria-current="page" class="detail-tab detail-tab--active">
@@ -145,15 +151,15 @@
                             </div>
                             <div>
                                 <dt th:text="#{checkout.review.stay.checkIn}">Check-in Date</dt>
-                                <dd><span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span></dd>
+                                <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span></dd>
                             </div>
                             <div>
                                 <dt th:text="#{checkout.review.stay.actualCheckIn}">Actual Check-in</dt>
-                                <dd><span th:replace="~{layout/datetime :: dateTime(${review.actualCheckInAt})}">—</span></dd>
+                                <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: dateTime(${review.actualCheckInAt})}">—</span></dd>
                             </div>
                             <div>
                                 <dt th:text="#{checkout.review.stay.checkOut}">Check-out Date</dt>
-                                <dd><span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span></dd>
+                                <dd class="date-value--check-out"><span th:replace="~{layout/datetime :: date(${review.checkOutDate})}">—</span></dd>
                             </div>
                             <div>
                                 <dt th:text="#{checkout.review.stay.nights}">Nights</dt>
@@ -226,12 +232,14 @@
                             <tr th:each="charge : ${financial.charges}" th:classappend="${charge.status != 'ACTIVE'} ? 'cor-row--inactive'">
                                 <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></td>
                                 <td>
-                                    <span th:text="${charge.description ?: '—'}">Description</span>
-                                    <span class="status-badge" th:if="${charge.status != 'ACTIVE'}" th:classappend="${'status-badge--' + #strings.toLowerCase(charge.status)}"
-                                          th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Voided</span>
+                                    <span class="cor-desc" th:text="${charge.description ?: '—'}" th:title="${charge.description}">Description</span>
                                 </td>
                                 <td class="cor-center" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">1</td>
-                                <td class="table-number"><span th:replace="~{layout/money :: amount(${charge.amount}, ${currency})}">0 VND</span></td>
+                                <td class="table-number cor-amount">
+                                            <span th:replace="~{layout/money :: amount(${charge.amount}, ${currency})}">0 VND</span>
+                                            <span class="cor-note cor-note--void" th:if="${charge.status != 'ACTIVE'}"
+                                                  th:text="#{'payment.folio.charge.status.' + ${charge.status}}">Voided</span>
+                                        </td>
                             </tr>
                             </tbody>
                             <tfoot>
@@ -277,7 +285,7 @@
                                 <td class="table-reference cor-center" th:text="${payment.reference ?: '—'}">—</td>
                                 <td class="table-number">
                                     <span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${currency})}">0 VND</span>
-                                    <span class="cor-note" th:if="${payment.currency != currency}"
+                                    <span class="cor-note cor-note--tender" th:if="${payment.currency != currency}"
                                           th:text="#{checkout.review.payments.tender(${payment.currency})}">Paid as USD</span>
                                 </td>
                             </tr>
@@ -377,6 +385,7 @@
     </main>
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+    <script defer th:src="@{/js/common/tab-shortcuts.js}"></script>
 </div>
 </body>
 </html>

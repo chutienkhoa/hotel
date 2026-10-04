@@ -13,6 +13,8 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.config.I18nConfig;
@@ -192,17 +194,31 @@ class StayExtensionPageTest {
                             .contentType("application/json")
                             .content("{\"expectedCurrentCheckOutDate\":\"2026-09-22\",\"newCheckOutDate\":\"2026-09-24\"}"))
                     .andExpect(status().isForbidden());
+            mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(other)
+                            .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
+                    .andExpect(status().isForbidden());
         }
         verify(service, never()).review(any(), any(), anyBoolean());
         verify(service, never()).extend(any(), any());
     }
 
-    /** Confirms the Review screen shows the Confirm Extension action only for a confirmable extension. */
+    /** Confirms the Review POST persists and renders nothing: it redirects (PRG) to the Review GET carrying only the two dates. */
+    @Test
+    void shouldRedirectReviewPostToTheReviewGet() throws Exception {
+        mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(manager()).with(csrf())
+                        .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID
+                        + "/stay-extension/review?expectedCurrentCheckOutDate=2026-09-22&newCheckOutDate=2026-09-24"));
+        verify(service, never()).extend(any(), any());
+    }
+
+    /** Confirms the Review GET shows the Confirm Extension action only for a confirmable extension. */
     @Test
     void shouldRenderReviewWithConfirmOnlyWhenAvailable() throws Exception {
         when(service.review(eq(ID), any(), eq(false))).thenReturn(preview(State.AVAILABLE, NEW_OUT, null));
 
-        mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(manager()).with(csrf())
+        mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(manager())
                         .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"stay-extension-confirm\"")))
@@ -213,38 +229,61 @@ class StayExtensionPageTest {
                 .andExpect(content().string(not(containsString("id=\"stay-extension-folio\""))));
     }
 
+    /** Confirms refreshing the Review GET only reads: it never applies the extension. */
+    @Test
+    void shouldNeverExtendFromTheReviewGet() throws Exception {
+        when(service.review(eq(ID), any(), eq(false))).thenReturn(preview(State.AVAILABLE, NEW_OUT, null));
+
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(manager())
+                            .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
+                    .andExpect(status().isOk());
+        }
+        verify(service, never()).extend(any(), any());
+    }
+
+    /** Confirms the Review GET without both dates returns to Select instead of reviewing. */
+    @Test
+    void shouldRedirectReviewGetWithoutDatesToSelect() throws Exception {
+        mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(manager()))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/stay-extension"))
+                .andExpect(flash().attribute("errorMessage", "Select a new check-out date first."));
+        verify(service, never()).review(any(), any(), anyBoolean());
+    }
+
     /** Confirms the folio impact appears on Review only when the caller may see payment data (MANAGE_PAYMENT). */
     @Test
     void shouldShowFolioImpactOnlyWithManagePayment() throws Exception {
         when(service.review(eq(ID), any(), eq(true))).thenReturn(preview(State.AVAILABLE, NEW_OUT, folio()));
 
-        mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(user("m").authorities(
+        mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(user("m").authorities(
                                 new SimpleGrantedAuthority("PERM_EXTEND_STAY"), new SimpleGrantedAuthority("PERM_MANAGE_PAYMENT")))
-                        .with(csrf())
                         .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"stay-extension-folio\"")));
     }
 
-    /** Confirms a stale Review re-renders the Select screen with the localized stale message (EN and VI). */
+    /** Confirms a stale Review redirects to the Select GET with the localized stale message (EN and VI). */
     @Test
     void shouldShowLocalizedStaleErrorOnTheSelectScreen() throws Exception {
         when(service.review(eq(ID), any(), eq(false)))
                 .thenThrow(new StayExtensionException(Reason.STALE_CHECK_OUT_DATE, "stale"));
-        when(service.preview(eq(ID), eq(NEW_OUT), eq(false))).thenReturn(preview(State.AVAILABLE, NEW_OUT, null));
 
-        mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(manager()).with(csrf())
+        mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(manager())
                         .param("expectedCurrentCheckOutDate", "2026-09-21").param("newCheckOutDate", "2026-09-24"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("The planned check-out changed since this form was opened")));
-        mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(manager()).with(csrf())
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/stay-extension?newCheckOutDate=2026-09-24"))
+                .andExpect(flash().attribute("errorMessage",
+                        containsString("The planned check-out changed since this form was opened")));
+        mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(manager())
                         .cookie(new Cookie("pms-lang", "vi"))
                         .param("expectedCurrentCheckOutDate", "2026-09-21").param("newCheckOutDate", "2026-09-24"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Ngày trả phòng dự kiến đã thay đổi")));
+                .andExpect(status().isFound())
+                .andExpect(flash().attribute("errorMessage", containsString("Ngày trả phòng dự kiến đã thay đổi")));
     }
 
-    /** Confirms a room conflict found at Review is shown on the Select screen with a Change Room route, and no Confirm. */
+    /** Confirms a room conflict found at Review sends the user to Select, where the Change Room route is offered, and no Confirm. */
     @Test
     void shouldShowRoomConflictWithChangeRoomGuidance() throws Exception {
         when(service.review(eq(ID), any(), eq(false)))
@@ -253,8 +292,14 @@ class StayExtensionPageTest {
         RequestPostProcessor withChangeRoom = user("staff").authorities(
                 new SimpleGrantedAuthority("PERM_EXTEND_STAY"), new SimpleGrantedAuthority("PERM_CHANGE_ROOM"));
 
-        mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(withChangeRoom).with(csrf())
+        var redirect = mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(withChangeRoom)
                         .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/stay-extension?newCheckOutDate=2026-09-24"))
+                .andReturn();
+
+        mockMvc.perform(get("/reservations/{id}/stay-extension", ID).param("newCheckOutDate", "2026-09-24")
+                        .with(withChangeRoom).flashAttrs(redirect.getFlashMap()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Room 201 is already booked or occupied")))
                 .andExpect(content().string(containsString("/reservations/" + ID + "/rooms/" + ROOM_ID + "/change")))
@@ -272,32 +317,40 @@ class StayExtensionPageTest {
         mockMvc.perform(post("/reservations/{id}/stay-extension", ID).with(manager()).with(csrf())
                         .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl(
-                        "/reservations/" + ID));
+                .andExpect(redirectedUrl("/reservations/" + ID))
+                .andExpect(flash().attributeExists("successMessage"));
     }
 
-    /** Confirms a recoverable rejection on Confirm returns to the Select screen with the proposed date, not a dead end. */
+    /** Confirms a recoverable rejection on Confirm redirects to the Select GET with the proposed date, not a dead end. */
     @Test
     void shouldRecoverOnTheSelectScreenWhenConfirmIsRejected() throws Exception {
         when(service.extend(eq(ID), any())).thenThrow(new StayExtensionException(Reason.INVENTORY_CONFLICT, "conflict", "201"));
-        when(service.preview(eq(ID), eq(NEW_OUT), eq(false))).thenReturn(preview(State.ROOM_CONFLICT, NEW_OUT, null));
 
         mockMvc.perform(post("/reservations/{id}/stay-extension", ID).with(manager()).with(csrf())
                         .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Room 201 is already booked or occupied")))
-                .andExpect(content().string(containsString("name=\"expectedCurrentCheckOutDate\"")));
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/stay-extension?newCheckOutDate=2026-09-24"))
+                .andExpect(flash().attribute("errorMessage", containsString("Room 201 is already booked or occupied")));
     }
 
-    /** Confirms a missing date on Review is reported on the Select screen rather than applied. */
+    /** Confirms a missing date on the Review POST is reported on the Select GET rather than applied or rendered. */
     @Test
     void shouldRejectMissingDateWithoutMutating() throws Exception {
-        when(service.preview(eq(ID), eq(null), eq(false))).thenReturn(preview(State.NOT_SELECTED, null, null));
-
         mockMvc.perform(post("/reservations/{id}/stay-extension/review", ID).with(manager()).with(csrf())
                         .param("expectedCurrentCheckOutDate", "2026-09-22"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Select a new check-out date first.")));
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/stay-extension"))
+                .andExpect(flash().attribute("errorMessage", "Select a new check-out date first."));
+        verify(service, never()).extend(any(), any());
+    }
+
+    /** Confirms a missing date on Confirm is reported on the Select GET and never applied. */
+    @Test
+    void shouldRejectConfirmWithMissingDateWithoutMutating() throws Exception {
+        mockMvc.perform(post("/reservations/{id}/stay-extension", ID).with(manager()).with(csrf())
+                        .param("expectedCurrentCheckOutDate", "2026-09-22"))
+                .andExpect(status().isFound())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/stay-extension"));
         verify(service, never()).extend(any(), any());
     }
 

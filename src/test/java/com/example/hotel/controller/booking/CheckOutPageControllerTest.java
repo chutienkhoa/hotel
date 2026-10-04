@@ -223,15 +223,14 @@ class CheckOutPageControllerTest {
                 .andExpect(status().isForbidden());
     }
 
-    /** Confirms a successful Confirm delegates to the existing authoritative checkOut and redirects to the queue. */
+    /** Confirms a successful Confirm delegates to the existing authoritative checkOut and redirects (PRG) to Checkout Complete. */
     @Test
-    void shouldDelegateToExistingCheckOutServiceAndRedirectToQueueOnSuccess() throws Exception {
+    void shouldDelegateToExistingCheckOutServiceAndRedirectToCheckoutCompleteOnSuccess() throws Exception {
         mockMvc.perform(post("/check-out/{id}/confirm", RESERVATION_ID)
                         .with(user("staff").authorities(checkOutAuthority()))
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/check-out"))
-                .andExpect(flash().attribute("successMessage", "Check-out completed successfully."));
+                .andExpect(redirectedUrl("/check-out/" + RESERVATION_ID + "/complete"));
 
         verify(reservationService).checkOut(RESERVATION_ID);
     }
@@ -251,15 +250,16 @@ class CheckOutPageControllerTest {
                 .andExpect(flash().attribute("errorMessage", "Outstanding balance must be zero."));
     }
 
-    /** Confirms the sidebar renders the Check-out link only when the user has CHECK_OUT. */
+    /** Confirms Check-out is reached through Front Desk: no global Check-out item, Front Desk present. */
     @Test
-    void shouldRenderCheckOutSidebarLinkOnlyWithCheckOutPermission() throws Exception {
+    void shouldNotRenderGlobalCheckOutSidebarLinkButKeepFrontDesk() throws Exception {
         when(checkOutQueryService.search(any(), org.mockito.ArgumentMatchers.eq(0)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         mockMvc.perform(get("/check-out").with(user("staff").authorities(checkOutAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-out\"")));
+                .andExpect(content().string(not(containsString("nav-check-out"))))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-front-desk\"")));
     }
 
     /** Confirms the Check-out sidebar link marks itself active while on the Check-out queue page. */

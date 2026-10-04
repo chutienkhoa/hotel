@@ -110,9 +110,34 @@ class CheckOutReviewPageTest {
                 .andReturn().getResponse().getContentAsString();
         // Charges: the VOIDED row is shown as voided, and the total is the authoritative one, not the sum of the rows.
         org.junit.jupiter.api.Assertions.assertTrue(body.contains("Double Room (101)") && body.contains("Voided"));
+        // The voided status is the compact note inside the Amount cell, no longer a badge beside the description.
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("cor-note cor-note--void"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("status-badge status-badge--voided"));
         org.junit.jupiter.api.Assertions.assertTrue(body.contains("3,600,000 VND"));
         // Payments: a USD tender shows its applied VND amount and a tender note.
         org.junit.jupiter.api.Assertions.assertTrue(body.contains("TRX123456") && body.contains("Paid as USD"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("cor-note cor-note--tender"));
+    }
+
+    /** Confirms Overview/Charges/Payments carry Ctrl+1/2/3 (not Checkout), the shared date classes and the shortcut script, in EN and VI. */
+    @Test
+    void shouldExposeTabShortcutsAndDateColors() throws Exception {
+        when(queryService.review(ID)).thenReturn(review(true, "READY", 0, "CHECKED_IN", room("101")));
+        when(queryService.financialSummary(ID)).thenReturn(finance("0"));
+
+        String body = mockMvc.perform(get("/check-out/{id}", ID).with(perm("PERM_CHECK_OUT", "PERM_MANAGE_PAYMENT")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-shortcut=\"1\"")))
+                .andExpect(content().string(containsString("aria-keyshortcuts=\"Control+2\"")))
+                .andExpect(content().string(containsString("Shortcut: Ctrl+3")))
+                .andExpect(content().string(containsString("/js/common/tab-shortcuts.js")))
+                .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("data-shortcut=\"4\""));
+        org.junit.jupiter.api.Assertions.assertEquals(2, body.split("date-value--check-in", -1).length - 1);
+        org.junit.jupiter.api.Assertions.assertEquals(1, body.split("date-value--check-out", -1).length - 1);
+        mockMvc.perform(get("/check-out/{id}", ID).with(perm("PERM_CHECK_OUT", "PERM_MANAGE_PAYMENT"))
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("Phím tắt: Ctrl+1")));
     }
 
     /** Confirms an outstanding balance is NOT READY: amount, the Go to Payments path, a disabled confirm and no confirm form. */

@@ -3,7 +3,13 @@
 <head th:fragment="head(pageTitle)">
     <meta charset="UTF-8" />
     <meta content="width=device-width, initial-scale=1" name="viewport" />
-    <title th:text="${pageTitle} + ' | ' + #{common.app.name}">Hotel Management</title>
+    <!-- Browser tab: "Sunset Hotel | <Page Name>". Pages supply only their name; the brand is a proper name, never translated. -->
+    <title th:text="'Sunset Hotel | ' + ${pageTitle}">Sunset Hotel</title>
+    <!-- The one authoritative favicon declaration for every page (logo mark only). The same icon is also served at
+         /favicon.ico, the URL browsers probe on their own, so no fallback can bring back another icon. Bump ?v= (a fixed
+         value, not per request) when the artwork changes, to defeat browser favicon caching. -->
+    <link rel="icon" type="image/png" sizes="32x32" th:href="@{/images/branding/sunset-hotel-favicon.png(v=2)}" />
+    <link rel="apple-touch-icon" th:href="@{/images/branding/sunset-hotel-apple-touch-icon.png(v=2)}" />
     <!-- Translated strings for JavaScript: read with PmsI18n.t(key, fallback). -->
     <meta name="pms-i18n:js.datePicker.clear" th:content="#{js.datePicker.clear}" content="Clear" />
     <meta name="pms-i18n:js.datePicker.clear.aria" th:content="#{js.datePicker.clear.aria}" content="Clear date" />

@@ -117,6 +117,23 @@ class FolioPageControllerTest {
     @MockitoBean
     private JwtService jwtService;
 
+    /** Confirms the three Folio tabs carry Ctrl+1/2/3 (data, ARIA, localized title) and the shared handler script, in EN and VI. */
+    @Test
+    void shouldExposeTabShortcuts() throws Exception {
+        stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
+
+        mockMvc.perform(get(FOLIO_PATH).with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-shortcut=\"1\" aria-keyshortcuts=\"Control+1\"")))
+                .andExpect(content().string(containsString("data-shortcut=\"2\" aria-keyshortcuts=\"Control+2\"")))
+                .andExpect(content().string(containsString("data-shortcut=\"3\" aria-keyshortcuts=\"Control+3\"")))
+                .andExpect(content().string(containsString("Shortcut: Ctrl+2")))
+                .andExpect(content().string(containsString("/js/common/tab-shortcuts.js")));
+        mockMvc.perform(get(FOLIO_PATH).with(user("manager").authorities(managePayment()))
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("Phím tắt: Ctrl+3")));
+    }
+
     /** Confirms the Overview renders the authoritative financial summary and links to the Payments section. */
     @Test
     void shouldRenderOverviewFinancialSummaryForManagePayment() throws Exception {

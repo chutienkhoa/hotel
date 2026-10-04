@@ -32,15 +32,6 @@
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: home}"></svg></span>
             <span class="sidebar-nav-label" th:text="#{navigation.frontDesk}">Front Desk</span>
         </a>
-        <!-- Task33 Batch 1A: transitional only, kept until Batch 3 (Front Desk); not the final contract. -->
-        <a class="sidebar-nav-link nav-check-in" th:href="@{/check-in}" th:if="${canCheckIn}">
-            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
-            <span class="sidebar-nav-label" th:text="#{navigation.checkIn}">Check-in</span>
-        </a>
-        <a class="sidebar-nav-link nav-check-out" th:href="@{/check-out}" th:if="${canCheckOut}">
-            <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
-            <span class="sidebar-nav-label" th:text="#{navigation.checkOut}">Check-out</span>
-        </a>
         <a class="sidebar-nav-link nav-reservations" th:href="@{/reservations}" th:if="${canViewBooking}">
             <span class="sidebar-nav-icon"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
             <span class="sidebar-nav-label" th:text="#{navigation.reservations}">Reservations</span>

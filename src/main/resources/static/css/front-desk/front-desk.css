@@ -323,7 +323,11 @@
   text-underline-offset: 3px;
 }
 .front-desk-table .front-desk-action {
+  justify-content: center;
+  text-align: center;
   white-space: nowrap;
+  /* One width for every row action (Review / Check in, Xem xét / Nhận phòng, ...), independent of the label. */
+  width: 7rem;
 }
 /* The Action column is always the last column. When the table is wider than its scroll container, it stays pinned
    to the right edge so the row's one primary action is reachable at any width. It only moves when the table

@@ -39,18 +39,24 @@
 
             <nav aria-label="Folio sections" class="detail-tabs folio-tabs">
                 <a class="detail-tab" th:aria-current="${activeTab == 'overview'} ? 'page' : null"
+                   data-shortcut="1" aria-keyshortcuts="Control+1"
+                   th:title="#{payment.folio.tab.overview} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+1')}"
                    th:classappend="${activeTab == 'overview'} ? 'detail-tab--active' : ''"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
                     <svg th:replace="~{layout/icons :: note}"></svg>
                     <span th:text="#{payment.folio.tab.overview}">Overview</span>
                 </a>
                 <a class="detail-tab" th:aria-current="${activeTab == 'charges'} ? 'page' : null"
+                   data-shortcut="2" aria-keyshortcuts="Control+2"
+                   th:title="#{payment.folio.tab.charges} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+2')}"
                    th:classappend="${activeTab == 'charges'} ? 'detail-tab--active' : ''"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='charges')}">
                     <svg th:replace="~{layout/icons :: coins}"></svg>
                     <span th:text="#{payment.folio.tab.charges}">Charges</span>
                 </a>
                 <a class="detail-tab" th:aria-current="${activeTab == 'payments'} ? 'page' : null"
+                   data-shortcut="3" aria-keyshortcuts="Control+3"
+                   th:title="#{payment.folio.tab.payments} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+3')}"
                    th:classappend="${activeTab == 'payments'} ? 'detail-tab--active' : ''"
                    th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='payments')}">
                     <svg th:replace="~{layout/icons :: creditCard}"></svg>
@@ -1016,6 +1022,7 @@
 
     <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
+<script defer th:src="@{/js/common/tab-shortcuts.js}"></script>
 <script defer th:src="@{/js/stay/folio.js}"></script>
 <script defer th:src="@{/js/stay/folio-charges.js}"></script>
 </body>

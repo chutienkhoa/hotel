@@ -141,6 +141,7 @@ class CheckOutQueryServiceTest {
         CheckOutQueryService overdue = new CheckOutQueryService(
                 reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService,
                 mock(com.example.hotel.service.room.RoomQueryService.class), mock(ChargeService.class), mock(PaymentService.class),
+                mock(ReservationActivityQueryService.class),
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-21T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
 
         CheckOutReviewResponse review = overdue.review(RESERVATION_ID);
@@ -324,6 +325,7 @@ class CheckOutQueryServiceTest {
             mock(com.example.hotel.service.room.RoomQueryService.class);
     private final ChargeService chargeService = mock(ChargeService.class);
     private final PaymentService paymentService = mock(PaymentService.class);
+    private final ReservationActivityQueryService activityQueryService = mock(ReservationActivityQueryService.class);
 
     /** Confirms the financial summary takes its totals from StayBalanceService and its rows from the Stay's Charges/Payments. */
     @Test
@@ -371,6 +373,94 @@ class CheckOutQueryServiceTest {
         assertEquals(BookingSource.DIRECT, review.source());
     }
 
+    /** Confirms Checkout Complete is built only for a CHECKED_OUT Reservation, from the released rooms and the CHECK_OUT audit actor. */
+    @Test
+    void shouldBuildCheckoutCompleteFromFinalRoomsStayTimesAndCheckOutActor() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService assignments = mock(StayRoomAssignmentQueryService.class);
+        Instant out = Instant.parse("2026-09-19T04:25:00Z");
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_OUT"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID))
+                .thenReturn(new StayResponse(STAY_ID, "CHECKED_OUT", Instant.parse("2026-09-17T10:00:00Z"), out));
+        when(assignments.findFinalRooms(RESERVATION_ID)).thenReturn(List.of(currentRoom("305")));
+        com.example.hotel.dto.room.response.RoomResponse room = new com.example.hotel.dto.room.response.RoomResponse(
+                ROOM_ID, "305", new com.example.hotel.dto.room.response.RoomTypeResponse(UUID.randomUUID(), "DBL", "Double Room"),
+                "3", "DIRTY", true);
+        when(roomQueryService.findAllByIds(any())).thenReturn(List.of(room));
+        when(activityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of(
+                new com.example.hotel.dto.booking.response.ReservationActivityEntry(out.minusSeconds(3600), "reception", "CHECK_IN"),
+                new com.example.hotel.dto.booking.response.ReservationActivityEntry(out, "admin", "CHECK_OUT")));
+
+        com.example.hotel.dto.booking.response.CheckOutCompleteResponse complete =
+                service(reservationQueryService, stayQueryService, assignments, mock(StayBalanceService.class))
+                        .complete(RESERVATION_ID);
+
+        assertEquals("CHECKED_OUT", complete.status());
+        assertEquals("CHECKED_OUT", complete.stayStatus());
+        assertEquals(out, complete.actualCheckOutAt());
+        assertEquals("admin", complete.checkedOutBy());
+        assertEquals("305", complete.roomNumbers());
+        assertEquals("Double Room", complete.roomTypeLabel());
+        assertEquals("DIRTY", complete.rooms().get(0).roomStatus());
+        assertEquals(2, complete.nights());
+    }
+
+    /** Confirms a Reservation that is not CHECKED_OUT is rejected, and nothing about its Stay is read. */
+    @Test
+    void shouldRejectCheckoutCompleteForNonCheckedOutReservation() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_IN"));
+
+        org.springframework.web.server.ResponseStatusException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                org.springframework.web.server.ResponseStatusException.class,
+                () -> service(reservationQueryService, stayQueryService, mock(StayRoomAssignmentQueryService.class),
+                        mock(StayBalanceService.class)).complete(RESERVATION_ID));
+
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, exception.getStatusCode());
+        org.mockito.Mockito.verifyNoInteractions(stayQueryService);
+    }
+
+    /** Confirms a missing CHECK_OUT audit entry yields no actor rather than an invented one. */
+    @Test
+    void shouldLeaveActorEmptyWhenNoCheckOutAuditEntryExists() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService assignments = mock(StayRoomAssignmentQueryService.class);
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_OUT"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID))
+                .thenReturn(new StayResponse(STAY_ID, "CHECKED_OUT", Instant.parse("2026-09-17T10:00:00Z"), Instant.parse("2026-09-19T04:25:00Z")));
+        when(assignments.findFinalRooms(RESERVATION_ID)).thenReturn(List.of());
+        when(activityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of());
+
+        com.example.hotel.dto.booking.response.CheckOutCompleteResponse complete =
+                service(reservationQueryService, stayQueryService, assignments, mock(StayBalanceService.class))
+                        .complete(RESERVATION_ID);
+
+        org.junit.jupiter.api.Assertions.assertNull(complete.checkedOutBy());
+        assertTrue(complete.rooms().isEmpty());
+    }
+
+    /** Confirms a CHECKED_OUT financial summary takes the room rates from the rooms released at checkout. */
+    @Test
+    void shouldReadRoomRatesFromFinalRoomsForCheckedOutFinancialSummary() {
+        ReservationQueryService reservationQueryService = mock(ReservationQueryService.class);
+        StayQueryService stayQueryService = mock(StayQueryService.class);
+        StayRoomAssignmentQueryService assignments = mock(StayRoomAssignmentQueryService.class);
+        StayBalanceService stayBalanceService = mock(StayBalanceService.class);
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CHECKED_OUT"));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenReturn(stay());
+        when(stayBalanceService.calculate(STAY_ID)).thenReturn(balance(BigDecimal.ZERO));
+        when(assignments.findFinalRoomRates(RESERVATION_ID)).thenReturn(java.util.Map.of(ROOM_ID, new BigDecimal("1200000")));
+
+        var summary = service(reservationQueryService, stayQueryService, assignments, stayBalanceService)
+                .financialSummary(RESERVATION_ID);
+
+        assertEquals(new BigDecimal("1200000"), summary.currentRoomRates().get(ROOM_ID));
+        verify(assignments, org.mockito.Mockito.never()).findCurrentRoomRates(any());
+    }
+
     /** Creates the query service under test. */
     private CheckOutQueryService service(
             ReservationQueryService reservationQueryService,
@@ -379,7 +469,7 @@ class CheckOutQueryServiceTest {
             StayBalanceService stayBalanceService) {
         return new CheckOutQueryService(
                 reservationQueryService, stayQueryService, stayRoomAssignmentQueryService, stayBalanceService,
-                roomQueryService, chargeService, paymentService,
+                roomQueryService, chargeService, paymentService, activityQueryService,
                 java.time.Clock.fixed(java.time.Instant.parse("2026-09-19T03:00:00Z"), java.time.ZoneId.of("Asia/Ho_Chi_Minh")));
     }
 

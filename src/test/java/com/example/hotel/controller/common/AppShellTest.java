@@ -75,6 +75,30 @@ class AppShellTest {
                 .andExpect(content().string(not(containsString("sidebar-brand"))));
     }
 
+    /** Confirms the shared head supplies the hotel favicon and the "Sunset Hotel | <Page>" title, whatever the locale. */
+    @Test
+    void shouldRenderHotelFaviconAndBrandedTitle() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<title>Sunset Hotel | Dashboard</title>")))
+                .andExpect(content().string(containsString("href=\"/images/branding/sunset-hotel-favicon.png?v=2\"")))
+                .andExpect(content().string(containsString("href=\"/images/branding/sunset-hotel-apple-touch-icon.png?v=2\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.matchesPattern("(?s)^(?:(?!rel=\"icon\").)*rel=\"icon\"(?:(?!rel=\"icon\").)*$")))
+                .andExpect(content().string(not(containsString("rel=\"shortcut icon\""))));
+    }
+
+    /** Confirms only the page name is localized: the brand stays first and unchanged in Vietnamese. */
+    @Test
+    void shouldLocalizeOnlyThePageNameInTheTitle() throws Exception {
+        when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
+
+        mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority()))
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("<title>Sunset Hotel | Bảng điều khiển</title>")));
+    }
+
     /** Confirms the mobile nav toggle targets the sidebar and starts closed, with a localized label. */
     @Test
     void shouldRenderMobileNavToggleControllingTheSidebar() throws Exception {
@@ -248,7 +272,7 @@ class AppShellTest {
      * sidebar-nav-link} class, per spec sec. 7.1a) with Room List/Housekeeping as its linked children.
      */
     @Test
-    void shouldStillRenderUnchangedGroupsAndTransitionalLinks() throws Exception {
+    void shouldStillRenderUnchangedGroupsAndFrontDeskWithoutTransitionalLinks() throws Exception {
         when(dashboardService.getDashboard(org.mockito.ArgumentMatchers.any())).thenReturn(emptyDashboard());
 
         mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
@@ -257,8 +281,9 @@ class AppShellTest {
                 .andExpect(content().string(not(containsString("class=\"sidebar-nav-link nav-rooms\""))))
                 .andExpect(content().string(containsString("nav-room-list")))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-housekeeping\"")))
-                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-in\"")))
-                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-out\"")))
+                .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-front-desk\"")))
+                .andExpect(content().string(not(containsString("nav-check-in"))))
+                .andExpect(content().string(not(containsString("nav-check-out"))))
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-staff\"")));
     }
 

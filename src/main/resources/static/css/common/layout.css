@@ -222,8 +222,8 @@ p {
 }
 .app-shell.page-dashboard .nav-dashboard,
 .app-shell.page-reports .nav-reports,
-.app-shell.page-check-in .nav-check-in,
-.app-shell.page-check-out .nav-check-out,
+.app-shell.page-check-in .nav-front-desk,
+.app-shell.page-check-out .nav-front-desk,
 .app-shell.page-reservations .nav-reservations,
 .app-shell.page-reservation-create .nav-reservations,
 .app-shell.page-guests .nav-guests,
@@ -240,8 +240,8 @@ p {
 }
 .app-shell.page-dashboard .nav-dashboard .sidebar-nav-icon,
 .app-shell.page-reports .nav-reports .sidebar-nav-icon,
-.app-shell.page-check-in .nav-check-in .sidebar-nav-icon,
-.app-shell.page-check-out .nav-check-out .sidebar-nav-icon,
+.app-shell.page-check-in .nav-front-desk .sidebar-nav-icon,
+.app-shell.page-check-out .nav-front-desk .sidebar-nav-icon,
 .app-shell.page-reservations .nav-reservations .sidebar-nav-icon,
 .app-shell.page-reservation-create .nav-reservations .sidebar-nav-icon,
 .app-shell.page-guests .nav-guests .sidebar-nav-icon,
@@ -257,8 +257,8 @@ p {
 }
 .app-shell.page-dashboard .nav-dashboard:hover,
 .app-shell.page-reports .nav-reports:hover,
-.app-shell.page-check-in .nav-check-in:hover,
-.app-shell.page-check-out .nav-check-out:hover,
+.app-shell.page-check-in .nav-front-desk:hover,
+.app-shell.page-check-out .nav-front-desk:hover,
 .app-shell.page-reservations .nav-reservations:hover,
 .app-shell.page-reservation-create .nav-reservations:hover,
 .app-shell.page-guests .nav-guests:hover,
@@ -2663,6 +2663,7 @@ span.flatpickr-weekday {
 .stay-extension-facts dd.date-value--check-in,
 .folio-facts dd.date-value--check-in,
 .room-change-facts dd.date-value--check-in,
+.cor-facts dd.date-value--check-in,
 .walk-in-summary-table td.date-value--check-in {
   color: var(--color-date-check-in);
 }
@@ -2672,6 +2673,7 @@ span.flatpickr-weekday {
 .stay-extension-facts dd.date-value--check-out,
 .folio-facts dd.date-value--check-out,
 .room-change-facts dd.date-value--check-out,
+.cor-facts dd.date-value--check-out,
 .walk-in-summary-table td.date-value--check-out {
   color: var(--color-date-check-out);
 }

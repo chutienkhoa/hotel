@@ -84,6 +84,54 @@ public class StayRoomAssignmentQueryService {
     }
 
     /**
+     * Lists the rooms a CHECKED_OUT Stay released at checkout: the assignments closed at the latest close instant, so
+     * rooms vacated earlier by a Room Change are not included. Empty before Check-in or while the Stay is still open.
+     *
+     * @param reservationId Reservation identifier
+     * @return the assignments closed by the checkout
+     */
+    @Transactional(readOnly = true)
+    public List<CurrentRoomResponse> findFinalRooms(UUID reservationId) {
+        return finalAssignments(reservationId).stream()
+                .map(assignment -> new CurrentRoomResponse(
+                        assignment.getId(),
+                        assignment.getRoom().getId(),
+                        assignment.getRoom().getRoomNumber(),
+                        assignment.getAssignedFrom()))
+                .toList();
+    }
+
+    /**
+     * Returns the nightly rate of each room released at checkout, keyed by Room identifier, from the booked price
+     * snapshot the assignment descends from.
+     *
+     * @param reservationId Reservation identifier
+     * @return final Room identifier to nightly rate; empty while the Stay is open
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, java.math.BigDecimal> findFinalRoomRates(UUID reservationId) {
+        java.util.Map<UUID, java.math.BigDecimal> rates = new java.util.LinkedHashMap<>();
+        finalAssignments(reservationId).forEach(assignment -> rates.put(
+                assignment.getRoom().getId(), assignment.getOriginalReservationRoom().getNightlyRate()));
+        return rates;
+    }
+
+    private List<StayRoomAssignment> finalAssignments(UUID reservationId) {
+        List<StayRoomAssignment> rows = stays.findByReservationId(reservationId)
+                .map(Stay::getId)
+                .map(assignments::findByStayIdOrderByLineageAndTime)
+                .orElseGet(List::of);
+        java.util.Optional<java.time.Instant> closedAt = rows.stream()
+                .map(StayRoomAssignment::getAssignedTo)
+                .filter(java.util.Objects::nonNull)
+                .max(java.util.Comparator.naturalOrder());
+        if (closedAt.isEmpty() || rows.stream().anyMatch(row -> row.getAssignedTo() == null)) {
+            return List.of();
+        }
+        return rows.stream().filter(row -> closedAt.get().equals(row.getAssignedTo())).toList();
+    }
+
+    /**
      * Lists the complete chronological Room History for a Reservation's Stay, grouped by lineage
      * (originally booked room) and ordered by time within each lineage, or an empty list before
      * Check-in.

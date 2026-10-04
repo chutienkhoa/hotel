@@ -22,17 +22,20 @@
         </div>
 
         <nav class="front-desk-tabs" th:aria-label="#{reservation.frontDesk.title}">
-            <a class="front-desk-tab front-desk-tab--arrivals" id="tab-arrivals" th:if="${canArrivals}"
+            <a class="front-desk-tab front-desk-tab--arrivals" id="tab-arrivals" data-shortcut="1" aria-keyshortcuts="Control+1"
+               th:title="#{reservation.frontDesk.tab.arrivals} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+1')}" th:if="${canArrivals}"
                th:href="@{/front-desk(view='arrivals')}" th:aria-current="${view == 'arrivals'} ? 'page'">
                 <span class="front-desk-tab__icon"><svg th:replace="~{layout/icons :: login}"></svg></span>
                 <span th:text="#{reservation.frontDesk.tab.arrivals}">Arrivals</span>
             </a>
-            <a class="front-desk-tab front-desk-tab--in-house" id="tab-in-house" th:if="${canStays}"
+            <a class="front-desk-tab front-desk-tab--in-house" id="tab-in-house" data-shortcut="2" aria-keyshortcuts="Control+2"
+               th:title="#{reservation.frontDesk.tab.inHouse} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+2')}" th:if="${canStays}"
                th:href="@{/front-desk(view='in-house')}" th:aria-current="${view == 'in-house'} ? 'page'">
                 <span class="front-desk-tab__icon"><svg th:replace="~{layout/icons :: bed}"></svg></span>
                 <span th:text="#{reservation.frontDesk.tab.inHouse}">In-house</span>
             </a>
-            <a class="front-desk-tab front-desk-tab--departures" id="tab-departures" th:if="${canStays}"
+            <a class="front-desk-tab front-desk-tab--departures" id="tab-departures" data-shortcut="3" aria-keyshortcuts="Control+3"
+               th:title="#{reservation.frontDesk.tab.departures} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+3')}" th:if="${canStays}"
                th:href="@{/front-desk(view='departures')}" th:aria-current="${view == 'departures'} ? 'page'">
                 <span class="front-desk-tab__icon"><svg th:replace="~{layout/icons :: logout}"></svg></span>
                 <span th:text="#{reservation.frontDesk.tab.departures}">Departures</span>
@@ -180,5 +183,6 @@
 </div>
 
     <script defer th:src="@{/js/front-desk/filters.js}"></script>
+    <script defer th:src="@{/js/common/tab-shortcuts.js}"></script>
 </body>
 </html>
