@@ -8,6 +8,8 @@ target/
 # VS Code
 .vscode/
 
+.VSCodeCounter/
+
 # Eclipse
 .classpath
 .project
