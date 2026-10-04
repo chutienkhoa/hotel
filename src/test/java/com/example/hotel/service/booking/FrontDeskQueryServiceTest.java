@@ -1123,4 +1123,168 @@ class FrontDeskQueryServiceTest {
         ReflectionTestUtils.setField(room, "status", status);
         return room;
     }
+
+    // ------------------------------------------------ Existing Reservation (check-in search)
+
+    private Page<FrontDeskArrivalRow> existingPaged(FrontDeskSearchCriteria criteria, int page) {
+        when(reservations.findByStatusWithGuest(ReservationStatus.CONFIRMED)).thenReturn(pending);
+        when(reservations.findBookedRoomsByReservationIdIn(any())).thenReturn(rows);
+        when(stays.findReservationIdsWithStay(any())).thenReturn(stayed);
+        stubGuest();
+        return service.confirmedReservations(criteria, page);
+    }
+
+    private Reservation otaReservation(String number, LocalDate checkIn, BookingSource source, String reference) {
+        Guest guest = Guest.create(UUID.randomUUID(), "G-" + number, "Ann", "Lee", null, null, "Vietnam", null, null);
+        Reservation reservation = new Reservation(UUID.randomUUID(), number, guest, checkIn, checkIn.plusDays(2),
+                source, reference, "VND", null);
+        pending.add(reservation);
+        return reservation;
+    }
+
+    /** Confirms the Existing Reservation search also lists a CONFIRMED reservation that is not yet due, with its blocker. */
+    @Test
+    void shouldListConfirmedReservationsOfAnyArrivalDateWithCanonicalReadiness() {
+        Reservation overdue = reservation("R-OD", TODAY.minusDays(1));
+        Reservation future = reservation("R-FUT", TODAY.plusDays(1));
+        line(overdue, room("101", RoomStatus.AVAILABLE));
+        line(future, room("102", RoomStatus.AVAILABLE));
+
+        Page<FrontDeskArrivalRow> page = existingPaged(criteria(null, null, null), 0);
+
+        assertEquals(List.of("R-OD", "R-FUT"), namesOf(page));
+        assertEquals(ArrivalReadinessState.READY, page.getContent().get(0).readiness().state());
+        assertEquals(ArrivalReadinessState.NEEDS_ATTENTION, page.getContent().get(1).readiness().state());
+        assertEquals(ArrivalIssueCode.ARRIVAL_TOO_EARLY, page.getContent().get(1).readiness().blockers().get(0).code());
+    }
+
+    /** Confirms a reservation that already has a Stay is not offered for check-in. */
+    @Test
+    void shouldExcludeStayedReservationsFromExistingSearch() {
+        Reservation stayedReservation = reservation("R-STAY", TODAY);
+        line(stayedReservation, room("101", RoomStatus.AVAILABLE));
+        stayed.add(stayedReservation.getId());
+
+        assertEquals(List.of(), namesOf(existingPaged(criteria(null, null, null), 0)));
+    }
+
+    /** Confirms search matches guest name, reservation number, room number and OTA booking reference. */
+    @Test
+    void shouldSearchExistingReservationsByGuestReservationRoomAndOtaReference() {
+        Reservation direct = reservation("R-100", TODAY);
+        Reservation ota = otaReservation("R-200", TODAY, BookingSource.AGODA, "123456789");
+        line(direct, room("101", RoomStatus.AVAILABLE));
+        line(ota, room("202", RoomStatus.AVAILABLE));
+        guestNames.put("G-R-100", "Chu Khoa");
+        guestNames.put("G-R-200", "Mai Vu");
+
+        assertEquals(List.of("R-100"), namesOf(existingPaged(criteria("chu khoa", null, null), 0)));
+        assertEquals(List.of("R-100"), namesOf(existingPaged(criteria("r-100", null, null), 0)));
+        assertEquals(List.of("R-200"), namesOf(existingPaged(criteria("202", null, null), 0)));
+        assertEquals(List.of("R-200"), namesOf(existingPaged(criteria("123456789", null, null), 0)));
+    }
+
+    /** Confirms OTA reservations expose their reference and DIRECT ones none. */
+    @Test
+    void shouldExposeOtaReferenceOnlyForOtaReservations() {
+        Reservation direct = reservation("R-100", TODAY);
+        Reservation ota = otaReservation("R-200", TODAY, BookingSource.AGODA, "123456789");
+        line(direct, room("101", RoomStatus.AVAILABLE));
+        line(ota, room("202", RoomStatus.AVAILABLE));
+
+        Page<FrontDeskArrivalRow> page = existingPaged(criteria(null, "reservationNumber", "asc"), 0);
+
+        assertNull(page.getContent().get(0).otaBookingReference());
+        assertEquals("123456789", page.getContent().get(1).otaBookingReference());
+    }
+
+    /** Confirms Today means check-in date equals the hotel date (not merely "not overdue"), Overdue means before it. */
+    @Test
+    void shouldFilterExistingReservationsByArrivalDateRelativeToTheHotelDate() {
+        line(reservation("R-OD", TODAY.minusDays(1)), room("101", RoomStatus.AVAILABLE));
+        line(reservation("R-TD", TODAY), room("102", RoomStatus.AVAILABLE));
+        line(reservation("R-FUT", TODAY.plusDays(2)), room("103", RoomStatus.AVAILABLE));
+
+        assertEquals(List.of("R-TD"), namesOf(existingPaged(facets("TODAY", null, null), 0)));
+        assertEquals(List.of("R-OD"), namesOf(existingPaged(facets("OVERDUE", null, null), 0)));
+        assertEquals(3, existingPaged(facets(null, null, null), 0).getTotalElements());
+    }
+
+    /** Confirms readiness and source filters, and their intersection with search, use the row's derived values. */
+    @Test
+    void shouldCombineReadinessSourceAndSearchFiltersOnExistingReservations() {
+        line(otaReservation("R-AG-OK", TODAY, BookingSource.AGODA, "111"), room("101", RoomStatus.AVAILABLE));
+        line(otaReservation("R-AG-BAD", TODAY, BookingSource.AGODA, "222"), room("102", RoomStatus.DIRTY));
+        line(reservation("R-DT-OK", TODAY), room("103", RoomStatus.AVAILABLE));
+
+        assertEquals(List.of("R-AG-BAD"), namesOf(existingPaged(facets(null, "NEEDS_ATTENTION", null), 0)));
+        assertEquals(List.of("R-AG-OK", "R-DT-OK"), namesOf(existingPaged(facets(null, "READY", null), 0)));
+        FrontDeskSearchCriteria combined = facets(null, "READY", "AGODA");
+        combined.setSearch("111");
+        assertEquals(List.of("R-AG-OK"), namesOf(existingPaged(combined, 0)));
+        FrontDeskSearchCriteria none = facets(null, "READY", "AGODA");
+        none.setSearch("222");
+        assertEquals(List.of(), namesOf(existingPaged(none, 0)));
+    }
+
+    /** Confirms every sortable column of the Existing Reservation table orders by the value the screen shows. */
+    @Test
+    void shouldSortExistingReservationsByEveryDataColumn() {
+        Reservation a = otaReservation("R-A", TODAY.minusDays(1), BookingSource.BOOKING_COM, "BK2");
+        Reservation b = reservation("R-B", TODAY);
+        Reservation c = otaReservation("R-C", TODAY.plusDays(1), BookingSource.AGODA, "AA1");
+        line(a, room("303", RoomStatus.DIRTY));
+        line(b, room("101", RoomStatus.AVAILABLE));
+        line(c, room("202", RoomStatus.AVAILABLE));
+        guestNames.put("G-R-A", "Zed");
+        guestNames.put("G-R-B", "Amy");
+        guestNames.put("G-R-C", "Mia");
+
+        assertEquals(List.of("R-A", "R-B", "R-C"), namesOf(existingPaged(criteria(null, "reservationNumber", "asc"), 0)));
+        assertEquals(List.of("R-C", "R-B", "R-A"), namesOf(existingPaged(criteria(null, "reservationNumber", "desc"), 0)));
+        assertEquals(List.of("R-B", "R-C", "R-A"), namesOf(existingPaged(criteria(null, "guestName", "asc"), 0)));
+        assertEquals(List.of("R-A", "R-B", "R-C"), namesOf(existingPaged(criteria(null, "checkInDate", "asc"), 0)));
+        assertEquals(List.of("R-B", "R-C", "R-A"), namesOf(existingPaged(criteria(null, "room", "asc"), 0)));
+        assertEquals(List.of("R-C", "R-A", "R-B"), namesOf(existingPaged(criteria(null, "source", "asc"), 0)));
+        // OTA Booking: references sort alphabetically with DIRECT (no reference) last in both directions.
+        assertEquals(List.of("R-C", "R-A", "R-B"), namesOf(existingPaged(criteria(null, "otaBookingReference", "asc"), 0)));
+        assertEquals(List.of("R-A", "R-C", "R-B"), namesOf(existingPaged(criteria(null, "otaBookingReference", "desc"), 0)));
+        // Status: the displayed readiness state; R-A (dirty room) and R-C (arrival too early) need attention, R-B is ready.
+        assertEquals(List.of("R-A", "R-C", "R-B"), namesOf(existingPaged(criteria(null, "readiness", "asc"), 0)));
+        assertEquals(List.of("R-B", "R-A", "R-C"), namesOf(existingPaged(criteria(null, "readiness", "desc"), 0)));
+    }
+
+    /** Confirms Nights sorts numerically. */
+    @Test
+    void shouldSortExistingReservationsByNightsNumerically() {
+        reservationWithNights("R-9", TODAY, 9);
+        reservationWithNights("R-10", TODAY, 10);
+        reservationWithNights("R-2", TODAY, 2);
+
+        assertEquals(List.of("R-2", "R-9", "R-10"), namesOf(existingPaged(criteria(null, "nights", "asc"), 0)));
+    }
+
+    /** Confirms the Check-in column key and unknown keys are not sortable and fall back to the default order. */
+    @Test
+    void shouldNotSortExistingReservationsByCheckInColumnOrUnknownKeys() {
+        line(reservation("R-2", TODAY), room("101", RoomStatus.AVAILABLE));
+        line(reservation("R-1", TODAY.minusDays(1)), room("102", RoomStatus.AVAILABLE));
+
+        assertEquals(List.of("R-1", "R-2"), namesOf(existingPaged(criteria(null, "checkIn", "desc"), 0)));
+        assertEquals(List.of("R-1", "R-2"), namesOf(existingPaged(criteria(null, "action", "desc"), 0)));
+        assertEquals(List.of("R-1", "R-2"), namesOf(existingPaged(criteria(null, "status", "desc"), 0)));
+    }
+
+    /** Confirms pagination slices the Existing Reservation result by ten and reports the total. */
+    @Test
+    void shouldPaginateExistingReservations() {
+        for (int index = 0; index < 12; index++) {
+            line(reservation(String.format("R-%02d", index), TODAY), room("1" + String.format("%02d", index), RoomStatus.AVAILABLE));
+        }
+
+        Page<FrontDeskArrivalRow> second = existingPaged(criteria(null, "reservationNumber", "asc"), 1);
+
+        assertEquals(12, second.getTotalElements());
+        assertEquals(List.of("R-10", "R-11"), namesOf(second));
+    }
 }

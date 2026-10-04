@@ -306,8 +306,21 @@
 .front-desk-table--departures th:nth-child(5),
 .front-desk-table--departures td:nth-child(5),
 .front-desk-table--in-house th:nth-child(6),
-.front-desk-table--in-house td:nth-child(6) {
+.front-desk-table--in-house td:nth-child(6),
+.front-desk-table--existing th:nth-child(5),
+.front-desk-table--existing td:nth-child(5) {
   text-align: center;
+}
+/* Reservation number link (Existing Reservation): primary blue, semi-bold, underlined only on hover/focus. */
+.front-desk-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.front-desk-link:hover,
+.front-desk-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .front-desk-table .front-desk-action {
   white-space: nowrap;

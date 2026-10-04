@@ -262,6 +262,18 @@ public interface ReservationRepository
             @Param("status") ReservationStatus status, @Param("checkInOnOrBefore") LocalDate checkInOnOrBefore);
 
     /**
+     * Loads every Reservation in one status (any check-in date) with its Guest initialized, for the Existing
+     * Reservation check-in search, which also lists CONFIRMED Reservations that are not yet due.
+     *
+     * @param status Reservation status to load
+     * @return matching Reservations with Guest initialized
+     */
+    @Query("SELECT r FROM Reservation r JOIN FETCH r.guest "
+            + "WHERE r.status = :status "
+            + "ORDER BY r.checkInDate, r.reservationNumber")
+    List<Reservation> findByStatusWithGuest(@Param("status") ReservationStatus status);
+
+    /**
      * Loads the booked Rooms (with RoomType initialized) of many Reservations in one query, as
      * {@code [reservationId, Room]} pairs ordered by room number.
      *

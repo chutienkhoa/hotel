@@ -1,84 +1,131 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Check-in — Existing Reservation')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/front-desk/front-desk.css'">
+<head th:replace="~{layout/base :: head(#{checkin.existing.title})}"></head>
 <body>
-<div class="app-shell page-check-in">
+<div class="app-shell page-front-desk">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <a class="back-link" th:href="@{/check-in}">Back to Check-in</a>
-
-        <div class="page-header">
-            <div>
-                <h1>Existing Reservation</h1>
-                <p>Find a reservation already entered into Hotel System. Only CONFIRMED reservations can be checked in. Search is local to Hotel System only.</p>
+    <main class="content front-desk">
+        <div>
+            <a class="back-link back-link--primary" th:href="@{/check-in}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{checkin.existing.back}">Back to Check-in Guest</span>
+            </a>
+            <div class="page-header">
+                <div class="page-header-copy">
+                    <h1 th:text="#{checkin.existing.title}">Existing Reservation</h1>
+                    <p class="page-description" th:text="#{checkin.existing.subtitle}">Find a confirmed reservation and continue to Check-in Review.</p>
+                </div>
             </div>
         </div>
 
-        <section class="form-card" aria-label="Search confirmed reservations">
-            <form method="get" th:action="@{/check-in/existing}">
+        <section class="front-desk-search" th:aria-label="#{reservation.frontDesk.search.label}">
+            <form class="front-desk-search__form front-desk-search__form--arrivals" id="front-desk-filters" method="get"
+                  th:action="@{/check-in/existing}">
                 <th:block th:replace="~{layout/table :: sortState}"></th:block>
-                <div class="form-grid">
-                    <div class="form-field">
-                        <label for="reservationNumber">Reservation Number</label>
-                        <input id="reservationNumber" name="reservationNumber" type="search"
-                               th:value="${searchCriteria.reservationNumber}" />
-                    </div>
-                    <div class="form-field">
-                        <label for="guest">Guest</label>
-                        <input id="guest" name="guest" type="search" th:value="${searchCriteria.guest}" />
-                    </div>
-                    <div class="form-field">
-                        <label for="otaBookingReference">OTA Booking Reference</label>
-                        <input id="otaBookingReference" name="otaBookingReference" type="search"
-                               th:value="${searchCriteria.otaBookingReference}" />
+                <!-- Hidden submit button: Enter in the search field submits without a visible Search button. -->
+                <button class="visually-hidden" type="submit" th:text="#{common.action.search}">Search</button>
+                <div class="front-desk-filter front-desk-filter--search">
+                    <label for="frontDeskSearch" th:text="#{reservation.frontDesk.search.label}">Search</label>
+                    <div class="front-desk-control">
+                        <span class="front-desk-control__lead"><svg th:replace="~{layout/icons :: search}"></svg></span>
+                        <input id="frontDeskSearch" name="search" type="search" th:value="${searchCriteria.search}"
+                               th:placeholder="#{checkin.existing.search.placeholder}" />
                     </div>
                 </div>
-                <div class="action-row expense-filter-actions">
-                    <a class="button button-secondary" th:href="@{/check-in/existing}">Clear</a>
-                    <button class="button button-primary" type="submit">Search</button>
+                <div class="front-desk-filter">
+                    <label for="frontDeskArrivalDate" th:text="#{reservation.frontDesk.filter.arrivalDate}">Arrival date</label>
+                    <div class="front-desk-control">
+                        <span class="front-desk-control__lead"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+                        <select class="front-desk-select--dated" id="frontDeskArrivalDate" name="arrivalDate">
+                            <option value="" th:selected="${searchCriteria.arrivalDate == null}" th:text="#{reservation.frontDesk.filter.allDates}">All dates</option>
+                            <option value="TODAY" th:selected="${searchCriteria.arrivalDate == 'TODAY'}" th:text="#{reservation.frontDesk.today}">Today</option>
+                            <option value="OVERDUE" th:selected="${searchCriteria.arrivalDate == 'OVERDUE'}" th:text="#{reservation.frontDesk.overdueArrival}">Overdue Arrival</option>
+                        </select>
+                        <span class="front-desk-control__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+                    </div>
                 </div>
+                <div class="front-desk-filter">
+                    <label for="frontDeskReadiness" th:text="#{reservation.frontDesk.filter.readiness}">Readiness</label>
+                    <div class="front-desk-control">
+                        <select id="frontDeskReadiness" name="readiness">
+                            <option value="" th:selected="${searchCriteria.readiness == null}" th:text="#{reservation.frontDesk.filter.allStatus}">All status</option>
+                            <option value="READY" th:selected="${searchCriteria.readiness == 'READY'}" th:text="#{reservation.frontDesk.readyForCheckIn}">Ready for Check-in</option>
+                            <option value="NEEDS_ATTENTION" th:selected="${searchCriteria.readiness == 'NEEDS_ATTENTION'}" th:text="#{checkin.readiness.state.NEEDS_ATTENTION}">Needs attention</option>
+                        </select>
+                        <span class="front-desk-control__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+                    </div>
+                </div>
+                <th:block th:replace="~{front-desk/fragments :: sourceFilter(${bookingSources}, ${searchCriteria.source})}"></th:block>
+                <a class="button button-secondary front-desk-search__clear" th:href="@{/check-in/existing} + ${clearSortQuery}"
+                   th:text="#{reservation.frontDesk.filter.clear}">Clear</a>
             </form>
         </section>
 
-        <section class="expense-results">
-            <div class="results-toolbar" th:if="${reservationPage != null}">
-                <p><span th:replace="~{layout/table :: resultSummary(${reservationPage})}">Showing 1&#8211;10 of 0</span></p>
-                <nav th:replace="~{layout/table :: pagination(${reservationPage}, 'Reservation pages', 'pagination')}"></nav>
+        <section class="card front-desk-results" id="existing-results">
+            <div class="front-desk-results__header">
+                <div class="front-desk-results__heading">
+                    <h2 th:text="#{checkin.existing.results.title}">Search Results</h2>
+                    <p th:text="${reservationPage.totalElements == 0}
+                                ? #{table.summary.none}
+                                : #{checkin.existing.results.summary(${'' + (reservationPage.number * reservationPage.size + 1)}, ${'' + (reservationPage.number * reservationPage.size + reservationPage.numberOfElements)}, ${'' + reservationPage.totalElements})}">Showing 1&#8211;10 of 0 reservations</p>
+                </div>
+                <div class="results-toolbar">
+                    <th:block th:replace="~{front-desk/fragments :: pager(${reservationPage}, #{checkin.existing.results.title})}"></th:block>
+                </div>
             </div>
 
-            <p class="empty-state" th:if="${reservationPage != null and reservationPage.empty}">
-                No confirmed reservations match these filters.
-            </p>
+            <p class="empty-state" th:if="${reservationPage.empty and !searchCriteria.hasCriteria()}" th:text="#{checkin.existing.empty}">No confirmed reservations.</p>
+            <div th:if="${reservationPage.empty and searchCriteria.hasCriteria()}">
+                <p class="empty-state" th:text="#{checkin.existing.noResults}">No reservations match your search.</p>
+                <a class="button button-secondary" th:href="@{/check-in/existing} + ${clearSortQuery}" th:text="#{common.action.clearFilters}">Clear filters</a>
+            </div>
 
-            <div class="table-wrap" th:if="${reservationPage != null and not reservationPage.empty}">
-                <table>
+            <div class="table-wrap front-desk-table-wrap" th:unless="${reservationPage.empty}">
+                <table class="front-desk-table front-desk-table--existing">
                     <thead>
                     <tr>
-                        <th th:replace="~{layout/table :: sortHeader('Reservation', 'reservationNumber')}"></th>
-                        <th scope="col">Guest</th>
-                        <th scope="col">Room</th>
-                        <th scope="col">Source</th>
-                        <th scope="col">OTA Booking</th>
-                        <th th:replace="~{layout/table :: sortHeader('Check-in', 'checkInDate')}"></th>
-                        <th scope="col">Check-out</th>
-                        <th scope="col">Total</th>
-                        <th scope="col"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.landing.column.reservation}, 'reservationNumber')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.landing.column.arrivalDate}, 'checkInDate')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.landing.column.rooms}, 'room')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.existing.column.otaBooking}, 'otaBookingReference')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'readiness')}"></th>
+                        <th scope="col" th:text="#{checkin.existing.column.checkIn}">Check-in</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="reservation : ${reservationPage.content}">
-                        <td th:text="${reservation.reservationNumber}">R20260916-000001</td>
-                        <td th:text="${reservation.guestFullName}">Guest name</td>
-                        <td th:text="${reservation.roomNumbers}">101</td>
-                        <td th:text="${reservation.source.displayName}">Direct</td>
-                        <td th:text="${reservation.otaBookingReference} ?: '—'">—</td>
-                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></td>
-                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></td>
-                        <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
+                    <tr th:each="row : ${reservationPage.content}">
                         <td>
-                            <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${reservation.id})}">Check-in</a>
+                            <a class="front-desk-link" th:if="${canViewBooking}" th:href="@{/reservations/{id}(id=${row.reservationId})}"
+                               th:text="${row.reservationNumber}">R-1</a>
+                            <span th:unless="${canViewBooking}" th:text="${row.reservationNumber}">R-1</span>
+                        </td>
+                        <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                        <td>
+                            <span th:replace="~{layout/datetime :: date(${row.checkInDate})}">—</span>
+                            <span class="front-desk-overdue" th:if="${row.overdue}" th:text="#{checkin.landing.overdueDays(${row.overdueDays})}">1 day overdue</span>
+                        </td>
+                        <td><th:block th:replace="~{front-desk/fragments :: roomList(${row.rooms})}"></th:block></td>
+                        <td th:text="${row.nights}">3</td>
+                        <td th:text="${row.source.displayName}">Direct</td>
+                        <td th:text="${#strings.isEmpty(row.otaBookingReference)} ? '—' : ${row.otaBookingReference}">—</td>
+                        <td>
+                            <span class="status-badge front-desk-status"
+                                  th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'">
+                                <th:block th:if="${row.readiness.state.name() == 'READY'}"><svg th:replace="~{layout/icons :: checkCircle}"></svg></th:block>
+                                <th:block th:unless="${row.readiness.state.name() == 'READY'}"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></th:block>
+                                <span th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
+                            </span>
+                        </td>
+                        <td>
+                            <!-- Navigation only: the actual check-in happens solely through Confirm Check-in on the Review. -->
+                            <a class="button button-primary front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                               th:text="#{checkin.existing.action.checkIn}">Check-in</a>
                         </td>
                     </tr>
                     </tbody>
@@ -87,5 +134,7 @@
         </section>
     </main>
 </div>
+
+    <script defer th:src="@{/js/front-desk/filters.js}"></script>
 </body>
 </html>

@@ -69,6 +69,23 @@ public final class TableSorts {
             Sort.by(Sort.Order.asc("checkInDate"), Sort.Order.asc("reservationNumber")),
             List.of(Sort.Order.asc("reservationNumber")));
 
+    /**
+     * Check-in Existing Reservation search. Same in-memory read-model sorting as {@link #FRONT_DESK_ARRIVALS}, plus the
+     * OTA Booking column and a Status column that sorts by the displayed Arrival Readiness state.
+     */
+    public static final SortWhitelist CHECK_IN_EXISTING = new SortWhitelist(
+            Map.of(
+                    "reservationNumber", "reservationNumber",
+                    "guestName", "guestName",
+                    "checkInDate", "checkInDate",
+                    "room", "room",
+                    "nights", "nights",
+                    "source", "source",
+                    "otaBookingReference", "otaBookingReference",
+                    "readiness", "readiness"),
+            Sort.by(Sort.Order.asc("checkInDate"), Sort.Order.asc("reservationNumber")),
+            List.of(Sort.Order.asc("reservationNumber")));
+
     /** Front Desk Departures (Batch 3A). See {@link #FRONT_DESK_ARRIVALS} for how this is used. */
     public static final SortWhitelist FRONT_DESK_DEPARTURES = new SortWhitelist(
             Map.of(

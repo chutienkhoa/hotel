@@ -3,13 +3,14 @@ package com.example.hotel.controller.booking;
 import com.example.hotel.common.TableSorts;
 import com.example.hotel.common.PaginationSupport;
 import com.example.hotel.dto.booking.request.CreateRequest;
-import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
+import com.example.hotel.dto.booking.request.FrontDeskSearchCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.response.MissingRequiredField;
 import com.example.hotel.dto.booking.request.WalkInRequest;
 import com.example.hotel.common.i18n.UiMessages;
 import com.example.hotel.dto.booking.response.CheckInReviewResponse;
 import com.example.hotel.dto.booking.response.CheckInRoomLine;
+import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
 import com.example.hotel.dto.booking.response.OtaEntryReviewResponse;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.WalkInReviewResponse;
@@ -161,36 +162,40 @@ public class CheckInPageController {
     }
 
     /**
-     * Displays a local-database-only search for CONFIRMED Reservations to check in.
+     * Displays the Existing Reservation search: CONFIRMED Reservations without a Stay, optionally searched, filtered,
+     * sorted and paginated through the Front Desk Arrivals read model (so readiness and overdue come from the one
+     * canonical rule set). It is a plain GET resource; each row only links to the Check-in Review and never checks a
+     * guest in.
      *
-     * @param searchCriteria submitted Reservation Number / Guest / OTA Booking Reference filters
+     * @param searchCriteria optional search, arrival date, readiness, source and sort state
      * @param page zero-based requested page number
      * @param model model used to render the search page
-     * @return the Existing Reservation search template name
+     * @return the Existing Reservation search template name, or a redirect to the last valid page
      */
     @GetMapping("/existing")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
     public String existingSearch(
-            @ModelAttribute("searchCriteria") ReservationSearchCriteria searchCriteria,
+            @ModelAttribute("searchCriteria") FrontDeskSearchCriteria searchCriteria,
             @RequestParam(required = false) String page,
             Model model) {
-        searchCriteria.normalizeReservationNumber();
-        searchCriteria.normalizeGuest();
-        searchCriteria.normalizeOtaBookingReference();
+        searchCriteria.normalize();
         int requestedPage = PaginationSupport.parsePage(page);
-        Page<?> reservationPage = checkInService.searchConfirmedReservations(searchCriteria, requestedPage);
-        String sortKey = TableSorts.CHECK_IN.key(searchCriteria.getSort(), searchCriteria.getDir());
-        String sortDir = TableSorts.CHECK_IN.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        Page<FrontDeskArrivalRow> reservationPage = frontDeskQueryService.confirmedReservations(searchCriteria, requestedPage);
+        String sortKey = TableSorts.CHECK_IN_EXISTING.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortDir = TableSorts.CHECK_IN_EXISTING.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
         Map<String, String> filters = new LinkedHashMap<>();
-        putIfPresent(filters, "reservationNumber", searchCriteria.getReservationNumber());
-        putIfPresent(filters, "guest", searchCriteria.getGuest());
-        putIfPresent(filters, "otaBookingReference", searchCriteria.getOtaBookingReference());
+        putIfPresent(filters, "search", searchCriteria.getSearch());
+        putIfPresent(filters, "arrivalDate", searchCriteria.getArrivalDate());
+        putIfPresent(filters, "readiness", searchCriteria.getReadiness());
+        putIfPresent(filters, "source", searchCriteria.getSource());
         String redirect = PaginationSupport.redirectWhenOutOfRange(
                 reservationPage, requestedPage, "/check-in/existing", filters, sortKey, sortDir);
         if (redirect != null) {
             return redirect;
         }
         model.addAttribute("reservationPage", reservationPage);
+        model.addAttribute("bookingSources", BookingSource.values());
+        model.addAttribute("clearSortQuery", sortKey == null ? "" : "?sort=" + sortKey + "&dir=" + sortDir);
         PaginationSupport.populate(model, reservationPage, "/check-in/existing", filters, sortKey, sortDir);
         return "check-in/existing";
     }

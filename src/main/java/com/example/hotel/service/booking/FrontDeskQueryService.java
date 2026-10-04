@@ -122,7 +122,20 @@ public class FrontDeskQueryService {
     @Transactional(readOnly = true)
     public List<FrontDeskArrivalRow> arrivals() {
         LocalDate today = hotelToday();
-        List<Reservation> pending = reservations.findByStatusAndCheckInOnOrBefore(ReservationStatus.CONFIRMED, today);
+        return toArrivalRows(reservations.findByStatusAndCheckInOnOrBefore(ReservationStatus.CONFIRMED, today), today);
+    }
+
+    /**
+     * Builds the ordered arrival rows for already-loaded CONFIRMED Reservations (two further queries: booked rooms
+     * with room type, existing Stays). Readiness always comes from {@link ArrivalReadinessRules}, so every caller
+     * shows the same canonical readiness. Ordered needs-attention overdue first, then other needs-attention, then
+     * ready; ties by check-in date then Reservation number.
+     *
+     * @param pending CONFIRMED Reservations with Guest initialized
+     * @param today hotel current date
+     * @return the ordered arrival rows, without Reservations that already have a Stay
+     */
+    private List<FrontDeskArrivalRow> toArrivalRows(List<Reservation> pending, LocalDate today) {
         if (pending.isEmpty()) {
             return List.of();
         }
@@ -157,7 +170,7 @@ public class FrontDeskQueryService {
      */
     @Transactional(readOnly = true)
     public List<FrontDeskArrivalRow> recentArrivals(int limit, String sort, String dir) {
-        return sortArrivals(arrivals(), sort, dir).stream().limit(limit).toList();
+        return sortArrivals(arrivals(), TableSorts.FRONT_DESK_ARRIVALS, sort, dir).stream().limit(limit).toList();
     }
 
     /**
@@ -174,7 +187,25 @@ public class FrontDeskQueryService {
     @Transactional(readOnly = true)
     public Page<FrontDeskArrivalRow> arrivals(FrontDeskSearchCriteria criteria, int page) {
         List<FrontDeskArrivalRow> matching = filterArrivalFacets(filterArrivals(arrivals(), criteria.getSearch()), criteria);
-        return paginate(sortArrivals(matching, criteria.getSort(), criteria.getDir()), page);
+        return paginate(sortArrivals(matching, TableSorts.FRONT_DESK_ARRIVALS, criteria.getSort(), criteria.getDir()), page);
+    }
+
+    /**
+     * Loads one page of the Existing Reservation check-in search: every CONFIRMED Reservation that has no Stay yet,
+     * whatever its arrival date (so a not-yet-due reservation can be found, and shows its own readiness blocker).
+     * Readiness, overdue timing, search, filters and ordering are exactly the Arrivals read model's; the page only
+     * widens the date scope and additionally allows sorting by OTA booking reference and by readiness state.
+     *
+     * @param criteria normalized optional search/filter/sort state for this request
+     * @param page zero-based requested page number
+     * @return the matching page of arrival rows
+     */
+    @Transactional(readOnly = true)
+    public Page<FrontDeskArrivalRow> confirmedReservations(FrontDeskSearchCriteria criteria, int page) {
+        LocalDate today = hotelToday();
+        List<FrontDeskArrivalRow> all = toArrivalRows(reservations.findByStatusWithGuest(ReservationStatus.CONFIRMED), today);
+        List<FrontDeskArrivalRow> matching = filterArrivalFacets(filterArrivals(all, criteria.getSearch()), criteria);
+        return paginate(sortArrivals(matching, TableSorts.CHECK_IN_EXISTING, criteria.getSort(), criteria.getDir()), page);
     }
 
     /**
@@ -191,8 +222,12 @@ public class FrontDeskQueryService {
         ArrivalDateFilter date = parse(ArrivalDateFilter.class, criteria.getArrivalDate());
         ArrivalReadinessState state = parse(ArrivalReadinessState.class, criteria.getReadiness());
         BookingSource source = parse(BookingSource.class, criteria.getSource());
+        LocalDate today = hotelToday();
         return rows.stream()
-                .filter(row -> date == null || (date == ArrivalDateFilter.OVERDUE) == row.overdue())
+                .filter(row -> date == null || switch (date) {
+                    case TODAY -> row.checkInDate().isEqual(today);
+                    case OVERDUE -> row.overdue();
+                })
                 .filter(row -> state == null || row.readiness().state() == state)
                 .filter(row -> source == null || row.source() == source)
                 .toList();
@@ -392,6 +427,11 @@ public class FrontDeskQueryService {
         return row.overdue() ? 0 : 1;
     }
 
+    /** Rank of the displayed Arrival Readiness state: Needs attention first, then Ready. */
+    private static int readinessRank(FrontDeskArrivalRow row) {
+        return row.readiness().state() == ArrivalReadinessState.NEEDS_ATTENTION ? 0 : 1;
+    }
+
     private static int departureRank(FrontDeskStayRow row) {
         if (row.overdue()) {
             return 0;
@@ -446,16 +486,18 @@ public class FrontDeskQueryService {
      * the default needs-attention/overdue-first ordering untouched.
      *
      * @param rows the filtered Arrivals rows, already in default order
-     * @param sort requested public sort key, validated against {@link TableSorts#FRONT_DESK_ARRIVALS}
+     * @param whitelist the requesting view's own sort whitelist
+     * @param sort requested public sort key, validated against {@code whitelist}
      * @param dir requested sort direction, validated against the same whitelist
      * @return the rows in the requested order, or unchanged when no valid sort was requested
      */
-    private List<FrontDeskArrivalRow> sortArrivals(List<FrontDeskArrivalRow> rows, String sort, String dir) {
-        String key = TableSorts.FRONT_DESK_ARRIVALS.key(sort, dir);
+    private List<FrontDeskArrivalRow> sortArrivals(
+            List<FrontDeskArrivalRow> rows, SortWhitelist whitelist, String sort, String dir) {
+        String key = whitelist.key(sort, dir);
         if (key == null) {
             return rows;
         }
-        boolean descending = "desc".equals(TableSorts.FRONT_DESK_ARRIVALS.activeDirection(sort, dir));
+        boolean descending = "desc".equals(whitelist.activeDirection(sort, dir));
         return rows.stream()
                 .sorted(arrivalColumn(key, descending).thenComparing(FrontDeskArrivalRow::reservationNumber))
                 .toList();
@@ -614,6 +656,8 @@ public class FrontDeskQueryService {
             case "nights" -> column(FrontDeskArrivalRow::nights, Comparator.naturalOrder(), descending);
             case "source" -> column(FrontDeskQueryService::arrivalSourceLabel, Comparator.naturalOrder(), descending);
             case "status" -> column(FrontDeskQueryService::arrivalRank, Comparator.naturalOrder(), descending);
+            case "otaBookingReference" -> column(FrontDeskArrivalRow::otaBookingReference, String.CASE_INSENSITIVE_ORDER, descending);
+            case "readiness" -> column(FrontDeskQueryService::readinessRank, Comparator.naturalOrder(), descending);
             default -> throw new IllegalArgumentException("Unsupported Arrivals sort key: " + key);
         };
     }
