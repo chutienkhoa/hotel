@@ -7,6 +7,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkOutSearch()})}"></nav>
         <div class="page-header">
             <div>
                 <h1>Check-out</h1>

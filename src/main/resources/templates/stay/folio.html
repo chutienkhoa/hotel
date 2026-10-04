@@ -9,10 +9,7 @@
 
     <main class="content folio">
         <div class="folio-page">
-            <a class="back-link back-link--primary folio-back" th:href="@{/reservations/{id}(id=${reservation.id})}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{payment.folio.backToReservation(${reservation.reservationNumber})}">Back to Reservation</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.folio(reservation.id, reservation.reservationNumber)})}"></nav>
 
             <div class="page-header folio-header">
                 <div class="folio-header__title">
@@ -30,7 +27,7 @@
                     </p>
                 </div>
                 <div class="folio-header__actions" th:if="${checkoutReviewAvailable}">
-                    <a class="button button-outline-primary" th:href="@{/check-out/{id}(id=${reservation.id})}">
+                    <a class="button button-primary" th:href="@{/check-out/{id}(id=${reservation.id})}">
                         <svg th:replace="~{layout/icons :: logout}"></svg>
                         <span th:text="#{payment.folio.actions.checkoutReview}">Checkout Review</span>
                     </a>
@@ -42,7 +39,7 @@
                    data-shortcut="1" aria-keyshortcuts="Control+1"
                    th:title="#{payment.folio.tab.overview} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+1')}"
                    th:classappend="${activeTab == 'overview'} ? 'detail-tab--active' : ''"
-                   th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
+                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio')}}">
                     <svg th:replace="~{layout/icons :: note}"></svg>
                     <span th:text="#{payment.folio.tab.overview}">Overview</span>
                 </a>
@@ -50,7 +47,7 @@
                    data-shortcut="2" aria-keyshortcuts="Control+2"
                    th:title="#{payment.folio.tab.charges} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+2')}"
                    th:classappend="${activeTab == 'charges'} ? 'detail-tab--active' : ''"
-                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='charges')}">
+                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio?tab=charges')}}">
                     <svg th:replace="~{layout/icons :: coins}"></svg>
                     <span th:text="#{payment.folio.tab.charges}">Charges</span>
                 </a>
@@ -58,7 +55,7 @@
                    data-shortcut="3" aria-keyshortcuts="Control+3"
                    th:title="#{payment.folio.tab.payments} + '\n' + #{reservation.frontDesk.tab.shortcut('Ctrl+3')}"
                    th:classappend="${activeTab == 'payments'} ? 'detail-tab--active' : ''"
-                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='payments')}">
+                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio?tab=payments')}}">
                     <svg th:replace="~{layout/icons :: creditCard}"></svg>
                     <span th:text="#{payment.folio.tab.payments}">Payments</span>
                 </a>
@@ -87,9 +84,9 @@
                                     <span th:text="#{payment.folio.charges.title}">Charges</span>
                                 </h2>
                                 <a class="button button-outline-primary button-compact"
-                                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='charges')}">
+                                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio?tab=charges')}}">
                                     <svg th:replace="~{layout/icons :: note}"></svg>
-                                    <span th:text="#{payment.folio.viewDetail}">Detail</span>
+                                    <span th:text="#{payment.folio.viewDetail}">View Detail</span>
                                 </a>
                             </div>
                             <div class="table-wrap" th:unless="${#lists.isEmpty(recentCharges)}">
@@ -98,7 +95,7 @@
                                     <tr>
                                         <th scope="col" th:text="#{payment.folio.column.date}">Date</th>
                                         <th scope="col" th:text="#{payment.folio.column.type}">Type</th>
-                                        <th class="table-number" scope="col" th:text="#{payment.folio.column.quantity}">Qty</th>
+                                        <th class="table-number text-center" scope="col" th:text="#{payment.folio.column.quantity}">Qty</th>
                                         <th class="table-number" scope="col" th:text="#{payment.folio.column.unitPrice}">Unit price</th>
                                         <th class="table-number" scope="col" th:text="#{payment.folio.column.amount}">Amount</th>
                                         <th scope="col" th:text="#{payment.folio.column.addedBy}">Added by</th>
@@ -109,7 +106,7 @@
                                     <tr th:each="charge : ${recentCharges}">
                                         <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
                                         <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></td>
-                                        <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
+                                        <td class="table-number text-center" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
                                         <td class="table-number">
                                             <th:block th:if="${charge.unitPrice != null}">
                                                 <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
@@ -146,9 +143,9 @@
                                     <span th:text="#{payment.folio.payments.title}">Payments</span>
                                 </h2>
                                 <a class="button button-outline-primary button-compact"
-                                   th:href="@{/reservations/{id}/folio(id=${reservation.id},tab='payments')}">
+                                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio?tab=payments')}}">
                                     <svg th:replace="~{layout/icons :: note}"></svg>
-                                    <span th:text="#{payment.folio.viewDetail}">Detail</span>
+                                    <span th:text="#{payment.folio.viewDetail}">View Detail</span>
                                 </a>
                             </div>
                             <div class="table-wrap" th:unless="${#lists.isEmpty(recentPayments)}">
@@ -232,7 +229,7 @@
                                     <span th:text="#{payment.folio.stay.title}">Stay Summary</span>
                                 </h2>
                             </div>
-                            <dl class="folio-facts">
+                            <dl class="label-value-rows label-value-rows--divided label-value-rows--fit folio-stay-facts">
                                 <div>
                                     <dt th:text="#{payment.folio.stay.roomNumber}">Room No.</dt>
                                     <dd>
@@ -322,7 +319,7 @@
                                             <span aria-hidden="true" class="folio-sort__icon">↕</span>
                                         </button>
                                     </th>
-                                    <th class="folio-sort-th table-number" scope="col" aria-sort="none">
+                                    <th class="folio-sort-th table-number text-center" scope="col" aria-sort="none">
                                         <button class="folio-sort" data-sort-key="qty" type="button">
                                             <span th:text="#{payment.folio.column.quantity}">Qty</span>
                                             <span aria-hidden="true" class="folio-sort__icon">↕</span>
@@ -362,7 +359,7 @@
                                     th:aria-current="${rowStat.first} ? 'true' : null">
                                     <td class="table-date"><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
                                     <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">ROOM</span></td>
-                                    <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
+                                    <td class="table-number text-center" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">—</td>
                                     <td class="table-number">
                                         <th:block th:if="${charge.unitPrice != null}">
                                             <span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0 VND</span>
@@ -565,8 +562,8 @@
                                     <span th:text="#{payment.folio.addCharge.amountVnd}">Amount (VND)</span>
                                     <span class="form-required" aria-hidden="true">*</span>
                                 </label>
-                                <input class="js-money-input" id="fixed-charge-amount" inputmode="decimal" required th:field="*{amount}" type="text"
-                                       th:attr="data-required-message=#{payment.folio.addCharge.required.amount}" />
+                                <input autocomplete="off" data-numeric="decimal" th:with="folioScale=${T(com.example.hotel.common.SupportedCurrency).valueOf(reservation.currency).fractionDigits()}" id="fixed-charge-amount" inputmode="decimal" required th:field="*{amount}" type="text"
+                                       th:attr="data-required-message=#{payment.folio.addCharge.required.amount},data-numeric-scale=${folioScale}" />
                                 <p class="field-error folio-client-error" data-client-error-for="fixed-charge-amount" hidden></p>
                                 <p class="field-error" th:errors="*{amount}"></p>
                             </div>
@@ -605,7 +602,7 @@
                                         <span th:text="#{payment.folio.field.quantity}">Quantity</span>
                                         <span class="form-required" aria-hidden="true">*</span>
                                     </label>
-                                    <input id="itemized-charge-quantity" inputmode="numeric" pattern="[0-9]*" required th:field="*{quantity}" type="text"
+                                    <input autocomplete="off" data-numeric="integer" id="itemized-charge-quantity" inputmode="numeric" required th:field="*{quantity}" type="text"
                                            th:attr="data-required-message=#{payment.folio.addCharge.required.quantity}" />
                                     <p class="field-error folio-client-error" data-client-error-for="itemized-charge-quantity" hidden></p>
                                     <p class="field-error" th:errors="*{quantity}"></p>
@@ -615,8 +612,8 @@
                                         <span th:text="#{payment.folio.addCharge.unitPriceVnd}">Unit Price (VND)</span>
                                         <span class="form-required" aria-hidden="true">*</span>
                                     </label>
-                                    <input class="js-money-input" id="itemized-charge-unit-price" inputmode="decimal" required th:field="*{unitPrice}" type="text"
-                                           th:attr="data-required-message=#{payment.folio.addCharge.required.unitPrice}" />
+                                    <input autocomplete="off" data-numeric="decimal" th:with="folioScale=${T(com.example.hotel.common.SupportedCurrency).valueOf(reservation.currency).fractionDigits()}" id="itemized-charge-unit-price" inputmode="decimal" required th:field="*{unitPrice}" type="text"
+                                           th:attr="data-required-message=#{payment.folio.addCharge.required.unitPrice},data-numeric-scale=${folioScale}" />
                                     <p class="field-error folio-client-error" data-client-error-for="itemized-charge-unit-price" hidden></p>
                                     <p class="field-error" th:errors="*{unitPrice}"></p>
                                 </div>
@@ -969,13 +966,13 @@
                                 <label for="payment-currency" th:text="#{payment.folio.field.currency}">Payment Currency</label>
                                 <select id="payment-currency" required th:field="*{currency}">
                                     <option value="" th:text="#{payment.folio.field.selectCurrency}">Select currency</option>
-                                    <option th:each="currency : ${paymentCurrencies}" th:text="${currency}" th:value="${currency}">VND</option>
+                                    <option th:each="currency : ${paymentCurrencies}" th:with="digits=${T(com.example.hotel.common.SupportedCurrency).valueOf(currency).fractionDigits()}" th:attr="data-fraction-digits=${digits}" th:text="${currency}" th:value="${currency}">VND</option>
                                 </select>
                                 <p class="field-error" th:errors="*{currency}"></p>
                             </div>
                             <div class="form-field">
                                 <label for="payment-amount" th:text="#{payment.folio.field.paymentAmount}">Amount</label>
-                                <input class="js-money-input" id="payment-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
+                                <input autocomplete="off" data-numeric="decimal" data-numeric-scale-from="#payment-currency" id="payment-amount" inputmode="decimal" required th:field="*{amount}" type="text" />
                                 <p class="field-error" th:errors="*{amount}"></p>
                             </div>
                         </div>
@@ -983,7 +980,7 @@
                             <label for="payment-exchange-rate" th:text="#{payment.folio.field.exchangeRate}">Exchange Rate</label>
                             <div class="exchange-rate-inline">
                                 <span aria-hidden="true">1 USD =</span>
-                                <input class="js-money-input" id="payment-exchange-rate" inputmode="decimal" th:field="*{exchangeRate}" type="text" />
+                                <input autocomplete="off" data-numeric="decimal" data-numeric-scale="6" id="payment-exchange-rate" inputmode="decimal" th:field="*{exchangeRate}" type="text" />
                                 <span aria-hidden="true">VND</span>
                             </div>
                             <p class="field-error" th:errors="*{exchangeRate}"></p>

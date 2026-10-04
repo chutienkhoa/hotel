@@ -14,10 +14,7 @@
                 session, not resubmitted, so Back, browser Back/Forward and Refresh all return to the same populated form
                 (spec 9.3.3a) without a POST in the browser history.
             -->
-            <a class="back-link back-link--primary" th:href="@{/check-in/walk-in}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkin.walkIn.summary.back}">Back to Walk-in Reservation</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInWalkInSummary()})}"></nav>
 
             <div class="page-header walk-in-header">
                 <div>
@@ -66,7 +63,7 @@
                         <section aria-labelledby="walk-in-summary-guest" class="card walk-in-card walk-in-card--sum-guest">
                             <header class="walk-in-card__header walk-in-card__header--action">
                                 <h2 id="walk-in-summary-guest" th:text="#{checkin.walkIn.guest.title}">Guest Information</h2>
-                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
+                                <a class="button button-outline-primary button-compact walk-in-edit" th:href="@{/check-in/walk-in}">
                                     <svg th:replace="~{layout/icons :: edit}"></svg>
                                     <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
                                 </a>
@@ -101,7 +98,7 @@
                         <section aria-labelledby="walk-in-summary-rooms" class="card walk-in-card walk-in-card--sum-room">
                             <header class="walk-in-card__header walk-in-card__header--action">
                                 <h2 id="walk-in-summary-rooms" th:text="#{checkin.walkIn.summary.rooms}">Room Details</h2>
-                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
+                                <a class="button button-outline-primary button-compact walk-in-edit" th:href="@{/check-in/walk-in}">
                                     <svg th:replace="~{layout/icons :: edit}"></svg>
                                     <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
                                 </a>
@@ -135,7 +132,7 @@
                         <section aria-labelledby="walk-in-summary-additional" class="card walk-in-card walk-in-card--sum-additional">
                             <header class="walk-in-card__header walk-in-card__header--action">
                                 <h2 id="walk-in-summary-additional" th:text="#{checkin.walkIn.summary.additional}">Additional Information</h2>
-                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
+                                <a class="button button-outline-primary button-compact walk-in-edit" th:href="@{/check-in/walk-in}">
                                     <svg th:replace="~{layout/icons :: edit}"></svg>
                                     <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
                                 </a>
@@ -175,7 +172,7 @@
                         <section aria-labelledby="walk-in-summary-stay" class="card walk-in-card walk-in-card--sum-stay">
                             <header class="walk-in-card__header walk-in-card__header--action">
                                 <h2 id="walk-in-summary-stay" th:text="#{checkin.walkIn.stay.title}">Stay Details</h2>
-                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
+                                <a class="button button-outline-primary button-compact walk-in-edit" th:href="@{/check-in/walk-in}">
                                     <svg th:replace="~{layout/icons :: edit}"></svg>
                                     <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
                                 </a>

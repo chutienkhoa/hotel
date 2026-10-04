@@ -869,8 +869,8 @@ class CheckInPageControllerTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("<a class=\"back-link back-link--primary\" href=\"/check-in/walk-in\">"));
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("class=\"button button-secondary walk-in-edit\" href=\"/check-in/walk-in\""));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("<a href=\"/check-in/walk-in\">Walk-in</a>"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("class=\"button button-outline-primary button-compact walk-in-edit\" href=\"/check-in/walk-in\""));
         org.junit.jupiter.api.Assertions.assertFalse(html.contains("walk-in/back"));
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("id=\"walk-in-confirm-form\""));
     }

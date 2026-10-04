@@ -171,7 +171,7 @@ class CheckOutCompletePageTest {
                 .andExpect(content().string(not(containsString("id=\"view-guest\""))))
                 .andExpect(content().string(not(containsString("View Room 101"))))
                 .andExpect(content().string(not(containsString("id=\"next-actions\""))))
-                .andExpect(content().string(containsString("Back to Front Desk")));
+                .andExpect(content().string(containsString("breadcrumb-current\">Complete</span>")));
         verify(queryService, never()).financialSummary(ID);
     }
 

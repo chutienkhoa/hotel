@@ -112,8 +112,11 @@ class CheckInExistingReservationPageTest {
     void shouldRenderApprovedLayoutInEnglish() throws Exception {
         String body = mockMvc.perform(get("/check-in/existing").with(perm("PERM_CHECK_IN", "PERM_VIEW_BOOKING")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("href=\"/check-in\"")))
-                .andExpect(content().string(containsString("Back to Check-in Guest")))
+                .andExpect(content().string(containsString("aria-label=\"Breadcrumb\"")))
+                .andExpect(content().string(containsString("<a href=\"/front-desk\">Front Desk</a>")))
+                .andExpect(content().string(containsString("<a href=\"/check-in\">Check-in</a>")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Find Reservation</span>")))
+                .andExpect(content().string(not(containsString("Back to Check-in Guest"))))
                 .andExpect(content().string(containsString("Existing Reservation")))
                 .andExpect(content().string(containsString("Find a confirmed reservation and continue to Check-in Review.")))
                 .andExpect(content().string(containsString("Guest, reservation, room, or OTA reference...")))
@@ -128,21 +131,21 @@ class CheckInExistingReservationPageTest {
         // Source options are the real booking sources.
         assertInOrder(body, ">Direct<", ">Agoda<", ">Booking.com<", ">Airbnb<");
         String head = body.substring(body.indexOf("<thead>"), body.indexOf("</thead>"));
-        assertInOrder(head, "Reservation No.", "Guest", "Arrival Date", "Room(s)", "Nights", "Source", "OTA Booking", "Status", "Check-in");
+        assertInOrder(head, "Reservation No.", "Guest", "Arrival Date", "Room(s)", "Nights", "Source", "OTA Booking", "Status", "Action");
         // No Arrivals / In-house / Departures tabs belong to this screen.
         org.junit.jupiter.api.Assertions.assertFalse(body.contains("front-desk-tabs"));
     }
 
-    /** Confirms every column but Check-in is a sort link, and Check-in is a plain, non-sortable header. */
+    /** Confirms every column but Action is a sort link, and Action is a plain, non-sortable header. */
     @Test
-    void shouldMakeEveryColumnExceptCheckInSortable() throws Exception {
+    void shouldMakeEveryColumnExceptActionSortable() throws Exception {
         String body = mockMvc.perform(get("/check-in/existing").with(perm("PERM_CHECK_IN"))).andReturn().getResponse().getContentAsString();
         for (String key : List.of("reservationNumber", "guestName", "checkInDate", "room", "nights", "source", "otaBookingReference", "readiness")) {
             org.junit.jupiter.api.Assertions.assertTrue(body.contains("href=\"/check-in/existing?sort=" + key + "&amp;dir=asc\""), key);
         }
         String head = body.substring(body.indexOf("<thead>"), body.indexOf("</thead>"));
         org.junit.jupiter.api.Assertions.assertEquals(8, countOccurrences(head, "front-desk-sort\""));
-        org.junit.jupiter.api.Assertions.assertTrue(head.contains("<th scope=\"col\">Check-in</th>"));
+        org.junit.jupiter.api.Assertions.assertTrue(head.contains("<th class=\"table-action-column\" scope=\"col\">Action</th>"));
     }
 
     /** Confirms OTA rows show the actual reference, DIRECT rows show a dash, and overdue days show under the date. */
@@ -164,8 +167,8 @@ class CheckInExistingReservationPageTest {
     void shouldLinkCheckInToReviewWithoutPerformingCheckIn() throws Exception {
         String body = mockMvc.perform(get("/check-in/existing").with(perm("PERM_CHECK_IN"))).andReturn().getResponse().getContentAsString();
         String rows = tbody(body);
-        org.junit.jupiter.api.Assertions.assertTrue(rows.contains("href=\"/check-in/reservations/" + AGODA_ID + "\""));
-        org.junit.jupiter.api.Assertions.assertTrue(rows.contains("href=\"/check-in/reservations/" + DIRECT_ID + "\""));
+        org.junit.jupiter.api.Assertions.assertTrue(rows.contains("href=\"/check-in/reservations/" + AGODA_ID + "?from=find\""));
+        org.junit.jupiter.api.Assertions.assertTrue(rows.contains("href=\"/check-in/reservations/" + DIRECT_ID + "?from=find\""));
         org.junit.jupiter.api.Assertions.assertFalse(rows.contains("<form"));
         org.junit.jupiter.api.Assertions.assertFalse(rows.contains("Select"));
         org.junit.jupiter.api.Assertions.assertFalse(rows.contains("/confirm"));
@@ -178,7 +181,7 @@ class CheckInExistingReservationPageTest {
     void shouldLinkReservationNumberToDetailOnlyWithViewBooking() throws Exception {
         String withView = tbody(mockMvc.perform(get("/check-in/existing").with(perm("PERM_CHECK_IN", "PERM_VIEW_BOOKING")))
                 .andReturn().getResponse().getContentAsString());
-        org.junit.jupiter.api.Assertions.assertTrue(withView.contains("href=\"/reservations/" + AGODA_ID + "\""));
+        org.junit.jupiter.api.Assertions.assertTrue(withView.contains("href=\"/reservations/" + AGODA_ID + "?from=find\""));
         String without = tbody(mockMvc.perform(get("/check-in/existing").with(perm("PERM_CHECK_IN")))
                 .andReturn().getResponse().getContentAsString());
         org.junit.jupiter.api.Assertions.assertFalse(without.contains("href=\"/reservations/"));
@@ -243,7 +246,7 @@ class CheckInExistingReservationPageTest {
     void shouldRenderInVietnamese() throws Exception {
         mockMvc.perform(get("/check-in/existing").with(perm("PERM_CHECK_IN", "PERM_VIEW_BOOKING")).cookie(new Cookie("pms-lang", "vi")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Quay lại Nhận phòng khách")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Tìm đặt phòng</span>")))
                 .andExpect(content().string(containsString("Đặt phòng có sẵn")))
                 .andExpect(content().string(containsString("Kết quả tìm kiếm")))
                 .andExpect(content().string(containsString("Hiển thị 1–2 trong 2 đặt phòng")))

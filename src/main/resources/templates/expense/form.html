@@ -36,7 +36,7 @@
                 </div>
                 <div class="form-field">
                     <label for="amount">Amount</label>
-                    <input class="js-money-input" id="amount" inputmode="decimal" required th:field="*{amount}" type="text" />
+                    <input autocomplete="off" data-numeric="vnd" id="amount" inputmode="numeric" required th:field="*{amount}" type="text" />
                     <p class="field-error" th:errors="*{amount}"></p>
                 </div>
                 <div class="form-field">

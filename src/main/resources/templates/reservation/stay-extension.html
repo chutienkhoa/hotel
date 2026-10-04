@@ -55,7 +55,7 @@
                                     <svg th:replace="~{layout/icons :: bed}"></svg>
                                 </th:block>
                             </div>
-                            <dl class="stay-extension-facts">
+                            <dl class="label-value-rows label-value-rows--divided label-value-rows--strong">
                                 <div>
                                     <dt th:text="#{reservation.stayExtension.field.guest}">Guest</dt>
                                     <dd><span th:text="${preview.guestName}">Guest</span> <span class="stay-extension-muted" th:text="'(' + ${preview.guestCode} + ')'">(G-1)</span></dd>

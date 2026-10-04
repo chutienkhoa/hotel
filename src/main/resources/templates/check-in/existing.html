@@ -9,10 +9,7 @@
 
     <main class="content front-desk">
         <div>
-            <a class="back-link back-link--primary" th:href="@{/check-in}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkin.existing.back}">Back to Check-in Guest</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInFind()})}"></nav>
             <div class="page-header">
                 <div class="page-header-copy">
                     <h1 th:text="#{checkin.existing.title}">Existing Reservation</h1>
@@ -59,7 +56,7 @@
                     </div>
                 </div>
                 <th:block th:replace="~{front-desk/fragments :: sourceFilter(${bookingSources}, ${searchCriteria.source})}"></th:block>
-                <a class="button button-secondary front-desk-search__clear" th:href="@{/check-in/existing} + ${clearSortQuery}"
+                <a class="button button-outline-primary front-desk-search__clear" th:href="@{/check-in/existing} + ${clearSortQuery}"
                    th:text="#{reservation.frontDesk.filter.clear}">Clear</a>
             </form>
         </section>
@@ -95,13 +92,13 @@
                         <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
                         <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.existing.column.otaBooking}, 'otaBookingReference')}"></th>
                         <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'readiness')}"></th>
-                        <th scope="col" th:text="#{checkin.existing.column.checkIn}">Check-in</th>
+                        <th class="table-action-column" scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
                     </tr>
                     </thead>
                     <tbody>
                     <tr th:each="row : ${reservationPage.content}">
                         <td>
-                            <a class="front-desk-link" th:if="${canViewBooking}" th:href="@{/reservations/{id}(id=${row.reservationId})}"
+                            <a class="front-desk-link" th:if="${canViewBooking}" th:href="@{/reservations/{id}(id=${row.reservationId},from='find')}"
                                th:text="${row.reservationNumber}">R-1</a>
                             <span th:unless="${canViewBooking}" th:text="${row.reservationNumber}">R-1</span>
                         </td>
@@ -122,9 +119,9 @@
                                 <span th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
                             </span>
                         </td>
-                        <td>
+                        <td class="table-action-column">
                             <!-- Navigation only: the actual check-in happens solely through Confirm Check-in on the Review. -->
-                            <a class="button button-primary front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                            <a class="button button-outline-primary table-row-action front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId},from='find')}"
                                th:text="#{checkin.existing.action.checkIn}">Check-in</a>
                         </td>
                     </tr>

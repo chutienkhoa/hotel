@@ -116,13 +116,12 @@ class ReservationGuestCompositionPageTest {
         mockMvc.perform(get("/reservations/new").with(manager()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("id=\"adultCount\"")))
-                .andExpect(content().string(containsString("min=\"1\"")))
-                .andExpect(content().string(containsString("min=\"0\"")))
+                .andExpect(content().string(containsString("data-numeric=\"integer\"")))
                 .andExpect(content().string(containsString("name=\"adultCount\"")))
                 .andExpect(content().string(containsString("value=\"1\"")))
                 .andExpect(content().string(containsString("value=\"0\"")))
-                .andExpect(content().string(containsString("Adults *")))
-                .andExpect(content().string(containsString("Children *")));
+                .andExpect(content().string(containsString("Adults")))
+                .andExpect(content().string(containsString("Children")));
     }
 
     /** Confirms the OTA and Walk-in creation forms expose the same controls with the same defaults. */

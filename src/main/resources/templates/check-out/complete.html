@@ -14,14 +14,7 @@
           th:with="currency=${financial != null ? financial.currency : null},
                    roomCount=${#lists.size(complete.rooms)}">
         <div class="cor-page">
-            <a class="back-link back-link--primary cor-back" th:if="${canViewBooking}" th:href="@{/reservations}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkout.complete.back.reservations}">Back to Reservations</span>
-            </a>
-            <a class="back-link back-link--primary cor-back" th:unless="${canViewBooking}" th:href="@{/front-desk(view='departures')}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkout.review.back.frontDesk}">Back to Front Desk</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkOutComplete()})}"></nav>
 
             <div class="cor-title">
                 <h1>

@@ -293,8 +293,8 @@ class FolioPageControllerTest {
         mockMvc.perform(get(FOLIO_PATH).param("tab", "payments")
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<option value=\"VND\">VND</option>")))
-                .andExpect(content().string(containsString("<option value=\"USD\">USD</option>")));
+                .andExpect(content().string(containsString("<option value=\"VND\" data-fraction-digits=\"0\">VND</option>")))
+                .andExpect(content().string(containsString("<option value=\"USD\" data-fraction-digits=\"2\">USD</option>")));
     }
 
     /** Confirms Payment lifecycle actions render only for the statuses that still permit a transition. */
@@ -326,33 +326,36 @@ class FolioPageControllerTest {
                 .andExpect(view().name("stay/folio"))
                 .andExpect(content().string(containsString("value=\"120.00\"")))
                 .andExpect(content().string(containsString("value=\"25000\"")))
-                .andExpect(content().string(containsString("value=\"USD\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("value=\"USD\" data-fraction-digits=\"2\" selected=\"selected\"")))
                 .andExpect(content().string(containsString("value=\"Wire ref\"")));
     }
 
     /**
-     * Confirms Charge monetary fields (Fixed Amount, Unit Price) use the shared money-input
-     * behavior consistent with Payment Amount/Exchange Rate, while Quantity — not a monetary
-     * field — keeps its plain numeric input untouched.
+     * Confirms Charge monetary fields (Fixed Amount, Unit Price) use the shared decimal numeric behaviour with the Folio
+     * currency's fraction digits (VND: none), Payment Amount follows the chosen payment currency, the exchange rate
+     * takes six fraction digits, and Quantity is a whole-number count.
      */
     @Test
-    void shouldApplyMoneyInputToChargeMonetaryFieldsOnly() throws Exception {
+    void shouldApplySharedNumericBehaviourToChargeAndPaymentFields() throws Exception {
         stubFolio("CHECKED_IN", BigDecimal.ZERO, "PENDING");
 
         mockMvc.perform(get(FOLIO_PATH).param("tab", "charges")
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-numeric=\"decimal\" id=\"fixed-charge-amount\"")))
+                .andExpect(content().string(containsString("data-numeric-scale=\"0\"")))
+                .andExpect(content().string(containsString("data-numeric=\"decimal\" id=\"itemized-charge-unit-price\"")))
+                .andExpect(content().string(containsString("data-numeric=\"integer\" id=\"itemized-charge-quantity\"")))
+                .andExpect(content().string(not(containsString("js-money-input"))));
+
+        mockMvc.perform(get(FOLIO_PATH).param("tab", "payments")
+                        .with(user("manager").authorities(managePayment())))
+                .andExpect(status().isOk())
                 .andExpect(content().string(containsString(
-                        "<input class=\"js-money-input\" id=\"fixed-charge-amount\"")))
-                .andExpect(content().string(containsString("id=\"fixed-charge-amount\" inputmode=\"decimal\"")))
+                        "data-numeric-scale-from=\"#payment-currency\" id=\"payment-amount\"")))
                 .andExpect(content().string(containsString(
-                        "<input class=\"js-money-input\" id=\"itemized-charge-unit-price\"")))
-                .andExpect(content().string(containsString(
-                        "id=\"itemized-charge-unit-price\" inputmode=\"decimal\"")))
-                .andExpect(content().string(containsString(
-                        "<input id=\"itemized-charge-quantity\" inputmode=\"numeric\"")))
-                .andExpect(content().string(not(containsString(
-                        "class=\"js-money-input\" id=\"itemized-charge-quantity\""))));
+                        "data-numeric-scale=\"6\" id=\"payment-exchange-rate\"")))
+                .andExpect(content().string(not(containsString("js-money-input"))));
     }
 
     /**
@@ -367,7 +370,7 @@ class FolioPageControllerTest {
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(
-                        "<input id=\"itemized-charge-quantity\" inputmode=\"numeric\" pattern=\"[0-9]*\" required "
+                        "data-numeric=\"integer\" id=\"itemized-charge-quantity\" inputmode=\"numeric\" required "
                                 + "type=\"text\"")))
                 .andExpect(content().string(not(containsString("id=\"itemized-charge-quantity\" min="))))
                 .andExpect(content().string(not(containsString("id=\"itemized-charge-quantity\" type=\"number\""))));
@@ -395,7 +398,7 @@ class FolioPageControllerTest {
                         .with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("80,000 VND")))
-                .andExpect(content().string(containsString("<td class=\"table-number\">—</td>")))
+                .andExpect(content().string(containsString("<td class=\"table-number text-center\">—</td>")))
                 .andExpect(content().string(not(containsString("null VND"))));
     }
 
@@ -1117,8 +1120,8 @@ class FolioPageControllerTest {
         mockMvc.perform(get(FOLIO_PATH).with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Folio — Reservation R20260911-000001")))
-                .andExpect(content().string(containsString("Back to Reservation R20260911-000001")))
-                .andExpect(content().string(containsString("href=\"/reservations/" + RESERVATION_ID + "\"")))
+                .andExpect(content().string(containsString("Reservation R20260911-000001")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Folio</span>")))
                 .andExpect(content().string(containsString("Nguyen Van A")))
                 .andExpect(content().string(containsString("Room 101")))
                 .andExpect(content().string(containsString("href=\"" + FOLIO_PATH + "?tab=charges\"")))

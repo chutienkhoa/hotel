@@ -7,11 +7,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <nav aria-label="Breadcrumb" class="breadcrumb">
-            <a th:href="@{/guests}">Guests</a>
-            <span class="breadcrumb-separator" aria-hidden="true">/</span>
-            <span class="breadcrumb-current" th:text="${guest.guestCode}">G000001</span>
-        </nav>
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.guestDetail(guest.guestCode)})}"></nav>
 
         <div class="page-header">
             <div>

@@ -16,14 +16,7 @@
                    ready=${review.eligibleForCheckOut},
                    currency=${financial != null ? financial.currency : null}">
         <div class="cor-page">
-            <a class="back-link back-link--primary cor-back" th:if="${canViewBooking}" th:href="@{/reservations/{id}(id=${review.reservationId})}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkout.review.back.reservation(${review.reservationNumber})}">Back to Reservation</span>
-            </a>
-            <a class="back-link back-link--primary cor-back" th:unless="${canViewBooking}" th:href="@{/front-desk(view='departures')}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkout.review.back.frontDesk}">Back to Front Desk</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkOutReview()})}"></nav>
 
             <div class="cor-title">
                 <h1>
@@ -98,7 +91,7 @@
                          th:with="nationality=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(summaryGuest?.nationality)}">
                     <h2 id="cor-guest-heading"><svg th:replace="~{layout/icons :: user}"></svg><span th:text="#{checkout.review.guest.title}">Guest Information</span></h2>
                     <div class="cor-cols">
-                        <dl class="cor-facts">
+                        <dl class="label-value-rows label-value-rows--divided label-value-rows--fit">
                             <div th:if="${summaryGuest != null and !#strings.isEmpty(summaryGuest.fullName)}">
                                 <dt th:text="#{checkin.review.guest.name}">Full Name</dt>
                                 <dd th:text="${summaryGuest.fullName}">Chu Khoa</dd>
@@ -124,7 +117,7 @@
                                 </div>
                             </th:block>
                         </dl>
-                        <dl class="cor-facts cor-facts--side" th:if="${summaryGuest != null}">
+                        <dl class="label-value-rows label-value-rows--divided label-value-rows--fit cor-facts--side" th:if="${summaryGuest != null}">
                             <div>
                                 <dt th:text="#{checkin.review.guest.email}">Email</dt>
                                 <dd class="cor-wrap" th:text="${#strings.isEmpty(summaryGuest.email) ? '—' : summaryGuest.email}">—</dd>
@@ -144,7 +137,7 @@
                 <section aria-labelledby="cor-stay-heading" class="card cor-card">
                     <h2 id="cor-stay-heading"><svg th:replace="~{layout/icons :: calendar}"></svg><span th:text="#{checkout.review.stay.title}">Stay Information</span></h2>
                     <div class="cor-stay">
-                        <dl class="cor-facts">
+                        <dl class="label-value-rows label-value-rows--divided label-value-rows--fit">
                             <div>
                                 <dt th:text="#{checkout.review.stay.reservationNo}">Reservation No.</dt>
                                 <dd th:text="${review.reservationNumber}">R-1</dd>
@@ -166,7 +159,7 @@
                                 <dd th:text="${review.nights()}">5</dd>
                             </div>
                         </dl>
-                        <dl class="cor-facts cor-facts--rooms">
+                        <dl class="label-value-rows label-value-rows--divided label-value-rows--fit cor-facts--rooms">
                             <div>
                                 <dt th:text="#{checkout.review.stay.roomNo}">Room No.</dt>
                                 <dd>

@@ -176,9 +176,11 @@
         const rateCell = document.createElement("td");
         rateCell.className = "walk-in-num";
         const rate = document.createElement("input");
-        rate.className = "js-money-input walk-in-rate";
+        rate.className = "walk-in-rate";
         rate.type = "text";
-        rate.inputMode = "decimal";
+        rate.inputMode = "numeric";
+        rate.autocomplete = "off";
+        rate.dataset.numeric = "vnd";
         rate.dataset.nightlyRate = "";
         rate.setAttribute("aria-label", (labels.labelRate || "").replace("{0}", room.roomNumber));
         rate.value = selection.get(room.id) || "";
@@ -196,12 +198,17 @@
         checkbox.addEventListener("change", () => {
             if (checkbox.checked) {
                 selection.set(room.id, rate.value);
-                rate.focus();
             } else {
+                // An unselected room has no rate: the field is disabled again and its value cleared.
                 selection.delete(room.id);
+                rate.value = "";
+                rate.removeAttribute("aria-invalid");
+                invalidRates.delete(room.id);
             }
+            // The field is enabled by updateFieldNames, so it can only take focus afterwards.
             updateFieldNames();
             applyTypeFilter();
+            if (checkbox.checked) rate.focus();
         });
         rate.addEventListener("input", () => {
             selection.set(room.id, rate.value);
@@ -212,7 +219,7 @@
             if (event.target.closest("input, a")) return;
             checkbox.click();
         });
-        if (window.PmsMoneyInput) window.PmsMoneyInput.initialize(rate);
+        if (window.PmsNumericInput) window.PmsNumericInput.initialize(rate);
         return row;
     };
 
@@ -481,7 +488,7 @@
         const missing = collectMissing();
         if (missing.length === 0) return;
         event.preventDefault();
-        // Keep the money-input script's submit normalisation from reformatting the entries we are keeping on screen.
+        // A failed check stops here: other submit listeners (such as the duplicate-submit guard) must not run.
         event.stopImmediatePropagation();
         showMissing(missing);
     }, true);

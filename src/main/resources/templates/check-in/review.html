@@ -15,10 +15,7 @@
              on the left, contact/party/money/documents on the right). The final action is last in the document so it ends
              the mobile flow; on desktop CSS places it at the top right of the header, as in the approved mockup. -->
         <div class="cir-page">
-            <a class="back-link cir-back" th:href="@{/check-in/existing}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkin.review.back}">Back to search</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInReview()})}"></nav>
 
             <div class="cir-title">
                 <h1 th:text="#{checkin.review.title}">Check-in Review</h1>
@@ -131,27 +128,27 @@
                             </p>
                         </div>
                     </div>
-                    <dl class="cir-rows">
-                        <div class="cir-row">
+                    <dl class="label-value-rows label-value-rows--divided">
+                        <div>
                             <dt th:text="#{checkin.review.guest.nationality}">Nationality</dt>
                             <dd>
                                 <span aria-hidden="true" class="cir-flag" th:if="${nationality.flag != null}" th:text="${nationality.flag}"></span>
                                 <span th:text="${#strings.isEmpty(review.guestNationality) ? '—' : review.guestNationality}">Vietnam</span>
                             </dd>
                         </div>
-                        <div class="cir-row">
+                        <div>
                             <dt th:text="#{checkin.review.guest.phone}">Phone</dt>
                             <dd th:text="${#strings.isEmpty(review.guestPhone) ? '—' : review.guestPhone}">+84 912 345 678</dd>
                         </div>
-                        <div class="cir-row">
+                        <div>
                             <dt th:text="#{checkin.review.guest.email}">Email</dt>
                             <dd th:text="${#strings.isEmpty(review.guestEmail) ? '—' : review.guestEmail}">guest@example.com</dd>
                         </div>
-                        <div class="cir-row">
+                        <div>
                             <dt th:text="#{checkin.review.guest.dateOfBirth}">Date of birth</dt>
                             <dd><span th:replace="~{layout/datetime :: date(${review.guestDateOfBirth})}">—</span></dd>
                         </div>
-                        <div class="cir-row">
+                        <div>
                             <dt th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</dt>
                             <dd id="guest-id-document" th:text="${#strings.isEmpty(summaryGuest?.idDocumentNumber) ? '—' : summaryGuest.idDocumentNumber}">—</dd>
                         </div>
@@ -199,16 +196,16 @@
                 <!-- Booking Contact: existing effective/fallback behavior, unchanged. -->
                 <section aria-labelledby="check-in-contact-heading" class="card cir-card" id="booking-contact">
                     <h2 id="check-in-contact-heading" th:text="#{reservation.contact.label}">Booking Contact</h2>
-                    <dl class="cir-rows">
-                        <div class="cir-row">
+                    <dl class="label-value-rows label-value-rows--divided">
+                        <div>
                             <dt th:text="#{reservation.contact.name}">Contact Name</dt>
                             <dd th:text="${#strings.isEmpty(review.effectiveBookingContactName) ? '—' : review.effectiveBookingContactName}">—</dd>
                         </div>
-                        <div class="cir-row">
+                        <div>
                             <dt th:text="#{reservation.contact.phone}">Contact Phone</dt>
                             <dd th:text="${#strings.isEmpty(review.effectiveBookingContactPhone) ? '—' : review.effectiveBookingContactPhone}">—</dd>
                         </div>
-                        <div class="cir-row">
+                        <div>
                             <dt th:text="#{reservation.contact.email}">Contact Email</dt>
                             <dd th:text="${#strings.isEmpty(review.effectiveBookingContactEmail) ? '—' : review.effectiveBookingContactEmail}">—</dd>
                         </div>

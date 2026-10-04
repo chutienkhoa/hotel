@@ -1,0 +1,191 @@
+/* Stay date-range picker (shared). One control that opens a range popover (Check-in, Check-out, calendar, Clear, Apply),
+   driven by static/js/common/stay-range-picker.js. Used by the Reservation List Stay filter and Create Reservation. */
+.reservation-stay {
+  position: relative;
+}
+.reservation-stay__trigger {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.9375rem;
+  height: var(--control-height);
+  padding: 0 2.25rem 0 calc(var(--space-3) + var(--icon-size-action) + var(--space-2));
+  position: relative;
+  text-align: left;
+  width: 100%;
+}
+.reservation-stay__trigger:focus-visible,
+.reservation-stay__trigger[aria-expanded="true"] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(23 105 170 / 15%);
+  outline: 0;
+}
+.reservation-stay__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reservation-stay__summary--empty {
+  color: var(--color-muted);
+}
+.reservation-stay__trigger[aria-expanded="true"] .reservation-list-control__chevron svg {
+  transform: rotate(180deg);
+}
+.reservation-stay__popover {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgb(16 42 67 / 18%);
+  left: 0;
+  padding: var(--space-4);
+  position: absolute;
+  top: calc(100% + var(--dropdown-gap));
+  width: max-content;
+  z-index: 30;
+}
+.reservation-stay__popover[hidden] {
+  display: none;
+}
+.reservation-stay__fields {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  margin-bottom: var(--space-3);
+}
+.reservation-stay__field {
+  display: grid;
+  gap: var(--space-1);
+}
+.reservation-stay__field > label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.reservation-stay__input {
+  position: relative;
+}
+.reservation-stay__input input {
+  cursor: default;
+  height: var(--control-height);
+  padding-right: 2.25rem;
+}
+.reservation-stay__input svg {
+  color: var(--color-muted);
+  height: 1rem;
+  pointer-events: none;
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+}
+.reservation-stay__arrow {
+  color: var(--color-muted);
+  line-height: var(--control-height);
+}
+/* flatpickr keeps the input it was built on; the calendar is the only visible control. */
+.reservation-stay__calendar > input {
+  display: none;
+}
+/* The inline flatpickr calendar sits flat inside the popover: two months side by side, each a fixed width. flatpickr
+   writes pixel widths onto its containers, so these overrides need !important. */
+.reservation-stay__calendar .flatpickr-calendar {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin: 0 auto;
+  overflow: visible;
+  width: auto !important;
+}
+.reservation-stay__calendar .flatpickr-rContainer,
+.reservation-stay__calendar .flatpickr-innerContainer {
+  width: auto !important;
+}
+/* Weekday header and day grid (both months and the gap between them) share the weekday header's background. */
+.reservation-stay__calendar .flatpickr-innerContainer {
+  background: var(--color-surface-muted);
+}
+.reservation-stay__calendar .flatpickr-days {
+  display: flex;
+  gap: var(--space-4);
+  padding: 0;
+  width: auto !important;
+}
+.reservation-stay__calendar .flatpickr-weekdays {
+  background: transparent;
+  gap: var(--space-4);
+  padding: 0;
+}
+.reservation-stay__calendar .flatpickr-days .dayContainer {
+  max-width: 18.75rem;
+  min-width: 18.75rem;
+  width: 18.75rem;
+}
+.reservation-stay__calendar .flatpickr-day.selected,
+.reservation-stay__calendar .flatpickr-day.startRange,
+.reservation-stay__calendar .flatpickr-day.endRange {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.reservation-stay__calendar .flatpickr-day.inRange {
+  background: var(--color-info-surface);
+  border-color: var(--color-info-surface);
+  box-shadow: -5px 0 0 var(--color-info-surface), 5px 0 0 var(--color-info-surface);
+  color: var(--color-text);
+}
+.reservation-stay__hint {
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+  margin: var(--space-2) 0 0;
+}
+.reservation-stay__hint[hidden] {
+  display: none;
+}
+.reservation-stay__actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-3);
+}
+
+/* Trailing icon (calendar) for a trigger that has no leading icon. */
+.reservation-stay__trail {
+  align-items: center;
+  bottom: 0;
+  color: var(--color-muted);
+  display: flex;
+  pointer-events: none;
+  position: absolute;
+  right: var(--space-3);
+  top: 0;
+}
+.reservation-stay__trail svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+
+/* Narrow screens: the popover takes the control's width and the single month shrinks to fit, instead of keeping the
+   fixed two-month width that would overflow the page. */
+@media (max-width: 40rem) {
+  .reservation-stay__popover {
+    padding: var(--space-3);
+    right: 0;
+    width: auto;
+  }
+  .reservation-stay__calendar .flatpickr-calendar,
+  .reservation-stay__calendar .flatpickr-rContainer,
+  .reservation-stay__calendar .flatpickr-innerContainer,
+  .reservation-stay__calendar .flatpickr-days {
+    width: 100% !important;
+  }
+  .reservation-stay__calendar .flatpickr-days .dayContainer {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+}

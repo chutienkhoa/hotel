@@ -503,13 +503,6 @@
   max-width: 9rem;
   text-align: center;
 }
-.walk-in-rate:disabled {
-  background: transparent;
-  border-color: transparent;
-}
-.walk-in-rate:disabled::placeholder {
-  color: var(--color-muted);
-}
 
 /* Booking Source: Direct is the selected source. The OTA rows are disabled explanations (plain text, not form
    controls): they can neither be submitted nor enabled. */

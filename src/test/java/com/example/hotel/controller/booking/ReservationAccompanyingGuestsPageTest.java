@@ -123,24 +123,19 @@ class ReservationAccompanyingGuestsPageTest {
     @MockitoBean
     private JwtService jwtService;
 
-    /** Confirms the create form offers the optional Accompanying Guests area (EN and VI) without inline guest creation. */
+    /** Confirms the create form offers the optional, searchable Accompanying Guests area (EN and VI). */
     @Test
     void shouldOfferAccompanyingGuestsAreaOnTheCreateForm() throws Exception {
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(
-                new GuestLookupResponse(COMPANION_ID, "G-2", "Bao Tran", null, null, null)));
-
         mockMvc.perform(get("/reservations/new").with(manager()))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("data-accompanying-guests")))
+                .andExpect(content().string(containsString("data-guest-picker=\"accompanying\"")))
                 .andExpect(content().string(containsString("Accompanying Guests")))
-                .andExpect(content().string(containsString("Add Guest")))
                 .andExpect(content().string(containsString("No accompanying guests")))
-                .andExpect(content().string(containsString("G-2 · Bao Tran")))
-                .andExpect(content().string(containsString("data-message-duplicate=\"Guest already selected.\"")))
+                .andExpect(content().string(containsString("Guest already selected.")))
                 .andExpect(content().string(containsString("Primary Guest cannot be an accompanying guest.")));
         mockMvc.perform(get("/reservations/new").with(manager()).cookie(new Cookie("pms-lang", "vi")))
                 .andExpect(content().string(containsString("Khách đi cùng")))
-                .andExpect(content().string(containsString("Thêm khách")))
                 .andExpect(content().string(containsString("Không có khách đi cùng")))
                 .andExpect(content().string(containsString("Khách đã được chọn.")));
     }

@@ -193,7 +193,13 @@ public class RoomAvailabilityService {
         return candidates.stream()
                 .filter(room -> !conflicted.contains(room.getId()))
                 .sorted(Comparator.comparing(Room::getRoomNumber))
-                .map(room -> new RoomLookupResponse(room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive()))
+                .map(room -> new RoomLookupResponse(
+                        room.getId(),
+                        room.getRoomNumber(),
+                        room.getStatus().name(),
+                        room.isActive(),
+                        room.getRoomType() == null ? null : room.getRoomType().getName(),
+                        room.getRoomType() == null ? null : room.getRoomType().getCapacity()))
                 .toList();
     }
 }

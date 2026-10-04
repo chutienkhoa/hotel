@@ -3,6 +3,9 @@ package com.example.hotel.service.room;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.example.hotel.dto.room.response.RoomLookupResponse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import jakarta.persistence.EntityManagerFactory;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
@@ -35,6 +38,9 @@ class RoomAvailabilityIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
 
     private UUID user;
     private UUID guest;
@@ -165,6 +171,31 @@ class RoomAvailabilityIntegrationTest {
 
     private LocalDate date(String value) {
         return LocalDate.parse(value);
+    }
+
+    /**
+     * Confirms the date-aware lookup carries Room Type and ADULT capacity for every offered Room, including one that is
+     * OCCUPIED today, and reads them with a bounded number of statements rather than one read per Room.
+     */
+    @Test
+    void shouldCarryRoomTypeAndAdultCapacityWithABoundedNumberOfStatements() {
+        jdbc.update("UPDATE room_type SET capacity = 3 WHERE id = ?", type);
+        String typeName = jdbc.queryForObject("SELECT name FROM room_type WHERE id = ?", String.class, type);
+        for (int number = 1; number <= 8; number++) {
+            room("30" + number, number == 1 ? "OCCUPIED" : "AVAILABLE");
+        }
+        org.hibernate.stat.Statistics statistics =
+                entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        statistics.clear();
+
+        List<RoomLookupResponse> result = service.bookableRoomsForPeriod(date("2026-10-10"), date("2026-10-12"));
+
+        assertEquals(8, result.size());
+        assertTrue(result.stream().allMatch(room -> typeName.equals(room.roomTypeName())));
+        assertTrue(result.stream().allMatch(room -> Integer.valueOf(3).equals(room.adultCapacity())));
+        assertTrue(statistics.getPrepareStatementCount() <= 3,
+                "expected a bounded lookup, but " + statistics.getPrepareStatementCount() + " statements ran");
     }
 
     private UUID room(String number, String status) {

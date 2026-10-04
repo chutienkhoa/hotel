@@ -14,10 +14,7 @@
                 session, not resubmitted, so Back, browser Back/Forward and Refresh all return to the same populated form
                 without a POST in the browser history. Nothing is persisted until Create Reservation.
             -->
-            <a class="back-link back-link--primary" th:href="@{/check-in/ota-entry}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkin.ota.summary.back}">Back to OTA Booking (Not Entered)</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInOtaSummary()})}"></nav>
 
             <div class="page-header walk-in-header">
                 <div>

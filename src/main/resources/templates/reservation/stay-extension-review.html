@@ -46,7 +46,7 @@
                             <svg th:replace="~{layout/icons :: note}"></svg>
                             <h2 id="stay-extension-reservation-heading" th:text="#{reservation.stayExtension.review.reservation.title}">Reservation Information</h2>
                         </header>
-                        <dl class="stay-extension-facts stay-extension-facts--stacked">
+                        <dl class="label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--strong">
                             <div>
                                 <dt th:text="#{reservation.stayExtension.field.reservationNo}">Reservation No.</dt>
                                 <dd th:text="${preview.reservationNumber}">RSV-20261002-001</dd>
@@ -125,7 +125,7 @@
                                 <td class="stay-extension-arrow" aria-hidden="true">
                                     <svg th:replace="~{layout/icons :: chevronRight}"></svg>
                                 </td>
-                                <td class="stay-extension-table__after"><span th:replace="~{layout/datetime :: date(${preview.checkInDate})}">—</span></td>
+                                <td class="stay-extension-table__after date-value--check-in"><span th:replace="~{layout/datetime :: date(${preview.checkInDate})}">—</span></td>
                             </tr>
                             <tr>
                                 <th scope="row" th:text="#{reservation.stayExtension.field.checkOut}">Check-out Date</th>
@@ -133,7 +133,7 @@
                                 <td class="stay-extension-arrow" aria-hidden="true">
                                     <svg th:replace="~{layout/icons :: chevronRight}"></svg>
                                 </td>
-                                <td class="stay-extension-table__after"><span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate})}">—</span></td>
+                                <td class="stay-extension-table__after date-value--check-out"><span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate})}">—</span></td>
                             </tr>
                             <tr>
                                 <th scope="row" th:text="#{reservation.stayExtension.field.nights}">Nights</th>
@@ -167,9 +167,9 @@
                     </header>
                     <p class="stay-extension-summary__nights" th:text="#{reservation.stayExtension.addedNights(${preview.additionalNights})}">+1 night</p>
                     <p class="stay-extension-summary__range">
-                        <span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span>
+                        <span class="date-value--check-out"><span th:replace="~{layout/datetime :: date(${preview.currentCheckOutDate})}">—</span></span>
                         <svg th:replace="~{layout/icons :: chevronRight}"></svg>
-                        <span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate})}">—</span>
+                        <span class="date-value--check-out"><span th:replace="~{layout/datetime :: date(${preview.requestedCheckOutDate})}">—</span></span>
                     </p>
                     <p class="stay-extension-summary__amount">
                         <span class="stay-extension-summary__caption" th:text="#{reservation.stayExtension.folio.additional}">Additional room charge</span>

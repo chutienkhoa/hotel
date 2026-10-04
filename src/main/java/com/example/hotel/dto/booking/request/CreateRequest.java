@@ -18,26 +18,26 @@ import java.util.UUID;
 /** Dữ liệu request tạo reservation nháp. */
 @RequiresOtaBookingReference
 public record CreateRequest(
-        @NotNull UUID guestId,
-        @NotNull LocalDate checkInDate,
-        @NotNull LocalDate checkOutDate,
+        @NotNull(message = "{validation.reservation.guestId.required}") UUID guestId,
+        @NotNull(message = "{validation.reservation.checkInDate.required}") LocalDate checkInDate,
+        @NotNull(message = "{validation.reservation.checkOutDate.required}") LocalDate checkOutDate,
         @NotNull(message = "{validation.reservation.adultCount.required}")
                 @Min(value = 1, message = "{validation.reservation.adultCount.min}")
                 @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer adultCount,
         @NotNull(message = "{validation.reservation.childCount.required}")
                 @Min(value = 0, message = "{validation.reservation.childCount.min}")
                 @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer childCount,
-        @NotNull BookingSource source,
-        @Size(max = 255) String otaBookingReference,
+        @NotNull(message = "{validation.reservation.source.required}") BookingSource source,
+        @Size(max = 255, message = "{validation.reservation.otaReference.max}") String otaBookingReference,
         @NotBlank(message = "{validation.reservation.currency.required}")
                 @Pattern(regexp = "VND", message = "{validation.reservation.currency.supported}")
                 String currency,
-        @Size(max = 5000) String notes,
-        @NotEmpty List<@Valid RoomRequest> rooms,
+        @Size(max = 5000, message = "{validation.reservation.notes.max}") String notes,
+        @NotEmpty(message = "{validation.reservation.rooms.required}") List<@Valid RoomRequest> rooms,
         List<UUID> accompanyingGuestIds,
-        @Size(max = 200) String bookingContactName,
-        @Size(max = 100) String bookingContactPhone,
-        @Size(max = 255) String bookingContactEmail) {
+        @Size(max = 200, message = "{validation.reservation.contactName.max}") String bookingContactName,
+        @Size(max = 100, message = "{validation.reservation.contactPhone.max}") String bookingContactPhone,
+        @Size(max = 255, message = "{validation.reservation.contactEmail.max}") String bookingContactEmail) {
 
     /**
      * Creates a request without explicit Booking Contact values, for callers that predate Booking Contact (Walk-in

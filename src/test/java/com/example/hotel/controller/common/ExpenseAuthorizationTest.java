@@ -205,14 +205,14 @@ class ExpenseAuthorizationTest {
     @Test
     void shouldExposeExpenseNavigationFlagFromNavigationModelAdvice() {
         ExtendedModelMap grantedModel = new ExtendedModelMap();
-        new NavigationModelAdvice().addNavigationAttributes(
+        new NavigationModelAdvice(new org.springframework.context.support.ResourceBundleMessageSource()).addNavigationAttributes(
                 grantedModel,
                 new UsernamePasswordAuthenticationToken("manager", null, managerAuthorities()),
                 new org.springframework.mock.web.MockHttpServletRequest());
         assertTrue((Boolean) grantedModel.getAttribute("canManageExpense"));
 
         ExtendedModelMap deniedModel = new ExtendedModelMap();
-        new NavigationModelAdvice().addNavigationAttributes(
+        new NavigationModelAdvice(new org.springframework.context.support.ResourceBundleMessageSource()).addNavigationAttributes(
                 deniedModel,
                 new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()),
                 new org.springframework.mock.web.MockHttpServletRequest());

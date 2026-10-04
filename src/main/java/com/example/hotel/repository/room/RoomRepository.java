@@ -6,6 +6,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
@@ -18,10 +19,12 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
 
     /**
      * Retrieves every active Room regardless of current operational status, for date-range-aware
-     * availability queries that must not rely solely on the current {@code Room.status}.
+     * availability queries that must not rely solely on the current {@code Room.status}. The Room Type is fetched in
+     * the same query so a lookup can show Room Type and capacity without one extra read per Room.
      *
      * @return every active Room
      */
+    @EntityGraph(attributePaths = "roomType")
     List<Room> findByActiveTrue();
 
     /**

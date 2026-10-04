@@ -95,7 +95,7 @@ class AdditionalRevenuePageControllerTest {
 
         mockMvc.perform(get("/additional-revenues/new").with(user("admin").authorities(manageAdditionalRevenue())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"js-money-input\" id=\"amount\"")))
+                .andExpect(content().string(containsString("data-numeric=\"vnd\" id=\"amount\"")))
                 .andExpect(content().string(containsString("class=\"js-date-picker\" id=\"revenueDate\"")))
                 .andExpect(content().string(containsString("Electric Cart Rental")));
     }

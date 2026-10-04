@@ -385,6 +385,33 @@ class ReservationModificationPageTest {
         return user("viewer").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
     }
 
+    /** Confirms Reservation Detail shows the workflow it was opened from, and ignores an unknown context. */
+    @Test
+    void shouldShowTheWorkflowBreadcrumbOnReservationDetail() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CONFIRMED", BookingSource.DIRECT));
+        RequestPostProcessor frontDesk = org.springframework.security.test.web.servlet.request
+                .SecurityMockMvcRequestPostProcessors.user("desk").authorities(
+                        new org.springframework.security.core.authority.SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                        new org.springframework.security.core.authority.SimpleGrantedAuthority("PERM_CHECK_IN"));
+
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(frontDesk))
+                .andExpect(content().string(containsString("<a href=\"/reservations\">Reservations</a>")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Reservation R20260924-000001</span>")))
+                .andExpect(content().string(not(containsString("Back to reservations"))));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).param("from", "arrivals").with(frontDesk))
+                .andExpect(content().string(containsString("<a href=\"/front-desk\">Front Desk</a>")))
+                .andExpect(content().string(containsString("<a href=\"/front-desk?view=arrivals\">Arrivals</a>")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Reservation R20260924-000001</span>")));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).param("from", "elsewhere").with(frontDesk))
+                .andExpect(content().string(containsString("<a href=\"/reservations\">Reservations</a>")))
+                .andExpect(content().string(not(containsString("view=arrivals"))));
+        // The trail follows the language of this very request, including the request that switches the language.
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).param("from", "arrivals").param("lang", "vi")
+                        .with(frontDesk))
+                .andExpect(content().string(containsString("<a href=\"/front-desk\">Lễ tân</a>")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Đặt phòng R20260924-000001</span>")));
+    }
+
     /** Supplies method security and the deterministic hotel Clock. */
     @TestConfiguration
     @EnableMethodSecurity

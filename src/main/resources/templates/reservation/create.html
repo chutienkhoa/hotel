@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/reservation/create.css'">
+<head th:replace="~{layout/base :: head(#{reservation.create.title})}"></head>
+<body>
+<div class="app-shell page-reservation-create">
+    <header th:replace="~{layout/header :: header}"></header>
+    <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
+
+    <main class="content reservation-create">
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.reservationCreate()})}"></nav>
+
+        <div class="page-header">
+            <div class="page-header-copy">
+                <h1 th:text="#{reservation.create.title}">Create Reservation</h1>
+                <p class="page-description" th:text="#{reservation.create.subtitle}">Create a new reservation as a draft. You can confirm it later.</p>
+            </div>
+            <div class="rc-header-actions">
+                <!-- Cancel is its own GET form so the shared confirmation dialog (confirmation.js) can ask before discarding.
+                     create.js lets it navigate straight away when nothing meaningful was entered. -->
+                <form class="rc-cancel-form" data-discard-form data-confirm-severity="WARNING" method="get"
+                      th:action="@{/reservations}"
+                      th:attr="data-confirm-title=#{reservation.create.discard.title},data-confirm-message=#{reservation.create.discard.message},data-confirm-label=#{reservation.create.discard.confirm}">
+                    <button class="button button-secondary" th:text="#{common.action.cancel}" type="submit">Cancel</button>
+                </form>
+                <button class="button button-primary" data-save-draft form="reservation-create-form" type="submit"
+                        th:attr="data-loading-text=#{reservation.create.action.saving}">
+                    <svg th:replace="~{layout/icons :: save}"></svg>
+                    <span th:text="#{reservation.create.action.save}">Save as Draft</span>
+                </button>
+            </div>
+        </div>
+
+        <form class="rc-form" data-submit-guard id="reservation-create-form" method="post" novalidate
+              th:action="@{/reservations}" th:object="${reservationForm}"
+              th:attr="data-guest-search-url=@{/reservations/new/guests},data-room-lookup-url=@{/reservations/new/rooms},data-hotel-today=${hotelToday},data-default-adults=${defaultAdultCount},data-default-children=${defaultChildCount},data-guest-url=${canManageGuest} ? @{/guests/GUEST_ID},data-created-guest-id=${createdGuestId}">
+            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+            <!-- V1 Reservations are VND only; the value is fixed here and still validated by the server. -->
+            <input name="currency" type="hidden" value="VND" />
+
+            <div class="rc-layout">
+                <div class="rc-main">
+                    <!-- 1. Primary Guest -->
+                    <section aria-labelledby="rc-guest-heading" class="card rc-card" id="rc-guest">
+                        <header class="rc-card__header">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                            <h2 id="rc-guest-heading" th:text="#{reservation.create.guest.title}">Primary Guest</h2>
+                        </header>
+
+                        <p class="rc-notice rc-notice--success" data-guest-created-notice role="status"
+                           th:if="${createdGuestId != null}">
+                            <svg th:replace="~{layout/icons :: checkCircle}"></svg>
+                            <span th:text="#{reservation.create.guest.created}">Guest created successfully and selected.</span>
+                        </p>
+
+                        <!-- Search field on the left, Create New Guest at the far right of the card; the selected-guest card spans
+                             the card's content width. -->
+                        <div class="rc-guest-lookup">
+                            <div class="form-field rc-guest-search">
+                                <label for="guestSearch" th:text="#{reservation.create.guest.search.label}">Search guest</label>
+                                <div class="rc-guest-search-row">
+                                    <div class="rc-combobox" data-guest-picker="primary">
+                                        <div class="rc-combobox__control">
+                                            <span class="rc-combobox__lead"><svg th:replace="~{layout/icons :: search}"></svg></span>
+                                            <input aria-autocomplete="list" aria-controls="guestSearch-list" aria-describedby="guestSearch-hint guestId-error"
+                                                   aria-expanded="false" aria-haspopup="listbox" aria-required="true"
+                                                   autocomplete="off" data-picker-input id="guestSearch" role="combobox" type="text"
+                                                   th:attr="aria-invalid=${#fields.hasErrors('guestId')},placeholder=#{reservation.create.guest.search.placeholder}" />
+                                            <span class="rc-combobox__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+                                        </div>
+                                        <div class="rc-popup" data-picker-popup hidden>
+                                            <ul aria-label="" class="rc-listbox" data-picker-list id="guestSearch-list" role="listbox"
+                                                th:attr="aria-label=#{reservation.create.guest.search.label}"></ul>
+                                            <p class="rc-popup__message" data-picker-message></p>
+                                        </div>
+                                        <p aria-live="polite" class="visually-hidden" data-picker-status role="status"></p>
+                                    </div>
+                                    <div class="rc-guest-new">
+                                        <a class="button button-outline-primary" data-create-guest-link
+                                           th:href="@{/guests/new(returnTo='/reservations/new')}">
+                                            <svg th:replace="~{layout/icons :: plus}"></svg>
+                                            <span th:text="#{reservation.create.guest.new}">Create New Guest</span>
+                                        </a>
+                                    </div>
+                                </div>
+                                <p class="rc-help" id="guestSearch-hint" th:text="#{reservation.create.guest.search.hint}">Searches every guest profile.</p>
+                                <input data-guest-id id="guestId" name="guestId" th:value="${reservationForm.guestId}" type="hidden" />
+                                <p class="field-error" id="guestId-error" th:text="${#fields.hasErrors('guestId')} ? ${#strings.listJoin(#fields.errors('guestId'), ' ')} : ''"></p>
+                            </div>
+                        <!-- Selected Primary Guest. Display only: guest code, name, phone, email and nationality. Never the
+                             ID / passport number or date of birth. The submitted value is the hidden guestId above. -->
+                        <div class="rc-guest-card" data-guest-card hidden>
+                            <span aria-hidden="true" class="rc-avatar" data-guest-initials>?</span>
+                            <div class="rc-guest-card__identity">
+                                <strong data-guest-name>—</strong>
+                                <span data-guest-code>—</span>
+                            </div>
+                            <ul class="rc-guest-card__contact">
+                                <li>
+                                    <svg th:replace="~{layout/icons :: phone}"></svg>
+                                    <span class="visually-hidden" th:text="#{reservation.create.guest.phone}">Phone</span>
+                                    <span data-guest-phone>—</span>
+                                </li>
+                                <li>
+                                    <svg th:replace="~{layout/icons :: mail}"></svg>
+                                    <span class="visually-hidden" th:text="#{reservation.create.guest.email}">Email</span>
+                                    <span data-guest-email>—</span>
+                                </li>
+                                <li>
+                                    <svg th:replace="~{layout/icons :: mapPin}"></svg>
+                                    <span class="visually-hidden" th:text="#{reservation.create.guest.nationality}">Nationality</span>
+                                    <span data-guest-nationality>—</span>
+                                </li>
+                            </ul>
+                            <!-- View Guest exists only for a user who may open Guest Detail. Picking another guest in the search above
+                                 replaces the Primary Guest directly; there is no separate "clear" step. -->
+                            <div class="rc-guest-card__actions" th:if="${canManageGuest}">
+                                <a class="button button-outline-primary" data-guest-view hidden rel="noopener" target="_blank"
+                                   th:text="#{reservation.create.guest.view}">View Guest</a>
+                            </div>
+                        </div>
+                        <div data-initial-guest hidden th:if="${selectedGuest != null}"
+                             th:attr="data-id=${selectedGuest.id},data-code=${selectedGuest.guestCode},data-name=${selectedGuest.fullName},data-phone=${selectedGuest.phone},data-email=${selectedGuest.email},data-nationality=${selectedGuest.nationality}"></div>
+                        </div>
+
+                        <p class="rc-help rc-guest-new-hint">
+                            <svg th:replace="~{layout/icons :: info}"></svg>
+                            <span th:text="#{reservation.create.guest.new.hint}">All previously entered reservation data is preserved.</span>
+                        </p>
+
+                        <!-- Accompanying Guests: optional, known profiles only. Not tied to the adult / child counts. -->
+                        <div class="rc-accompanying" data-accompanying-guests id="rc-accompanying">
+                            <h3 class="rc-subheading" th:text="#{reservation.guests.accompanying}">Accompanying Guests</h3>
+                            <p class="rc-help" id="accompanying-hint" th:text="#{reservation.guests.accompanyingHint}">Optional.</p>
+                            <div class="rc-combobox" data-guest-picker="accompanying">
+                                <label class="visually-hidden" for="accompanyingSearch" th:text="#{reservation.guests.accompanying}">Accompanying Guests</label>
+                                <div class="rc-combobox__control">
+                                    <span class="rc-combobox__lead"><svg th:replace="~{layout/icons :: search}"></svg></span>
+                                    <input aria-autocomplete="list" aria-controls="accompanyingSearch-list" aria-describedby="accompanying-hint accompanyingGuestIds-error"
+                                           aria-expanded="false" aria-haspopup="listbox" autocomplete="off" data-picker-input
+                                           id="accompanyingSearch" role="combobox" type="text"
+                                           th:attr="aria-invalid=${#fields.hasErrors('accompanyingGuestIds')},placeholder=#{reservation.create.accompanying.placeholder}" />
+                                    <span class="rc-combobox__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+                                </div>
+                                <div class="rc-popup" data-picker-popup hidden>
+                                    <ul class="rc-listbox" data-picker-list id="accompanyingSearch-list" role="listbox"
+                                        th:attr="aria-label=#{reservation.guests.accompanying}"></ul>
+                                    <p class="rc-popup__message" data-picker-message></p>
+                                </div>
+                                <p aria-live="polite" class="visually-hidden" data-picker-status role="status"></p>
+                            </div>
+                            <p class="field-error" data-accompanying-error id="accompanyingGuestIds-error"
+                               th:text="${#fields.hasErrors('accompanyingGuestIds')} ? ${#strings.listJoin(#fields.errors('accompanyingGuestIds'), ' ')} : ''"></p>
+                            <ul class="rc-chips" data-accompanying-list>
+                                <li th:each="selected : ${selectedAccompanyingGuests}"
+                                    th:attr="data-guest-id=${selected.id},data-guest-label=${selected.guestCode + ' · ' + selected.fullName}">
+                                    <span th:text="${selected.guestCode + ' · ' + selected.fullName}">G000002 · Guest name</span>
+                                    <input name="accompanyingGuestIds" th:value="${selected.id}" type="hidden" />
+                                    <button class="rc-chip-remove" data-accompanying-remove type="button"
+                                            th:attr="aria-label=#{reservation.guests.remove} + ': ' + ${selected.guestCode}">
+                                        <svg th:replace="~{layout/icons :: close}"></svg>
+                                    </button>
+                                </li>
+                            </ul>
+                            <p class="rc-help" data-accompanying-empty th:hidden="${!#lists.isEmpty(selectedAccompanyingGuests)}"
+                               th:text="#{reservation.guests.noAccompanying}">No accompanying guests</p>
+                        </div>
+                    </section>
+
+                    <!-- 2. Stay Details -->
+                    <section aria-labelledby="rc-stay-heading" class="card rc-card" id="rc-stay">
+                        <header class="rc-card__header">
+                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <h2 id="rc-stay-heading" th:text="#{reservation.create.stay.title}">Stay Details</h2>
+                        </header>
+
+                        <div class="rc-grid rc-grid--dates">
+                            <!-- One Stay range picker (shared with the Reservation List Stay filter). It is only the UI for the two
+                                 existing values: the hidden checkInDate / checkOutDate inputs are what is submitted. -->
+                            <div class="form-field rc-stay-field">
+                                <span class="rc-label" id="rc-stay-label"><span th:text="#{reservation.create.stay.range}">Stay</span> <span aria-hidden="true" class="rc-required">*</span></span>
+                                <div class="reservation-stay" data-stay-picker
+                                     th:attr="data-all-dates=#{reservation.create.stay.range.placeholder}">
+                                    <input data-stay-from id="checkInDate" name="checkInDate" type="hidden"
+                                           th:value="${reservationForm.checkInDate == null ? '' : #temporals.format(reservationForm.checkInDate, 'yyyy-MM-dd')}" />
+                                    <input data-stay-to id="checkOutDate" name="checkOutDate" type="hidden"
+                                           th:value="${reservationForm.checkOutDate == null ? '' : #temporals.format(reservationForm.checkOutDate, 'yyyy-MM-dd')}" />
+                                    <button aria-describedby="checkInDate-error checkOutDate-error" aria-expanded="false" aria-haspopup="dialog"
+                                            aria-labelledby="rc-stay-label rc-stay-summary" aria-required="true"
+                                            class="reservation-stay__trigger" data-stay-trigger id="rc-stay-trigger" type="button"
+                                            th:attr="aria-invalid=${#fields.hasErrors('checkInDate') or #fields.hasErrors('checkOutDate')}">
+                                        <span class="reservation-stay__summary" data-stay-summary id="rc-stay-summary"
+                                              th:classappend="${reservationForm.checkInDate == null or reservationForm.checkOutDate == null} ? 'reservation-stay__summary--empty'"
+                                              th:text="${reservationForm.checkInDate != null and reservationForm.checkOutDate != null}
+                                                  ? ${T(com.example.hotel.common.DisplayFormats).formatDate(reservationForm.checkInDate) + ' → ' + T(com.example.hotel.common.DisplayFormats).formatDate(reservationForm.checkOutDate)}
+                                                  : #{reservation.create.stay.range.placeholder}">Select check-in and check-out dates</span>
+                                        <span class="reservation-stay__trail"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+                                    </button>
+                                    <div class="reservation-stay__popover" data-stay-popover hidden role="dialog" th:aria-label="#{reservation.list.picker.title}">
+                                        <div class="reservation-stay__fields">
+                                            <div class="reservation-stay__field">
+                                                <label for="rc-stay-check-in" th:text="#{reservation.list.picker.checkIn}">Check-in</label>
+                                                <div class="reservation-stay__input">
+                                                    <input data-stay-in-display id="rc-stay-check-in" readonly type="text" />
+                                                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                                </div>
+                                            </div>
+                                            <span aria-hidden="true" class="reservation-stay__arrow">→</span>
+                                            <div class="reservation-stay__field">
+                                                <label for="rc-stay-check-out" th:text="#{reservation.list.picker.checkOut}">Check-out</label>
+                                                <div class="reservation-stay__input">
+                                                    <input data-stay-out-display id="rc-stay-check-out" readonly type="text" />
+                                                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="reservation-stay__calendar" data-stay-calendar></div>
+                                        <p class="reservation-stay__hint" data-stay-hint hidden role="status" th:text="#{reservation.list.error.stayOrder}">The stay date range must end after it starts.</p>
+                                        <div class="reservation-stay__actions">
+                                            <button class="button button-outline-primary" data-stay-clear th:text="#{reservation.list.picker.clear}" type="button">Clear</button>
+                                            <button class="button button-primary" data-stay-apply disabled th:text="#{reservation.list.picker.apply}" type="button">Apply</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="field-error" id="checkInDate-error" th:text="${#fields.hasErrors('checkInDate')} ? ${#strings.listJoin(#fields.errors('checkInDate'), ' ')} : ''"></p>
+                                <p class="field-error" id="checkOutDate-error" th:text="${#fields.hasErrors('checkOutDate')} ? ${#strings.listJoin(#fields.errors('checkOutDate'), ' ')} : ''"></p>
+                            </div>
+                            <div class="form-field">
+                                <span class="rc-label" id="rc-nights-label" th:text="#{reservation.create.stay.nights}">Nights</span>
+                                <output aria-labelledby="rc-nights-label" class="rc-readonly" data-nights>—</output>
+                            </div>
+                            <div class="form-field">
+                                <label for="source"><span th:text="#{reservation.create.stay.source}">Source</span> <span aria-hidden="true" class="rc-required">*</span></label>
+                                <select aria-describedby="source-error" aria-required="true" id="source" name="source"
+                                        th:attr="aria-invalid=${#fields.hasErrors('source')}">
+                                    <option value="" th:text="#{reservation.create.stay.source.placeholder}">Select source</option>
+                                    <option th:each="bookingSource : ${bookingSources}"
+                                            th:selected="${reservationForm.source == bookingSource}"
+                                            th:text="${#messages.msgOrNull('enum.bookingSource.' + bookingSource.name()) ?: bookingSource.name()}"
+                                            th:value="${bookingSource.name()}">Direct</option>
+                                </select>
+                                <p class="field-error" id="source-error" th:text="${#fields.hasErrors('source')} ? ${#strings.listJoin(#fields.errors('source'), ' ')} : ''"></p>
+                            </div>
+                        </div>
+                        <p class="rc-notice rc-notice--warning" data-past-check-in hidden role="status">
+                            <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                            <span th:text="#{reservation.create.stay.pastCheckIn}">Check-in date is before today's hotel date.</span>
+                        </p>
+
+                        <div class="rc-grid rc-grid--guests">
+                            <div class="form-field">
+                                <label for="adultCount"><span th:text="#{reservation.create.stay.adults}">Adults</span> <span aria-hidden="true" class="rc-required">*</span></label>
+                                <input aria-describedby="adultCount-error" aria-required="true" autocomplete="off" data-numeric="integer"
+                                       id="adultCount" inputmode="numeric"
+                                       th:attr="aria-invalid=${#fields.hasErrors('adultCount')}" th:field="*{adultCount}" type="text" />
+                                <p class="field-error" id="adultCount-error" th:text="${#fields.hasErrors('adultCount')} ? ${#strings.listJoin(#fields.errors('adultCount'), ' ')} : ''"></p>
+                            </div>
+                            <div class="form-field">
+                                <label for="childCount" th:text="#{reservation.create.stay.children}">Children</label>
+                                <input aria-describedby="childCount-error" autocomplete="off" data-numeric="integer"
+                                       id="childCount" inputmode="numeric"
+                                       th:attr="aria-invalid=${#fields.hasErrors('childCount')}" th:field="*{childCount}" type="text" />
+                                <p class="field-error" id="childCount-error" th:text="${#fields.hasErrors('childCount')} ? ${#strings.listJoin(#fields.errors('childCount'), ' ')} : ''"></p>
+                            </div>
+                            <div class="form-field" data-ota-field
+                                 th:hidden="${reservationForm.source == null or reservationForm.source.name() == 'DIRECT'}">
+                                <label for="otaBookingReference"><span th:text="#{reservation.create.stay.otaReference}">OTA booking reference</span> <span aria-hidden="true" class="rc-required">*</span></label>
+                                <input aria-describedby="otaBookingReference-hint otaBookingReference-error" aria-required="true" autocomplete="off"
+                                       id="otaBookingReference" maxlength="255"
+                                       th:attr="aria-invalid=${#fields.hasErrors('otaBookingReference')}" th:field="*{otaBookingReference}" type="text" />
+                                <p class="rc-help" id="otaBookingReference-hint" th:text="#{reservation.create.stay.otaReference.hint}">Required for OTA sources.</p>
+                                <p class="field-error" id="otaBookingReference-error" th:text="${#fields.hasErrors('otaBookingReference')} ? ${#strings.listJoin(#fields.errors('otaBookingReference'), ' ')} : ''"></p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 3. Rooms & Rates -->
+                    <section aria-labelledby="rc-rooms-heading" class="card rc-card" id="rc-rooms">
+                        <header class="rc-card__header">
+                            <svg th:replace="~{layout/icons :: bed}"></svg>
+                            <h2 id="rc-rooms-heading" th:text="#{reservation.create.rooms.title}">Rooms &amp; Rates</h2>
+                        </header>
+
+                        <div class="table-wrap rc-rooms-wrap">
+                            <table class="rc-rooms-table">
+                                <thead>
+                                <tr>
+                                    <th scope="col" th:text="#{reservation.create.rooms.col.index}">#</th>
+                                    <th scope="col"><span th:text="#{reservation.create.rooms.col.room}">Room</span> <span aria-hidden="true" class="rc-required">*</span></th>
+                                    <th scope="col" th:text="#{reservation.create.rooms.col.roomType}">Room Type</th>
+                                    <th scope="col" th:text="#{reservation.create.rooms.col.capacity}">Capacity</th>
+                                    <th scope="col"><span th:text="#{reservation.create.rooms.col.rate}">Nightly Rate (VND)</span> <span aria-hidden="true" class="rc-required">*</span></th>
+                                    <th class="rc-col-total" scope="col" th:text="#{reservation.create.rooms.col.total}">Total (VND)</th>
+                                    <th scope="col" th:text="#{reservation.create.rooms.col.action}">Action</th>
+                                </tr>
+                                </thead>
+                                <tbody data-room-rows></tbody>
+                            </table>
+                        </div>
+                        <p class="field-error" id="rooms-error" th:text="${#fields.hasErrors('rooms')} ? ${#strings.listJoin(#fields.errors('rooms'), ' ')} : ''"></p>
+
+                        <div class="rc-rooms-actions">
+                            <button class="button button-outline-primary" data-add-room type="button">
+                                <svg th:replace="~{layout/icons :: plus}"></svg>
+                                <span th:text="#{reservation.create.rooms.add}">Add Room</span>
+                            </button>
+                            <p class="rc-help rc-rooms-capacity" data-capacity-total hidden></p>
+                        </div>
+
+                        <p aria-live="polite" class="rc-notice rc-notice--info" data-room-availability role="status">
+                            <svg th:replace="~{layout/icons :: info}"></svg>
+                            <span data-room-availability-text th:text="#{reservation.create.rooms.prompt}">Select the dates.</span>
+                            <button class="button button-link rc-retry" data-room-retry hidden th:text="#{reservation.create.rooms.retry}" type="button">Retry</button>
+                        </p>
+                        <p class="rc-notice rc-notice--warning" data-rooms-cleared hidden role="status">
+                            <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                            <span th:text="#{reservation.create.rooms.clearedNotice}">Some rooms were cleared.</span>
+                        </p>
+                        <p class="rc-notice rc-notice--warning" data-capacity-warning hidden role="status">
+                            <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+                            <span data-capacity-warning-text></span>
+                        </p>
+                        <p class="rc-help" th:text="#{reservation.create.rooms.rateHint}">Rates are entered manually.</p>
+
+                        <!-- Rooms and rates preserved by the server after a rejected submit. create.js rebuilds the rows from
+                             these, then re-checks them against the stay dates. Display data and errors only. -->
+                        <div data-initial-rooms hidden>
+                            <span data-initial-room th:each="roomRequest, roomRowStat : *{rooms}"
+                                  th:attr="data-room-id=${roomRequest == null ? null : roomRequest.roomId},data-room-number=${roomRequest == null or roomRequest.roomId == null ? null : selectedRoomNumbers.get(roomRequest.roomId)},data-rate=${roomRequest == null ? null : roomRequest.nightlyRate},data-error-room=${#fields.hasErrors('rooms[__${roomRowStat.index}__].roomId')} ? ${#strings.listJoin(#fields.errors('rooms[__${roomRowStat.index}__].roomId'), ' ')},data-error-rate=${#fields.hasErrors('rooms[__${roomRowStat.index}__].nightlyRate')} ? ${#strings.listJoin(#fields.errors('rooms[__${roomRowStat.index}__].nightlyRate'), ' ')}"></span>
+                        </div>
+                    </section>
+
+                    <!-- 4. Booking Contact -->
+                    <section aria-labelledby="rc-contact-heading" class="card rc-card" id="rc-contact">
+                        <header class="rc-card__header">
+                            <svg th:replace="~{layout/icons :: user}"></svg>
+                            <h2 id="rc-contact-heading" th:text="#{reservation.contact.label}">Booking Contact</h2>
+                        </header>
+                        <div class="rc-grid rc-grid--contact">
+                            <div class="form-field">
+                                <label for="bookingContactName" th:text="#{reservation.contact.name}">Contact Name</label>
+                                <input aria-describedby="bookingContactName-error" autocomplete="off" id="bookingContactName" maxlength="200"
+                                       th:attr="aria-invalid=${#fields.hasErrors('bookingContactName')}" th:field="*{bookingContactName}" type="text" />
+                                <p class="field-error" id="bookingContactName-error" th:text="${#fields.hasErrors('bookingContactName')} ? ${#strings.listJoin(#fields.errors('bookingContactName'), ' ')} : ''"></p>
+                            </div>
+                            <div class="form-field">
+                                <label for="bookingContactPhone" th:text="#{reservation.contact.phone}">Contact Phone</label>
+                                <input aria-describedby="bookingContactPhone-error" autocomplete="off" id="bookingContactPhone" maxlength="100"
+                                       th:attr="aria-invalid=${#fields.hasErrors('bookingContactPhone')}" th:field="*{bookingContactPhone}" type="text" />
+                                <p class="field-error" id="bookingContactPhone-error" th:text="${#fields.hasErrors('bookingContactPhone')} ? ${#strings.listJoin(#fields.errors('bookingContactPhone'), ' ')} : ''"></p>
+                            </div>
+                            <div class="form-field">
+                                <label for="bookingContactEmail" th:text="#{reservation.contact.email}">Contact Email</label>
+                                <input aria-describedby="bookingContactEmail-error" autocomplete="off" id="bookingContactEmail" maxlength="255"
+                                       th:attr="aria-invalid=${#fields.hasErrors('bookingContactEmail')}" th:field="*{bookingContactEmail}" type="text" />
+                                <p class="field-error" id="bookingContactEmail-error" th:text="${#fields.hasErrors('bookingContactEmail')} ? ${#strings.listJoin(#fields.errors('bookingContactEmail'), ' ')} : ''"></p>
+                            </div>
+                        </div>
+                        <p class="rc-help" th:text="#{reservation.create.contact.note}">Optional.</p>
+                        <p class="rc-help rc-help--info" data-contact-hint>
+                            <svg th:replace="~{layout/icons :: info}"></svg>
+                            <span data-contact-hint-text th:text="#{reservation.create.contact.hintBlank}">If all contact fields are left empty, they will be copied from the Primary Guest.</span>
+                        </p>
+                    </section>
+
+                    <!-- 5. Notes -->
+                    <section aria-labelledby="rc-notes-heading" class="card rc-card" id="rc-notes">
+                        <header class="rc-card__header">
+                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <h2 id="rc-notes-heading" th:text="#{reservation.create.notes.title}">Notes</h2>
+                        </header>
+                        <div class="form-field">
+                            <label for="notes" th:text="#{reservation.create.notes.label}">Reservation notes</label>
+                            <textarea aria-describedby="notes-counter notes-error" id="notes" rows="4"
+                                      th:attr="aria-invalid=${#fields.hasErrors('notes')},placeholder=#{reservation.create.notes.placeholder}" th:field="*{notes}"></textarea>
+                            <p class="rc-counter" data-notes-counter id="notes-counter">0 / 5000</p>
+                            <p class="field-error" id="notes-error" th:text="${#fields.hasErrors('notes')} ? ${#strings.listJoin(#fields.errors('notes'), ' ')} : ''"></p>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Reservation Summary: a preview of the DRAFT being created, updated as the form changes. -->
+                <aside aria-labelledby="rc-summary-heading" class="card rc-summary" data-summary>
+                    <header class="rc-card__header">
+                        <svg th:replace="~{layout/icons :: note}"></svg>
+                        <h2 id="rc-summary-heading" th:text="#{reservation.create.summary.title}">Reservation Summary</h2>
+                    </header>
+                    <!-- One Label | Value grid for the whole summary: every value starts at the same position. -->
+                    <div class="rc-summary__section">
+                        <dl class="label-value-rows rc-summary__grid">
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.summary.guest}">Primary Guest</dt>
+                                <dd><strong data-summary-guest>—</strong><span data-summary-guest-code></span></dd>
+                            </div>
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.summary.stay}">Stay</dt>
+                                <dd><strong data-summary-stay>—</strong><span data-summary-nights></span></dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div class="rc-summary__section">
+                        <dl class="label-value-rows rc-summary__grid">
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.summary.rooms}">Rooms</dt>
+                                <dd><strong data-summary-room-count>—</strong></dd>
+                            </div>
+                        </dl>
+                        <dl class="label-value-rows rc-summary__grid" data-summary-rooms></dl>
+                    </div>
+                    <div class="rc-summary__section">
+                        <dl class="label-value-rows rc-summary__grid">
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.stay.adults}">Adults</dt>
+                                <dd><strong data-summary-adults>—</strong></dd>
+                            </div>
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.stay.children}">Children</dt>
+                                <dd><strong data-summary-children>—</strong></dd>
+                            </div>
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.summary.accompanying}">Accompanying Guests</dt>
+                                <dd><strong data-summary-accompanying>0</strong></dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div class="rc-summary__section">
+                        <dl class="label-value-rows rc-summary__grid">
+                            <div class="rc-summary__row">
+                                <dt th:text="#{reservation.create.summary.source}">Source</dt>
+                                <dd><strong data-summary-source>—</strong></dd>
+                            </div>
+                            <div class="rc-summary__row" data-summary-ota-row hidden>
+                                <dt th:text="#{reservation.create.summary.otaReference}">OTA Reference</dt>
+                                <dd><strong data-summary-ota>—</strong></dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <div class="rc-summary__section">
+                        <dl class="label-value-rows rc-summary__grid">
+                            <div class="rc-summary__row rc-summary__row--total">
+                                <dt th:text="#{reservation.create.summary.total}">Estimated Total</dt>
+                                <dd><strong data-summary-total>0 VND</strong></dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <p class="rc-notice rc-notice--info">
+                        <svg th:replace="~{layout/icons :: info}"></svg>
+                        <span th:text="#{reservation.create.summary.draftNote}">This is a draft reservation.</span>
+                    </p>
+                    <p class="rc-help" th:text="#{reservation.create.summary.currencyNote}">All amounts are in VND.</p>
+                </aside>
+            </div>
+        </form>
+
+        <!-- Row template for Rooms & Rates (create.js clones it per room). -->
+        <template id="rc-room-row-template">
+            <tr class="rc-room-row" data-room-row>
+                <td class="rc-room-row__index" data-row-index></td>
+                <td class="rc-room-row__room">
+                    <div class="rc-room-picker" data-room-picker>
+                        <input data-room-id type="hidden" />
+                        <button aria-expanded="false" aria-haspopup="listbox" class="rc-room-picker__trigger" data-room-trigger type="button">
+                            <span data-room-trigger-label th:text="#{reservation.create.rooms.select}">Select a room</span>
+                            <svg th:replace="~{layout/icons :: chevronDown}"></svg>
+                        </button>
+                        <div class="rc-popup rc-popup--floating" data-room-popup hidden>
+                            <div class="rc-combobox__control">
+                                <span class="rc-combobox__lead"><svg th:replace="~{layout/icons :: search}"></svg></span>
+                                <input aria-autocomplete="list" aria-expanded="true" autocomplete="off" data-room-search role="combobox" type="text"
+                                       th:attr="aria-label=#{reservation.create.rooms.searchLabel},placeholder=#{reservation.create.rooms.search}" />
+                            </div>
+                            <ul class="rc-listbox" data-room-list role="listbox" th:attr="aria-label=#{reservation.create.rooms.col.room}"></ul>
+                            <p class="rc-popup__message" data-room-message></p>
+                        </div>
+                    </div>
+                    <p class="field-error" data-room-error></p>
+                </td>
+                <td class="rc-room-row__type" data-room-type>—</td>
+                <td class="rc-room-row__capacity" data-room-capacity>—</td>
+                <td class="rc-room-row__rate">
+                    <input autocomplete="off" data-numeric="vnd" data-rate inputmode="numeric" type="text" />
+                    <p class="field-error" data-rate-error></p>
+                </td>
+                <td class="rc-room-row__total" data-room-total>—</td>
+                <td class="rc-room-row__action">
+                    <button class="button button-secondary rc-icon-button" data-room-remove type="button">
+                        <svg th:replace="~{layout/icons :: trash}"></svg>
+                    </button>
+                </td>
+            </tr>
+        </template>
+
+        <!-- Text for create.js, taken from the same message keys as the server (EN / VI). {0}, {1}, {2} are replaced in the
+             browser. Presentation only: the server validates everything again. -->
+        <div data-create-messages hidden
+             th:with="clientMessages=${ {
+                'guestSearchLoading':'reservation.create.guest.search.loading',
+                'guestSearchNoResults':'reservation.create.guest.search.noResults',
+                'guestSearchError':'reservation.create.guest.search.error',
+                'guestSelected':'reservation.create.guest.selected',
+                'removeLabel':'reservation.guests.remove',
+                'rateLabel':'reservation.create.rooms.col.rate',
+                'guestSearchCount':'reservation.create.guest.search.count',
+                'guestNotProvided':'reservation.create.guest.notProvided',
+                'guestAlreadyPrimary':'reservation.create.guest.alreadyPrimary',
+                'guestAlreadyAdded':'reservation.create.guest.alreadyAdded',
+                'accompanyingAdded':'reservation.create.accompanying.added',
+                'accompanyingRemoved':'reservation.create.accompanying.removed',
+                'accompanyingPrimary':'reservation.guests.primaryNotAllowed',
+                'accompanyingDuplicate':'reservation.guests.alreadySelected',
+                'nightsOne':'reservation.create.nights.one',
+                'nightsOther':'reservation.create.nights.other',
+                'datesOrder':'reservation.create.error.checkOutAfterCheckIn',
+                'roomsSelect':'reservation.create.rooms.select',
+                'roomsAvailable':'reservation.create.rooms.available',
+                'roomsAddedElsewhere':'reservation.create.rooms.addedElsewhere',
+                'roomsNoMatch':'reservation.create.rooms.noMatch',
+                'roomsPrompt':'reservation.create.rooms.prompt',
+                'roomsInvalidDates':'reservation.create.rooms.invalidDates',
+                'roomsLoading':'reservation.create.rooms.loading',
+                'roomsLoadError':'reservation.create.rooms.loadError',
+                'roomsNone':'reservation.create.rooms.none',
+                'roomsAvailabilityNote':'reservation.create.rooms.availabilityNote',
+                'roomsCleared':'reservation.create.rooms.cleared',
+                'roomsOptionCount':'reservation.create.rooms.optionCount',
+                'roomsRemove':'reservation.create.rooms.remove',
+                'capacityOne':'reservation.create.rooms.capacity.one',
+                'capacityOther':'reservation.create.rooms.capacity.other',
+                'capacityUnknown':'reservation.create.rooms.capacity.unknown',
+                'capacityTotal':'reservation.create.rooms.capacity.total',
+                'capacityExceeded':'reservation.create.capacity.exceeded',
+                'capacityNotConfigured':'reservation.create.capacity.notConfigured',
+                'contactHintBlank':'reservation.create.contact.hintBlank',
+                'contactHintFilled':'reservation.create.contact.hintFilled',
+                'notesCounter':'reservation.create.notes.counter',
+                'summaryNoGuest':'reservation.create.summary.noGuest',
+                'summaryNoStay':'reservation.create.summary.noStay',
+                'summaryRoomPending':'reservation.create.summary.roomPending',
+                'summaryNoRooms':'reservation.create.summary.noRooms',
+                'summaryRoomLabel':'reservation.create.summary.roomLabel',
+                'summaryRoomsOne':'reservation.create.summary.rooms.one',
+                'summaryRoomsOther':'reservation.create.summary.rooms.other',
+                'vGuest':'validation.reservation.guestId.required',
+                'vCheckIn':'validation.reservation.checkInDate.required',
+                'vCheckOut':'validation.reservation.checkOutDate.required',
+                'vSource':'validation.reservation.source.required',
+                'vOta':'validation.reservation.otaReference.required',
+                'vOtaMax':'validation.reservation.otaReference.max',
+                'vRooms':'validation.reservation.rooms.required',
+                'vRoomRequired':'validation.reservation.room.required',
+                'vRoomDuplicate':'reservation.create.rooms.duplicate',
+                'vRateRequired':'validation.reservation.nightlyRate.required',
+                'vRatePositive':'validation.reservation.nightlyRate.positive',
+                'vRateScale':'validation.reservation.nightlyRate.scale',
+                'vRateInvalid':'typeMismatch.nightlyRate',
+                'vAdultsRequired':'validation.reservation.adultCount.required',
+                'vAdultsMin':'validation.reservation.adultCount.min',
+                'vChildrenRequired':'validation.reservation.childCount.required',
+                'vChildrenMin':'validation.reservation.childCount.min',
+                'vNotesMax':'validation.reservation.notes.max',
+                'vContactNameMax':'validation.reservation.contactName.max',
+                'vContactPhoneMax':'validation.reservation.contactPhone.max',
+                'vContactEmailMax':'validation.reservation.contactEmail.max',
+                'errorTitle':'reservation.create.error.title',
+                'errorIntro':'reservation.create.error.summaryIntro',
+                'errorRoomRow':'reservation.create.error.roomRow'} }">
+            <span th:attr="data-msg=${entry.key}" th:each="entry : ${clientMessages}" th:text="#{${entry.value}}"></span>
+        </div>
+    </main>
+
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+    <!-- Global error dialog: a concise summary of the problems found on Save as Draft (from the server for a rejected
+         submit, from create.js for a problem found in the browser). Inline errors stay at the fields. -->
+    <th:block th:replace="~{layout/feedback-dialog :: feedbackDialog}"></th:block>
+</div>
+<script defer th:src="@{/js/reservation/create-model.js}"></script>
+<script defer th:src="@{/js/reservation/create.js}"></script>
+</body>
+</html>

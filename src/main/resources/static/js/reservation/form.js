@@ -105,7 +105,7 @@
     const updateRoomFieldNames = () => {
         roomRows.querySelectorAll(".room-row").forEach((roomRow, index) => {
             const roomSelect = roomRow.querySelector("select");
-            const nightlyRateInput = roomRow.querySelector("[data-nightly-rate], .js-money-input");
+            const nightlyRateInput = roomRow.querySelector("[data-nightly-rate], [data-numeric=\"vnd\"]");
             roomSelect.name = `rooms[${index}].roomId`;
             nightlyRateInput.name = `rooms[${index}].nightlyRate`;
         });
@@ -129,6 +129,9 @@
         const roomRow = template.content.cloneNode(true);
         roomRows.appendChild(roomRow);
         updateRoomFieldNames();
+        if (window.PmsNumericInput) {
+            roomRows.querySelectorAll("[data-numeric]").forEach(window.PmsNumericInput.initialize);
+        }
     });
 
     updateRoomFieldNames();

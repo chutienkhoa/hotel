@@ -64,7 +64,7 @@
                                     <svg th:replace="~{layout/icons :: bed}"></svg>
                                 </th:block>
                             </div>
-                            <dl class="room-change-facts">
+                            <dl class="label-value-rows label-value-rows--divided label-value-rows--strong">
                                 <div>
                                     <dt th:text="#{reservation.roomChange.field.roomNo}">Room No.</dt>
                                     <dd th:text="${currentRoom.currentRoomNumber}">101</dd>
@@ -105,7 +105,7 @@
                             <svg th:replace="~{layout/icons :: calendar}"></svg>
                             <h2 id="room-change-stay-heading" th:text="#{reservation.roomChange.stay.title}">Stay Information</h2>
                         </header>
-                        <dl class="room-change-facts room-change-facts--stay">
+                        <dl class="label-value-rows label-value-rows--divided label-value-rows--strong">
                             <div>
                                 <dt th:text="#{reservation.roomChange.field.checkIn}">Check-in Date</dt>
                                 <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${currentRoom.checkInDate})}">—</span></dd>
@@ -114,7 +114,7 @@
                                 <dt th:text="#{reservation.roomChange.field.checkOut}">Check-out Date</dt>
                                 <dd class="date-value--check-out">
                                     <span th:replace="~{layout/datetime :: date(${currentRoom.checkOutDate})}">—</span>
-                                    <span class="reservation-overdue" th:if="${currentRoom.overdueDays > 0}"
+                                    <span class="reservation-overdue reservation-overdue--below" th:if="${currentRoom.overdueDays > 0}"
                                        th:text="#{reservation.detail.overdue(${currentRoom.overdueDays})}">(1 day overdue)</span>
                                 </dd>
                             </div>

@@ -395,7 +395,7 @@ class ReservationListPageTest {
         }
         assertTrue(body.contains("<th scope=\"col\">Room(s)</th>"));
         assertTrue(body.contains("<th scope=\"col\">Nights</th>"));
-        assertTrue(body.contains("<th scope=\"col\">Action</th>"));
+        assertTrue(body.contains("<th class=\"table-action-column\" scope=\"col\">Action</th>"));
     }
 
     /** Confirms sort links keep filters and drop the page, page links keep filters and sort. */

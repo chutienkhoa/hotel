@@ -7,7 +7,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/check-in/reservations/{id}(id=${form.reservationId})}" th:text="#{checkin.reassign.back}">Back to check-in review</a>
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInReassign(form.reservationId)})}"></nav>
 
         <div class="page-header">
             <div>

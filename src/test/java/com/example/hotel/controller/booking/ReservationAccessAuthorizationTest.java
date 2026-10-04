@@ -4,6 +4,7 @@ import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.hamcrest.Matchers.containsString;
@@ -413,17 +414,15 @@ class ReservationAccessAuthorizationTest {
     /** Confirms reservation mutation forms expose confirmation metadata without changing their CSRF fields. */
     @Test
     void shouldRenderReservationConfirmationMetadata() throws Exception {
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
-        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
-
         mockMvc.perform(get("/reservations/new")
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("app-shell page-reservation-create")))
-                .andExpect(content().string(containsString("data-confirm-title=\"Create reservation\"")))
-                .andExpect(content().string(containsString("data-confirm-message=\"Create this reservation?\"")))
-                .andExpect(content().string(containsString("data-confirm-label=\"Create reservation\"")))
-                .andExpect(content().string(containsString("data-confirm-severity=\"NORMAL\"")))
+                // Create saves a DRAFT directly; the only confirmation is the discard-changes dialog behind Cancel.
+                .andExpect(content().string(containsString("data-confirm-title=\"Discard changes?\"")))
+                .andExpect(content().string(containsString("data-confirm-label=\"Discard\"")))
+                .andExpect(content().string(containsString("data-confirm-severity=\"WARNING\"")))
+                .andExpect(content().string(containsString("data-submit-guard")))
                 .andExpect(content().string(containsString("name=\"_csrf\"")));
 
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
@@ -443,56 +442,35 @@ class ReservationAccessAuthorizationTest {
                         "href=\"/check-in/reservations/" + RESERVATION_ID + "\">Check-in</a>")));
     }
 
-    /** Confirms the reservation Guest field remains one native select with collapsible details. */
+    /** Confirms the Primary Guest is chosen through a searchable picker and the Guest list is no longer preloaded. */
     @Test
-    void shouldRenderNativeGuestSelectWithoutGuestSearchControl() throws Exception {
-        GuestLookupResponse guest = new GuestLookupResponse(
-                UUID.fromString("33333333-3333-3333-3333-333333333333"),
-                "G000125",
-                "Nguyen Van A",
-                "guest@example.com",
-                "0901234567",
-                "Vietnam");
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guest));
-        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
-
+    void shouldRenderSearchableGuestPickerInsteadOfPreloadedGuestSelect() throws Exception {
         mockMvc.perform(get("/reservations/new")
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<select data-guest-select")))
-                .andExpect(content().string(containsString("G000125 · Nguyen Van A")))
-                .andExpect(content().string(containsString("data-email=\"guest@example.com\"")))
-                .andExpect(content().string(containsString("<summary>Guest Information</summary>")))
-                .andExpect(content().string(containsString("Guest Code")))
-                .andExpect(content().string(containsString("Full Name")))
-                .andExpect(content().string(containsString("Nationality")))
-                .andExpect(content().string(not(containsString("data-guest-search"))))
-                .andExpect(content().string(not(containsString("guest-lookup.js"))))
+                .andExpect(content().string(containsString("data-guest-picker=\"primary\"")))
+                .andExpect(content().string(containsString("role=\"combobox\"")))
+                .andExpect(content().string(containsString("data-guest-search-url=\"/reservations/new/guests\"")))
+                .andExpect(content().string(containsString("data-room-lookup-url=\"/reservations/new/rooms\"")))
+                .andExpect(content().string(not(containsString("<select data-guest-select"))))
+                .andExpect(content().string(not(containsString("<summary>Guest Information</summary>"))))
                 .andExpect(content().string(not(containsString("Passport"))))
                 .andExpect(content().string(not(containsString("Identity document"))));
+        verify(guestQueryService, never()).findAllForReservationCreation();
+        verify(roomQueryService, never()).findAllForReservationCreation();
     }
 
-    /** Confirms the Reservation Create page limits currency selection to VND and rejects a crafted USD submission. */
+    /** Confirms the Create page has no Currency selector, fixes VND, and surfaces a crafted USD in the error dialog. */
     @Test
-    void shouldRenderCurrencySelectAndPreserveSelectedCurrencyAfterValidationFailure() throws Exception {
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
-        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
-
+    void shouldFixCurrencyToVndWithoutASelectorAndRejectACraftedUsdSubmission() throws Exception {
         mockMvc.perform(get("/reservations/new")
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("<select id=\"currency\"")))
-                .andExpect(content().string(containsString("value=\"VND\">VND")))
+                .andExpect(content().string(containsString("<input name=\"currency\" type=\"hidden\" value=\"VND\"")))
+                .andExpect(content().string(not(containsString("<select id=\"currency\""))))
                 .andExpect(content().string(not(containsString("value=\"USD\""))))
-                .andExpect(content().string(not(containsString("<input id=\"currency\""))))
-                .andExpect(content().string(containsString("class=\"button button-danger remove-room\"")));
-
-        mockMvc.perform(post("/reservations")
-                        .param("currency", "VND")
-                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
-                        .with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("value=\"VND\" selected=\"selected\"")));
+                .andExpect(content().string(containsString("Nightly Rate (VND)")))
+                .andExpect(content().string(containsString("data-room-remove")));
 
         mockMvc.perform(post("/reservations")
                         .param("currency", "USD")
@@ -503,19 +481,33 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(not(containsString("value=\"USD\""))));
     }
 
-    /** Confirms the Create Reservation date fields opt in to the shared non-native date picker assets. */
+    /** Confirms Create shows ONE Stay range picker (the shared component) over the two existing, submitted date fields. */
     @Test
-    void shouldRenderSharedDatePickerForCreateForm() throws Exception {
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
-        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
-
+    void shouldRenderOneStayRangePickerOverTheTwoExistingDateFields() throws Exception {
         mockMvc.perform(get("/reservations/new")
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"checkInDate\"")))
-                .andExpect(content().string(containsString("id=\"checkOutDate\"")))
-                .andExpect(content().string(containsString("class=\"js-date-picker\"")))
-                .andExpect(content().string(not(containsString("type=\"date\""))));
+                .andExpect(content().string(containsString("data-stay-picker")))
+                .andExpect(content().string(containsString("Select check-in and check-out dates")))
+                .andExpect(content().string(containsString("name=\"checkInDate\" type=\"hidden\"")))
+                .andExpect(content().string(containsString("name=\"checkOutDate\" type=\"hidden\"")))
+                .andExpect(content().string(containsString("/js/common/stay-range-picker.js")))
+                .andExpect(content().string(not(containsString("js-date-picker"))))
+                .andExpect(content().string(not(containsString("name=\"stay\""))));
+    }
+
+    /** Confirms a rejected submit redisplays the complete range in the Stay field and in the two submitted values. */
+    @Test
+    void shouldRestoreTheFullStayRangeAfterAValidationFailure() throws Exception {
+        mockMvc.perform(post("/reservations")
+                        .param("checkInDate", "2026-10-04")
+                        .param("checkOutDate", "2026-10-09")
+                        .with(user("manager").authorities(manageBookingAndViewAuthorities()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("04/10/2026 → 09/10/2026")))
+                .andExpect(content().string(containsString("value=\"2026-10-04\"")))
+                .andExpect(content().string(containsString("value=\"2026-10-09\"")));
     }
 
     /** Confirms ISO dates submitted by the date picker continue to bind to LocalDate. */
@@ -600,7 +592,7 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(containsString("value=\"AGODA\" selected=\"selected\"")))
                 .andExpect(content().string(containsString("value=\"AG-998877\"")))
                 .andExpect(content().string(containsString("Quiet room")))
-                .andExpect(content().string(containsString("class=\"js-money-input\"")));
+                .andExpect(content().string(containsString("data-numeric=\"vnd\"")));
     }
 
     /** Confirms edit remains a MANAGE_BOOKING operation and its POST is CSRF protected. */
@@ -789,16 +781,13 @@ class ReservationAccessAuthorizationTest {
         assertEquals(false, body.contains("javascript:void(0)"));
     }
 
-    /** Confirms the Create form hides the OTA field for DIRECT and shows it for an OTA source after redisplay. */
+    /** Confirms the OTA field is hidden for DIRECT and shown, with its own inline error, for an OTA source on redisplay. */
     @Test
     void shouldToggleOtaBookingReferenceFieldByRedisplayedSource() throws Exception {
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
-        when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
-
         mockMvc.perform(get("/reservations/new")
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("data-ota-booking-reference-field")))
+                .andExpect(content().string(containsString("data-ota-field")))
                 .andExpect(content().string(containsString("hidden=\"hidden\"")));
 
         mockMvc.perform(post("/reservations")
@@ -806,8 +795,8 @@ class ReservationAccessAuthorizationTest {
                         .with(user("manager").authorities(manageBookingAndViewAuthorities()))
                         .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("OTA Booking Reference is required for this source.")))
-                .andExpect(content().string(not(containsString("hidden=\"hidden\""))));
+                .andExpect(content().string(containsString("OTA Booking Reference is required.")))
+                .andExpect(content().string(not(containsString("data-ota-field hidden"))));
     }
 
     /** Confirms Reservation Detail shows human-friendly Source and, only for an OTA source, the reference. */

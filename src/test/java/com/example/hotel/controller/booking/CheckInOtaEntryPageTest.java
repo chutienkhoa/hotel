@@ -214,7 +214,7 @@ class CheckInOtaEntryPageTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        org.junit.jupiter.api.Assertions.assertTrue(html.contains("<a class=\"back-link back-link--primary\" href=\"/check-in/ota-entry\">"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("<a href=\"/check-in/ota-entry\">OTA Reservation</a>"));
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("class=\"button button-secondary walk-in-edit\" href=\"/check-in/ota-entry\""));
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("action=\"/check-in/ota-entry\""));
         org.junit.jupiter.api.Assertions.assertTrue(

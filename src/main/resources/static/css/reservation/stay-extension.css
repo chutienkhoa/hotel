@@ -232,53 +232,6 @@
   width: 2.5rem;
 }
 
-.stay-extension-facts {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  display: grid;
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.stay-extension-facts > div {
-  align-items: center;
-  border-bottom: 1px solid var(--color-border);
-  display: grid;
-  grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1.1fr);
-  min-height: 2.125rem;
-}
-
-.stay-extension-facts > div:last-child {
-  border-bottom: 0;
-}
-
-.stay-extension-facts dt {
-  align-self: stretch;
-  border-right: 1px solid var(--color-border);
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  font-size: 0.875rem;
-  font-weight: 500;
-  padding: var(--space-1) var(--space-3);
-}
-
-.stay-extension-facts dd {
-  color: var(--color-navy);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  padding: var(--space-1) var(--space-3);
-}
-
-/* Review uses the facts list full-width, without the photo column. */
-.stay-extension-facts--stacked > div {
-  grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.2fr);
-}
-
 /* Bordered tables with a muted first column, shared by Rate, Summary, Charges, Stay comparison and Folio. */
 .stay-extension-table-scroll {
   min-width: 0;
@@ -723,11 +676,6 @@
   .stay-extension-photo {
     height: 10rem;
     width: 100%;
-  }
-
-  .stay-extension-facts > div,
-  .stay-extension-facts--stacked > div {
-    grid-template-columns: minmax(6.5rem, 0.8fr) minmax(0, 1.2fr);
   }
 
   .stay-extension-actions__inner {

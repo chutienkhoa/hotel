@@ -102,7 +102,7 @@ class CheckOutReviewPageTest {
                 .andExpect(content().string(containsString("data-readiness=\"READY\"")))
                 .andExpect(content().string(containsString("Ready for checkout")))
                 .andExpect(content().string(containsString("<span>0 VND</span>")))
-                .andExpect(content().string(containsString("href=\"/reservations/" + ID + "\"")))
+                .andExpect(content().string(containsString("breadcrumb-current\">Review</span>")))
                 .andExpect(content().string(containsString("id=\"confirm-checkout\"")))
                 .andExpect(content().string(containsString("action=\"/check-out/" + ID + "/confirm\"")))
                 .andExpect(content().string(containsString("mark the room(s) as DIRTY")))

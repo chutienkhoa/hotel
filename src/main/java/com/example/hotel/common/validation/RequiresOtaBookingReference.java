@@ -24,7 +24,7 @@ public @interface RequiresOtaBookingReference {
      *
      * @return the validation message
      */
-    String message() default "OTA Booking Reference is required for this source.";
+    String message() default "{validation.reservation.otaReference.required}";
 
     /**
      * Returns the Bean Validation groups for this constraint.

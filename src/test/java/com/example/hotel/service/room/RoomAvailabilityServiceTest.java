@@ -194,4 +194,27 @@ class RoomAvailabilityServiceTest {
                 any(), any(), any(), any(), any(), anyBoolean(), any(), any(),
                 eq(new UUID(0L, 0L)), eq(reservationId));
     }
+
+    /** Confirms the date-aware lookup carries Room Type and ADULT capacity, and never invents a missing capacity. */
+    @Test
+    void shouldExposeRoomTypeNameAndAdultCapacityWithoutInventingAMissingCapacity() {
+        com.example.hotel.entity.room.RoomType twin = mock(com.example.hotel.entity.room.RoomType.class);
+        when(twin.getName()).thenReturn("Twin Room");
+        when(twin.getCapacity()).thenReturn(2);
+        com.example.hotel.entity.room.RoomType unconfigured = mock(com.example.hotel.entity.room.RoomType.class);
+        when(unconfigured.getName()).thenReturn("Loft");
+        when(unconfigured.getCapacity()).thenReturn(null);
+        Room first = room("201", RoomStatus.OCCUPIED, true);
+        ReflectionTestUtils.setField(first, "roomType", twin);
+        Room second = room("202", RoomStatus.AVAILABLE, true);
+        ReflectionTestUtils.setField(second, "roomType", unconfigured);
+        when(rooms.findByActiveTrue()).thenReturn(List.of(second, first));
+
+        List<RoomLookupResponse> result = service.bookableRoomsForPeriod(IN, OUT);
+
+        assertEquals("Twin Room", result.get(0).roomTypeName());
+        assertEquals(2, result.get(0).adultCapacity());
+        assertEquals("Loft", result.get(1).roomTypeName());
+        org.junit.jupiter.api.Assertions.assertNull(result.get(1).adultCapacity());
+    }
 }

@@ -74,7 +74,13 @@ public class RoomQueryService {
     }
 
     private RoomLookupResponse toLookup(Room room) {
-        return new RoomLookupResponse(room.getId(), room.getRoomNumber(), room.getStatus().name(), room.isActive());
+        return new RoomLookupResponse(
+                room.getId(),
+                room.getRoomNumber(),
+                room.getStatus().name(),
+                room.isActive(),
+                room.getRoomType() == null ? null : room.getRoomType().getName(),
+                room.getRoomType() == null ? null : room.getRoomType().getCapacity());
     }
 
     /**

@@ -9,10 +9,7 @@
 
     <main class="content walk-in">
         <div class="walk-in-page">
-            <a class="back-link back-link--primary" th:href="@{/check-in}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{checkin.walkIn.back}">Back to Check-in Guest</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInOta()})}"></nav>
 
             <div class="page-header walk-in-header">
                 <div>
@@ -247,7 +244,7 @@
                                         <span th:text="#{reservation.guests.adults}">Adults</span>
                                         <span aria-hidden="true" class="walk-in-required">*</span>
                                     </label>
-                                    <input id="adultCount" inputmode="numeric" min="1" required step="1" th:field="*{adultCount}" type="number"
+                                    <input autocomplete="off" data-numeric="integer" id="adultCount" inputmode="numeric" required th:field="*{adultCount}" type="text"
                                            th:attr="aria-invalid=${#fields.hasErrors('adultCount')},aria-describedby=${#fields.hasErrors('adultCount')} ? 'adultCount-error'" />
                                     <p class="field-error" th:classappend="${missingPaths.contains('adultCount')} ? 'visually-hidden'" id="adultCount-error" th:if="${#fields.hasErrors('adultCount')}" th:errors="*{adultCount}"></p>
                                 </div>
@@ -256,7 +253,7 @@
                                         <span th:text="#{reservation.guests.children}">Children</span>
                                         <span aria-hidden="true" class="walk-in-required">*</span>
                                     </label>
-                                    <input id="childCount" inputmode="numeric" min="0" required step="1" th:field="*{childCount}" type="number"
+                                    <input autocomplete="off" data-numeric="integer" id="childCount" inputmode="numeric" required th:field="*{childCount}" type="text"
                                            th:attr="aria-invalid=${#fields.hasErrors('childCount')},aria-describedby=${#fields.hasErrors('childCount')} ? 'childCount-error'" />
                                     <p class="field-error" th:classappend="${missingPaths.contains('childCount')} ? 'visually-hidden'" id="childCount-error" th:if="${#fields.hasErrors('childCount')}" th:errors="*{childCount}"></p>
                                 </div>

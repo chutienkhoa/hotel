@@ -148,7 +148,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-dropdown);
-  margin-top: var(--space-2);
+  margin-top: var(--dropdown-gap);
   min-width: 11rem;
   overflow: hidden;
   position: absolute;
@@ -278,7 +278,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-dropdown);
-  margin-top: var(--space-2);
+  margin-top: var(--dropdown-gap);
   min-width: 12rem;
   overflow: hidden;
   position: absolute;
@@ -536,4 +536,28 @@
 .error-page p {
   color: var(--color-muted);
   margin: 0;
+}
+
+/* Workflow breadcrumb (layout/breadcrumb.html :: crumbs): a long trail wraps instead of overflowing, and a parent the user
+   cannot open reads as plain, muted text. */
+.breadcrumb {
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
+}
+.breadcrumb-text {
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+/* Table row actions (shared by the Front Desk tables, Check-in Find Reservation / landing and the Reservation List): the
+   Action header and its cells share one horizontal centre, and every row action button has one width whatever its label
+   (Review / Check in / View / Select, in either language). Size, padding, font and radius come from .button. */
+.table-action-column {
+  text-align: center;
+}
+.table-row-action {
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  width: 7rem;
 }

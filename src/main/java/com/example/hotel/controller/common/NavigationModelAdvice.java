@@ -1,6 +1,8 @@
 package com.example.hotel.controller.common;
 
+import com.example.hotel.common.i18n.UiMessages;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.context.MessageSource;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -10,6 +12,17 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 /** Supplies shared navigation permission flags to MVC page models. */
 @ControllerAdvice(annotations = Controller.class)
 public class NavigationModelAdvice {
+
+    private final UiMessages messages;
+
+    /**
+     * Creates the advice.
+     *
+     * @param messageSource localized text source used to build breadcrumb trails
+     */
+    public NavigationModelAdvice(MessageSource messageSource) {
+        this.messages = new UiMessages(messageSource);
+    }
 
     /**
      * Adds every navigation permission flag used by shared layout fragments (such as the
@@ -23,6 +36,14 @@ public class NavigationModelAdvice {
     @ModelAttribute
     public void addNavigationAttributes(Model model, Authentication authentication, HttpServletRequest request) {
         model.addAttribute("languageSwitchBase", languageSwitchBase(request));
+        // Breadcrumb trails for this request: the shared fragment layout/breadcrumb renders what a page picks from here.
+        model.addAttribute(
+                "crumbs",
+                new Breadcrumbs(
+                        messages,
+                        org.springframework.web.servlet.support.RequestContextUtils.getLocale(request),
+                        authentication,
+                        request.getParameter(Breadcrumbs.CONTEXT_PARAMETER)));
         model.addAttribute("currentUsername", authentication == null ? null : authentication.getName());
         model.addAttribute("canViewReport", hasAuthority(authentication, "PERM_VIEW_REPORT"));
         model.addAttribute("canViewBooking", hasAuthority(authentication, "PERM_VIEW_BOOKING"));

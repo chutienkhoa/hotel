@@ -204,17 +204,17 @@ class FrontDeskPageControllerTest {
         String arrivals = mockMvc.perform(get("/front-desk")
                         .with(perm("PERM_CHECK_IN", "PERM_VIEW_BOOKING", "PERM_MANAGE_HOUSEKEEPING", "PERM_EXTEND_STAY")))
                 .andReturn().getResponse().getContentAsString();
-        org.junit.jupiter.api.Assertions.assertEquals(2, countOccurrences(arrivals, "front-desk-action"));
+        org.junit.jupiter.api.Assertions.assertEquals(2, countOccurrences(arrivals, "front-desk-action\""));
 
         String departures = mockMvc.perform(get("/front-desk").param("view", "departures")
                         .with(perm("PERM_CHECK_OUT", "PERM_MANAGE_PAYMENT", "PERM_EXTEND_STAY", "PERM_VIEW_BOOKING")))
                 .andReturn().getResponse().getContentAsString();
-        org.junit.jupiter.api.Assertions.assertEquals(1, countOccurrences(departures, "front-desk-action"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, countOccurrences(departures, "front-desk-action\""));
 
         String inHouse = mockMvc.perform(get("/front-desk").param("view", "in-house")
                         .with(perm("PERM_CHECK_OUT", "PERM_MANAGE_PAYMENT", "PERM_CHANGE_ROOM", "PERM_VIEW_BOOKING")))
                 .andReturn().getResponse().getContentAsString();
-        org.junit.jupiter.api.Assertions.assertEquals(1, countOccurrences(inHouse, "front-desk-action"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, countOccurrences(inHouse, "front-desk-action\""));
     }
 
     /** Confirms an overdue arrival shows the Overdue Arrival state and still routes to the Check-in Review workflow. */
@@ -328,7 +328,7 @@ class FrontDeskPageControllerTest {
     @Test
     void shouldLinkInHouseViewActionToReservationDetailOnly() throws Exception {
         mockMvc.perform(get("/front-desk").param("view", "in-house").with(perm("PERM_CHECK_OUT", "PERM_VIEW_BOOKING")))
-                .andExpect(content().string(containsString("href=\"/reservations/" + RES + "\"")))
+                .andExpect(content().string(containsString("href=\"/reservations/" + RES + "?from=in-house\"")))
                 .andExpect(content().string(not(containsString("/change"))));
         mockMvc.perform(get("/front-desk").param("view", "in-house").with(perm("PERM_CHECK_OUT")))
                 .andExpect(content().string(not(containsString("href=\"/reservations/" + RES + "\""))));
@@ -338,7 +338,7 @@ class FrontDeskPageControllerTest {
     @Test
     void shouldLinkDepartureActionToCheckoutReview() throws Exception {
         mockMvc.perform(get("/front-desk").param("view", "departures").with(perm("PERM_CHECK_OUT")))
-                .andExpect(content().string(containsString("href=\"/check-out/" + RES + "\"")));
+                .andExpect(content().string(containsString("href=\"/check-out/" + RES + "?from=departures\"")));
     }
 
     /**
@@ -645,7 +645,7 @@ class FrontDeskPageControllerTest {
         org.junit.jupiter.api.Assertions.assertTrue(pager.contains("roomType=" + type), pager);
         org.junit.jupiter.api.Assertions.assertTrue(pager.contains("source=DIRECT"), pager);
         org.junit.jupiter.api.Assertions.assertTrue(
-                body.contains("class=\"button button-secondary front-desk-search__clear\" href=\"/front-desk?view=in-house\""),
+                body.contains("class=\"button button-outline-primary front-desk-search__clear\" href=\"/front-desk?view=in-house\""),
                 "Clear must link to the bare In-house view");
     }
 

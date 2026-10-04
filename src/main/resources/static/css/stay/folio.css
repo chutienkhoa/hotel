@@ -282,6 +282,17 @@
   text-align: right;
 }
 
+/* Stay Summary keeps the shared row layout but sits on the plain card background (no gray label column). */
+.folio-stay-facts.label-value-rows dt {
+  background: transparent;
+}
+
+.folio-stay-facts dd {
+  color: var(--color-text);
+  font-weight: 700;
+  text-align: right;
+}
+
 .folio-facts__note {
   color: var(--color-muted);
   display: block;
@@ -475,6 +486,16 @@
 .folio-table--charges .table-number .folio-sort,
 .folio-table--payments .table-number .folio-sort {
   justify-content: flex-end;
+}
+
+/* Count/quantity columns (shared .text-center) stay centered in the Charges table, overriding the numeric
+   right alignment above; the sort button centers its label and arrow together. */
+.folio-table--charges .text-center {
+  text-align: center;
+}
+
+.folio-table--charges .text-center .folio-sort {
+  justify-content: center;
 }
 
 .folio-reason {

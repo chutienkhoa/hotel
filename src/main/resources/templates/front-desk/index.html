@@ -8,6 +8,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content front-desk">
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.frontDeskView(view)})}"></nav>
         <div class="page-header">
             <div class="page-header-copy">
                 <h1 th:text="#{reservation.frontDesk.title}">Front Desk</h1>
@@ -134,7 +135,7 @@
                     </div>
                     <th:block th:replace="~{front-desk/fragments :: sourceFilter(${bookingSources}, ${searchCriteria.source})}"></th:block>
                 </th:block>
-                <a class="button button-secondary front-desk-search__clear" th:href="@{/front-desk(view=${view})} + ${clearSortQuery}" th:text="#{reservation.frontDesk.filter.clear}">Clear</a>
+                <a class="button button-outline-primary front-desk-search__clear" th:href="@{/front-desk(view=${view})} + ${clearSortQuery}" th:text="#{reservation.frontDesk.filter.clear}">Clear</a>
             </form>
         </section>
 

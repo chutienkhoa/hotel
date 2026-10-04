@@ -386,17 +386,30 @@ public class ReservationPageController {
     }
 
     /**
-     * Displays the reservation creation form with read-only guest and room choices.
+     * Displays the Create Reservation page. Guests and Rooms are not preloaded: the page searches Guests on demand and
+     * lists Rooms for the selected stay dates through the existing lookup endpoints. A Guest just created through the
+     * Create New Guest round trip arrives as the {@code createdGuestId} flash attribute and is pre-selected.
      *
      * @param model model used to render the creation form
      * @param authentication current browser authentication
-     * @return the reservation form template name
+     * @return the Create Reservation template name
      */
     @GetMapping("/reservations/new")
     @PreAuthorize("hasAuthority('PERM_MANAGE_BOOKING')")
     public String createForm(Model model, Authentication authentication) {
-        addReservationFormAttributes(model, emptyReservationForm(), authentication, null);
-        return "reservation/form";
+        CreateRequest form = emptyReservationForm();
+        UUID createdGuestId = resolveCreatedGuestId(model);
+        if (createdGuestId != null) {
+            form = withGuestId(form, createdGuestId);
+            // The Create New Guest feedback is shown inside the Primary Guest card, so the generic flash message
+            // set by Guest creation must not also be shown as a second notice.
+            model.asMap().remove("successMessage");
+        } else {
+            // A flash value that names no existing Guest must not reach the page.
+            model.asMap().remove("createdGuestId");
+        }
+        addCreateFormAttributes(model, form, authentication);
+        return "reservation/create";
     }
 
     /** Displays the prepopulated edit form for a draft Reservation. */
@@ -431,13 +444,14 @@ public class ReservationPageController {
                 null,
                 reservation.guestId(),
                 reservation.rooms().stream().map(room -> room.roomId()).toList());
-        model.addAttribute("editing", true);
         model.addAttribute("reservationId", id);
         return "reservation/form";
     }
 
     /**
-     * Submits the existing reservation-create operation through a CSRF-protected session form.
+     * Submits the existing reservation-create operation through a CSRF-protected session form. A rejected form is
+     * redisplayed with its input preserved, inline errors on the offending fields and a summary for the global error
+     * dialog; nothing is persisted.
      *
      * @param reservationForm request fields bound from the form
      * @param bindingResult structural validation result
@@ -454,23 +468,25 @@ public class ReservationPageController {
             Model model,
             Authentication authentication,
             RedirectAttributes redirectAttributes) {
-        if (bindingResult.hasErrors()) {
-            addReservationFormAttributes(model, reservationForm, authentication, null);
-            return "reservation/form";
+        if (!bindingResult.hasErrors()) {
+            try {
+                Response response = reservationService.create(reservationForm);
+                redirectAttributes.addFlashAttribute("successMessage", messages.get("reservation.create.success"));
+                return "redirect:/reservations/" + response.id();
+            } catch (ResponseStatusException exception) {
+                rejectCreateFailure(bindingResult, reservationForm, exception);
+            }
         }
-        try {
-            Response response = reservationService.create(reservationForm);
-            redirectAttributes.addFlashAttribute("successMessage", "Reservation created successfully.");
-            return "redirect:/reservations/" + response.id();
-        } catch (ResponseStatusException exception) {
-            addReservationFormAttributes(
-                    model,
-                    reservationForm,
-                    authentication,
-                    guestQueryService.findForReservationCreation(reservationForm.guestId()));
-            model.addAttribute("errorMessage", safeMessage(exception));
-            return "reservation/form";
-        }
+        addCreateFormAttributes(model, reservationForm, authentication);
+        model.addAttribute("feedbackTitle", messages.get("reservation.create.error.title"));
+        model.addAttribute("errorMessage", messages.get("reservation.create.error.summaryIntro"));
+        model.addAttribute(
+                "validationSummary",
+                ReservationCreateErrors.summary(
+                        bindingResult,
+                        messages::resolve,
+                        (row, message) -> messages.get("reservation.create.error.roomRow", row, message)));
+        return "reservation/create";
     }
 
     /** Submits a CSRF-protected replacement of editable draft Reservation data. */
@@ -485,8 +501,7 @@ public class ReservationPageController {
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             addReservationFormAttributes(model, reservationForm, authentication, null, reservationForm.guestId(), roomIds(reservationForm));
-            model.addAttribute("editing", true);
-            model.addAttribute("reservationId", id);
+                model.addAttribute("reservationId", id);
             return "reservation/form";
         }
         try {
@@ -495,8 +510,7 @@ public class ReservationPageController {
             return "redirect:/reservations/" + id;
         } catch (ResponseStatusException exception) {
             addReservationFormAttributes(model, reservationForm, authentication, null, reservationForm.guestId(), roomIds(reservationForm));
-            model.addAttribute("editing", true);
-            model.addAttribute("reservationId", id);
+                model.addAttribute("reservationId", id);
             model.addAttribute("errorMessage", safeMessage(exception));
             return "reservation/form";
         }
@@ -604,29 +618,106 @@ public class ReservationPageController {
     }
 
     /**
-     * Adds lookup and authorization data required to render the reservation creation form.
+     * Adds the data the Create Reservation page needs: the form values, the already-selected Primary and Accompanying
+     * Guests, the selected Rooms' numbers, the current hotel date and the permission flags. Choices are never
+     * preloaded; the page fetches them on demand.
      *
-     * @param model model used to render the form
-     * @param reservationForm form data to preserve after validation errors
+     * @param model model used to render the page
+     * @param reservationForm form data to preserve, empty on first display
      * @param authentication current browser authentication
      */
-    private void addReservationFormAttributes(
-            Model model,
-            CreateRequest reservationForm,
-            Authentication authentication,
-            GuestLookupResponse selectedGuest) {
-        addReservationFormAttributes(model, reservationForm, authentication, selectedGuest, null);
+    private void addCreateFormAttributes(Model model, CreateRequest reservationForm, Authentication authentication) {
+        addAuthorizationAttributes(model, authentication);
+        model.addAttribute("reservationForm", reservationForm);
+        model.addAttribute("bookingSources", BookingSource.values());
+        model.addAttribute("selectedGuest", guestQueryService.findForReservationCreation(reservationForm.guestId()));
+        model.addAttribute(
+                "selectedAccompanyingGuests",
+                guestQueryService.findAllByIds(reservationForm.accompanyingGuestIdsOrEmpty()));
+        model.addAttribute("selectedRoomNumbers", selectedRoomNumbers(reservationForm));
+        model.addAttribute("hotelToday", LocalDate.now(clockProvider.getIfAvailable(Clock::systemDefaultZone)));
+        model.addAttribute("defaultAdultCount", Reservation.DEFAULT_ADULT_COUNT);
+        model.addAttribute("defaultChildCount", Reservation.DEFAULT_CHILD_COUNT);
     }
 
-    private void addReservationFormAttributes(
-            Model model,
-            CreateRequest reservationForm,
-            Authentication authentication,
-            GuestLookupResponse selectedGuest,
-            UUID currentGuestId) {
-        addReservationFormAttributes(model, reservationForm, authentication, selectedGuest, currentGuestId, List.of());
+    /**
+     * Indexes the display number of each Room already chosen in a redisplayed form, so the page can name a Room whose
+     * stay-date availability has not been looked up yet.
+     *
+     * @param reservationForm the form being redisplayed
+     * @return Room numbers keyed by Room identifier, empty when no Room was chosen
+     */
+    private Map<UUID, String> selectedRoomNumbers(CreateRequest reservationForm) {
+        List<UUID> roomIds = roomIds(reservationForm);
+        if (roomIds.isEmpty()) {
+            return Map.of();
+        }
+        return roomQueryService.findAllByIds(roomIds).stream()
+                .collect(Collectors.toMap(RoomResponse::id, RoomResponse::roomNumber, (first, second) -> first));
     }
 
+    /**
+     * Registers a service rejection of the create operation on the form: on the field the user can correct when the
+     * rejection belongs to one, otherwise as a form-level error shown only in the error dialog.
+     *
+     * @param bindingResult the form's binding result
+     * @param reservationForm the submitted form
+     * @param exception the rejection raised by the create operation
+     */
+    private void rejectCreateFailure(
+            BindingResult bindingResult, CreateRequest reservationForm, ResponseStatusException exception) {
+        String message = safeMessage(exception);
+        String field = ReservationCreateErrors.fieldFor(exception, reservationForm);
+        if (field == null) {
+            bindingResult.reject(ReservationCreateErrors.FAILURE_CODE, message);
+        } else {
+            bindingResult.rejectValue(field, ReservationCreateErrors.FAILURE_CODE, message);
+        }
+    }
+
+    /**
+     * Resolves the {@code createdGuestId} flash attribute set by {@code GuestPageController.create}, accepting it only
+     * when it names a Guest that exists, so a stale or unknown value falls back to the ordinary empty form.
+     *
+     * @param model model carrying the redirect's flash attributes
+     * @return the created Guest identifier, or {@code null} when none applies
+     */
+    private UUID resolveCreatedGuestId(Model model) {
+        Object candidate = model.asMap().get("createdGuestId");
+        if (!(candidate instanceof UUID createdGuestId)) {
+            return null;
+        }
+        return guestQueryService.findForReservationCreation(createdGuestId) != null ? createdGuestId : null;
+    }
+
+    private CreateRequest withGuestId(CreateRequest form, UUID guestId) {
+        return new CreateRequest(
+                guestId,
+                form.checkInDate(),
+                form.checkOutDate(),
+                form.adultCount(),
+                form.childCount(),
+                form.source(),
+                form.otaBookingReference(),
+                form.currency(),
+                form.notes(),
+                form.rooms(),
+                form.accompanyingGuestIds(),
+                form.bookingContactName(),
+                form.bookingContactPhone(),
+                form.bookingContactEmail());
+    }
+
+    /**
+     * Adds lookup and authorization data required to render the draft Reservation edit form.
+     *
+     * @param model model used to render the form
+     * @param reservationForm form data to preserve
+     * @param authentication current browser authentication
+     * @param selectedGuest unused by the edit form, kept {@code null}
+     * @param currentGuestId Guest currently assigned to the draft
+     * @param assignedRoomIds Rooms currently assigned to the draft, retained as choices
+     */
     private void addReservationFormAttributes(
             Model model,
             CreateRequest reservationForm,
@@ -652,7 +743,14 @@ public class ReservationPageController {
     }
 
     private List<UUID> roomIds(CreateRequest reservationForm) {
-        return reservationForm.rooms().stream().map(RoomRequest::roomId).filter(java.util.Objects::nonNull).toList();
+        if (reservationForm.rooms() == null) {
+            return List.of();
+        }
+        return reservationForm.rooms().stream()
+                .filter(java.util.Objects::nonNull)
+                .map(RoomRequest::roomId)
+                .filter(java.util.Objects::nonNull)
+                .toList();
     }
 
     /**

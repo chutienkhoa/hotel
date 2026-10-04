@@ -150,6 +150,7 @@ public class ReservationService {
     @Transactional
     public Response create(CreateRequest request) {
         ReservationDraftData draftData = validateDraftData(request, NO_RESERVATION);
+        requireBookableRooms(request, draftData);
         CurrentUser user = currentUser();
         Reservation reservation =
                 new Reservation(
@@ -172,6 +173,30 @@ public class ReservationService {
         reservations.save(reservation);
         audit(user, "CREATE", reservation, null, "DRAFT");
         return response(reservation);
+    }
+
+    /**
+     * Defensive integrity check for a NEW Reservation: every requested Room must be bookable inventory (active and
+     * neither MAINTENANCE nor OUT_OF_ORDER, see {@link Room#isBookableInventory()}). A room picker already offers only
+     * such Rooms, but that filtering is not authoritative, so a crafted request must not be able to attach an
+     * inactive or out-of-service Room to a DRAFT. This is deliberately NOT an availability or capacity check: booking
+     * overlap and adult capacity stay Confirm-time rules, evaluated under the Room locks. Draft editing does not apply
+     * this check, because the edit form retains the Rooms already assigned to the draft.
+     *
+     * @param request submitted creation data
+     * @param draftData resolved draft data holding the requested Rooms
+     */
+    private void requireBookableRooms(CreateRequest request, ReservationDraftData draftData) {
+        for (var roomRequest : request.rooms()) {
+            Room room = draftData.roomsById().get(roomRequest.roomId());
+            if (!room.isBookableInventory()) {
+                throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reservation.create.error.roomNotBookable",
+                        "Room is not bookable inventory",
+                        room.getRoomNumber(),
+                        room.getId());
+            }
+        }
     }
 
     /**
@@ -310,7 +335,9 @@ public class ReservationService {
      */
     private ReservationDraftData validateDraftData(CreateRequest request, UUID excludedReservationId) {
         if (!request.checkOutDate().isAfter(request.checkInDate())) {
-            throw bad("check_out_date must be after check_in_date");
+            throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "reservation.create.error.checkOutAfterCheckIn",
+                    "check_out_date must be after check_in_date");
         }
         requireAvailableOtaIdentity(request.source(), request.otaBookingReference(), excludedReservationId);
         if (request.adultCount() == null || request.adultCount() < 1) {
@@ -328,17 +355,22 @@ public class ReservationService {
                     "reservation.currency.error.vndOnly",
                     "Reservation currency must be VND");
         }
-        Guest guest = guests.findById(request.guestId()).orElseThrow(() -> notFound("Guest"));
+        Guest guest = guests.findById(request.guestId())
+                .orElseThrow(() -> new LocalizedResponseStatusException(HttpStatus.NOT_FOUND,
+                        "reservation.create.error.guestNotFound", "Guest not found"));
         Set<UUID> roomIds = new HashSet<>();
         for (var roomRequest : request.rooms()) {
             if (!roomIds.add(roomRequest.roomId())) {
-                throw bad("A room may be assigned once per reservation");
+                throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reservation.create.error.duplicateRoom",
+                        "A room may be assigned once per reservation");
             }
         }
         Map<UUID, Room> roomsById = rooms.findAllById(roomIds).stream()
                 .collect(Collectors.toMap(Room::getId, room -> room));
         if (roomsById.size() != roomIds.size()) {
-            throw notFound("Room");
+            throw new LocalizedResponseStatusException(HttpStatus.NOT_FOUND,
+                    "reservation.create.error.roomNotFound", "Room not found");
         }
         return new ReservationDraftData(guest, currency, roomsById, resolveAccompanyingGuests(guest, request));
     }
@@ -356,19 +388,26 @@ public class ReservationService {
         Set<UUID> unique = new HashSet<>();
         for (UUID accompanyingId : ids) {
             if (accompanyingId == null) {
-                throw bad("An accompanying guest identifier is required");
+                throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reservation.create.error.accompanyingRequired",
+                        "An accompanying guest identifier is required");
             }
             if (!unique.add(accompanyingId)) {
-                throw bad("A guest may be selected as an accompanying guest only once");
+                throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reservation.create.error.accompanyingDuplicate",
+                        "A guest may be selected as an accompanying guest only once");
             }
             if (accompanyingId.equals(primary.getId())) {
-                throw bad("The primary guest cannot also be an accompanying guest");
+                throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "reservation.create.error.accompanyingIsPrimary",
+                        "The primary guest cannot also be an accompanying guest");
             }
         }
         Map<UUID, Guest> found = guests.findAllById(unique).stream()
                 .collect(Collectors.toMap(Guest::getId, guest -> guest));
         if (found.size() != unique.size()) {
-            throw notFound("Guest");
+            throw new LocalizedResponseStatusException(HttpStatus.NOT_FOUND,
+                    "reservation.create.error.accompanyingNotFound", "Guest not found");
         }
         return ids.stream().map(found::get).toList();
     }
@@ -386,7 +425,8 @@ public class ReservationService {
                             draftData.roomsById().get(roomRequest.roomId()),
                             request.checkInDate(),
                             request.checkOutDate(),
-                            scale(roomRequest.nightlyRate(), draftData.currency()));
+                            scale(roomRequest.nightlyRate(), draftData.currency(),
+                                    draftData.roomsById().get(roomRequest.roomId())));
                     reservationRoom.audit(user.id());
                     return reservationRoom;
                 })
@@ -1125,12 +1165,17 @@ public class ReservationService {
      *
      * @param value giá cần chuẩn hóa
      * @param currency tiền tệ áp dụng
+     * @param room phòng sở hữu giá, dùng để báo lỗi gắn với đúng dòng phòng
      * @return giá đã chuẩn hóa
      * @throws ResponseStatusException nếu giá vượt độ chính xác tiền tệ
      */
-    private BigDecimal scale(BigDecimal value, SupportedCurrency currency) {
+    private BigDecimal scale(BigDecimal value, SupportedCurrency currency, Room room) {
         if (!currency.hasValidPrecision(value)) {
-            throw bad("Rate exceeds currency precision");
+            throw new LocalizedResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "reservation.create.error.nightlyRateScale",
+                    "Rate exceeds currency precision",
+                    room.getRoomNumber(),
+                    room.getId());
         }
         return currency.normalize(value);
     }

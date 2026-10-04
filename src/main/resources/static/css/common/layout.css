@@ -29,6 +29,11 @@
      dialog, which is a native <dialog> and always topmost). */
   --radius-lg: 0.875rem;
   --shadow-dropdown: 0 12px 24px rgb(16 42 67 / 16%);
+  --dropdown-gap: 0.3125rem;
+  --color-dropdown-surface: #2c2f33;
+  --color-dropdown-border: #44494f;
+  --color-dropdown-text: #f2f4f7;
+  --color-dropdown-hover: #3d444d;
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;
   --space-1: 0.25rem;
@@ -1030,6 +1035,9 @@ tbody tr:last-child td {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.text-center {
+  text-align: center;
+}
 .table-actions {
   text-align: right;
   white-space: nowrap;
@@ -1145,6 +1153,65 @@ dt {
   color: var(--color-muted);
   font-weight: 700;
 }
+
+/* Read-only label/value rows: a light-gray label cell and a white value cell, each filling its row. The convention for
+   <dl class="label-value-rows"><div><dt/><dd/></div></dl> across the PMS; --divided adds a rule between rows. */
+.label-value-rows {
+  margin: 0;
+}
+.label-value-rows > div {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+}
+.label-value-rows > div[hidden] {
+  display: none;
+}
+.label-value-rows dt,
+.label-value-rows dd {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+.label-value-rows dt {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.label-value-rows dd {
+  align-content: start;
+  background: var(--color-surface);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.label-value-rows--strong dd {
+  color: var(--color-navy);
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.label-value-rows--strong dd .status-badge {
+  font-size: 0.75rem;
+}
+.label-value-rows--divided > div {
+  border-bottom: 1px solid var(--color-border);
+}
+.label-value-rows--divided > div:last-child {
+  border-bottom: 0;
+}
+/* --fit: the label column is as wide as the longest label in the list (never wrapping), shared by every row. Set
+   --label-value-label-width to give several lists (e.g. two cards) the exact same label width instead. */
+.label-value-rows--fit {
+  display: grid;
+  grid-template-columns: var(--label-value-label-width, max-content) minmax(0, 1fr);
+}
+.label-value-rows--fit > div {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.label-value-rows--fit dt {
+  white-space: nowrap;
+}
+
 dd {
   margin: var(--space-1) 0 0;
 }
@@ -1548,40 +1615,7 @@ legend {
   font-size: 0.9375rem;
   margin-bottom: 0;
 }
-.hub-fields {
-  display: grid;
-  gap: 0;
-  margin: 0;
-}
-.hub-field {
-  align-items: baseline;
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  gap: var(--space-3);
-  justify-content: space-between;
-  padding: var(--space-2) 0;
-}
-.hub-field:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-/* The Stay Information card renders its Check-in/.../Children rows and its conditional Original
-   Booking Total/Extension Amount/Current Accommodation Total rows as two separate <dl class="hub-fields">
-   blocks. Without this, the ":last-child" rule above strips Children's own separator, leaving no
-   border between it and Original Booking Total even though they must read as one continuous row
-   system. Restores the same border + row padding as every other (non-final) row, only when another
-   .hub-fields block actually follows -- the single-dl case (every other hub-fields card) is untouched. */
-.hub-fields:not(:last-of-type) .hub-field:last-child {
-  border-bottom: 1px solid var(--color-border);
-  padding-bottom: var(--space-2);
-}
-.hub-field dt {
-  color: var(--color-muted);
-  flex: none;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-.hub-field dd {
+.hub-fields dd {
   color: var(--color-navy);
   font-size: 0.8125rem;
   font-weight: 700;
@@ -1589,7 +1623,7 @@ legend {
   overflow-wrap: anywhere;
   text-align: right;
 }
-.hub-field dd.text-muted {
+.hub-fields dd.text-muted {
   color: var(--color-muted);
   font-weight: 600;
 }
@@ -2117,6 +2151,42 @@ textarea {
 textarea {
   min-height: 7rem;
   resize: vertical;
+}
+/* Native selects: where the browser supports customizable selects, the open menu is anchored below the control with a
+   small gap (never over it), overlays the page from the top layer, and flips above only when there is no room below.
+   Other browsers keep their built-in menu. Closed-control styling above is unchanged. The menu itself is dark. */
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+  select:not([multiple]):not([size])::picker(select) {
+    background: var(--color-dropdown-surface);
+    border: 1px solid var(--color-dropdown-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-dropdown);
+    color: var(--color-dropdown-text);
+    margin-block: var(--dropdown-gap);
+    max-block-size: 20rem;
+    min-inline-size: anchor-size(width);
+    padding: var(--space-1);
+    position-area: block-end span-inline-end;
+    position-try-fallbacks: flip-block;
+  }
+  select:not([multiple]):not([size]) option {
+    color: var(--color-dropdown-text);
+  }
+  select:not([multiple]):not([size]) option:hover,
+  select:not([multiple]):not([size]) option:focus-visible {
+    background: var(--color-dropdown-hover);
+  }
+  select:not([multiple]):not([size]) option::checkmark {
+    color: var(--color-dropdown-text);
+  }
+  /* Selects that draw their own trailing chevron (Front Desk and Reservation List filters) must not get a second one. */
+  select:has(+ [class$="__chevron"])::picker-icon {
+    display: none;
+  }
 }
 input:focus,
 select:focus,
@@ -2659,8 +2729,8 @@ span.flatpickr-weekday {
 
 /* Reservation Detail date convention: check-in value light blue, check-out value (and any overdue text) light red. */
 .hub-summary-item .reservation-info-value.date-value--check-in,
-.hub-field dd.date-value--check-in,
-.stay-extension-facts dd.date-value--check-in,
+.label-value-rows dd.date-value--check-in,
+.stay-extension-table td.date-value--check-in,
 .folio-facts dd.date-value--check-in,
 .room-change-facts dd.date-value--check-in,
 .cor-facts dd.date-value--check-in,
@@ -2669,8 +2739,9 @@ span.flatpickr-weekday {
 }
 
 .hub-summary-item .reservation-info-value.date-value--check-out,
-.hub-field dd.date-value--check-out,
-.stay-extension-facts dd.date-value--check-out,
+.label-value-rows dd.date-value--check-out,
+.stay-extension-table td.date-value--check-out,
+.stay-extension-summary__range .date-value--check-out,
 .folio-facts dd.date-value--check-out,
 .room-change-facts dd.date-value--check-out,
 .cor-facts dd.date-value--check-out,
@@ -2680,9 +2751,8 @@ span.flatpickr-weekday {
 
 /* Summary bar: the overdue text sits on its own compact line under the check-out date, slightly smaller. */
 .hub-summary-item .reservation-overdue--below,
-.stay-extension-facts .reservation-overdue--below,
 .folio-facts .reservation-overdue--below,
-.hub-field .reservation-overdue--below {
+.label-value-rows .reservation-overdue--below {
   display: block;
   font-size: 0.8125rem;
   line-height: 1.2;

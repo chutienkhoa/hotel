@@ -138,7 +138,7 @@
                         <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.source}, 'source')}"></th>
                         <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.otaRef}, 'otaBookingReference')}"></th>
                         <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.status}, 'status')}"></th>
-                        <th scope="col" th:text="#{reservation.list.column.action}">Action</th>
+                        <th class="table-action-column" scope="col" th:text="#{reservation.list.column.action}">Action</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -178,8 +178,8 @@
                                   th:classappend="${'status-badge--' + #strings.toLowerCase(row.status.name())}"
                                   th:text="#{'enum.reservationStatus.' + ${row.status.name()}}">Confirmed</span>
                         </td>
-                        <td>
-                            <a class="button button-outline-primary reservation-list-action"
+                        <td class="table-action-column">
+                            <a class="button button-outline-primary table-row-action reservation-list-action"
                                th:href="@{/reservations/{id}(id=${row.id})}"
                                th:attr="aria-label=#{reservation.list.action.viewAria(${row.reservationNumber})}"
                                th:text="#{common.action.view}">View</a>

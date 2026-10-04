@@ -118,7 +118,7 @@
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'status')}"></th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                <th class="table-action-column" scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
             </tr>
             </thead>
             <tbody>
@@ -149,8 +149,8 @@
                             th:text="#{'checkin.readiness.issue.' + ${issue.code.name()}(${issue.messageArgument(0)},${issue.messageArgument(1)})}">Room 101 needs cleaning</li>
                     </ul>
                 </td>
-                <td>
-                    <a class="button button-primary front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                <td class="table-action-column">
+                    <a class="button button-outline-primary table-row-action front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId},from='arrivals')}"
                        th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkIn}">Review</a>
                 </td>
             </tr>
@@ -172,7 +172,7 @@
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'status')}"></th>
                 <th:block th:if="${canManagePayment}"><th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.balance}, 'outstanding')}"></th></th:block>
-                <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                <th class="table-action-column" scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
             </tr>
             </thead>
             <tbody>
@@ -204,8 +204,8 @@
                     <span class="front-desk-balance--outstanding" th:if="${row.paymentRequired}" th:text="#{reservation.frontDesk.balance.outstanding}">Outstanding</span>
                     <span class="front-desk-balance--settled" th:unless="${row.paymentRequired}" th:text="#{reservation.frontDesk.balance.settled}">Settled</span>
                 </td>
-                <td>
-                    <a class="button button-primary front-desk-action" th:href="@{/check-out/{id}(id=${row.reservationId})}"
+                <td class="table-action-column">
+                    <a class="button button-outline-primary table-row-action front-desk-action" th:href="@{/check-out/{id}(id=${row.reservationId},from='departures')}"
                        th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkOut}">Review</a>
                 </td>
             </tr>
@@ -226,7 +226,7 @@
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
-                <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                <th class="table-action-column" scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
             </tr>
             </thead>
             <tbody>
@@ -238,9 +238,9 @@
                 <td><th:block th:replace="~{front-desk/fragments :: plannedCheckout(${row}, ${hotelToday})}"></th:block></td>
                 <td th:text="${row.nights}">4</td>
                 <td th:text="${row.source.displayName}">Direct</td>
-                <td>
-                    <a class="button button-primary front-desk-action" th:if="${canViewBooking}"
-                       th:href="@{/reservations/{id}(id=${row.reservationId})}" th:text="#{common.action.view}">View</a>
+                <td class="table-action-column">
+                    <a class="button button-outline-primary table-row-action front-desk-action" th:if="${canViewBooking}"
+                       th:href="@{/reservations/{id}(id=${row.reservationId},from='in-house')}" th:text="#{common.action.view}">View</a>
                 </td>
             </tr>
             </tbody>

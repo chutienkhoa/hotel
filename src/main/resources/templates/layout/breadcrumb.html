@@ -12,5 +12,18 @@
     <span aria-hidden="true" class="breadcrumb-separator">/</span>
     <span aria-current="page" class="breadcrumb-current" th:text="${currentLabel}">Current</span>
 </nav>
+
+<!-- Workflow breadcrumb: renders a trail built by the request's "crumbs" helper (controller/common/Breadcrumbs), e.g.
+     ~{layout/breadcrumb :: crumbs(${crumbs.checkInReview()})}. Every entry except the last is a link when it has a
+     destination the user may open (otherwise plain text); the last entry is the current page and is never a link. A trail
+     is navigation context, not browser history. -->
+<nav aria-label="Breadcrumb" class="breadcrumb" th:fragment="crumbs(items)">
+    <th:block th:each="item, position : ${items}">
+        <span aria-hidden="true" class="breadcrumb-separator" th:unless="${position.first}">/</span>
+        <span aria-current="page" class="breadcrumb-current" th:if="${position.last}" th:text="${item.label}">Current</span>
+        <a th:href="@{${item.href}}" th:if="${!position.last and item.href != null}" th:text="${item.label}">Parent</a>
+        <span class="breadcrumb-text" th:if="${!position.last and item.href == null}" th:text="${item.label}">Parent</span>
+    </th:block>
+</nav>
 </body>
 </html>

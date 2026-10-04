@@ -365,7 +365,7 @@ class RoomAuthorizationTest {
     @Test
     void shouldExposeFalseRoomNavigationFlagWithoutManageRoomPermission() {
         ExtendedModelMap model = new ExtendedModelMap();
-        new NavigationModelAdvice().addNavigationAttributes(
+        new NavigationModelAdvice(new org.springframework.context.support.ResourceBundleMessageSource()).addNavigationAttributes(
                 model,
                 new UsernamePasswordAuthenticationToken("staff", null, staffAuthorities()),
                 new org.springframework.mock.web.MockHttpServletRequest());
@@ -594,7 +594,7 @@ class RoomAuthorizationTest {
     /** Confirms the housekeeping navigation flag follows MANAGE_HOUSEKEEPING only. */
     @Test
     void shouldExposeHousekeepingFlagOnlyWithManageHousekeeping() {
-        NavigationModelAdvice advice = new NavigationModelAdvice();
+        NavigationModelAdvice advice = new NavigationModelAdvice(new org.springframework.context.support.ResourceBundleMessageSource());
         ExtendedModelMap with = new ExtendedModelMap();
         ExtendedModelMap without = new ExtendedModelMap();
         org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest();

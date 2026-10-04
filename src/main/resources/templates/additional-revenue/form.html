@@ -23,7 +23,7 @@
                     </select><p class="field-error" th:errors="*{categoryId}"></p>
                 </div>
                 <div class="form-field"><label for="amount">Amount</label>
-                    <input class="js-money-input" id="amount" inputmode="decimal" required th:field="*{amount}" type="text" /><p class="field-error" th:errors="*{amount}"></p>
+                    <input autocomplete="off" data-numeric="vnd" id="amount" inputmode="numeric" required th:field="*{amount}" type="text" /><p class="field-error" th:errors="*{amount}"></p>
                 </div>
                 <div class="form-field"><label for="revenueDate">Revenue date</label>
                     <input class="js-date-picker" id="revenueDate" name="revenueDate" required type="text" th:value="${revenueForm.revenueDate == null ? '' : #temporals.format(revenueForm.revenueDate, 'yyyy-MM-dd')}" /><p class="field-error" th:errors="*{revenueDate}"></p>

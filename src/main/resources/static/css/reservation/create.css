@@ -1,0 +1,733 @@
+/* Create Reservation (Task33). Domain stylesheet for templates/reservation/create.html: header actions, the five form
+   cards (Primary Guest, Stay Details, Rooms & Rates, Booking Contact, Notes), the Reservation Summary column, and the
+   Guest / Room search popups. Draft Edit keeps its own template and is not styled here. */
+
+/* One width for the Primary Guest and Accompanying Guests search fields, so they share left and right edges. */
+.reservation-create {
+  --rc-guest-search-width: 31rem;
+}
+
+/* Breadcrumb, header and form sit close together; the shared 2rem rhythm between page sections is too loose here. */
+.reservation-create > * + * {
+  margin-top: var(--space-4);
+}
+.reservation-create > .breadcrumb + .page-header {
+  margin-top: 0;
+}
+.reservation-create .breadcrumb {
+  margin-bottom: 0;
+}
+.reservation-create .page-header {
+  align-items: flex-start;
+}
+/* Cancel and Save as Draft share one size: two equal columns as wide as the wider label, so neither dimension is
+   hardcoded. The Cancel button lives in its own form (for the discard dialog), which fills its column. */
+.rc-header-actions {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-3);
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+}
+.rc-header-actions form {
+  display: flex;
+}
+.rc-header-actions .button {
+  flex: 1;
+  white-space: nowrap;
+  width: 100%;
+}
+
+/* Every text input and select on the form is exactly one control height, so rows line up. */
+.rc-form input:not([type="hidden"]),
+.rc-form select {
+  height: var(--control-height);
+}
+
+/* Elements that set their own display (buttons, flex notices) must still disappear when hidden. */
+.reservation-create [hidden] {
+  display: none !important;
+}
+
+/* Two columns: the form cards, then the Reservation Summary. Below ~70rem the summary moves under the form. */
+.rc-layout {
+  align-items: start;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) 26rem;
+}
+.rc-main {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.rc-card {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.rc-card__header {
+  align-items: center;
+  color: var(--color-navy);
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+.rc-card__header svg {
+  flex: none;
+  height: var(--icon-size-section);
+  width: var(--icon-size-section);
+}
+.rc-card__header h2 {
+  font-size: 1.0625rem;
+  margin: 0;
+}
+.rc-subheading {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin: 0 0 var(--space-1);
+}
+.rc-required {
+  color: var(--color-danger);
+}
+.rc-label {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.rc-help {
+  align-items: flex-start;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--space-2);
+  line-height: 1.4;
+  margin: 0;
+}
+.rc-help svg {
+  color: var(--color-info);
+  flex: none;
+  height: var(--icon-size-sm);
+  margin-top: 0.1rem;
+  width: var(--icon-size-sm);
+}
+.rc-form .field-error:empty {
+  display: none;
+}
+.rc-form [aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.rc-form [aria-invalid="true"]:focus {
+  box-shadow: 0 0 0 3px rgb(180 35 24 / 15%);
+}
+
+/* Inline notices: success (Guest created), warning (past check-in, capacity), info (availability, draft note). */
+.rc-notice {
+  align-items: flex-start;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  display: flex;
+  font-size: 0.8125rem;
+  gap: var(--space-2);
+  line-height: 1.4;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+}
+.rc-notice[hidden] {
+  display: none;
+}
+.rc-notice svg {
+  flex: none;
+  height: var(--icon-size-action);
+  margin-top: 0.05rem;
+  width: var(--icon-size-action);
+}
+.rc-notice--success {
+  background: var(--color-success-surface);
+  border-color: #a6e9bf;
+  color: var(--color-success);
+}
+.rc-notice--warning {
+  background: var(--color-warning-surface);
+  border-color: #f5cc72;
+  color: var(--color-warning);
+}
+.rc-notice--info {
+  background: var(--color-info-surface);
+  border-color: #c5dcf2;
+  color: var(--color-info);
+}
+.rc-retry {
+  margin-left: auto;
+  padding: 0 var(--space-2);
+}
+
+/* Field grids. */
+.rc-grid {
+  display: grid;
+  gap: var(--space-3) var(--space-4);
+}
+.rc-grid .form-field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+.rc-grid--dates {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rc-grid--dates {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rc-stay-field .reservation-stay__trigger {
+  padding-left: var(--space-3);
+  padding-right: 2.5rem;
+}
+/* Row 2 of Stay Details: Adults | Children | OTA booking reference (always the third column). */
+.rc-grid--guests {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-3);
+}
+.rc-grid--contact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rc-grid + .rc-help {
+  margin-top: var(--space-3);
+}
+.rc-readonly {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  display: flex;
+  min-height: var(--control-height);
+  padding: 0 0.65rem;
+}
+
+/* Primary Guest: the search field keeps one fixed width (shared with the Accompanying Guests search) on the left and
+   Create New Guest sits at the far right of the card's content area; the selected-Guest card spans the full width. */
+.rc-guest-search {
+  margin-bottom: 0;
+}
+.rc-guest-search-row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+.rc-guest-search-row .rc-combobox,
+.rc-accompanying .rc-combobox {
+  flex: 0 1 var(--rc-guest-search-width);
+  max-width: 100%;
+  min-width: 0;
+}
+.rc-guest-new {
+  flex: none;
+  margin-left: auto;
+}
+.rc-guest-new .button {
+  white-space: nowrap;
+}
+.rc-guest-card {
+  align-items: center;
+  background: var(--color-info-surface);
+  border: 1px solid #c5dcf2;
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-3) var(--space-4);
+  grid-template-columns: auto minmax(8rem, 1fr) minmax(0, 1.4fr) auto;
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.rc-guest-card[hidden] {
+  display: none;
+}
+.rc-avatar {
+  align-items: center;
+  background: #cfe3f6;
+  border-radius: 50%;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: none;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+.rc-guest-card__identity {
+  display: grid;
+  min-width: 0;
+}
+.rc-guest-card__identity strong {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+.rc-guest-card__identity span {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+.rc-guest-card__contact {
+  display: grid;
+  font-size: 0.8125rem;
+  gap: 0.2rem;
+  list-style: none;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+.rc-guest-card__contact li {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.rc-guest-card__contact svg {
+  color: var(--color-muted);
+  flex: none;
+  height: var(--icon-size-sm);
+  width: var(--icon-size-sm);
+}
+.rc-guest-card__contact span:not(.visually-hidden) {
+  overflow-wrap: anywhere;
+}
+.rc-guest-card__actions {
+  align-items: center;
+  justify-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.rc-guest-card__actions [hidden] {
+  display: none;
+}
+.rc-guest-new-hint {
+  margin-top: var(--space-3);
+}
+
+/* Accompanying Guests. */
+.rc-accompanying {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+}
+.rc-accompanying .rc-combobox {
+  margin-top: var(--space-2);
+  max-width: 100%;
+  width: var(--rc-guest-search-width);
+}
+.rc-accompanying .field-error {
+  margin-top: var(--space-1);
+}
+.rc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+.rc-chips li {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.8125rem;
+  gap: var(--space-2);
+  padding: 0.2rem 0.3rem 0.2rem 0.75rem;
+}
+.rc-chip-remove {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-muted);
+  cursor: pointer;
+  display: inline-flex;
+  height: 1.5rem;
+  justify-content: center;
+  padding: 0;
+  width: 1.5rem;
+}
+.rc-chip-remove:hover {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.rc-chip-remove svg {
+  height: var(--icon-size-sm);
+  width: var(--icon-size-sm);
+}
+
+/* Search combobox (Guests) and select-like room picker: input + popup listbox. */
+.rc-combobox {
+  position: relative;
+}
+.rc-combobox__control {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+.rc-combobox__control > input {
+  font-size: 0.9375rem;
+  height: var(--control-height);
+  padding-left: calc(var(--space-3) + var(--icon-size-action) + var(--space-2));
+  padding-right: 2.25rem;
+  width: 100%;
+}
+.rc-combobox__lead,
+.rc-combobox__chevron {
+  align-items: center;
+  bottom: 0;
+  color: var(--color-muted);
+  display: flex;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+}
+.rc-combobox__lead {
+  left: var(--space-3);
+}
+.rc-combobox__chevron {
+  right: var(--space-3);
+}
+.rc-combobox__lead svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.rc-combobox__chevron svg {
+  height: 1rem;
+  width: 1rem;
+}
+.rc-popup {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  left: 0;
+  margin-top: var(--dropdown-gap);
+  max-height: 20rem;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: var(--z-dropdown);
+}
+.rc-popup[hidden] {
+  display: none;
+}
+/* The room popup is placed by create.js from the trigger's position, so a horizontally scrolling table never clips it. */
+.rc-popup--floating {
+  left: auto;
+  margin-top: 0;
+  position: fixed;
+  right: auto;
+  top: auto;
+}
+.rc-popup--floating > .rc-combobox__control {
+  padding: var(--space-2);
+}
+.rc-popup__message {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+}
+.rc-popup__message:empty {
+  display: none;
+}
+.rc-listbox {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-1);
+}
+.rc-listbox:empty {
+  display: none;
+}
+.rc-option {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+.rc-option--guest {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr);
+}
+.rc-option--room {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.rc-option.is-active,
+.rc-option:hover {
+  background: var(--color-info-surface);
+}
+.rc-option[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.rc-option[aria-disabled="true"]:hover {
+  background: transparent;
+}
+.rc-option__main {
+  display: grid;
+  min-width: 0;
+}
+.rc-option__main strong {
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+.rc-option__main span,
+.rc-option__side {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.rc-option__side {
+  display: grid;
+}
+.rc-badge {
+  background: var(--color-success-surface);
+  border-radius: 999px;
+  color: var(--color-success);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.1rem 0.6rem;
+  white-space: nowrap;
+}
+.rc-badge--muted {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+}
+
+/* Rooms & Rates table. Columns scroll together on a narrow screen (no sticky / fixed Action column). */
+.rc-rooms-wrap {
+  overflow-x: auto;
+}
+.rc-rooms-table {
+  border-collapse: collapse;
+  min-width: 44rem;
+  width: 100%;
+}
+.rc-rooms-table th {
+  font-size: 0.8125rem;
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+  text-align: left;
+}
+.rc-rooms-table td {
+  padding: var(--space-2);
+  vertical-align: top;
+}
+.rc-rooms-table td.rc-room-row__index {
+  color: var(--color-muted);
+  padding-top: 0.75rem;
+  width: 2.5rem;
+}
+.rc-room-row__room {
+  min-width: 10.5rem;
+  width: 22%;
+}
+.rc-room-row__type,
+.rc-room-row__capacity,
+.rc-room-row__total {
+  color: var(--color-text);
+  padding-top: 0.75rem !important;
+  white-space: nowrap;
+}
+.rc-room-row__type {
+  color: var(--color-muted);
+}
+.rc-room-row__rate {
+  min-width: 8.5rem;
+  width: 18%;
+}
+.rc-room-row__rate input {
+  text-align: right;
+}
+.rc-room-row__total {
+  font-variant-numeric: tabular-nums;
+}
+/* Total (VND): header and every value share one horizontal centre. */
+.rc-rooms-table th.rc-col-total,
+.rc-rooms-table td.rc-room-row__total {
+  text-align: center;
+}
+.rc-room-row__action {
+  width: 4.5rem;
+}
+.rc-rooms-table td .field-error {
+  margin-top: var(--space-1);
+}
+.rc-icon-button {
+  padding: 0;
+  width: var(--control-height);
+}
+.rc-room-picker {
+  position: relative;
+}
+.rc-room-picker__trigger {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.9375rem;
+  gap: var(--space-2);
+  height: var(--control-height);
+  justify-content: space-between;
+  padding: 0 0.65rem;
+  text-align: left;
+  width: 100%;
+}
+.rc-room-picker__trigger svg {
+  color: var(--color-muted);
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+.rc-room-picker__trigger:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+.rc-room-picker__trigger[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.rc-room-picker__trigger[data-empty="true"] {
+  color: var(--color-muted);
+}
+.rc-rooms-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.rc-rooms-capacity[hidden] {
+  display: none;
+}
+.rc-form .rc-notice + .rc-help,
+.rc-form .rc-notice + .rc-notice {
+  margin-top: var(--space-3);
+}
+.rc-form .rc-notice + .rc-help {
+  margin-top: var(--space-2);
+}
+
+/* Notes counter. */
+.rc-counter {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+  text-align: right;
+}
+.rc-counter--over {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* Reservation Summary: secondary, scannable preview of the DRAFT. One Label | Value grid throughout, with a fixed label
+   column, so every value starts at the same horizontal position; sections are separated by divider lines. */
+.rc-summary {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.rc-summary__section {
+  border-top: 1px solid var(--color-border);
+  display: grid;
+}
+.rc-card__header + .rc-summary__section {
+  border-top: 0;
+}
+.rc-summary__grid {
+  display: grid;
+}
+.rc-summary__row dd {
+  display: grid;
+  gap: 0.05rem;
+}
+.rc-summary__row dd strong {
+  color: var(--color-navy);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.rc-summary__row dd span {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.rc-summary__row dd span:empty {
+  display: none;
+}
+.rc-summary__row dd .rc-summary__room-total {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.rc-summary__row--total dd strong {
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+.rc-summary .rc-notice {
+  margin-top: var(--space-3);
+}
+.rc-summary .rc-help {
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 70rem) {
+  .rc-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rc-guest-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .rc-guest-card__contact,
+  .rc-guest-card__actions {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 56rem) {
+  .rc-grid--guests {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rc-grid--contact,
+  .rc-grid--dates {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rc-stay-field {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 40rem) {
+  .rc-stay-field {
+    grid-column: auto;
+  }
+  .rc-grid--dates,
+  .rc-grid--guests,
+  .rc-grid--contact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rc-guest-search-row {
+    flex-wrap: wrap;
+  }
+  .rc-guest-search-row .rc-combobox,
+  .rc-guest-new,
+  .rc-guest-new .button {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .rc-option--guest {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .rc-option--guest .rc-option__side {
+    grid-column: 2;
+  }
+  .rc-header-actions {
+    width: 100%;
+  }
+}

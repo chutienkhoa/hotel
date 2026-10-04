@@ -29,20 +29,20 @@
             <div class="form-grid reservation-details-grid">
                 <div class="form-field">
                     <label for="amount" th:text="#{payment.prepayment.amount} + ' *'">Amount *</label>
-                    <input id="amount" required step="any" th:field="*{amount}" type="number" />
+                    <input autocomplete="off" data-numeric="decimal" data-numeric-scale-from="#currency" id="amount" inputmode="decimal" required th:field="*{amount}" type="text" />
                     <p class="field-error" th:errors="*{amount}"></p>
                 </div>
                 <div class="form-field">
                     <label for="currency" th:text="#{payment.prepayment.currency} + ' *'">Currency *</label>
                     <select id="currency" required th:field="*{currency}">
                         <option value="" th:text="#{payment.prepayment.selectCurrency}">Select currency</option>
-                        <option th:each="c : ${paymentCurrencies}" th:text="${c}" th:value="${c}">VND</option>
+                        <option th:each="c : ${paymentCurrencies}" th:with="digits=${T(com.example.hotel.common.SupportedCurrency).valueOf(c).fractionDigits()}" th:attr="data-fraction-digits=${digits}" th:text="${c}" th:value="${c}">VND</option>
                     </select>
                     <p class="field-error" th:errors="*{currency}"></p>
                 </div>
                 <div class="form-field">
                     <label for="exchangeRate" th:text="#{payment.prepayment.exchangeRate}">Exchange rate (1 USD = ? VND)</label>
-                    <input id="exchangeRate" step="any" th:field="*{exchangeRate}" type="number" />
+                    <input autocomplete="off" data-numeric="decimal" data-numeric-scale="6" id="exchangeRate" inputmode="decimal" th:field="*{exchangeRate}" type="text" />
                     <p class="field-error" th:errors="*{exchangeRate}"></p>
                 </div>
                 <div class="form-field">

@@ -7,10 +7,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link back-link--primary" th:href="@{/reservations}">
-            <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-            <span>Back to reservations</span>
-        </a>
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.reservationDetail(reservation.reservationNumber)})}"></nav>
 
         <div class="page-header">
             <div>
@@ -48,26 +45,26 @@
                    th:href="@{/reservations/{id}/prepayments(id=${reservation.id})}"
                    th:if="${reservation.status == 'CONFIRMED' and canManagePayment}"
                    th:text="#{payment.prepayment.action}">Record Prepayment</a>
-                <a class="button button-outline-primary" id="reservation-change-room"
+                <a class="button button-primary" id="reservation-change-room"
                    th:href="@{/reservations/{id}/rooms/{roomId}/change(id=${reservation.id},roomId=${currentRooms[0].roomId})}"
                    th:if="${reservation.status == 'CHECKED_IN' and canChangeRoom and #lists.size(currentRooms) == 1}">
                     <svg th:replace="~{layout/icons :: swap}"></svg>
                     <span th:text="#{reservation.detail.roomDetails.changeRoom}">Change Room</span>
                 </a>
-                <a class="button button-outline-primary" id="extend-stay"
+                <a class="button button-primary" id="extend-stay"
                    th:href="@{/reservations/{id}/stay-extension(id=${reservation.id})}"
                    th:if="${reservation.status == 'CHECKED_IN' and canExtendStay}">
                     <svg th:replace="~{layout/icons :: calendar}"></svg>
                     <span th:text="#{reservation.stayExtension.action}">Extend Stay</span>
                 </a>
-                <a class="button button-outline-primary" id="reservation-add-charge"
-                   th:href="@{/reservations/{id}/folio(id=${reservation.id})}"
+                <a class="button button-primary" id="reservation-add-charge"
+                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio')}}"
                    th:if="${reservation.status == 'CHECKED_IN' and canManagePayment}">
                     <svg th:replace="~{layout/icons :: plusCircle}"></svg>
                     <span th:text="#{reservation.detail.action.addCharge}">Add Charge</span>
                 </a>
                 <a class="button button-secondary" id="reservation-folio"
-                   th:href="@{/reservations/{id}/folio(id=${reservation.id})}"
+                   th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio')}}"
                    th:if="${canManagePayment and reservation.status == 'CHECKED_OUT'}">View Folio</a>
                 <a class="button button-primary" id="reservation-checkout"
                    th:href="@{/check-out/{id}(id=${reservation.id})}"
@@ -218,24 +215,24 @@
                                             <span th:text="#{common.action.edit}">Edit</span>
                                         </a>
                                     </div>
-                                    <dl class="hub-fields">
-                                        <div class="hub-field">
+                                    <dl class="label-value-rows label-value-rows--divided label-value-rows--fit hub-fields">
+                                        <div>
                                             <dt th:text="#{reservation.detail.guestInfo.fullName}">Full Name</dt>
                                             <dd th:text="${guest != null and !#strings.isEmpty(guest.fullName) ? guest.fullName : reservation.guestCode}">Nguyen Van A</dd>
                                         </div>
-                                        <div class="hub-field" th:if="${guest != null and !#strings.isEmpty(guest.nationality)}">
+                                        <div th:if="${guest != null and !#strings.isEmpty(guest.nationality)}">
                                             <dt th:text="#{reservation.detail.guestInfo.nationality}">Nationality</dt>
                                             <dd th:text="${guest.nationality}">Vietnam</dd>
                                         </div>
-                                        <div class="hub-field" th:if="${guest != null and !#strings.isEmpty(guest.phone)}">
+                                        <div th:if="${guest != null and !#strings.isEmpty(guest.phone)}">
                                             <dt th:text="#{reservation.detail.guestInfo.phone}">Phone</dt>
                                             <dd th:text="${guest.phone}">+84 912 345 678</dd>
                                         </div>
-                                        <div class="hub-field" th:if="${guest != null and !#strings.isEmpty(guest.email)}">
+                                        <div th:if="${guest != null and !#strings.isEmpty(guest.email)}">
                                             <dt th:text="#{reservation.detail.guestInfo.email}">Email</dt>
                                             <dd th:text="${guest.email}">guest@example.com</dd>
                                         </div>
-                                        <div class="hub-field" th:if="${guest != null and guest.dateOfBirth != null}">
+                                        <div th:if="${guest != null and guest.dateOfBirth != null}">
                                             <dt th:text="#{reservation.detail.guestInfo.dateOfBirth}">Date of Birth</dt>
                                             <dd><span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">—</span></dd>
                                         </div>
@@ -255,12 +252,12 @@
                                             <span th:text="#{common.action.edit}">Edit</span>
                                         </a>
                                     </div>
-                                    <dl class="hub-fields">
-                                        <div class="hub-field">
+                                    <dl class="label-value-rows label-value-rows--divided label-value-rows--fit hub-fields">
+                                        <div>
                                             <dt th:text="#{reservation.detail.stayInfo.checkIn}">Check-in Date</dt>
                                             <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></dd>
                                         </div>
-                                        <div class="hub-field">
+                                        <div>
                                             <dt th:text="#{reservation.detail.stayInfo.checkOut}">Check-out Date</dt>
                                             <dd class="date-value--check-out">
                                                 <span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span>
@@ -268,32 +265,32 @@
                                        th:text="#{reservation.detail.overdue(${overdueDays})}">(1 day overdue)</span>
                                             </dd>
                                         </div>
-                                        <div class="hub-field">
+                                        <div>
                                             <dt th:text="#{reservation.detail.stayInfo.nights}">Nights</dt>
                                             <dd th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</dd>
                                         </div>
-                                        <div class="hub-field">
+                                        <div>
                                             <dt th:text="#{reservation.guests.adults}">Adults</dt>
                                             <dd th:text="${reservation.adultCount}">2</dd>
                                         </div>
-                                        <div class="hub-field">
+                                        <div>
                                             <dt th:text="#{reservation.guests.children}">Children</dt>
                                             <dd th:text="${reservation.childCount}">1</dd>
                                         </div>
-                                    </dl>
-                                    <dl class="hub-fields" th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
-                                        <div class="hub-field" id="hub-original-booking-total">
-                                            <dt th:text="#{reservation.stayExtension.originalTotal}">Original Booking Total</dt>
-                                            <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.originalBookingTotal}, ${reservation.currency})}">0 VND</span></dd>
-                                        </div>
-                                        <div class="hub-field" id="hub-extension-amount">
-                                            <dt th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</dt>
-                                            <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.extensionAmount}, ${reservation.currency})}">0 VND</span></dd>
-                                        </div>
-                                        <div class="hub-field" id="hub-current-accommodation-total">
-                                            <dt th:text="#{reservation.stayExtension.currentTotal}">Current Accommodation Total</dt>
-                                            <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.currentAccommodationTotal}, ${reservation.currency})}">0 VND</span></dd>
-                                        </div>
+                                        <th:block th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
+                                            <div id="hub-original-booking-total">
+                                                <dt th:text="#{reservation.stayExtension.originalTotal}">Original Booking Total</dt>
+                                                <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.originalBookingTotal}, ${reservation.currency})}">0 VND</span></dd>
+                                            </div>
+                                            <div id="hub-extension-amount">
+                                                <dt th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</dt>
+                                                <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.extensionAmount}, ${reservation.currency})}">0 VND</span></dd>
+                                            </div>
+                                            <div id="hub-current-accommodation-total">
+                                                <dt th:text="#{reservation.stayExtension.currentTotal}">Current Accommodation Total</dt>
+                                                <dd><span th:replace="~{layout/money :: amount(${stayExtensionSummary.currentAccommodationTotal}, ${reservation.currency})}">0 VND</span></dd>
+                                            </div>
+                                        </th:block>
                                     </dl>
                                 </section>
 
@@ -310,24 +307,24 @@
                                             <span th:text="#{common.action.edit}">Edit</span>
                                         </a>
                                     </div>
-                                    <dl class="hub-fields">
-                                        <div class="hub-field">
+                                    <dl class="label-value-rows label-value-rows--divided label-value-rows--fit hub-fields">
+                                        <div>
                                             <dt th:text="#{reservation.detail.reservationInfo.source}">Source</dt>
                                             <dd th:text="${reservation.source.displayName}">Direct</dd>
                                         </div>
-                                        <div class="hub-field">
+                                        <div>
                                             <dt th:text="#{reservation.detail.reservationInfo.externalBookingRef}">External Booking Ref</dt>
                                             <dd th:text="${#strings.isEmpty(reservation.otaBookingReference) ? '—' : reservation.otaBookingReference}">—</dd>
                                         </div>
-                                        <div class="hub-field" th:if="${reservation.reservedAt != null}">
+                                        <div th:if="${reservation.reservedAt != null}">
                                             <dt th:text="#{reservation.detail.reservationInfo.reservationDate}">Reservation Date</dt>
                                             <dd><span th:replace="~{layout/datetime :: dateTime(${reservation.reservedAt})}">—</span></dd>
                                         </div>
-                                        <div class="hub-field">
+                                        <div>
                                             <dt th:text="#{reservation.detail.reservationInfo.createdBy}">Created By</dt>
                                             <dd th:text="${reservation.createdByUsername ?: '—'}">admin</dd>
                                         </div>
-                                        <div class="hub-field" th:if="${reservation.updatedAt != null}">
+                                        <div th:if="${reservation.updatedAt != null}">
                                             <dt th:text="#{reservation.detail.reservationInfo.lastUpdated}">Last Updated</dt>
                                             <dd><span th:replace="~{layout/datetime :: dateTime(${reservation.updatedAt})}">—</span></dd>
                                         </div>
@@ -358,7 +355,7 @@
                                             <th scope="col" th:text="#{reservation.detail.roomDetails.roomType}">Room Type</th>
                                             <th scope="col" th:text="#{reservation.detail.roomDetails.guests}">Guests</th>
                                             <th scope="col" th:text="#{reservation.detail.roomDetails.rate}">Rate (VND / Night)</th>
-                                            <th scope="col" th:text="#{reservation.detail.roomDetails.nights}">Nights</th>
+                                            <th class="text-center" scope="col" th:text="#{reservation.detail.roomDetails.nights}">Nights</th>
                                             <th scope="col" th:text="#{reservation.detail.roomDetails.total}">Total (VND)</th>
                                             <th scope="col" th:text="#{reservation.detail.roomDetails.status}">Status</th>
                                             <th class="table-actions" scope="col" th:if="${canChangeRoom and #lists.size(currentRooms) > 1}"></th>
@@ -378,7 +375,7 @@
                                                 <th:block th:if="${pricing != null}"><span th:replace="~{layout/money :: amount(${pricing.nightlyRate}, ${reservation.currency})}">0</span></th:block>
                                                 <span th:unless="${pricing != null}">—</span>
                                             </td>
-                                            <td class="table-number" th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</td>
+                                            <td class="table-number text-center" th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(reservation.checkInDate, reservation.checkOutDate)}">3</td>
                                             <td class="table-number">
                                                 <th:block th:if="${pricing != null}"><span th:replace="~{layout/money :: amount(${pricing.totalAmount}, ${reservation.currency})}">0</span></th:block>
                                                 <span th:unless="${pricing != null}">—</span>
@@ -407,23 +404,11 @@
                                         <svg th:replace="~{layout/icons :: note}"></svg>
                                         <h2 id="folio-charges-heading" th:text="#{reservation.detail.folio.title}">Folio / Charges</h2>
                                     </div>
-                                    <div class="action-row">
-                                        <a class="button button-outline-primary button-compact" id="folio-add-room-charge"
-                                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
-                                            <svg th:replace="~{layout/icons :: plusCircle}"></svg>
-                                            <span th:text="#{reservation.detail.folio.addRoomCharge}">Add Room Charge</span>
-                                        </a>
-                                        <a class="button button-outline-primary button-compact" id="folio-add-additional-revenue"
-                                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
-                                            <svg th:replace="~{layout/icons :: plusCircle}"></svg>
-                                            <span th:text="#{reservation.detail.folio.addAdditionalRevenue}">Add Additional Revenue</span>
-                                        </a>
-                                        <a class="button button-outline-primary button-compact" id="folio-add-adjustment"
-                                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
-                                            <svg th:replace="~{layout/icons :: plusCircle}"></svg>
-                                            <span th:text="#{reservation.detail.folio.addAdjustment}">Add Adjustment</span>
-                                        </a>
-                                    </div>
+                                    <a class="button button-outline-primary button-compact" id="folio-view-detail"
+                                       th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio?tab=charges')}}">
+                                        <svg th:replace="~{layout/icons :: note}"></svg>
+                                        <span th:text="#{payment.folio.viewDetail}">View Detail</span>
+                                    </a>
                                 </div>
                                 <div class="table-wrap">
                                     <table>
@@ -431,7 +416,7 @@
                                         <tr>
                                             <th scope="col" th:text="#{reservation.detail.folio.columnDate}">Date</th>
                                             <th scope="col" th:text="#{reservation.detail.folio.columnType}">Type</th>
-                                            <th scope="col" th:text="#{reservation.detail.folio.columnQty}">Qty</th>
+                                            <th class="text-center" scope="col" th:text="#{reservation.detail.folio.columnQty}">Qty</th>
                                             <th scope="col" th:text="#{reservation.detail.folio.columnUnitPrice}">Unit Price (VND)</th>
                                             <th scope="col" th:text="#{reservation.detail.folio.columnAmount}">Amount (VND)</th>
                                             <th scope="col" th:text="#{reservation.detail.folio.columnAddedBy}">Added By</th>
@@ -442,7 +427,7 @@
                                         <tr th:each="charge : ${charges}">
                                             <td><span th:replace="~{layout/datetime :: dateTime(${charge.chargedAt})}">—</span></td>
                                             <td><span th:replace="~{layout/enum :: label('chargeType', ${charge.type})}">Room Charge</span></td>
-                                            <td class="table-number" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">1</td>
+                                            <td class="table-number text-center" th:text="${charge.quantity != null ? charge.quantity.stripTrailingZeros().toPlainString() : '—'}">1</td>
                                             <td class="table-number">
                                                 <th:block th:if="${charge.unitPrice != null}"><span th:replace="~{layout/money :: amount(${charge.unitPrice}, ${reservation.currency})}">0</span></th:block>
                                                 <span th:unless="${charge.unitPrice != null}">—</span>
@@ -472,10 +457,10 @@
                                         <svg th:replace="~{layout/icons :: creditCard}"></svg>
                                         <h2 id="payments-heading" th:text="#{reservation.detail.payments.title}">Payments</h2>
                                     </div>
-                                    <a class="button button-outline-primary button-compact" id="payments-add-payment"
-                                       th:href="@{/reservations/{id}/folio(id=${reservation.id})}">
-                                        <svg th:replace="~{layout/icons :: plusCircle}"></svg>
-                                        <span th:text="#{reservation.detail.payments.addPayment}">Add Payment</span>
+                                    <a class="button button-outline-primary button-compact" id="payments-view-detail"
+                                       th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio?tab=payments')}}">
+                                        <svg th:replace="~{layout/icons :: note}"></svg>
+                                        <span th:text="#{payment.folio.viewDetail}">View Detail</span>
                                     </a>
                                 </div>
                                 <div class="table-wrap">
@@ -517,6 +502,47 @@
                                 </div>
                             </section>
                             </div>
+
+                            <section aria-labelledby="extensions-heading" class="card reservation-detail-section" id="stay-extensions" th:fragment="stayExtensions"
+                                     th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
+                                <div class="assigned-rooms-header">
+                                    <div class="assigned-rooms-header-copy">
+                                        <h2 id="extensions-heading" th:text="#{reservation.stayExtension.section.title}">Stay extensions</h2>
+                                        <p th:text="#{reservation.stayExtension.section.description}">Extension history.</p>
+                                    </div>
+                                </div>
+                                <div class="table-wrap">
+                                    <table>
+                                        <thead>
+                                        <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col" th:text="#{reservation.stayExtension.period}">Extension period</th>
+                                            <th scope="col">Room</th>
+                                            <th class="text-center" scope="col" th:text="#{reservation.stayExtension.nights}">Extension Nights</th>
+                                            <th scope="col" th:text="#{reservation.stayExtension.rate}">Rate</th>
+                                            <th scope="col" th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody th:each="event : ${stayExtensionSummary.events}">
+                                        <tr th:each="line : ${event.lines}">
+                                            <td th:text="${event.sequenceNo}">1</td>
+                                            <td>
+                                                <span th:replace="~{layout/datetime :: date(${event.previousCheckOutDate})}">—</span> –
+                                                <span th:replace="~{layout/datetime :: date(${event.newCheckOutDate})}">—</span>
+                                            </td>
+                                            <td>
+                                                <a class="record-link" th:if="${canManageRoom and line.roomId != null}"
+                                                   th:href="@{/rooms/{id}(id=${line.roomId})}" th:text="${line.roomNumber}">101</a>
+                                                <span th:unless="${canManageRoom and line.roomId != null}" th:text="${line.roomNumber}">101</span>
+                                            </td>
+                                            <td class="text-center" th:text="${line.nights}">2</td>
+                                            <td><span th:replace="~{layout/money :: amount(${line.nightlyRate}, ${reservation.currency})}">0 VND</span></td>
+                                            <td><span th:replace="~{layout/money :: amount(${line.amount}, ${reservation.currency})}">0 VND</span></td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
                         </div>
 
                         <div class="hub-side">
@@ -922,46 +948,9 @@
                 </div>
             </section>
 
-            <section aria-labelledby="extensions-heading" class="card reservation-detail-section" id="stay-extensions"
-                     th:if="${stayExtensionSummary != null and !#lists.isEmpty(stayExtensionSummary.events)}">
-                <div class="assigned-rooms-header">
-                    <div class="assigned-rooms-header-copy">
-                        <h2 id="extensions-heading" th:text="#{reservation.stayExtension.section.title}">Stay extensions</h2>
-                        <p th:text="#{reservation.stayExtension.section.description}">Extension history.</p>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                        <tr>
-                            <th scope="col">#</th>
-                            <th scope="col" th:text="#{reservation.stayExtension.period}">Extension period</th>
-                            <th scope="col">Room</th>
-                            <th scope="col" th:text="#{reservation.stayExtension.nights}">Extension Nights</th>
-                            <th scope="col" th:text="#{reservation.stayExtension.rate}">Rate</th>
-                            <th scope="col" th:text="#{reservation.stayExtension.extensionAmount}">Extension Amount</th>
-                        </tr>
-                        </thead>
-                        <tbody th:each="event : ${stayExtensionSummary.events}">
-                        <tr th:each="line : ${event.lines}">
-                            <td th:text="${event.sequenceNo}">1</td>
-                            <td>
-                                <span th:replace="~{layout/datetime :: date(${event.previousCheckOutDate})}">—</span> –
-                                <span th:replace="~{layout/datetime :: date(${event.newCheckOutDate})}">—</span>
-                            </td>
-                            <td>
-                                <a class="record-link" th:if="${canManageRoom and line.roomId != null}"
-                                   th:href="@{/rooms/{id}(id=${line.roomId})}" th:text="${line.roomNumber}">101</a>
-                                <span th:unless="${canManageRoom and line.roomId != null}" th:text="${line.roomNumber}">101</span>
-                            </td>
-                            <td th:text="${line.nights}">2</td>
-                            <td><span th:replace="~{layout/money :: amount(${line.nightlyRate}, ${reservation.currency})}">0 VND</span></td>
-                            <td><span th:replace="~{layout/money :: amount(${line.amount}, ${reservation.currency})}">0 VND</span></td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
+            <th:block th:if="${reservation.status != 'CHECKED_IN'}">
+                <th:block th:replace="~{this :: stayExtensions}"></th:block>
+            </th:block>
 
             <section aria-labelledby="prepayments-heading" class="card reservation-detail-section" id="prepayments"
                      th:if="${prepaymentSummary != null}">
@@ -1030,7 +1019,7 @@
                     </div>
                     <div class="action-row">
                         <a class="button button-secondary"
-                           th:href="@{/reservations/{id}/folio(id=${reservation.id})}">View Folio</a>
+                           th:href="@{${crumbs.keep('/reservations/' + reservation.id + '/folio')}}">View Folio</a>
                     </div>
                 </div>
                 <div class="card-grid">

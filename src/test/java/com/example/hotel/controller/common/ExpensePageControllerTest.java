@@ -35,7 +35,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-/** Verifies Expense page rendering conforms to the shared money-input, money, and date conventions. */
+/** Verifies Expense page rendering conforms to the shared numeric-input, money, and date conventions. */
 @WebMvcTest(ExpensePageController.class)
 @Import(ExpensePageControllerTest.MethodSecurityTestConfiguration.class)
 class ExpensePageControllerTest {
@@ -52,7 +52,7 @@ class ExpensePageControllerTest {
     @MockitoBean
     private JwtService jwtService;
 
-    /** Confirms the Amount field is a text money input using the shared js-money-input convention. */
+    /** Confirms the Amount field is a text money input using the shared data-numeric="vnd" convention. */
     @Test
     void shouldRenderAmountAsTextMoneyInput() throws Exception {
         when(expenseService.findAllCategories()).thenReturn(List.of(category()));
@@ -60,8 +60,8 @@ class ExpensePageControllerTest {
         mockMvc.perform(get("/expenses/new").with(user("admin").authorities(manageExpense())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(
-                        "<input class=\"js-money-input\" id=\"amount\" inputmode=\"decimal\"")))
-                .andExpect(content().string(containsString("id=\"amount\" inputmode=\"decimal\" required type=\"text\"")))
+                        "data-numeric=\"vnd\" id=\"amount\" inputmode=\"numeric\"")))
+                .andExpect(content().string(containsString("id=\"amount\" inputmode=\"numeric\" required type=\"text\"")))
                 .andExpect(content().string(not(containsString("id=\"amount\" min="))));
     }
 

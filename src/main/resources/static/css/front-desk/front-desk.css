@@ -322,13 +322,6 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.front-desk-table .front-desk-action {
-  justify-content: center;
-  text-align: center;
-  white-space: nowrap;
-  /* One width for every row action (Review / Check in, Xem xét / Nhận phòng, ...), independent of the label. */
-  width: 7rem;
-}
 /* No sticky or fixed columns (Task33 decision): on narrow screens the whole table, Action included, scrolls horizontally
    as one unit inside its .table-wrap, so no column ever overlays another. */
 .front-desk-table .button svg,

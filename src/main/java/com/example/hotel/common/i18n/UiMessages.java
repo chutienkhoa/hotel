@@ -3,6 +3,7 @@ package com.example.hotel.common.i18n;
 import com.example.hotel.exception.LocalizedResponseStatusException;
 import java.util.Locale;
 import org.springframework.context.MessageSource;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.context.NoSuchMessageException;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
@@ -48,6 +49,21 @@ public final class UiMessages {
      */
     public String get(Locale locale, String key, Object... args) {
         return messageSource.getMessage(key, args, key, locale);
+    }
+
+    /**
+     * Resolves a validation error (or any other resolvable message) in the current request locale, trying its codes
+     * first and then its default message, exactly as a template's field-error rendering does.
+     *
+     * @param resolvable the error to resolve
+     * @return the translated text, or the error's default message when no code matches
+     */
+    public String resolve(MessageSourceResolvable resolvable) {
+        try {
+            return messageSource.getMessage(resolvable, LocaleContextHolder.getLocale());
+        } catch (NoSuchMessageException missing) {
+            return resolvable.getDefaultMessage() == null ? "" : resolvable.getDefaultMessage();
+        }
     }
 
     /**

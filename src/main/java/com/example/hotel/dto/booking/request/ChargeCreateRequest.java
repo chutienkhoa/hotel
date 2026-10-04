@@ -1,6 +1,7 @@
 package com.example.hotel.dto.booking.request;
 
 import com.example.hotel.entity.booking.ChargeType;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -12,9 +13,9 @@ import java.math.BigDecimal;
 public record ChargeCreateRequest(
         @NotNull ChargeType type,
         @Size(max = 1000) String description,
-        @Positive BigDecimal quantity,
-        @DecimalMin(value = "0.0", inclusive = true) BigDecimal unitPrice,
-        @Positive BigDecimal amount) {
+        @Positive @Digits(integer = 13, fraction = 6, message = "{validation.number.digits}") BigDecimal quantity,
+        @DecimalMin(value = "0.0", inclusive = true) @Digits(integer = 13, fraction = 6, message = "{validation.number.digits}") BigDecimal unitPrice,
+        @Positive @Digits(integer = 13, fraction = 6, message = "{validation.number.digits}") BigDecimal amount) {
 
     /**
      * Confirms quantity and unit price are supplied together or both omitted.
