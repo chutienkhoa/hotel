@@ -1,5 +1,6 @@
 package com.example.hotel.dto.customer.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -13,6 +14,8 @@ import java.util.UUID;
  * @param phone the guest's optional phone number
  * @param nationality the guest's optional nationality
  * @param dateOfBirth the guest's optional date of birth
+ * @param idDocumentNumber the guest's optional national ID / passport number; server-rendered into the Walk-in
+ *     Guest details only and never serialized to JSON (the lookup API does not expose it)
  */
 public record GuestLookupResponse(
         UUID id,
@@ -21,7 +24,25 @@ public record GuestLookupResponse(
         String email,
         String phone,
         String nationality,
-        LocalDate dateOfBirth) {
+        LocalDate dateOfBirth,
+        @JsonIgnore String idDocumentNumber) {
+
+    /**
+     * Creates a lookup representation without an ID / Passport Number.
+     *
+     * @param id the guest identifier
+     * @param guestCode the guest's unique display code
+     * @param fullName the guest's display name
+     * @param email the guest's optional email address
+     * @param phone the guest's optional phone number
+     * @param nationality the guest's optional nationality
+     * @param dateOfBirth the guest's optional date of birth
+     */
+    public GuestLookupResponse(
+            UUID id, String guestCode, String fullName, String email, String phone, String nationality,
+            LocalDate dateOfBirth) {
+        this(id, guestCode, fullName, email, phone, nationality, dateOfBirth, null);
+    }
 
     /**
      * Creates a lookup representation without date of birth, for existing fixtures/tests that predate this
@@ -36,7 +57,7 @@ public record GuestLookupResponse(
      */
     public GuestLookupResponse(
             UUID id, String guestCode, String fullName, String email, String phone, String nationality) {
-        this(id, guestCode, fullName, email, phone, nationality, null);
+        this(id, guestCode, fullName, email, phone, nationality, null, null);
     }
 
     /**
@@ -46,6 +67,6 @@ public record GuestLookupResponse(
      * @param guestCode Guest display code
      */
     public GuestLookupResponse(UUID id, String guestCode) {
-        this(id, guestCode, null, null, null, null, null);
+        this(id, guestCode, null, null, null, null, null, null);
     }
 }

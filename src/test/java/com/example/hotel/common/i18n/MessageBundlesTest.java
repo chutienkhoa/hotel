@@ -75,7 +75,9 @@ class MessageBundlesTest {
     void shouldUseApprovedKeyFamilies() throws Exception {
         Set<String> families = Set.of("common", "navigation", "table", "auth", "dashboard", "report", "reservation", "guest",
                 "room", "checkin", "checkout", "payment", "expense", "revenue", "staff", "user", "role", "validation",
-                "error", "enum", "js");
+                "error", "enum", "js",
+                // Spring MVC fixed prefix for form type-conversion error codes (resolved as typeMismatch.<field>).
+                "typeMismatch");
         for (String key : load("/messages.properties").keySet()) {
             assertTrue(families.contains(key.substring(0, key.indexOf('.'))), key);
             assertFalse(key.contains(" "), key);

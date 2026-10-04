@@ -242,6 +242,110 @@ class CheckInServiceTest {
         verify(fixture.reservationService, never()).checkIn(any());
     }
 
+    /** Confirms the Walk-in room options are exactly the check-in-ready rooms, enriched with type and adult capacity. */
+    @Test
+    void shouldEnrichWalkInRoomOptionsWithTypeAndCapacity() {
+        Fixture fixture = fixture(Clock.fixed(
+                LocalDate.of(2026, 9, 20).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+        Room ready = activeRoom(RoomStatus.AVAILABLE);
+        when(fixture.roomRepository.findByActiveTrue()).thenReturn(List.of(activeRoom(RoomStatus.DIRTY), ready));
+        when(fixture.roomRepository.findAllById(any())).thenReturn(List.of(ready));
+
+        List<com.example.hotel.dto.booking.response.WalkInRoomOption> options =
+                fixture.service.walkInRoomOptions(LocalDate.of(2026, 9, 22));
+
+        assertEquals(1, options.size());
+        assertEquals(ready.getId(), options.get(0).id());
+        assertEquals(2, options.get(0).adultCapacity());
+        assertEquals("AVAILABLE", options.get(0).status());
+    }
+
+    /** Confirms no room is offered when the check-out date is not after the hotel date. */
+    @Test
+    void shouldOfferNoWalkInRoomsWhenCheckOutIsNotAfterToday() {
+        Fixture fixture = fixture(Clock.fixed(
+                LocalDate.of(2026, 9, 20).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+
+        assertTrue(fixture.service.walkInRoomOptions(LocalDate.of(2026, 9, 20)).isEmpty());
+        verify(fixture.roomRepository, never()).findByActiveTrue();
+    }
+
+    /** Confirms Walk-in review rejects a check-out that is not after the hotel date. */
+    @Test
+    void shouldRejectWalkInReviewWithCheckOutNotAfterToday() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        LocalDate today = LocalDate.now(f.clock);
+
+        com.example.hotel.exception.WalkInReviewException exception = assertThrows(
+                com.example.hotel.exception.WalkInReviewException.class,
+                () -> f.fixture.service.reviewWalkIn(f.request(today, 1)));
+
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.CHECK_OUT_NOT_AFTER_CHECK_IN,
+                exception.getReason());
+    }
+
+    /** Confirms Walk-in review rejects a room that is not currently AVAILABLE (current operational state). */
+    @Test
+    void shouldRejectWalkInReviewForRoomThatIsNotCurrentlyAvailable() {
+        for (RoomStatus status : List.of(RoomStatus.DIRTY, RoomStatus.OCCUPIED, RoomStatus.MAINTENANCE)) {
+            WalkInReviewFixture f = walkInReviewFixture(status, 2);
+
+            com.example.hotel.exception.WalkInReviewException exception = assertThrows(
+                    com.example.hotel.exception.WalkInReviewException.class,
+                    () -> f.fixture.service.reviewWalkIn(f.request(LocalDate.now(f.clock).plusDays(2), 1)));
+
+            assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE,
+                    exception.getReason());
+        }
+    }
+
+    /** Confirms Walk-in review rejects a room that overlaps an existing reservation or stay. */
+    @Test
+    void shouldRejectWalkInReviewForRoomWithAnInventoryConflict() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        when(f.fixture.roomRepository.findRoomIdsWithInventoryConflict(
+                        any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any()))
+                .thenReturn(List.of(f.room.getId()));
+
+        com.example.hotel.exception.WalkInReviewException exception = assertThrows(
+                com.example.hotel.exception.WalkInReviewException.class,
+                () -> f.fixture.service.reviewWalkIn(f.request(LocalDate.now(f.clock).plusDays(2), 1)));
+
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE, exception.getReason());
+    }
+
+    /** Confirms adults are compared with ADULT capacity only: children never consume it, and more adults are rejected. */
+    @Test
+    void shouldApplyAdultOnlyCapacityToWalkInReview() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        LocalDate checkOut = LocalDate.now(f.clock).plusDays(2);
+
+        // 2 adults + 3 children fits a capacity-2 room: children do not take adult capacity.
+        assertEquals(0, new BigDecimal("2000000").compareTo(f.fixture.service.reviewWalkIn(f.request(checkOut, 2, 3)).totalAmount()));
+
+        com.example.hotel.exception.WalkInReviewException exception = assertThrows(
+                com.example.hotel.exception.WalkInReviewException.class,
+                () -> f.fixture.service.reviewWalkIn(f.request(checkOut, 3, 0)));
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.INSUFFICIENT_ADULT_CAPACITY,
+                exception.getReason());
+        assertEquals(3, exception.getArguments()[0]);
+        assertEquals(2, exception.getArguments()[1]);
+    }
+
+    /** Confirms the same room selected twice is rejected before the Summary. */
+    @Test
+    void shouldRejectDuplicateRoomInWalkInReview() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 4);
+        WalkInRequest request = new WalkInRequest(
+                f.guestId, LocalDate.now(f.clock).plusDays(2), 1, 0, "VND", null,
+                List.of(new RoomRequest(f.room.getId(), BigDecimal.TEN), new RoomRequest(f.room.getId(), BigDecimal.TEN)));
+
+        com.example.hotel.exception.WalkInReviewException exception = assertThrows(
+                com.example.hotel.exception.WalkInReviewException.class, () -> f.fixture.service.reviewWalkIn(request));
+
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.DUPLICATE_ROOM, exception.getReason());
+    }
+
     /** Confirms the review exposes a NEEDS_ATTENTION readiness (and is not eligible) for a DIRTY assigned room. */
     @Test
     void shouldExposeReadinessBlockerForDirtyRoomInReview() {
@@ -343,6 +447,36 @@ class CheckInServiceTest {
         Room room = Room.create(UUID.randomUUID(), "101", type, "1");
         org.springframework.test.util.ReflectionTestUtils.setField(room, "status", status);
         return room;
+    }
+
+    /** A wired Walk-in review scenario: one room in the given state with the given adult capacity, and one Guest. */
+    private WalkInReviewFixture walkInReviewFixture(RoomStatus status, int capacity) {
+        Clock clock = Clock.fixed(LocalDate.of(2026, 9, 20).atTime(10, 0).atZone(ZONE).toInstant(), ZONE);
+        Fixture fixture = fixture(clock);
+        Guest guest = mock(Guest.class, RETURNS_DEEP_STUBS);
+        UUID guestId = UUID.randomUUID();
+        when(guest.getId()).thenReturn(guestId);
+        when(guest.getGuestCode()).thenReturn("GUEST-001");
+        when(fixture.guestRepository.findById(guestId)).thenReturn(Optional.of(guest));
+        when(fixture.guestDocumentService.findPassports(guestId)).thenReturn(List.of());
+        RoomType type = mock(RoomType.class, invocation -> "getCapacity".equals(invocation.getMethod().getName()) ? Integer.valueOf(capacity) : null);
+        Room room = Room.create(UUID.randomUUID(), "101", type, "1");
+        org.springframework.test.util.ReflectionTestUtils.setField(room, "status", status);
+        when(fixture.roomRepository.findById(room.getId())).thenReturn(Optional.of(room));
+        return new WalkInReviewFixture(fixture, clock, guestId, room);
+    }
+
+    /** Bundles a Walk-in review scenario. */
+    private record WalkInReviewFixture(Fixture fixture, Clock clock, UUID guestId, Room room) {
+
+        WalkInRequest request(LocalDate checkOut, int adults) {
+            return request(checkOut, adults, 0);
+        }
+
+        WalkInRequest request(LocalDate checkOut, int adults, int children) {
+            return new WalkInRequest(guestId, checkOut, adults, children, "VND", null,
+                    List.of(new RoomRequest(room.getId(), new BigDecimal("1000000"))));
+        }
     }
 
     /** Wires a CheckInService with fully mocked collaborators for one test. */

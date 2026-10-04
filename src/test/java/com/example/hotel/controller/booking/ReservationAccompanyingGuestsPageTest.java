@@ -70,6 +70,9 @@ class ReservationAccompanyingGuestsPageTest {
     private MockMvc mockMvc;
 
     @MockitoBean
+    private com.example.hotel.service.booking.FrontDeskQueryService frontDeskQueryService;
+
+    @MockitoBean
     private ReservationQueryService reservationQueryService;
 
     @MockitoBean

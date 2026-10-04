@@ -29,6 +29,10 @@
     };
 
     const initializeMoneyInput = (input) => {
+        if (input.dataset.moneyInitialized) {
+            return;
+        }
+        input.dataset.moneyInitialized = "true";
         input.value = format(input.value);
         input.addEventListener("input", () => {
             input.value = format(input.value);
@@ -47,6 +51,9 @@
             form.addEventListener("submit", () => normalizeBeforeSubmit(form));
         });
     };
+
+    // Lets a page that adds money inputs after load (for example a table built from fetched rows) give them the same behaviour.
+    window.PmsMoneyInput = { initialize: initializeMoneyInput };
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", initializeMoneyInputs);

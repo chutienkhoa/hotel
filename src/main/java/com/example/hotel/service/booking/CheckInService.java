@@ -12,6 +12,7 @@ import com.example.hotel.dto.booking.response.CheckInTiming;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.WalkInReviewResponse;
+import com.example.hotel.dto.booking.response.WalkInRoomOption;
 import com.example.hotel.dto.customer.response.GuestDocumentResponse;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.BookingSource;
@@ -20,6 +21,8 @@ import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.room.Room;
+import com.example.hotel.entity.room.RoomType;
+import com.example.hotel.exception.WalkInReviewException;
 import com.example.hotel.mapper.customer.GuestMapper;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.booking.StayRepository;
@@ -32,7 +35,12 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -252,6 +260,7 @@ public class CheckInService {
                 .findById(request.guestId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Guest not found"));
         LocalDate checkInDate = LocalDate.now(clock);
+        requireWalkInSelectionsValid(request, checkInDate);
         List<CheckInRoomLine> rooms = request.rooms().stream()
                 .map(roomRequest -> toPreviewRoomLine(roomRequest, checkInDate, request.checkOutDate()))
                 .toList();
@@ -270,6 +279,86 @@ public class CheckInService {
                 rooms,
                 total,
                 request.currency());
+    }
+
+    /**
+     * Lists the Rooms offered by the Walk-in Room Selection table: exactly the check-in-ready Rooms of
+     * {@link #availableRoomsForWalkIn}, enriched with their Room Type name and adult capacity for display. This list
+     * is UI guidance only; {@link #reviewWalkIn} and the final confirmation independently re-validate.
+     *
+     * @param checkOutDate staff-requested check-out date
+     * @return the selectable Rooms, ordered by room number; empty when the check-out date is not after today
+     */
+    @Transactional(readOnly = true)
+    public List<WalkInRoomOption> walkInRoomOptions(LocalDate checkOutDate) {
+        if (!checkOutDate.isAfter(LocalDate.now(clock))) {
+            return List.of();
+        }
+        List<RoomLookupResponse> ready = availableRoomsForWalkIn(checkOutDate);
+        Map<UUID, Room> roomsById = new HashMap<>();
+        roomRepository.findAllById(ready.stream().map(RoomLookupResponse::id).toList())
+                .forEach(room -> roomsById.put(room.getId(), room));
+        return ready.stream()
+                .map(lookup -> {
+                    Room room = roomsById.get(lookup.id());
+                    RoomType type = room == null ? null : room.getRoomType();
+                    return new WalkInRoomOption(
+                            lookup.id(),
+                            lookup.roomNumber(),
+                            type == null ? null : type.getName(),
+                            type == null ? null : type.getCapacity(),
+                            lookup.status());
+                })
+                .toList();
+    }
+
+    /**
+     * Applies the read-only Walk-in rules that the authoritative create/confirm/check-in path enforces later, so a
+     * rejected selection is reported on the form instead of on the Summary: the stay must be at least one night, every
+     * selected Room must be distinct and check-in-ready and conflict-free for the whole stay (the same predicate as
+     * the Room list), and the adults must fit the selected Rooms' adult capacity ({@link AdultCapacityRules}).
+     *
+     * @param request the submitted Walk-in selections
+     * @param checkInDate the hotel current date
+     * @throws WalkInReviewException when a rule is not satisfied
+     */
+    private void requireWalkInSelectionsValid(WalkInRequest request, LocalDate checkInDate) {
+        if (!request.checkOutDate().isAfter(checkInDate)) {
+            throw new WalkInReviewException(
+                    WalkInReviewException.Reason.CHECK_OUT_NOT_AFTER_CHECK_IN,
+                    "Check-out date must be after the check-in date");
+        }
+        Set<UUID> seen = new HashSet<>();
+        List<Room> selected = new ArrayList<>();
+        for (RoomRequest roomRequest : request.rooms()) {
+            Room room = roomRepository
+                    .findById(roomRequest.roomId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+            if (!seen.add(room.getId())) {
+                throw new WalkInReviewException(
+                        WalkInReviewException.Reason.DUPLICATE_ROOM,
+                        "A room can only be selected once", room.getRoomNumber());
+            }
+            if (!roomAvailability.isCheckInReadyForPeriod(room, checkInDate, request.checkOutDate())) {
+                throw new WalkInReviewException(
+                        WalkInReviewException.Reason.ROOM_UNAVAILABLE,
+                        "Room " + room.getRoomNumber() + " is not available for the whole stay", room.getRoomNumber());
+            }
+            selected.add(room);
+        }
+        AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(request.adultCount(), selected);
+        switch (capacity.outcome()) {
+            case INSUFFICIENT_ADULT_CAPACITY -> throw new WalkInReviewException(
+                    WalkInReviewException.Reason.INSUFFICIENT_ADULT_CAPACITY,
+                    "Reservation has " + capacity.adultCount() + " adults but the selected rooms support only "
+                            + capacity.totalAdultCapacity() + " adults",
+                    capacity.adultCount(), capacity.totalAdultCapacity());
+            case CAPACITY_NOT_CONFIGURED -> throw new WalkInReviewException(
+                    WalkInReviewException.Reason.CAPACITY_NOT_CONFIGURED,
+                    "Room capacity is not configured for room type " + String.join(", ", capacity.unconfiguredRoomTypes()),
+                    String.join(", ", capacity.unconfiguredRoomTypes()));
+            case VALID -> { }
+        }
     }
 
     /**
@@ -312,6 +401,7 @@ public class CheckInService {
         Room room = reservationRoom.getRoom();
         long nights = ChronoUnit.DAYS.between(reservationRoom.getCheckInDate(), reservationRoom.getCheckOutDate());
         return new CheckInRoomLine(
+                room.getId(),
                 room.getRoomNumber(),
                 room.getRoomType() == null ? null : room.getRoomType().getName(),
                 reservationRoom.getCheckInDate(),
@@ -339,6 +429,7 @@ public class CheckInService {
         long nights = ChronoUnit.DAYS.between(checkInDate, checkOutDate);
         BigDecimal total = roomRequest.nightlyRate().multiply(BigDecimal.valueOf(Math.max(nights, 0)));
         return new CheckInRoomLine(
+                room.getId(),
                 room.getRoomNumber(),
                 room.getRoomType() == null ? null : room.getRoomType().getName(),
                 checkInDate,

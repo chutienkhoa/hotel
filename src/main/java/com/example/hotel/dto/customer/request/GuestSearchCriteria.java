@@ -10,6 +10,7 @@ public class GuestSearchCriteria {
     private String lastName;
     private String email;
     private String nationality;
+    private String idDocumentNumber;
 
     /**
      * Returns the optional case-insensitive Guest Code filter fragment.
@@ -102,6 +103,24 @@ public class GuestSearchCriteria {
     }
 
     /**
+     * Returns the optional case-insensitive ID / Passport Number filter fragment.
+     *
+     * @return the supplied filter fragment, or {@code null} when absent
+     */
+    public String getIdDocumentNumber() {
+        return idDocumentNumber;
+    }
+
+    /**
+     * Sets the ID / Passport Number filter fragment supplied by the Guest list form.
+     *
+     * @param idDocumentNumber optional ID / Passport Number filter fragment
+     */
+    public void setIdDocumentNumber(String idDocumentNumber) {
+        this.idDocumentNumber = idDocumentNumber;
+    }
+
+    /**
      * Trims every filter field and converts a blank value to an absent filter.
      */
     public void normalize() {
@@ -110,6 +129,7 @@ public class GuestSearchCriteria {
         lastName = normalizeField(lastName);
         email = normalizeField(email);
         nationality = normalizeField(nationality);
+        idDocumentNumber = normalizeField(idDocumentNumber);
     }
 
     /**

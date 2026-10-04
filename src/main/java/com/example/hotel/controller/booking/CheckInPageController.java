@@ -9,10 +9,13 @@ import com.example.hotel.dto.booking.request.WalkInRequest;
 import com.example.hotel.dto.booking.response.CheckInReviewResponse;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.WalkInReviewResponse;
+import com.example.hotel.dto.booking.response.WalkInRoomOption;
+import com.example.hotel.exception.WalkInReviewException;
 import com.example.hotel.dto.room.response.RoomLookupResponse;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.service.booking.CheckInService;
+import com.example.hotel.service.booking.FrontDeskQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import jakarta.servlet.http.HttpSession;
@@ -67,10 +70,14 @@ public class CheckInPageController {
     /** The OTA Booking Not Entered flow's own {@code returnTo} target, as accepted by {@code GuestPageController}. */
     private static final String OTA_ENTRY_RETURN_TARGET = "/check-in/ota-entry";
 
+    /** Number of rows shown in the landing's Recent Confirmed Reservations table. */
+    private static final int RECENT_ARRIVALS_LIMIT = 5;
+
     private final com.example.hotel.service.booking.PrepaymentService prepaymentService;
     private final CheckInService checkInService;
     private final GuestQueryService guestQueryService;
     private final RoomQueryService roomQueryService;
+    private final FrontDeskQueryService frontDeskQueryService;
 
     /**
      * Creates the Check-in MVC controller with its collaborators.
@@ -79,12 +86,15 @@ public class CheckInPageController {
      * @param guestQueryService service used to load eligible Guest choices
      * @param roomQueryService service used to load Room choices for OTA Booking Not Entered
      * @param prepaymentService read-only prepayment summary shown on the Review
+     * @param frontDeskQueryService read model for the landing's Recent Confirmed Reservations
      */
     public CheckInPageController(
             CheckInService checkInService,
             GuestQueryService guestQueryService,
             RoomQueryService roomQueryService,
-            com.example.hotel.service.booking.PrepaymentService prepaymentService) {
+            com.example.hotel.service.booking.PrepaymentService prepaymentService,
+            FrontDeskQueryService frontDeskQueryService) {
+        this.frontDeskQueryService = frontDeskQueryService;
         this.prepaymentService = prepaymentService;
         this.checkInService = checkInService;
         this.guestQueryService = guestQueryService;
@@ -92,13 +102,17 @@ public class CheckInPageController {
     }
 
     /**
-     * Displays the Check-in landing page with its three operational entry flows.
+     * Displays the Check-in Guest landing page: its three operational entry flows and the first few pending
+     * arrivals (the Front Desk Arrivals read model, so readiness and overdue rules are not duplicated here).
      *
+     * @param model model used to render the landing page
      * @return the Check-in landing template name
      */
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
-    public String landing() {
+    public String landing(Model model) {
+        model.addAttribute("recentArrivals", frontDeskQueryService.recentArrivals(RECENT_ARRIVALS_LIMIT));
+        model.addAttribute("hotelToday", frontDeskQueryService.hotelToday());
         return "check-in/landing";
     }
 
@@ -304,9 +318,10 @@ public class CheckInPageController {
     }
 
     /**
-     * Returns active Rooms available for the entire Walk-in date range (hotel current date
-     * through the requested check-out date), reused by the Walk-in form's client-side room
-     * selector. This list is UX guidance only; final confirmation independently re-validates.
+     * Returns the check-in-ready Rooms available for the entire Walk-in date range (hotel current date
+     * through the requested check-out date) with their Room Type and adult capacity, shown by the Walk-in
+     * form's Room Selection table. This list is UX guidance only; review and final confirmation
+     * independently re-validate.
      *
      * @param checkOutDate requested check-out date
      * @return date-range-available Room choices
@@ -314,9 +329,9 @@ public class CheckInPageController {
     @GetMapping("/walk-in/available-rooms")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
     @ResponseBody
-    public List<RoomLookupResponse> availableRooms(
+    public List<WalkInRoomOption> availableRooms(
             @RequestParam("checkOutDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate checkOutDate) {
-        return checkInService.availableRoomsForWalkIn(checkOutDate);
+        return checkInService.walkInRoomOptions(checkOutDate);
     }
 
     /**
@@ -333,6 +348,7 @@ public class CheckInPageController {
     public String walkInReview(
             @Valid @ModelAttribute("walkInForm") WalkInRequest walkInForm, BindingResult bindingResult, Model model) {
         if (bindingResult.hasErrors()) {
+            addNightlyRateErrorFlags(model, bindingResult);
             addWalkInFormAttributes(model, walkInForm, List.of());
             return "check-in/walk-in";
         }
@@ -341,6 +357,11 @@ public class CheckInPageController {
             model.addAttribute("review", review);
             model.addAttribute("walkInForm", walkInForm);
             return "check-in/walk-in-review";
+        } catch (WalkInReviewException exception) {
+            rejectWalkInSelection(bindingResult, exception);
+            addNightlyRateErrorFlags(model, bindingResult);
+            addWalkInFormAttributes(model, walkInForm, List.of());
+            return "check-in/walk-in";
         } catch (ResponseStatusException exception) {
             model.addAttribute("errorMessage", safeMessage(exception));
             addWalkInFormAttributes(model, walkInForm, List.of());
@@ -367,16 +388,25 @@ public class CheckInPageController {
             HttpSession session,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
+            addNightlyRateErrorFlags(model, bindingResult);
             addWalkInFormAttributes(model, walkInForm, List.of());
             return "check-in/walk-in";
         }
         try {
+            // The same read-only rules as the Review, so a selection that went stale after the Summary was shown is
+            // reported next to its field; confirmWalkIn then re-validates authoritatively under the room locks.
+            checkInService.reviewWalkIn(walkInForm);
             Response response = checkInService.confirmWalkIn(walkInForm);
             // The wizard has completed, so any stashed in-progress state from an earlier Create New
             // Guest round trip is no longer needed and must not leak into a later, unrelated visit.
             session.removeAttribute(WALK_IN_WIZARD_SESSION_KEY);
             redirectAttributes.addFlashAttribute("successMessage", "Walk-in guest checked in successfully.");
             return "redirect:/reservations/" + response.id();
+        } catch (WalkInReviewException exception) {
+            rejectWalkInSelection(bindingResult, exception);
+            addNightlyRateErrorFlags(model, bindingResult);
+            addWalkInFormAttributes(model, walkInForm, List.of());
+            return "check-in/walk-in";
         } catch (ResponseStatusException exception) {
             model.addAttribute("errorMessage", safeMessage(exception));
             addWalkInFormAttributes(model, walkInForm, List.of());
@@ -399,6 +429,24 @@ public class CheckInPageController {
     }
 
     /**
+     * Tells the Walk-in form whether the validation errors include a selected room's nightly rate, and whether
+     * they are only that, so the form can present a missing rate through the shared feedback dialog instead of
+     * the generic "correct the highlighted fields" banner. The errors themselves stay on the binding result.
+     *
+     * @param model model used to render the form
+     * @param bindingResult validation result of the submitted Walk-in form
+     */
+    private void addNightlyRateErrorFlags(Model model, BindingResult bindingResult) {
+        boolean rateError = bindingResult.getFieldErrors().stream()
+                .anyMatch(error -> error.getField().endsWith(".nightlyRate"));
+        boolean otherError = bindingResult.getAllErrors().stream()
+                .anyMatch(error -> !(error instanceof org.springframework.validation.FieldError fieldError
+                        && fieldError.getField().endsWith(".nightlyRate")));
+        model.addAttribute("walkInRateError", rateError);
+        model.addAttribute("walkInRateErrorOnly", rateError && !otherError);
+    }
+
+    /**
      * Adds the Walk-in form's lookup data.
      *
      * @param model model used to render the form
@@ -409,6 +457,26 @@ public class CheckInPageController {
         model.addAttribute("walkInForm", walkInForm);
         model.addAttribute("guests", guestQueryService.findAllForReservationCreation());
         model.addAttribute("rooms", assignedRooms);
+        model.addAttribute("hotelToday", frontDeskQueryService.hotelToday());
+    }
+
+    /**
+     * Reports a rejected Walk-in selection on the field it concerns, with a localized message resolved from
+     * {@code checkin.walkIn.error.<REASON>}.
+     *
+     * @param bindingResult binding result of the redisplayed Walk-in form
+     * @param exception the rejection raised by the Walk-in review
+     */
+    private void rejectWalkInSelection(BindingResult bindingResult, WalkInReviewException exception) {
+        String field =
+                switch (exception.getReason()) {
+                    case CHECK_OUT_NOT_AFTER_CHECK_IN -> "checkOutDate";
+                    case INSUFFICIENT_ADULT_CAPACITY, CAPACITY_NOT_CONFIGURED -> "adultCount";
+                    case DUPLICATE_ROOM, ROOM_UNAVAILABLE -> "rooms";
+                };
+        bindingResult.rejectValue(
+                field, "checkin.walkIn.error." + exception.getReason().name(), exception.getArguments(),
+                exception.getMessage());
     }
 
     /**
@@ -428,7 +496,7 @@ public class CheckInPageController {
      */
     private WalkInRequest emptyWalkInForm() {
         return new WalkInRequest(null, null, Reservation.DEFAULT_ADULT_COUNT, Reservation.DEFAULT_CHILD_COUNT,
-                null, null, List.of(new RoomRequest(null, null)));
+                "VND", null, List.of(new RoomRequest(null, null)));
     }
 
     /**

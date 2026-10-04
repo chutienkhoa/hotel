@@ -194,7 +194,7 @@ public class GuestPageController {
             Model model,
             Authentication authentication) {
         addFormAttributes(
-                model, new GuestCreateRequest(null, null, null, null, null, null, null), authentication, null);
+                model, new GuestCreateRequest(null, null, null, null, null, null, null, null), authentication, null);
         model.addAttribute("returnTo", allowedReturnTarget(returnTo));
         return "customer/form";
     }
@@ -454,6 +454,7 @@ public class GuestPageController {
         putIfPresent(filters, "lastName", searchCriteria.getLastName());
         putIfPresent(filters, "email", searchCriteria.getEmail());
         putIfPresent(filters, "nationality", searchCriteria.getNationality());
+        putIfPresent(filters, "idDocumentNumber", searchCriteria.getIdDocumentNumber());
         return filters;
     }
 
@@ -485,6 +486,7 @@ public class GuestPageController {
                 guest.phone(),
                 nationalitySelection,
                 guest.dateOfBirth(),
+                guest.idDocumentNumber(),
                 guest.address());
     }
 

@@ -18,8 +18,8 @@ import java.util.UUID;
  * never accepted from the client; they are always assigned server-side by {@code CheckInService}.
  */
 public record WalkInRequest(
-        @NotNull UUID guestId,
-        @NotNull LocalDate checkOutDate,
+        @NotNull(message = "{validation.walkIn.guest.required}") UUID guestId,
+        @NotNull(message = "{validation.walkIn.checkOut.required}") LocalDate checkOutDate,
         @NotNull(message = "{validation.reservation.adultCount.required}")
                 @Min(value = 1, message = "{validation.reservation.adultCount.min}")
                 @JsonDeserialize(using = StrictIntegerDeserializer.class) Integer adultCount,
@@ -30,4 +30,4 @@ public record WalkInRequest(
                 @Pattern(regexp = "VND", message = "{validation.reservation.currency.supported}")
                 String currency,
         @Size(max = 5000) String notes,
-        @NotEmpty List<@Valid RoomRequest> rooms) {}
+        @NotEmpty(message = "{validation.walkIn.rooms.required}") List<@Valid RoomRequest> rooms) {}

@@ -14,12 +14,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.hotel.dto.booking.response.ArrivalReadiness;
+import com.example.hotel.dto.booking.response.ArrivalReadinessState;
 import com.example.hotel.dto.booking.response.CheckInReviewResponse;
+import com.example.hotel.dto.booking.response.FrontDeskArrivalRow;
+import com.example.hotel.dto.booking.response.FrontDeskRoomResponse;
 import com.example.hotel.dto.booking.response.CheckInTiming;
 import com.example.hotel.dto.customer.response.GuestLookupResponse;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.booking.CheckInService;
+import com.example.hotel.service.booking.FrontDeskQueryService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.room.RoomQueryService;
 import java.time.Instant;
@@ -38,11 +43,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** Verifies Check-in MVC authorization and Review-page rendering rules. */
-@WebMvcTest(CheckInPageController.class)
-@Import(CheckInPageControllerTest.MethodSecurityTestConfiguration.class)
+@WebMvcTest(value = CheckInPageController.class, properties = "hotel.i18n.default-locale=en")
+@Import({CheckInPageControllerTest.MethodSecurityTestConfiguration.class, com.example.hotel.config.I18nConfig.class})
 class CheckInPageControllerTest {
 
     private static final UUID RESERVATION_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
+    private static final UUID ROOM_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID GUEST_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     @Autowired
@@ -50,6 +56,9 @@ class CheckInPageControllerTest {
 
     @MockitoBean
     private CheckInService checkInService;
+
+    @MockitoBean
+    private FrontDeskQueryService frontDeskQueryService;
 
     @MockitoBean
     private GuestQueryService guestQueryService;
@@ -94,6 +103,49 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("href=\"/check-in/walk-in\"")))
                 .andExpect(content().string(not(containsString("href=\"#\""))))
                 .andExpect(content().string(not(containsString("javascript:void(0)"))));
+    }
+
+    /** Confirms the landing lists real arrivals with Today/overdue text, status badges and Select links to Review. */
+    @Test
+    void shouldRenderRecentConfirmedReservationsFromTheArrivalsReadModel() throws Exception {
+        LocalDate today = LocalDate.of(2026, 10, 2);
+        ArrivalReadiness ready = new ArrivalReadiness(ArrivalReadinessState.READY, CheckInTiming.NORMAL, List.of());
+        ArrivalReadiness late = new ArrivalReadiness(ArrivalReadinessState.NEEDS_ATTENTION, CheckInTiming.LATE, List.of());
+        FrontDeskRoomResponse room = new FrontDeskRoomResponse(UUID.randomUUID(), "DEMO-101", "Single Room", null);
+        when(frontDeskQueryService.hotelToday()).thenReturn(today);
+        when(frontDeskQueryService.recentArrivals(5)).thenReturn(List.of(
+                new FrontDeskArrivalRow(RESERVATION_ID, "R20261002-000001", "Nguyen Van Minh", "DEMO-G001",
+                        BookingSource.DIRECT, null, today.minusDays(1), true, true, late, List.of(room), false, null, 3, 1),
+                new FrontDeskArrivalRow(GUEST_ID, "R20261002-000002", "Tran Thi Mai", "DEMO-G002",
+                        BookingSource.AGODA, null, today, false, false, ready, List.of(room), false, null, 3, 0)));
+
+        mockMvc.perform(get("/check-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Recent Confirmed Reservations")))
+                .andExpect(content().string(containsString("R20261002-000001")))
+                .andExpect(content().string(containsString("DEMO-G001")))
+                .andExpect(content().string(containsString("1 day overdue")))
+                .andExpect(content().string(containsString("Today")))
+                .andExpect(content().string(containsString("Ready for Check-in")))
+                .andExpect(content().string(containsString("Needs attention")))
+                .andExpect(content().string(containsString("Agoda")))
+                .andExpect(content().string(containsString("href=\"/check-in/reservations/" + RESERVATION_ID + "\"")))
+                .andExpect(content().string(containsString("href=\"/front-desk?view=arrivals\"")))
+                .andExpect(content().string(containsString("href=\"/front-desk\"")));
+    }
+
+    /** Confirms the overdue line is pluralised. */
+    @Test
+    void shouldPluraliseOverdueDays() throws Exception {
+        LocalDate today = LocalDate.of(2026, 10, 2);
+        ArrivalReadiness late = new ArrivalReadiness(ArrivalReadinessState.NEEDS_ATTENTION, CheckInTiming.LATE, List.of());
+        when(frontDeskQueryService.hotelToday()).thenReturn(today);
+        when(frontDeskQueryService.recentArrivals(5)).thenReturn(List.of(
+                new FrontDeskArrivalRow(RESERVATION_ID, "R-1", "Ann", "G-1", BookingSource.DIRECT, null,
+                        today.minusDays(4), true, true, late, List.of(), false, null, 2, 4)));
+
+        mockMvc.perform(get("/check-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(containsString("4 days overdue")));
     }
 
     /** Confirms an EARLY Review shows the block message and no Confirm Check-in action. */
@@ -225,15 +277,231 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("class=\"sidebar-nav-link nav-check-in\"")));
     }
 
-    /** Confirms the Walk-in and OTA entry forms offer VND as the only Reservation currency. */
+    /** Confirms the OTA entry form offers VND as the only Reservation currency. */
     @Test
-    void shouldOfferOnlyVndAsReservationCurrencyOnWalkInAndOtaEntry() throws Exception {
-        for (String path : List.of("/check-in/walk-in", "/check-in/ota-entry")) {
-            mockMvc.perform(get(path).with(user("staff").authorities(checkInAuthority())))
-                    .andExpect(status().isOk())
-                    .andExpect(content().string(containsString("value=\"VND\">VND")))
-                    .andExpect(content().string(not(containsString("value=\"USD\""))));
-        }
+    void shouldOfferOnlyVndAsReservationCurrencyOnOtaEntry() throws Exception {
+        mockMvc.perform(get("/check-in/ota-entry").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"VND\">VND")))
+                .andExpect(content().string(not(containsString("value=\"USD\""))));
+    }
+
+    /**
+     * Confirms the Walk-in form fixes the currency to VND and the source to Direct: no currency or source choice is
+     * rendered, and no OTA source or OTA booking reference is offered.
+     */
+    @Test
+    void shouldRenderWalkInAsDirectAndVndOnly() throws Exception {
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<h1>Walk-in Reservation</h1>")))
+                .andExpect(content().string(containsString("name=\"currency\" type=\"hidden\" value=\"VND\"")))
+                .andExpect(content().string(containsString("Direct (Walk-in)")))
+                .andExpect(content().string(not(containsString("value=\"USD\""))))
+                .andExpect(content().string(not(containsString("name=\"source\""))))
+                .andExpect(content().string(not(containsString("AGODA"))))
+                .andExpect(content().string(not(containsString("BOOKING_COM"))))
+                .andExpect(content().string(not(containsString("AIRBNB"))))
+                .andExpect(content().string(not(containsString("otaBookingReference"))))
+                .andExpect(content().string(containsString("formaction=\"/check-in/walk-in/new-guest\"")))
+                .andExpect(content().string(containsString("action=\"/check-in/walk-in/review\"")));
+    }
+
+    /**
+     * Confirms the Booking Source card shows Direct as the selected source and the OTA sources as disabled text:
+     * none of them is a form control, so no OTA value can be submitted or enabled.
+     */
+    @Test
+    void shouldRenderOtaSourcesAsDisabledNonSubmittableRows() throws Exception {
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("walk-in-source-option--selected")))
+                .andExpect(content().string(containsString("aria-disabled=\"true\"")))
+                .andExpect(content().string(containsString(">Agoda<")))
+                .andExpect(content().string(containsString(">Booking.com<")))
+                .andExpect(content().string(containsString(">Airbnb<")))
+                .andExpect(content().string(not(containsString("type=\"radio\""))))
+                .andExpect(content().string(not(containsString("name=\"source\""))))
+                .andExpect(content().string(containsString("href=\"/check-in/ota-entry\"")));
+    }
+
+    /** Confirms the Guest Information card offers a real Search Existing Guest control and the identity detail fields. */
+    @Test
+    void shouldRenderGuestSearchAndIdentityDetailFields() throws Exception {
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Search Existing Guest")))
+                .andExpect(content().string(containsString("data-guest-search-toggle")))
+                .andExpect(content().string(containsString("data-guest-id-document")))
+                .andExpect(content().string(containsString("data-guest-dob")))
+                .andExpect(content().string(containsString("ID / Passport Number")))
+                .andExpect(content().string(containsString("Date of Birth")))
+                .andExpect(content().string(containsString("data-check-availability")));
+    }
+
+    /** Confirms the selected Guest's identity values come from the Guest read model and are exposed on the option. */
+    @Test
+    void shouldExposeGuestIdentityValuesFromTheGuestReadModel() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(
+                new GuestLookupResponse(GUEST_ID, "G000001", "Ann Lee", "ann@example.com", "0123", "Japan",
+                        LocalDate.of(1990, 8, 15), "C1234567")));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+
+        mockMvc.perform(get("/check-in/walk-in")
+                        .flashAttr("createdGuestId", GUEST_ID)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-date-of-birth=\"15/08/1990\"")))
+                .andExpect(content().string(containsString("data-id-document-number=\"C1234567\"")));
+    }
+
+    /** Confirms the nationality flag is derived from the Guest's nationality, and is omitted when it cannot be mapped. */
+    @Test
+    void shouldDeriveNationalityFlagFromTheGuestNationality() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(
+                new GuestLookupResponse(GUEST_ID, "G000001", "Ann Lee", null, null, "Vietnamese"),
+                new GuestLookupResponse(UUID.randomUUID(), "G000002", "Taro", null, null, "Japan"),
+                new GuestLookupResponse(UUID.randomUUID(), "G000003", "Zed", null, null, "Atlantis"),
+                new GuestLookupResponse(UUID.randomUUID(), "G000004", "Nil", null, null, null)));
+
+        String html = mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-nationality=\"Vietnamese\" data-nationality-flag=\"🇻🇳\"")))
+                .andExpect(content().string(containsString("data-nationality=\"Japan\" data-nationality-flag=\"🇯🇵\"")))
+                .andExpect(content().string(containsString("data-guest-flag")))
+                .andReturn().getResponse().getContentAsString();
+        // Unmappable or missing nationality: no flag attribute at all (never "null").
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("data-nationality=\"Atlantis\">") 
+                || html.contains("data-nationality=\"Atlantis\" "));
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("data-nationality-flag=\"null\""));
+        org.junit.jupiter.api.Assertions.assertEquals(2, html.split("data-nationality-flag=", -1).length - 1);
+    }
+
+    /** Confirms the Walk-in form renders in Vietnamese through the message bundle, with no hardcoded English labels. */
+    @Test
+    void shouldRenderWalkInInVietnamese() throws Exception {
+        mockMvc.perform(get("/check-in/walk-in")
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi"))
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Đặt phòng khách vãng lai")))
+                .andExpect(content().string(containsString("Tạo khách mới")))
+                .andExpect(content().string(containsString("Tiếp theo: Tóm tắt đặt phòng")))
+                .andExpect(content().string(not(containsString(">Create New Guest<"))));
+    }
+
+    /** Confirms the Walk-in room list endpoint returns the service's room options (type and adult capacity). */
+    @Test
+    void shouldReturnWalkInRoomOptionsFromTheService() throws Exception {
+        UUID roomId = UUID.randomUUID();
+        LocalDate checkOut = LocalDate.now().plusDays(2);
+        when(checkInService.walkInRoomOptions(checkOut)).thenReturn(List.of(
+                new com.example.hotel.dto.booking.response.WalkInRoomOption(roomId, "101", "Double Room", 2, "AVAILABLE")));
+
+        mockMvc.perform(get("/check-in/walk-in/available-rooms")
+                        .param("checkOutDate", checkOut.toString())
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("\"roomNumber\":\"101\"")))
+                .andExpect(content().string(containsString("\"roomTypeName\":\"Double Room\"")))
+                .andExpect(content().string(containsString("\"adultCapacity\":2")));
+    }
+
+    /** Confirms a Walk-in capacity rejection is shown next to the Adults field, localized, with the entries kept. */
+    @Test
+    void shouldShowWalkInCapacityErrorNextToAdultsAndKeepEntries() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenThrow(new com.example.hotel.exception.WalkInReviewException(
+                com.example.hotel.exception.WalkInReviewException.Reason.INSUFFICIENT_ADULT_CAPACITY,
+                "capacity", 2, 1));
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Insufficient room capacity: 2 adults, but the selected rooms support only 1 adults.")))
+                .andExpect(content().string(containsString("aria-describedby=\"adultCount-error\"")))
+                .andExpect(content().string(containsString("id=\"adultCount-error\"")))
+                .andExpect(content().string(containsString("Please correct the highlighted fields.")));
+    }
+
+    /** Confirms a room that is no longer available is rejected on the Rooms section instead of reaching the Summary. */
+    @Test
+    void shouldShowWalkInRoomUnavailableErrorOnTheRoomSection() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenThrow(new com.example.hotel.exception.WalkInReviewException(
+                com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE, "unavailable", "DEMO-101"));
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Room DEMO-101 is not available for the whole stay.")))
+                .andExpect(content().string(containsString("id=\"rooms-error\"")));
+    }
+
+    /** Confirms missing Guest, check-out and rooms are reported next to their own fields without calling the service. */
+    @Test
+    void shouldReportMissingWalkInFieldsNextToTheirFields() throws Exception {
+        mockMvc.perform(post("/check-in/walk-in/review")
+                        .param("adultCount", "1")
+                        .param("childCount", "0")
+                        .param("currency", "VND")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Select a guest.")))
+                .andExpect(content().string(containsString("Check-out date is required.")))
+                .andExpect(content().string(containsString("Select at least one room.")))
+                .andExpect(content().string(containsString("id=\"guestId-error\"")))
+                .andExpect(content().string(containsString("id=\"checkOutDate-error\"")));
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms an invalid (non-positive) nightly rate is rejected with a localized message and never reaches the service. */
+    @Test
+    void shouldRejectNonPositiveWalkInNightlyRate() throws Exception {
+        mockMvc.perform(post("/check-in/walk-in/review")
+                        .param("guestId", GUEST_ID.toString())
+                        .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                        .param("adultCount", "2")
+                        .param("childCount", "0")
+                        .param("currency", "VND")
+                        .param("rooms[0].roomId", UUID.randomUUID().toString())
+                        .param("rooms[0].nightlyRate", "0")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Enter a nightly rate greater than 0.")));
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms the Summary lists the real room lines and VND totals with Direct as the source. */
+    @Test
+    void shouldRenderWalkInSummaryRoomLinesAndVndTotals() throws Exception {
+        LocalDate today = LocalDate.now();
+        when(checkInService.reviewWalkIn(any())).thenReturn(new com.example.hotel.dto.booking.response.WalkInReviewResponse(
+                GUEST_ID, "Ann Lee", "G000001", false, null, today, today.plusDays(2), Instant.now(),
+                List.of(new com.example.hotel.dto.booking.response.CheckInRoomLine(
+                        ROOM_ID, "101", "Double Room", today, today.plusDays(2), new java.math.BigDecimal("1200000"), 2,
+                        new java.math.BigDecimal("2400000"), 2, "AVAILABLE")),
+                new java.math.BigDecimal("2400000"), "VND"));
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Reservation Summary")))
+                .andExpect(content().string(containsString("Direct (Walk-in)")))
+                .andExpect(content().string(containsString("Double Room")))
+                .andExpect(content().string(containsString("1,200,000 VND")))
+                .andExpect(content().string(containsString("2,400,000 VND")))
+                .andExpect(content().string(containsString("Confirm &amp; Check-in")));
+        verify(checkInService, never()).confirmWalkIn(any());
+    }
+
+    /** Confirms a selection that went stale after the Summary is rejected on the form and nothing is created. */
+    @Test
+    void shouldNotConfirmWalkInWhenTheSelectionIsNoLongerValid() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenThrow(new com.example.hotel.exception.WalkInReviewException(
+                com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE, "unavailable", "DEMO-101"));
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/confirm", "VND"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Room DEMO-101 is not available for the whole stay.")));
+        verify(checkInService, never()).confirmWalkIn(any());
     }
 
     /** Confirms a crafted USD Walk-in review/confirm is rejected by validation and never reaches the service. */
@@ -523,6 +791,140 @@ class CheckInPageControllerTest {
     }
 
     /** Builds a representative created-Guest lookup entry matching {@code GUEST_ID}. */
+    /** Confirms a Guest with a null date of birth and ID / Passport Number exposes neither value, so the page shows the placeholder. */
+    @Test
+    void shouldOmitGuestIdentityOptionDataWhenTheGuestHasNone() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+
+        String html = mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("data-date-of-birth="));
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("data-id-document-number="));
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("=\"null\""));
+    }
+
+    /** Confirms the Guest created in Create New Guest and returned to the form carries both persisted identity fields. */
+    @Test
+    void shouldExposeCreatedGuestIdentityFieldsAfterTheCreateNewGuestRoundTrip() throws Exception {
+        GuestLookupResponse created = new GuestLookupResponse(
+                GUEST_ID, "G000001", "Ann Lee", null, null, "Japan", LocalDate.of(1971, 2, 2), "ID-777123");
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(created));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(created);
+
+        mockMvc.perform(get("/check-in/walk-in")
+                        .flashAttr("createdGuestId", GUEST_ID)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("value=\"" + GUEST_ID + "\"")))
+                .andExpect(content().string(containsString("selected=\"selected\"")))
+                .andExpect(content().string(containsString("data-date-of-birth=\"02/02/1971\"")))
+                .andExpect(content().string(containsString("data-id-document-number=\"ID-777123\"")));
+    }
+
+    /** Confirms the Rate column header carries the shared required marker, in English and in Vietnamese. */
+    @Test
+    void shouldMarkTheRateHeaderAsRequired() throws Exception {
+        String required = "<span aria-hidden=\"true\" class=\"walk-in-required\">*</span>";
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Rate (VND / night)</span>")))
+                .andExpect(content().string(containsString("Rate (VND / night)</span>\n                                            " + required)));
+        mockMvc.perform(get("/check-in/walk-in").param("lang", "vi").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Giá (VND / đêm)</span>\n                                            " + required)));
+    }
+
+    /** Confirms the dialog texts for a missing rate are rendered from i18n keys in both languages. */
+    @Test
+    void shouldRenderMissingRateDialogMessagesInBothLanguages() throws Exception {
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(containsString("data-msg-rate-title=\"Missing nightly rate\"")))
+                .andExpect(content().string(containsString(
+                        "data-msg-rate-missing=\"Enter the nightly rate for all selected rooms before continuing.\"")))
+                .andExpect(content().string(containsString("id=\"feedback-dialog\"")));
+        mockMvc.perform(get("/check-in/walk-in").param("lang", "vi").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(containsString("data-msg-rate-title=\"Thiếu giá phòng\"")));
+    }
+
+    /**
+     * Confirms the server still rejects a submitted room without a nightly rate: nothing reaches the service, the
+     * entered state is kept, the rate is flagged invalid and it is presented through the dialog hook, not the generic banner.
+     */
+    @Test
+    void shouldRejectMissingNightlyRateOnTheServerAndPreserveTheEnteredState() throws Exception {
+        UUID otherRoom = UUID.randomUUID();
+        mockMvc.perform(post("/check-in/walk-in/review")
+                        .param("guestId", GUEST_ID.toString())
+                        .param("checkOutDate", LocalDate.now().plusDays(2).toString())
+                        .param("adultCount", "2")
+                        .param("childCount", "0")
+                        .param("currency", "VND")
+                        .param("notes", "Late arrival")
+                        .param("rooms[0].roomId", ROOM_ID.toString())
+                        .param("rooms[1].roomId", otherRoom.toString())
+                        .param("rooms[1].nightlyRate", "900000")
+                        .with(user("staff").authorities(checkInAuthority()))
+                        .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("data-rate-error=\"true\"")))
+                .andExpect(content().string(containsString("data-room-id=\"" + ROOM_ID + "\"")))
+                .andExpect(content().string(containsString("data-room-id=\"" + otherRoom + "\"")))
+                .andExpect(content().string(containsString("data-rate=\"900000\"")))
+                .andExpect(content().string(containsString("data-rate-invalid=\"true\"")))
+                .andExpect(content().string(containsString("Late arrival")))
+                .andExpect(content().string(not(containsString("Please correct the highlighted fields."))));
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms a valid rate proceeds to the Summary and the rate-error hook is absent from a clean form. */
+    @Test
+    void shouldProceedToTheSummaryWhenEveryRateIsPresent() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Reservation Summary")))
+                .andExpect(content().string(not(containsString("data-rate-error"))));
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(not(containsString("data-rate-error"))));
+    }
+
+    /** Confirms a user allowed to open Room Detail gets the real route for Walk-in rooms and the Summary room number. */
+    @Test
+    void shouldLinkWalkInAndSummaryRoomNumbersToRoomDetailForRoomManagers() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+
+        mockMvc.perform(get("/check-in/walk-in")
+                        .with(user("staff").authorities(checkInAndRoomAuthority())))
+                .andExpect(content().string(containsString("data-room-url=\"/rooms/ROOM_ID\"")));
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND")
+                        .with(user("staff").authorities(checkInAndRoomAuthority())))
+                .andExpect(content().string(containsString("<a class=\"record-link\" href=\"/rooms/" + ROOM_ID + "\">101</a>")));
+    }
+
+    /** Confirms the room number stays plain text, with no Room Detail route, without the Room Detail permission. */
+    @Test
+    void shouldNotLinkRoomNumbersWithoutTheRoomDetailPermission() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+
+        mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(not(containsString("data-room-url="))));
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(content().string(not(containsString("href=\"/rooms/"))))
+                .andExpect(content().string(containsString(">101</span>")));
+    }
+
+    private com.example.hotel.dto.booking.response.WalkInReviewResponse walkInReview() {
+        LocalDate today = LocalDate.now();
+        return new com.example.hotel.dto.booking.response.WalkInReviewResponse(
+                GUEST_ID, "Ann Lee", "G000001", false, null, today, today.plusDays(2), Instant.now(),
+                List.of(new com.example.hotel.dto.booking.response.CheckInRoomLine(
+                        ROOM_ID, "101", "Double Room", today, today.plusDays(2), new java.math.BigDecimal("1200000"), 2,
+                        new java.math.BigDecimal("2400000"), 2, "AVAILABLE")),
+                new java.math.BigDecimal("2400000"), "VND");
+    }
+
     private GuestLookupResponse guestLookup() {
         return new GuestLookupResponse(GUEST_ID, "G000001", "Ann Lee", null, null, null);
     }
@@ -626,6 +1028,10 @@ class CheckInPageControllerTest {
     }
 
     /** Builds the CHECK_IN authority. */
+    private static List<SimpleGrantedAuthority> checkInAndRoomAuthority() {
+        return List.of(new SimpleGrantedAuthority("PERM_CHECK_IN"), new SimpleGrantedAuthority("PERM_MANAGE_ROOM"));
+    }
+
     private static List<SimpleGrantedAuthority> checkInAuthority() {
         return List.of(new SimpleGrantedAuthority("PERM_CHECK_IN"));
     }

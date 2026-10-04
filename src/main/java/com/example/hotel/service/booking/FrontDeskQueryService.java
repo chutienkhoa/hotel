@@ -140,12 +140,24 @@ public class FrontDeskQueryService {
             List<Room> rooms = roomsByReservation.getOrDefault(reservation.getId(), List.of());
             ArrivalReadiness readiness = ArrivalReadinessRules.evaluate(
                     reservation.getStatus(), reservation.getCheckInDate(), today, false, reservation.getAdultCount(), rooms, true);
-            rows.add(toArrivalRow(reservation, rooms, readiness));
+            rows.add(toArrivalRow(reservation, rooms, readiness, today));
         }
         rows.sort(Comparator.comparingInt(FrontDeskQueryService::arrivalRank)
                 .thenComparing(FrontDeskArrivalRow::checkInDate)
                 .thenComparing(FrontDeskArrivalRow::reservationNumber));
         return rows;
+    }
+
+    /**
+     * Loads the first few Arrivals in the default Front Desk order, for the Check-in Guest quick-access table. It is
+     * the same business-scoped result as {@link #arrivals()}, only truncated.
+     *
+     * @param limit maximum number of rows to return
+     * @return at most {@code limit} arrival rows
+     */
+    @Transactional(readOnly = true)
+    public List<FrontDeskArrivalRow> recentArrivals(int limit) {
+        return arrivals().stream().limit(limit).toList();
     }
 
     /**
@@ -337,7 +349,8 @@ public class FrontDeskQueryService {
         return rows;
     }
 
-    private FrontDeskArrivalRow toArrivalRow(Reservation reservation, List<Room> rooms, ArrivalReadiness readiness) {
+    private FrontDeskArrivalRow toArrivalRow(
+            Reservation reservation, List<Room> rooms, ArrivalReadiness readiness, LocalDate today) {
         Map<UUID, ArrivalIssueCode> blockerByRoom = new LinkedHashMap<>();
         for (ArrivalReadinessIssue issue : readiness.issues()) {
             if (issue.severity() == ArrivalIssueSeverity.BLOCKER && issue.roomId() != null) {
@@ -367,7 +380,9 @@ public class FrontDeskQueryService {
                 readiness,
                 roomRows,
                 housekeeping,
-                EffectiveBookingContact.of(reservation).phone());
+                EffectiveBookingContact.of(reservation).phone(),
+                ChronoUnit.DAYS.between(reservation.getCheckInDate(), reservation.getCheckOutDate()),
+                overdue ? Math.max(0L, ChronoUnit.DAYS.between(reservation.getCheckInDate(), today)) : 0L);
     }
 
     private static int arrivalRank(FrontDeskArrivalRow row) {

@@ -95,6 +95,7 @@ public class GuestService {
                 request.phone(),
                 trimRequired(request.nationality()),
                 request.dateOfBirth(),
+                normalizeOptional(request.idDocumentNumber()),
                 request.address());
         guest.audit(currentUser.id());
         Guest savedGuest = guestRepository.save(guest);
@@ -136,6 +137,7 @@ public class GuestService {
                 request.phone(),
                 trimRequired(request.nationality()),
                 request.dateOfBirth(),
+                normalizeOptional(request.idDocumentNumber()),
                 request.address());
         guest.audit(currentUser.id());
         Guest savedGuest = guestRepository.save(guest);
@@ -177,6 +179,22 @@ public class GuestService {
      */
     private String trimRequired(String value) {
         return value.trim();
+    }
+
+    /**
+     * Normalizes an optional identity value: surrounding whitespace is removed and a blank value is stored as
+     * absent. No format is imposed, since national ID and passport numbers differ by country. The value is never
+     * logged.
+     *
+     * @param value optional submitted value
+     * @return the trimmed value, or {@code null} when absent or blank
+     */
+    private String normalizeOptional(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

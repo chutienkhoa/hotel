@@ -353,8 +353,7 @@ p {
 }
 .card,
 .detail-grid > div,
-fieldset,
-.login-panel {
+fieldset {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -1334,34 +1333,6 @@ legend {
   pointer-events: none;
 }
 
-.check-in-options {
-  display: grid;
-  gap: var(--space-4);
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-}
-.check-in-option-card {
-  align-items: flex-start;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  text-decoration: none;
-  transition:
-    box-shadow 150ms ease,
-    border-color 150ms ease;
-}
-.check-in-option-card:hover {
-  border-color: var(--color-border-strong);
-  box-shadow: 0 2px 8px rgb(16 42 67 / 10%);
-}
-.check-in-option-card h2 {
-  color: var(--color-navy);
-  font-size: 1.0625rem;
-  margin-bottom: 0;
-}
-.check-in-option-card p {
-  margin-bottom: 0;
-}
 .check-in-review-warning {
   background: var(--color-warning-surface);
   border: 1px solid transparent;
@@ -2359,21 +2330,6 @@ span.flatpickr-weekday {
 .empty-state-message {
   margin: 0;
 }
-.login-page {
-  align-items: center;
-  display: flex;
-  justify-content: center;
-  min-height: 100vh;
-  padding: var(--space-4);
-}
-.login-panel {
-  max-width: 25rem;
-  padding: var(--space-6);
-  width: 100%;
-}
-.login-panel .button {
-  width: 100%;
-}
 .visually-hidden {
   height: 1px;
   margin: -1px;
@@ -2424,7 +2380,7 @@ span.flatpickr-weekday {
     padding: var(--space-1);
   }
   .sidebar-collapse-toggle svg {
-    height: 0.875rem;
+    height: 1.875rem;
     width: 0.875rem;
   }
   .sidebar-collapse-toggle:hover,
@@ -2690,7 +2646,8 @@ span.flatpickr-weekday {
 .hub-field dd.date-value--check-in,
 .stay-extension-facts dd.date-value--check-in,
 .folio-facts dd.date-value--check-in,
-.room-change-facts dd.date-value--check-in {
+.room-change-facts dd.date-value--check-in,
+.walk-in-summary-table td.date-value--check-in {
   color: var(--color-date-check-in);
 }
 
@@ -2698,7 +2655,8 @@ span.flatpickr-weekday {
 .hub-field dd.date-value--check-out,
 .stay-extension-facts dd.date-value--check-out,
 .folio-facts dd.date-value--check-out,
-.room-change-facts dd.date-value--check-out {
+.room-change-facts dd.date-value--check-out,
+.walk-in-summary-table td.date-value--check-out {
   color: var(--color-date-check-out);
 }
 

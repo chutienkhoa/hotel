@@ -1,29 +1,123 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/auth/login.css'">
 <head th:replace="~{layout/base :: head(#{auth.login.title})}"></head>
-<body class="login-page">
-<main aria-labelledby="login-heading" class="login-panel">
-    <h1 id="login-heading" th:text="#{auth.login.title}">Sign in</h1>
+<body class="login-screen" th:with="loginFailed=${param.error != null}">
+<div class="login-layout">
+    <aside class="login-brand">
+        <div class="login-brand-inner">
+            <div class="login-brand-header">
+                <svg aria-hidden="true" class="login-brand-mark" fill="none" viewBox="0 0 128 80">
+                    <path d="M32 50a32 32 0 0 1 64 0Z" fill="#e9b45f"></path>
+                    <path d="M4 46c14 0 20-4 30-4s16 4 30 4 20-4 30-4 20 4 30 4" stroke="#e9b45f" stroke-linecap="round" stroke-width="3"></path>
+                    <path d="M20 56c10 0 16-4 26-4s14 4 24 4 14-4 24-4 12 3 18 3" stroke="#e9b45f" stroke-linecap="round" stroke-width="3"></path>
+                    <path d="M34 66c8 0 12-3 20-3s12 3 20 3 10-2 18-2" stroke="#e9b45f" stroke-linecap="round" stroke-width="3"></path>
+                </svg>
+                <p class="login-brand-name" th:text="#{auth.login.brand.name}">SUNSET HOUSE</p>
+                <p class="login-brand-tagline" th:text="#{auth.login.brand.tagline}">HOTEL MANAGEMENT SYSTEM</p>
+                <hr class="login-brand-rule" />
+            </div>
 
-    <p class="message message-error" th:if="${param.error}" th:text="#{auth.login.error}">
-        Invalid username or password.
-    </p>
+            <div class="login-brand-body">
+                <h2 class="login-brand-headline" th:text="#{auth.login.headline}">Manage your hotel operations in one place.</h2>
+                <p class="login-brand-copy" th:text="#{auth.login.copy}">Reservations, guests, rooms, finance and reports – all in a simple and powerful system.</p>
 
-    <form method="post" th:action="@{/login}">
-        <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <ul class="login-features">
+                    <li>
+                        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24">
+                            <rect height="15" rx="2" width="17" x="3.5" y="5.5"></rect>
+                            <path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17"></path>
+                        </svg>
+                        <span th:text="#{auth.login.feature.operations}">Streamline operations</span>
+                    </li>
+                    <li>
+                        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24">
+                            <circle cx="9" cy="8.5" r="3"></circle>
+                            <path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"></path>
+                            <path d="M15.5 5.7a3 3 0 0 1 0 5.6M17.5 14.3c1.8.5 3 2.2 3.5 4.7"></path>
+                        </svg>
+                        <span th:text="#{auth.login.feature.guests}">Better guest experience</span>
+                    </li>
+                    <li>
+                        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path d="M4 20h16M6.5 20v-7M11 20V6M15.5 20v-9M20 20v-5"></path>
+                        </svg>
+                        <span th:text="#{auth.login.feature.data}">Data-driven decisions</span>
+                    </li>
+                    <li>
+                        <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path d="M12 3.5 19.5 6v5.5c0 4.4-3 7.6-7.5 9-4.5-1.4-7.5-4.6-7.5-9V6Z"></path>
+                            <path d="m8.8 12 2.4 2.4 4-4.4"></path>
+                        </svg>
+                        <span th:text="#{auth.login.feature.secure}">Secure and reliable</span>
+                    </li>
+                </ul>
+            </div>
 
-        <div class="form-field">
-            <label for="username" th:text="#{auth.login.username}">Username</label>
-            <input autocomplete="username" id="username" name="username" required type="text" />
+            <p class="login-brand-footer">
+                <span th:text="#{auth.login.footer.version}">Sunset House PMS v1.0</span><br />
+                <span th:text="#{auth.login.footer.copyright}">© 2026 Sunset House. All rights reserved.</span>
+            </p>
         </div>
+    </aside>
 
-        <div class="form-field">
-            <label for="password" th:text="#{auth.login.password}">Password</label>
-            <input autocomplete="current-password" id="password" name="password" required type="password" />
-        </div>
+    <main aria-labelledby="login-heading" class="login-main">
+        <section class="login-card">
+            <h1 id="login-heading" th:text="#{auth.login.welcome}">Welcome back</h1>
+            <p class="login-card-subtitle" th:text="#{auth.login.subtitle}">Sign in to Sunset House PMS</p>
 
-        <button class="button button-primary" th:text="#{auth.login.submit}" type="submit">Sign in</button>
-    </form>
-</main>
+            <p class="login-error" role="alert" th:if="${param.error}" th:text="#{auth.login.error}">
+                Invalid username or password.
+            </p>
+
+            <form method="post" th:action="@{/login}">
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+
+                <div class="login-field">
+                    <label for="username" th:text="#{auth.login.username}">Username</label>
+                    <div class="login-input">
+                        <svg aria-hidden="true" class="login-input-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24">
+                            <circle cx="12" cy="8" r="3.5"></circle>
+                            <path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5"></path>
+                        </svg>
+                        <input autocomplete="username" id="username" name="username"
+                               required th:aria-invalid="${loginFailed} ? 'true'"
+                               th:placeholder="#{auth.login.username.placeholder}" type="text" />
+                    </div>
+                </div>
+
+                <div class="login-field">
+                    <label for="password" th:text="#{auth.login.password}">Password</label>
+                    <div class="login-input">
+                        <svg aria-hidden="true" class="login-input-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24">
+                            <rect height="10" rx="1.5" width="14" x="5" y="11"></rect>
+                            <path d="M8 11V7.5a4 4 0 0 1 8 0V11"></path>
+                        </svg>
+                        <input autocomplete="current-password" id="password" name="password"
+                               required th:aria-invalid="${loginFailed} ? 'true'"
+                               th:placeholder="#{auth.login.password.placeholder}" type="password" />
+                        <button aria-pressed="false" class="login-password-toggle" data-password-toggle="password"
+                                th:aria-label="#{auth.login.password.show}"
+                                th:data-label-hide="#{auth.login.password.hide}" th:data-label-show="#{auth.login.password.show}"
+                                type="button">
+                            <svg aria-hidden="true" class="icon-eye" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24">
+                                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <svg aria-hidden="true" class="icon-eye-off" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" viewBox="0 0 24 24">
+                                <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M4 4l16 16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button class="login-submit" th:text="#{auth.login.submit}" type="submit">Sign in</button>
+            </form>
+        </section>
+    </main>
+</div>
+<script defer th:src="@{/js/auth/login.js}"></script>
 </body>
 </html>

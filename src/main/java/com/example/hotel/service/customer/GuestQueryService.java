@@ -141,6 +141,7 @@ public class GuestQueryService {
             addPartialMatch(predicates, criteriaBuilder, root, "firstName", criteria.getFirstName());
             addPartialMatch(predicates, criteriaBuilder, root, "lastName", criteria.getLastName());
             addPartialMatch(predicates, criteriaBuilder, root, "email", criteria.getEmail());
+            addPartialMatch(predicates, criteriaBuilder, root, "idDocumentNumber", criteria.getIdDocumentNumber());
             addNationalityMatch(predicates, criteriaBuilder, root, criteria.getNationality());
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
@@ -150,7 +151,7 @@ public class GuestQueryService {
      * Builds the database predicate for the Reservation Guest lookup search fields.
      *
      * @param normalizedQuery trimmed non-blank search text
-     * @return an OR-based specification for code, full name, phone, and email matching
+     * @return an OR-based specification for code, full name, phone, email, and ID / Passport Number matching
      */
     private Specification<Guest> lookupSpecificationFor(String normalizedQuery) {
         return (root, query, criteriaBuilder) -> {
@@ -164,7 +165,8 @@ public class GuestQueryService {
                     criteriaBuilder.like(criteriaBuilder.lower(root.get("guestCode")), pattern),
                     criteriaBuilder.like(criteriaBuilder.lower(fullName), pattern),
                     criteriaBuilder.like(criteriaBuilder.lower(root.get("phone")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("email")), pattern));
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("email")), pattern),
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("idDocumentNumber")), pattern));
         };
     }
 

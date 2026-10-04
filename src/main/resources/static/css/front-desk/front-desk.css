@@ -330,8 +330,9 @@
   color: var(--color-danger);
   display: block;
   font-size: 0.8125rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
+  margin-top: 0.125rem;
 }
 
 /* Status: one readiness pill, plus the blockers that keep a row from being ready. Pills stack in the Departures cell. */
@@ -375,6 +376,129 @@
 }
 .front-desk-balance--settled {
   color: var(--color-success);
+}
+
+/* Check-in Guest landing (approved check-in-guest-final.png): three equal method cards, then the Recent Confirmed
+   Reservations table, which reuses the Arrivals table, status badge and results-card styles above. */
+.check-in-methods {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.check-in-method {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 1.25rem;
+}
+.check-in-method__head {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  gap: var(--space-4);
+  padding-bottom: var(--space-3);
+}
+.check-in-method__head h2 {
+  font-size: 1.25rem;
+  line-height: 1.25;
+  margin: 0 0 var(--space-1);
+}
+.check-in-method__head p {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  margin: 0;
+}
+.check-in-method__icon {
+  align-items: center;
+  border-radius: 999px;
+  display: flex;
+  flex: none;
+  height: 4.5rem;
+  justify-content: center;
+  width: 4.5rem;
+}
+.check-in-method__icon svg {
+  height: 2.25rem;
+  width: 2.25rem;
+}
+.check-in-method--existing .check-in-method__icon {
+  background: var(--color-info-surface);
+  color: var(--color-primary);
+}
+.check-in-method--walk-in .check-in-method__icon {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.check-in-method--ota .check-in-method__icon {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+/* The list takes the spare height so the CTA buttons align along the bottom of equal-height cards. */
+.check-in-method__list {
+  display: grid;
+  flex: 1;
+  gap: 0.625rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.check-in-method__list span,
+.check-in-method__head h2,
+.check-in-method__head p {
+  text-wrap: balance;
+}
+.check-in-method__list li {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-3);
+}
+.check-in-method__list svg {
+  color: var(--color-primary);
+  flex: none;
+  height: 1.125rem;
+  margin-top: 0.125rem;
+  width: 1.125rem;
+}
+.check-in-method__cta {
+  gap: var(--space-2);
+  height: 2.75rem;
+  justify-content: center;
+  line-height: 1;
+  width: 100%;
+}
+.check-in-method__cta svg,
+.check-in-view-all svg {
+  flex: none;
+  height: 1rem;
+  transform: scaleX(-1);
+  width: 1rem;
+}
+.check-in-view-all {
+  align-items: center;
+  color: var(--color-primary);
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  line-height: 1.25;
+  text-decoration: none;
+}
+.check-in-view-all:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.check-in-view-all:focus-visible {
+  border-radius: var(--radius-sm);
+}
+.front-desk .back-link--primary svg {
+  transform: none;
+}
+
+@media (max-width: 64rem) {
+  .check-in-methods {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 /* Task33 icon rule for this page: slightly stronger strokes than the shared 1.8 so the small icons read clearly. */

@@ -7,12 +7,11 @@
         return;
     }
 
+    const title = dialog.querySelector("#feedback-dialog-title");
     const message = dialog.querySelector("#feedback-dialog-message");
     const closeButton = dialog.querySelector("[data-feedback-dialog-close]");
 
-    // Nothing to show: the page rendered the dialog markup (always present once the fragment is
-    // included) but neither errorMessage nor systemErrorMessage was set this request.
-    if (!message || !closeButton || !message.textContent.trim()) {
+    if (!message || !closeButton) {
         return;
     }
 
@@ -22,6 +21,30 @@
         event.preventDefault();
         dialog.close();
     });
+
+    // Lets a page raise this same dialog for a client-detected, recoverable problem (for example the Walk-in
+    // form's missing nightly rate) without a second dialog component. Presentation only: the server still
+    // validates. onClose runs once, after the dialog has closed (the page uses it to restore focus).
+    window.PmsFeedbackDialog = {
+        show({ title: heading, message: text, onClose }) {
+            if (title && heading) {
+                title.textContent = heading;
+            }
+            message.textContent = text;
+            if (typeof onClose === "function") {
+                dialog.addEventListener("close", onClose, { once: true });
+            }
+            if (!dialog.open) {
+                dialog.showModal();
+            }
+        },
+    };
+
+    // Nothing to show: the page rendered the dialog markup (always present once the fragment is
+    // included) but neither errorMessage nor systemErrorMessage was set this request.
+    if (!message.textContent.trim()) {
+        return;
+    }
 
     dialog.showModal();
 })();

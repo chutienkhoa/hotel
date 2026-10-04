@@ -57,6 +57,85 @@ class GuestServiceTest {
         assertEquals(creatorId, savedGuest.getValue().getCreatedBy());
     }
 
+    /** Confirms a Guest created without identity fields stores both as absent (backward compatible). */
+    @Test
+    void shouldCreateGuestWithoutIdentityFields() {
+        GuestRepository guestRepository = mock(GuestRepository.class);
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), mock(GuestDocumentService.class));
+        setCurrentUser(UUID.randomUUID());
+        when(guestRepository.nextGuestCodeSequence()).thenReturn(1L);
+        when(guestRepository.save(any(Guest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GuestResponse created = guestService.create(new GuestCreateRequest("A", "B", null, null, "Japan", null, null));
+
+        assertEquals(null, created.idDocumentNumber());
+        assertEquals(null, created.dateOfBirth());
+    }
+
+    /** Confirms the ID / Passport Number is trimmed and a blank value is stored as absent. */
+    @Test
+    void shouldTrimIdDocumentNumberAndStoreBlankAsAbsent() {
+        GuestRepository guestRepository = mock(GuestRepository.class);
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), mock(GuestDocumentService.class));
+        setCurrentUser(UUID.randomUUID());
+        when(guestRepository.nextGuestCodeSequence()).thenReturn(1L);
+        when(guestRepository.save(any(Guest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GuestResponse trimmed = guestService.create(new GuestCreateRequest(
+                "A", "B", null, null, "Japan", LocalDate.of(1990, 8, 15), "  C1234567  ", null));
+        GuestResponse blank = guestService.create(new GuestCreateRequest(
+                "A", "B", null, null, "Japan", null, "   ", null));
+
+        assertEquals("C1234567", trimmed.idDocumentNumber());
+        assertEquals(LocalDate.of(1990, 8, 15), trimmed.dateOfBirth());
+        assertEquals(null, blank.idDocumentNumber());
+    }
+
+    /** Confirms Edit Guest persists a changed identity number on the Guest itself. */
+    @Test
+    void shouldUpdateIdDocumentNumberOnTheGuest() {
+        GuestRepository guestRepository = mock(GuestRepository.class);
+        GuestService guestService = new GuestService(guestRepository, new GuestMapper(), mock(GuestDocumentService.class));
+        UUID guestId = UUID.randomUUID();
+        Guest guest = Guest.create(guestId, "G000123", "Original", "Guest", null, null, null, null, "OLD-1", null);
+        when(guestRepository.findById(guestId)).thenReturn(Optional.of(guest));
+        when(guestRepository.save(any(Guest.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        setCurrentUser(UUID.randomUUID());
+
+        GuestResponse updated = guestService.update(guestId, new GuestUpdateRequest(
+                "Updated", "Guest", null, null, "Japan", null, " NEW-2 ", null));
+
+        assertEquals("NEW-2", updated.idDocumentNumber());
+        assertEquals("NEW-2", guest.getIdDocumentNumber());
+    }
+
+    /** Confirms the legacy profile update (no identity argument) leaves a stored ID number untouched. */
+    @Test
+    void shouldKeepIdDocumentNumberWhenLegacyProfileUpdateIsUsed() {
+        Guest guest = Guest.create(UUID.randomUUID(), "G1", "A", "B", null, null, null, null, "KEEP-1", null);
+
+        guest.updateProfile("C", "D", null, null, null, null, null);
+
+        assertEquals("KEEP-1", guest.getIdDocumentNumber());
+    }
+
+    /** Confirms a future date of birth and an overlong ID number violate the request constraints, and a past date does not. */
+    @Test
+    void shouldValidateDateOfBirthAndIdDocumentNumberLength() {
+        jakarta.validation.Validator validator = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        GuestCreateRequest ok = new GuestCreateRequest(
+                "A", "B", null, null, "Vietnam", LocalDate.now().minusYears(30), "X".repeat(50), null);
+        GuestCreateRequest future = new GuestCreateRequest(
+                "A", "B", null, null, "Vietnam", LocalDate.now().plusDays(1), null, null);
+        GuestCreateRequest tooLong = new GuestCreateRequest(
+                "A", "B", null, null, "Vietnam", null, "X".repeat(51), null);
+
+        assertFalse(validator.validateProperty(ok, "dateOfBirth").iterator().hasNext());
+        assertFalse(validator.validateProperty(ok, "idDocumentNumber").iterator().hasNext());
+        assertEquals(1, validator.validateProperty(future, "dateOfBirth").size());
+        assertEquals(1, validator.validateProperty(tooLong, "idDocumentNumber").size());
+    }
+
     /** Confirms a generated guest code remains unique when a legacy code already uses a sequence value. */
     @Test
     void shouldSkipAnExistingGuestCodeWhenGeneratingGuestCode() {

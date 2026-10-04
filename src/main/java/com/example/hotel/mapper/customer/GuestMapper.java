@@ -27,6 +27,7 @@ public class GuestMapper {
                 guest.getPhone(),
                 guest.getNationality(),
                 guest.getDateOfBirth(),
+                guest.getIdDocumentNumber(),
                 guest.getAddress());
     }
 
@@ -60,7 +61,8 @@ public class GuestMapper {
                 guest.getEmail(),
                 guest.getPhone(),
                 guest.getNationality(),
-                guest.getDateOfBirth());
+                guest.getDateOfBirth(),
+                guest.getIdDocumentNumber());
     }
 
     /**

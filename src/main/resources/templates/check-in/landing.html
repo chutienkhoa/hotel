@@ -1,44 +1,144 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Check-in')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/front-desk/front-desk.css'">
+<head th:replace="~{layout/base :: head(#{checkin.landing.title})}"></head>
 <body>
-<div class="app-shell page-check-in">
+<div class="app-shell page-front-desk">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <div class="page-header">
-            <div>
-                <h1>Check-in</h1>
-                <p>Choose how this guest's stay is entered into Hotel System.</p>
+    <main class="content front-desk">
+        <div>
+            <a class="back-link back-link--primary" th:href="@{/front-desk}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{checkin.landing.back}">Back to Front Desk</span>
+            </a>
+            <div class="page-header">
+                <div class="page-header-copy">
+                    <h1 th:text="#{checkin.landing.title}">Check-in Guest</h1>
+                    <p class="page-description" th:text="#{checkin.landing.description}">Choose how you want to check in the guest.</p>
+                </div>
             </div>
         </div>
 
-        <div class="check-in-options">
-            <a class="card check-in-option-card check-in-option-card--existing" th:href="@{/check-in/existing}">
-                <span class="reservation-info-icon reservation-info-icon--blue">
-                    <svg th:replace="~{layout/icons :: calendar}"></svg>
-                </span>
-                <h2>Existing Reservation</h2>
-                <p>Find a reservation already entered into Hotel System.</p>
-            </a>
+        <div class="check-in-methods">
+            <section class="card check-in-method check-in-method--existing" id="method-existing">
+                <div class="check-in-method__head">
+                    <span class="check-in-method__icon"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+                    <div>
+                        <h2 th:text="#{checkin.landing.existing.title}">Existing Reservation</h2>
+                        <p th:text="#{checkin.landing.existing.description}">Check in a guest with a confirmed reservation.</p>
+                    </div>
+                </div>
+                <ul class="check-in-method__list">
+                    <li th:each="step : ${#numbers.sequence(1, 4)}">
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                        <span th:text="#{'checkin.landing.existing.step' + ${step}}">Step</span>
+                    </li>
+                </ul>
+                <a class="button button-primary check-in-method__cta" th:href="@{/check-in/existing}">
+                    <span th:text="#{checkin.landing.existing.cta}">Search Reservation</span>
+                    <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                </a>
+            </section>
 
-            <a class="card check-in-option-card check-in-option-card--ota" th:href="@{/check-in/ota-entry}">
-                <span class="reservation-info-icon reservation-info-icon--green">
-                    <svg th:replace="~{layout/icons :: building}"></svg>
-                </span>
-                <h2>OTA Booking Not Entered</h2>
-                <p>Guest has an Agoda / Booking.com / Airbnb booking that has not yet been entered into Hotel System.</p>
-            </a>
+            <section class="card check-in-method check-in-method--walk-in" id="method-walk-in">
+                <div class="check-in-method__head">
+                    <span class="check-in-method__icon"><svg th:replace="~{layout/icons :: user}"></svg></span>
+                    <div>
+                        <h2 th:text="#{checkin.landing.walkIn.title}">Walk-in</h2>
+                        <p th:text="#{checkin.landing.walkIn.description}">Create a new reservation and check in a walk-in guest.</p>
+                    </div>
+                </div>
+                <ul class="check-in-method__list">
+                    <li th:each="step : ${#numbers.sequence(1, 4)}">
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                        <span th:text="#{'checkin.landing.walkIn.step' + ${step}}">Step</span>
+                    </li>
+                </ul>
+                <a class="button button-primary check-in-method__cta" th:href="@{/check-in/walk-in}">
+                    <span th:text="#{checkin.landing.walkIn.cta}">Create Walk-in Reservation</span>
+                    <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                </a>
+            </section>
 
-            <a class="card check-in-option-card check-in-option-card--walk-in" th:href="@{/check-in/walk-in}">
-                <span class="reservation-info-icon reservation-info-icon--purple">
-                    <svg th:replace="~{layout/icons :: user}"></svg>
-                </span>
-                <h2>Walk-in</h2>
-                <p>Guest has no existing reservation.</p>
-            </a>
+            <section class="card check-in-method check-in-method--ota" id="method-ota">
+                <div class="check-in-method__head">
+                    <span class="check-in-method__icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
+                    <div>
+                        <h2 th:text="#{checkin.landing.ota.title}">OTA Booking Not Entered</h2>
+                        <p th:text="#{checkin.landing.ota.description}">Create a reservation for an OTA booking that is not yet entered in the system.</p>
+                    </div>
+                </div>
+                <ul class="check-in-method__list">
+                    <li th:each="step : ${#numbers.sequence(1, 4)}">
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                        <span th:text="#{'checkin.landing.ota.step' + ${step}}">Step</span>
+                    </li>
+                </ul>
+                <a class="button button-primary check-in-method__cta" th:href="@{/check-in/ota-entry}">
+                    <span th:text="#{checkin.landing.ota.cta}">Create OTA Reservation</span>
+                    <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                </a>
+            </section>
         </div>
+
+        <section class="card front-desk-results" id="recent-arrivals">
+            <div class="front-desk-results__header">
+                <div class="front-desk-results__heading">
+                    <h2 th:text="#{checkin.landing.recent.title}">Recent Confirmed Reservations</h2>
+                    <p th:text="#{checkin.landing.recent.description}">Quick access to today's arrivals.</p>
+                </div>
+                <a class="check-in-view-all" th:href="@{/front-desk(view='arrivals')}">
+                    <span th:text="#{checkin.landing.recent.viewAll}">View all arrivals</span>
+                    <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                </a>
+            </div>
+
+            <p class="empty-state" th:if="${recentArrivals.empty}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
+            <div class="table-wrap front-desk-table-wrap" th:unless="${recentArrivals.empty}">
+                <table class="front-desk-table front-desk-table--arrivals">
+                    <thead>
+                    <tr>
+                        <th scope="col" th:text="#{checkin.landing.column.reservation}">Reservation No.</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
+                        <th scope="col" th:text="#{checkin.landing.column.arrivalDate}">Arrival Date</th>
+                        <th scope="col" th:text="#{checkin.landing.column.rooms}">Room(s)</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.nights}">Nights</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.status}">Status</th>
+                        <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="row : ${recentArrivals}">
+                        <td th:text="${row.reservationNumber}">R-1</td>
+                        <td><th:block th:replace="~{front-desk/fragments :: guest(${row})}"></th:block></td>
+                        <td>
+                            <span th:replace="~{layout/datetime :: date(${row.checkInDate})}">—</span>
+                            <span class="front-desk-overdue" th:if="${row.overdue}" th:text="#{checkin.landing.overdueDays(${row.overdueDays})}">1 day overdue</span>
+                            <span class="front-desk-secondary" th:unless="${row.overdue}" th:text="#{reservation.frontDesk.today}">Today</span>
+                        </td>
+                        <td><th:block th:replace="~{front-desk/fragments :: roomList(${row.rooms})}"></th:block></td>
+                        <td th:text="${row.nights}">3</td>
+                        <td th:text="${row.source.displayName}">Direct</td>
+                        <td>
+                            <span class="status-badge front-desk-status"
+                                  th:classappend="${row.readiness.state.name() == 'READY'} ? 'status-badge--available' : 'status-badge--out_of_order'">
+                                <th:block th:if="${row.readiness.state.name() == 'READY'}"><svg th:replace="~{layout/icons :: checkCircle}"></svg></th:block>
+                                <th:block th:unless="${row.readiness.state.name() == 'READY'}"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></th:block>
+                                <span th:text="${row.readiness.state.name() == 'READY'} ? #{reservation.frontDesk.readyForCheckIn} : #{checkin.readiness.state.NEEDS_ATTENTION}">Ready</span>
+                            </span>
+                        </td>
+                        <td>
+                            <a class="button button-primary front-desk-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                               th:text="#{checkin.landing.action.select}">Select</a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </main>
 </div>
 </body>

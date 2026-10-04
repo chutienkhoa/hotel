@@ -133,6 +133,53 @@ class GuestQueryServiceTest {
         assertArrayEquals(new Predicate[] {predicate}, predicatesCaptor.getValue());
     }
 
+    /** Confirms the ID / Passport Number filter is a case-insensitive partial match on its own column. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldBuildPartialMatchPredicateForIdDocumentNumber() {
+        GuestRepository repository = mock(GuestRepository.class);
+        GuestQueryService service = new GuestQueryService(repository, mock(GuestMapper.class));
+        GuestSearchCriteria criteria = new GuestSearchCriteria();
+        criteria.setIdDocumentNumber("  c12  ");
+        criteria.normalize();
+        Root<Guest> root = mock(Root.class);
+        CriteriaQuery<?> query = mock(CriteriaQuery.class);
+        CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class);
+        Path<String> field = mock(Path.class);
+        Expression<String> lowerCaseField = mock(Expression.class);
+        Predicate predicate = mock(Predicate.class);
+        when(root.<String>get("idDocumentNumber")).thenReturn(field);
+        when(criteriaBuilder.lower(field)).thenReturn(lowerCaseField);
+        when(criteriaBuilder.like(lowerCaseField, "%c12%")).thenReturn(predicate);
+        ArgumentCaptor<Predicate[]> predicatesCaptor = ArgumentCaptor.forClass(Predicate[].class);
+        when(criteriaBuilder.and(predicatesCaptor.capture())).thenReturn(mock(Predicate.class));
+
+        service.specificationFor(criteria).toPredicate(root, query, criteriaBuilder);
+
+        verify(root).get("idDocumentNumber");
+        assertArrayEquals(new Predicate[] {predicate}, predicatesCaptor.getValue());
+    }
+
+    /** Confirms the reservation Guest lookup also matches the ID / Passport Number. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldMatchIdDocumentNumberInReservationGuestLookup() {
+        GuestRepository repository = mock(GuestRepository.class);
+        GuestQueryService service = new GuestQueryService(repository, mock(GuestMapper.class));
+        ArgumentCaptor<org.springframework.data.jpa.domain.Specification<Guest>> specification =
+                ArgumentCaptor.forClass(org.springframework.data.jpa.domain.Specification.class);
+        when(repository.findAll(specification.capture(), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        service.searchForReservationCreation("C123");
+
+        Root<Guest> root = mock(Root.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        CriteriaBuilder criteriaBuilder = mock(CriteriaBuilder.class, org.mockito.Mockito.RETURNS_DEEP_STUBS);
+        specification.getValue().toPredicate(root, mock(CriteriaQuery.class), criteriaBuilder);
+        verify(root).get("idDocumentNumber");
+        verify(root).get("guestCode");
+    }
+
     /**
      * Confirms the nationality filter builds a case-insensitive OR predicate across the
      * canonical country name and its known legacy demonyms, not a free-text partial match.

@@ -1,0 +1,746 @@
+/* Task33 Batch 3B: Walk-in Reservation form and Reservation Summary, following
+   docs/specs/evidence/task33/front-desk/walk-in-reservation-final.png and reservation-summary-final.png. Every rule is
+   scoped under .walk-in so shared styles are untouched. Only the sections the backend supports are drawn: the Guest is
+   selected (or created through Guest management), Source is fixed Direct and the currency is fixed VND. */
+
+.walk-in {
+  --walk-in-inset: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  /* The page wrapper owns the inset so the bottom action bar can span the full main-content width. */
+  padding: 0;
+}
+.walk-in-page {
+  flex: 1 0 auto;
+  min-width: 0;
+  padding: var(--space-6) var(--walk-in-inset) 0;
+}
+.walk-in-page > * + * {
+  margin-top: var(--space-4);
+}
+.walk-in svg {
+  stroke-width: 2.2;
+}
+.walk-in .back-link--primary svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+.walk-in-header {
+  margin-bottom: 0;
+}
+.walk-in-header h1 {
+  font-size: 2rem;
+  line-height: 1.15;
+  margin: 0;
+}
+.walk-in-header p {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  margin: var(--space-1) 0 0;
+}
+
+/* Progress: complete steps and the current step are blue, the rest grey. The current step is the first incomplete one. */
+.walk-in-steps {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  list-style: none;
+  margin: var(--space-4) 0;
+  padding: 0;
+}
+.walk-in-step {
+  align-items: center;
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+.walk-in-step:not(:last-child)::after {
+  background: var(--color-border-strong);
+  content: "";
+  flex: 1 1 2rem;
+  height: 1px;
+  margin: 0 var(--space-4);
+  min-width: 2rem;
+  width: 6rem;
+}
+.walk-in-steps {
+  gap: 0;
+}
+.walk-in-step__marker {
+  align-items: center;
+  background: #cbd5e1;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  flex: none;
+  font-weight: 700;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+.walk-in-step__marker svg {
+  display: none;
+  height: 1.25rem;
+  width: 1.25rem;
+}
+.walk-in-step--current,
+.walk-in-step--complete {
+  color: var(--color-primary);
+}
+.walk-in-step--current .walk-in-step__marker,
+.walk-in-step--complete .walk-in-step__marker {
+  background: var(--color-primary);
+}
+.walk-in-step--complete .walk-in-step__number {
+  display: none;
+}
+.walk-in-step--complete .walk-in-step__marker svg {
+  display: block;
+}
+
+/* Two columns: Guest and Room on the left, Stay and Source on the right. */
+.walk-in-grid {
+  align-items: start;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+}
+.walk-in-form > * + * {
+  margin-top: var(--space-3);
+}
+.walk-in-column {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.walk-in-card {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+}
+.walk-in-card .form-field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+.walk-in-card__header {
+  align-items: center;
+  column-gap: var(--space-3);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.walk-in-card__header > svg {
+  color: var(--color-primary);
+  height: 1.375rem;
+  width: 1.375rem;
+}
+.walk-in-card__header h2 {
+  font-size: 1.0625rem;
+  margin: 0;
+}
+.walk-in-required {
+  color: var(--color-danger);
+  margin-inline-start: 0.125rem;
+}
+.walk-in-hint {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  margin: 0;
+}
+/* A pristine required field is neutral (the shared :invalid rule would paint it red before anything is entered); only a
+   field the server rejected is marked. */
+.walk-in-card select:invalid,
+.walk-in-card input:invalid:not(:placeholder-shown) {
+  border-color: var(--color-border-strong);
+}
+.walk-in-card :is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+
+/* Guest Information: Search Existing Guest and Create New Guest in the card header, the selector, then the read-only
+   details of the selected Guest laid out as labelled value boxes (two columns), as in the approved mockup. */
+.walk-in-card__header--action {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.walk-in-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+.walk-in-card__actions .button {
+  height: 2.25rem;
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+.walk-in-card__actions .button svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.walk-in-search-toggle {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.walk-in-guest-search {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+.walk-in-guest-search[hidden] {
+  display: none;
+}
+.walk-in-guest-results {
+  display: grid;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  max-height: 14rem;
+  overflow-y: auto;
+  padding: 0;
+}
+.walk-in-guest-result {
+  align-items: baseline;
+  background: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  width: 100%;
+}
+.walk-in-guest-result:hover,
+.walk-in-guest-result:focus-visible {
+  background: var(--color-info-surface);
+  border-color: var(--color-primary);
+}
+.walk-in-guest-result__name {
+  font-weight: 700;
+}
+.walk-in-guest-result__detail {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.walk-in-guest-empty {
+  margin: 0;
+  background: var(--color-surface-muted);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  padding: var(--space-4);
+  text-align: center;
+}
+.walk-in-guest-empty[hidden] {
+  display: none;
+}
+.walk-in-guest-details {
+  display: grid;
+  gap: var(--space-3) var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+.walk-in-guest-details[hidden] {
+  display: none;
+}
+.walk-in-guest-details div {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.walk-in-guest-details dt {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.walk-in-guest-details dd {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+  min-height: var(--control-height);
+  overflow-wrap: anywhere;
+  padding: 0.35rem var(--space-3);
+}
+.walk-in-nationality {
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+.walk-in-nationality [data-guest-nationality] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.walk-in-flag {
+  flex: none;
+  font-size: 1.375rem;
+  line-height: 1;
+}
+.walk-in-flag[hidden] {
+  display: none;
+}
+.walk-in-label {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+/* Stay fields: two per row; Nights and Notes span the row. Check-in and Nights are read-only context, not inputs. */
+.walk-in-fields {
+  display: grid;
+  gap: var(--space-3) var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.walk-in-fields__wide {
+  grid-column: 1 / -1;
+}
+.walk-in-readonly {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+}
+.walk-in-source {
+  align-items: center;
+  background: var(--color-info-surface);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.walk-in-source__icon {
+  align-items: center;
+  background: var(--color-surface);
+  border-radius: 999px;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: none;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+.walk-in-source__icon svg {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+.walk-in-source__value {
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Room Selection: type filter, the guests the rooms are for, and Check Availability above the stay range and the table
+   of rooms the server offers. */
+.walk-in-room-toolbar {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3) var(--space-4);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+.walk-in-check {
+  height: var(--control-height);
+  white-space: nowrap;
+}
+.walk-in-check svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.walk-in-room-range {
+  align-items: center;
+  color: var(--color-text);
+  display: flex;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  justify-content: center;
+  margin: 0;
+}
+.walk-in-room-range[hidden] {
+  display: none;
+}
+.walk-in-room-range svg {
+  color: var(--color-primary);
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.walk-in-capacity {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin: 0;
+}
+.walk-in-capacity[hidden] {
+  display: none;
+}
+.walk-in-capacity--short {
+  color: var(--color-warning);
+}
+.walk-in-room-state {
+  background: var(--color-surface-muted);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  margin: 0;
+  padding: var(--space-4);
+  text-align: center;
+}
+.walk-in-room-state[hidden],
+.walk-in-room-table-wrap[hidden] {
+  display: none;
+}
+.walk-in-room-table-wrap {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+.walk-in-room-table {
+  min-width: 34rem;
+}
+.walk-in-room-table th,
+.walk-in-room-table td {
+  padding: var(--space-2) var(--space-2);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+/* The required marker made the Rate header the widest cell and pushed it (and the marker) past the card edge;
+   let this one header wrap so "Rate (VND / night) *" stays fully visible without horizontal scrolling. */
+.walk-in-room-table th:last-child {
+  min-width: 8rem;
+  white-space: normal;
+}
+.walk-in-room-table tbody tr {
+  cursor: pointer;
+}
+.walk-in-room-table tbody tr:has(input[type="checkbox"]:checked) {
+  background: var(--color-info-surface);
+}
+.walk-in-room-table tbody tr[hidden] {
+  display: none;
+}
+/* The global text-input rule (border, padding, 2.5rem min-height, 100% width) also matched this checkbox and drew a
+   faint box around it in the Select column. Reset it here; the native checkbox keeps its own border, and keyboard
+   focus is restored below as an outline (the global :focus ring is a box-shadow on that same reset box). */
+.walk-in-room-table input[type="checkbox"] {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  height: 1.125rem;
+  min-height: 0;
+  padding: 0;
+  width: 1.125rem;
+}
+.walk-in-room-table input[type="checkbox"]:focus,
+.walk-in-room-table input[type="checkbox"]:focus-visible {
+  box-shadow: none;
+}
+.walk-in-room-table input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.walk-in-room-number {
+  font-weight: 700;
+}
+.walk-in-room-number .record-link {
+  display: inline-block;
+}
+.walk-in-rate[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.walk-in-num {
+  text-align: right;
+}
+.walk-in-rate {
+  height: 2rem;
+  max-width: 9rem;
+  text-align: right;
+}
+.walk-in-rate:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+.walk-in-rate:disabled::placeholder {
+  color: var(--color-muted);
+}
+
+/* Booking Source: Direct is the selected source. The OTA rows are disabled explanations (plain text, not form
+   controls): they can neither be submitted nor enabled. */
+.walk-in-source-list {
+  display: grid;
+  gap: var(--space-2);
+}
+.walk-in-source-option {
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  gap: var(--space-3);
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+}
+.walk-in-source-option--selected {
+  background: var(--color-info-surface);
+  border-color: var(--color-primary);
+  font-weight: 700;
+}
+.walk-in-source-option--disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+.walk-in-radio {
+  border: 2px solid var(--color-border-strong);
+  border-radius: 999px;
+  flex: none;
+  height: 1.125rem;
+  position: relative;
+  width: 1.125rem;
+}
+.walk-in-radio--on {
+  border-color: var(--color-primary);
+}
+.walk-in-radio--on::after {
+  background: var(--color-primary);
+  border-radius: 999px;
+  content: "";
+  inset: 0.2rem;
+  position: absolute;
+}
+.walk-in-source-option__icon {
+  align-items: center;
+  background: var(--color-surface);
+  border-radius: 999px;
+  color: var(--color-primary);
+  display: inline-flex;
+  flex: none;
+  height: 2rem;
+  justify-content: center;
+  width: 2rem;
+}
+.walk-in-source-option__icon svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.walk-in-source-option__icon--letter {
+  background: #e7ebf0;
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+
+/* Bottom action bar: Cancel / Back on the left, the one primary action on the right, on the content edges. */
+.walk-in-actions {
+  background: #f4f7fb;
+  bottom: 0;
+  margin: var(--space-5) 0 0;
+  position: sticky;
+  z-index: 5;
+}
+.walk-in-actions__inner {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-4) var(--walk-in-inset);
+}
+.walk-in-actions .button {
+  height: 2.75rem;
+  min-width: 10rem;
+  padding: 0.625rem var(--space-4);
+}
+.walk-in-actions .button-primary svg {
+  height: 1rem;
+  transform: scaleX(-1);
+  width: 1rem;
+}
+
+/* Reservation Summary: read-only key/value tables in the same two-column composition. */
+.walk-in-summary-table {
+  background: transparent;
+  border-collapse: collapse;
+  min-width: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+.walk-in-summary-table th,
+.walk-in-summary-table td {
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9375rem;
+  padding: var(--space-2) var(--space-3);
+  vertical-align: top;
+  white-space: normal;
+}
+.walk-in-summary-table tr:last-child th,
+.walk-in-summary-table tr:last-child td {
+  border-bottom: 0;
+}
+.walk-in-summary-table th {
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  width: 42%;
+}
+.walk-in-summary-table td {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.walk-in-edit {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-1);
+  height: 2rem;
+  padding: 0 var(--space-3);
+}
+.walk-in-edit svg {
+  height: 1rem;
+  width: 1rem;
+}
+.walk-in-lines {
+  min-width: 0;
+}
+.walk-in-lines th,
+.walk-in-lines td {
+  padding: var(--space-2) var(--space-3);
+}
+.walk-in-price {
+  background: var(--color-info-surface);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+.walk-in-price__row {
+  align-items: baseline;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+.walk-in-price__row--total {
+  border-top: 1px solid var(--color-border-strong);
+  font-size: 1.125rem;
+  font-weight: 800;
+  padding-top: var(--space-2);
+}
+.walk-in-price__row span:first-child {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+}
+.walk-in-price__row--total span:first-child {
+  color: var(--color-text);
+  font-size: inherit;
+}
+
+@media (max-width: 64rem) {
+  .walk-in {
+    --walk-in-inset: var(--space-5);
+  }
+  .walk-in-page {
+    padding: var(--space-5) var(--walk-in-inset) 0;
+  }
+  .walk-in-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* One column: the operator's order is Guest, Stay (the check-out date drives the room list), Room, Source. */
+  .walk-in-column {
+    display: contents;
+  }
+  .walk-in-card--guest {
+    order: 1;
+  }
+  .walk-in-card--stay {
+    order: 2;
+  }
+  .walk-in-card--room {
+    order: 3;
+  }
+  .walk-in-card--source {
+    order: 4;
+  }
+}
+
+@media (max-width: 40rem) {
+  .walk-in-header h1 {
+    font-size: 1.625rem;
+  }
+  /* Steps: markers and connectors only share the width; the labels of inactive steps are hidden, the current/complete
+     ones stay readable through the aria-label and the marker. */
+  .walk-in-steps {
+    gap: 0;
+    justify-content: space-between;
+  }
+  .walk-in-step {
+    flex: 1 1 auto;
+    font-size: 0.8125rem;
+    min-width: 0;
+    white-space: normal;
+  }
+  .walk-in-step:not(:last-child)::after {
+    margin: 0 var(--space-2);
+    min-width: 0.5rem;
+    width: auto;
+  }
+  .walk-in-step__label {
+    display: none;
+  }
+  .walk-in-step--current .walk-in-step__label {
+    display: inline;
+  }
+  .walk-in-room-toolbar,
+  .walk-in-fields,
+  .walk-in-guest-details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .walk-in-card__header--action {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .walk-in-card__actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+  .walk-in-card__actions .button,
+  .walk-in-check {
+    flex: 1 1 100%;
+    justify-content: center;
+    width: 100%;
+  }
+  .walk-in-actions__inner {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .walk-in-actions .button {
+    width: 100%;
+  }
+  .walk-in-summary-table th {
+    width: 45%;
+  }
+  .walk-in-lines {
+    min-width: 30rem;
+  }
+}

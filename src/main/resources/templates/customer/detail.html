@@ -49,10 +49,14 @@
                     </div>
 
                     <div class="profile-info-field">
-                        <p class="profile-info-label">Date of birth</p>
+                        <p class="profile-info-label" th:text="#{guest.field.dateOfBirth}">Date of Birth</p>
                         <p class="profile-info-value">
                             <span th:replace="~{layout/datetime :: date(${guest.dateOfBirth})}">01/01/1971</span>
                         </p>
+                    </div>
+                    <div class="profile-info-field">
+                        <p class="profile-info-label" th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</p>
+                        <p class="profile-info-value" th:text="${guest.idDocumentNumber} ?: '—'">079012345678</p>
                     </div>
                     <div class="profile-info-field">
                         <p class="profile-info-label">Email</p>

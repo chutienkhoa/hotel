@@ -1,0 +1,285 @@
+/* Task33 Login screen. Scoped to body.login-screen; reuses the shared design tokens from layout.css. */
+.login-screen {
+  background: #f5f8fc;
+}
+.login-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 44fr) minmax(0, 56fr);
+  min-height: 100vh;
+}
+
+/* ---- Left brand panel ---- */
+.login-brand {
+  background:
+    linear-gradient(180deg, rgb(8 30 62 / 82%) 0%, rgb(10 40 80 / 55%) 38%, rgb(8 28 56 / 30%) 70%, rgb(6 24 50 / 55%) 100%),
+    linear-gradient(90deg, rgb(8 30 62 / 55%) 0%, rgb(8 30 62 / 5%) 70%),
+    url("/images/login/login-sunset-house-background.png") center / cover no-repeat;
+  background-color: var(--color-navy-strong);
+  color: #fff;
+  display: flex;
+}
+.login-brand-inner {
+  display: flex;
+  flex-direction: column;
+  padding: clamp(2rem, 5vh, 3.75rem) clamp(2rem, 3vw, 3.1rem) clamp(1.5rem, 3.5vh, 2.75rem);
+  width: 100%;
+}
+.login-brand-mark {
+  display: block;
+  height: auto;
+  margin-bottom: 0.5rem;
+  margin-left: 4%;
+  width: clamp(5rem, 7.7vw, 7.9rem);
+}
+.login-brand-name,
+.login-brand-headline {
+  font-family: "Cormorant Garamond", "Playfair Display", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  margin: 0;
+}
+.login-brand-name {
+  color: #fff;
+  font-size: clamp(1.9rem, 2.6vw, 2.5rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+}
+.login-brand-tagline {
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.26em;
+  margin: 0.6rem 0 0;
+}
+.login-brand-rule {
+  background: #e9b45f;
+  border: 0;
+  height: 2px;
+  margin: clamp(1.5rem, 4vh, 2.8rem) 0 0;
+  width: 3rem;
+}
+.login-brand-body {
+  flex: 1;
+  margin-top: clamp(1.5rem, 4vh, 2.6rem);
+}
+.login-brand-headline {
+  font-size: clamp(1.8rem, 2.4vw, 2.4rem);
+  font-weight: 500;
+  line-height: 1.2;
+  max-width: 28rem;
+}
+.login-brand-copy {
+  color: rgb(255 255 255 / 80%);
+  font-size: 1.05rem;
+  line-height: 1.55;
+  margin: 1.25rem 0 0;
+  max-width: 22rem;
+  text-wrap: balance;
+}
+.login-features {
+  display: grid;
+  gap: 1.1rem;
+  list-style: none;
+  margin: clamp(2rem, 6vh, 4rem) 0 0;
+  padding: 0;
+}
+.login-features li {
+  align-items: center;
+  color: rgb(255 255 255 / 82%);
+  display: flex;
+  font-size: 0.95rem;
+  gap: 1.1rem;
+}
+.login-features svg {
+  flex: none;
+  height: 1.9rem;
+  margin-left: 0.15rem;
+  width: 1.9rem;
+}
+.login-brand-footer {
+  color: rgb(255 255 255 / 70%);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  margin: 1.5rem 0 0;
+}
+
+/* ---- Right login area ---- */
+.login-main {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-6) var(--space-5);
+}
+.login-card {
+  background: var(--color-surface);
+  border: 1px solid #e3eaf3;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 40px rgb(16 42 67 / 8%);
+  max-width: 34rem;
+  padding: clamp(1.5rem, 3vw, 3rem);
+  width: 100%;
+}
+.login-card h1 {
+  color: var(--color-navy-strong);
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0;
+}
+.login-card-subtitle {
+  color: #5d6b80;
+  font-size: 1.15rem;
+  margin: 0.4rem 0 2rem;
+}
+.login-field {
+  margin-bottom: 1.25rem;
+}
+.login-field label {
+  color: var(--color-navy-strong);
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.55rem;
+}
+.login-input {
+  position: relative;
+}
+.login-input-icon {
+  color: #6b7a90;
+  height: 1.35rem;
+  left: 1rem;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.35rem;
+}
+.login-input input {
+  background: #fff;
+  border: 1px solid #d5deea;
+  border-radius: var(--radius-md);
+  color: var(--color-navy-strong);
+  font-size: 1rem;
+  min-height: 3.5rem;
+  padding: 0.75rem 3.25rem 0.75rem 3.25rem;
+}
+.login-input input::placeholder {
+  color: #8a97a9;
+}
+.login-input input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(23 105 170 / 18%);
+}
+/* Neutral until an authentication failure marks both fields aria-invalid (no per-field hint is given). */
+.login-input input:invalid:not(:placeholder-shown) {
+  border-color: #d5deea;
+}
+.login-input input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.login-password-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: #4a5a70;
+  cursor: pointer;
+  display: flex;
+  height: 2.5rem;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2.5rem;
+}
+.login-password-toggle:hover {
+  color: var(--color-navy-strong);
+}
+.login-password-toggle:focus-visible,
+.login-submit:focus-visible {
+  outline: 3px solid rgb(23 105 170 / 45%);
+  outline-offset: 2px;
+}
+.login-password-toggle svg {
+  height: 1.35rem;
+  width: 1.35rem;
+}
+.login-password-toggle .icon-eye {
+  display: none;
+}
+.login-password-toggle[aria-pressed="true"] .icon-eye {
+  display: block;
+}
+.login-password-toggle[aria-pressed="true"] .icon-eye-off {
+  display: none;
+}
+.login-error {
+  background: var(--color-danger-surface);
+  border: 1px solid #f9b4ae;
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-size: 0.95rem;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+}
+.login-submit {
+  background: var(--color-primary);
+  border: 0;
+  border-radius: var(--radius-md);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-top: 0.5rem;
+  min-height: 3.4rem;
+  width: 100%;
+}
+.login-submit:hover {
+  background: var(--color-primary-hover);
+}
+
+/* ---- Tablet: keep split, tighten ---- */
+@media (max-width: 64rem) {
+  .login-layout {
+    grid-template-columns: minmax(0, 40fr) minmax(0, 60fr);
+  }
+  .login-features {
+    margin-top: 1.5rem;
+  }
+  .login-brand-copy {
+    font-size: 0.95rem;
+  }
+}
+
+/* ---- Mobile: form first, brand panel reduced to a compact header ---- */
+@media (max-width: 48rem) {
+  .login-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .login-main {
+    flex: 1;
+    padding: var(--space-5) var(--space-4);
+  }
+  .login-brand-body,
+  .login-brand-rule,
+  .login-brand-footer {
+    display: none;
+  }
+  .login-brand-inner {
+    padding: 1.5rem var(--space-4);
+  }
+  .login-brand-mark {
+    margin-left: 0;
+    width: 4rem;
+  }
+  .login-card {
+    padding: var(--space-5);
+  }
+  .login-card h1 {
+    font-size: 1.75rem;
+  }
+}

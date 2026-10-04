@@ -52,6 +52,9 @@ class CheckInReadinessPageTest {
     private CheckInService checkInService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.FrontDeskQueryService frontDeskQueryService;
+
+    @MockitoBean
     private GuestQueryService guestQueryService;
 
     @MockitoBean

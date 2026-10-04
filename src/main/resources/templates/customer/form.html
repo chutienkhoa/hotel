@@ -66,9 +66,14 @@
                     <p class="field-error" th:errors="*{nationality}"></p>
                 </div>
                 <div class="form-field">
-                    <label for="dateOfBirth">Date of birth</label>
+                    <label for="dateOfBirth" th:text="#{guest.field.dateOfBirth}">Date of Birth</label>
                     <input class="js-date-picker" id="dateOfBirth" th:field="*{dateOfBirth}" type="text" />
                     <p class="field-error" th:errors="*{dateOfBirth}"></p>
+                </div>
+                <div class="form-field">
+                    <label for="idDocumentNumber" th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</label>
+                    <input autocomplete="off" id="idDocumentNumber" maxlength="50" th:field="*{idDocumentNumber}" type="text" />
+                    <p class="field-error" th:errors="*{idDocumentNumber}"></p>
                 </div>
 
                 <div class="form-field guest-form-address">

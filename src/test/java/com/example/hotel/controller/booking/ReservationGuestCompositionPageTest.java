@@ -60,6 +60,9 @@ class ReservationGuestCompositionPageTest {
     private MockMvc mockMvc;
 
     @MockitoBean
+    private com.example.hotel.service.booking.FrontDeskQueryService frontDeskQueryService;
+
+    @MockitoBean
     private ReservationQueryService reservationQueryService;
 
     @MockitoBean
@@ -228,7 +231,8 @@ class ReservationGuestCompositionPageTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("name=\"adultCount\" value=\"3\"")))
                 .andExpect(content().string(containsString("name=\"childCount\" value=\"1\"")))
-                .andExpect(content().string(containsString("Adults: 3")));
+                .andExpect(content().string(containsString("<th scope=\"row\">Adults</th><td>3</td>")))
+                .andExpect(content().string(containsString("<th scope=\"row\">Children</th><td>1</td>")));
     }
 
     private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder create(String adults, String children) {

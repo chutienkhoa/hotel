@@ -103,6 +103,38 @@ class FrontDeskQueryServiceTest {
         assertFalse(rows.get(1).overdue() || rows.get(1).needsAttention());
     }
 
+    /** Confirms an arrival row carries its stay nights and whole overdue days, and today's arrival is not overdue. */
+    @Test
+    void shouldExposeNightsAndOverdueDaysOnArrivalRows() {
+        Reservation overdue = reservation("R-1", TODAY.minusDays(3));
+        Reservation today = reservation("R-2", TODAY);
+        line(overdue, room("101", RoomStatus.AVAILABLE));
+        line(today, room("102", RoomStatus.AVAILABLE));
+
+        List<FrontDeskArrivalRow> rows = arrivals();
+
+        assertEquals(3L, rows.get(0).overdueDays());
+        assertEquals(2L, rows.get(0).nights());
+        assertEquals(0L, rows.get(1).overdueDays());
+    }
+
+    /** Confirms the quick-access list is the default-ordered Arrivals result cut to the requested size. */
+    @Test
+    void shouldLimitRecentArrivalsKeepingDefaultOrder() {
+        Reservation ready = reservation("R-1", TODAY);
+        Reservation overdue = reservation("R-2", TODAY.minusDays(1));
+        line(ready, room("101", RoomStatus.AVAILABLE));
+        line(overdue, room("102", RoomStatus.AVAILABLE));
+        when(reservations.findByStatusAndCheckInOnOrBefore(ReservationStatus.CONFIRMED, TODAY)).thenReturn(pending);
+        when(reservations.findBookedRoomsByReservationIdIn(any())).thenReturn(rows);
+        when(stays.findReservationIdsWithStay(any())).thenReturn(stayed);
+        stubGuest();
+
+        List<FrontDeskArrivalRow> recent = service.recentArrivals(1);
+
+        assertEquals(List.of("R-2"), recent.stream().map(FrontDeskArrivalRow::reservationNumber).toList());
+    }
+
     /** Confirms a blocker means Needs Attention, ordered after overdue and before ready, with per-room issue. */
     @Test
     void shouldOrderNeedsAttentionOverdueThenBlockedThenReady() {

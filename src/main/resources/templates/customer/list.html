@@ -42,6 +42,11 @@
                                th:value="${searchCriteria.email}" />
                     </div>
                     <div class="form-field">
+                        <label for="idDocumentNumber" th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</label>
+                        <input id="idDocumentNumber" name="idDocumentNumber" type="search"
+                               th:value="${searchCriteria.idDocumentNumber}" />
+                    </div>
+                    <div class="form-field">
                         <label for="nationality">Nationality</label>
                         <select id="nationality" name="nationality">
                             <option th:selected="${searchCriteria.nationality == null}" value="">

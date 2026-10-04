@@ -2,10 +2,12 @@ package com.example.hotel.dto.booking.response;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
  * Supplies one assigned-room line for a Check-in Review page (Existing Reservation or Walk-in).
  *
+ * @param roomId the assigned room identifier, used to link the room number to its Room Detail page
  * @param roomNumber the assigned room's business number
  * @param roomTypeName the assigned room's RoomType name, when available
  * @param checkInDate the room's snapshot check-in date
@@ -17,6 +19,7 @@ import java.time.LocalDate;
  * @param roomStatus the Room's current live status (e.g. {@code AVAILABLE}, {@code DIRTY})
  */
 public record CheckInRoomLine(
+        UUID roomId,
         String roomNumber,
         String roomTypeName,
         LocalDate checkInDate,
