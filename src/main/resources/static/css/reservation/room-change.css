@@ -241,58 +241,16 @@
   width: 1.75rem;
 }
 
-/* Key/value facts: bordered rows with a muted label column, mirroring the mockup tables. */
-.room-change-facts {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  display: grid;
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.room-change-facts > div {
-  align-items: center;
-  border-bottom: 1px solid var(--color-border);
-  display: grid;
-  grid-template-columns: minmax(7.5rem, 0.9fr) minmax(0, 1.1fr);
-  min-height: 2.125rem;
-}
-
-.room-change-facts > div:last-child {
-  border-bottom: 0;
-}
-
-.room-change-facts dt {
-  align-self: stretch;
-  border-right: 1px solid var(--color-border);
-  color: var(--color-text);
-  display: flex;
-  align-items: center;
-  font-size: 0.875rem;
-  font-weight: 500;
-  padding: var(--space-1) var(--space-3);
-}
-
-.room-change-facts dd {
-  color: var(--color-navy);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  margin: 0;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  padding: var(--space-1) var(--space-3);
-}
-
-.room-change-facts dd .status-badge {
-  font-size: 0.75rem;
-}
-
 .room-change-current {
   align-items: flex-start;
   display: grid;
   gap: var(--space-3);
   grid-template-columns: auto minmax(0, 1fr);
+}
+
+.room-change-details .form-required {
+  color: var(--color-danger);
+  margin-left: 2px;
 }
 
 .room-change-details {
@@ -521,12 +479,9 @@
   align-content: start;
 }
 
-.room-change-review-pair > .room-change-card > .room-change-facts {
+.room-change-review-pair > .room-change-card > .label-value-rows {
+  --label-value-label-width: 12.5rem;
   align-self: start;
-}
-
-.room-change-facts--review dd {
-  overflow-wrap: anywhere;
 }
 
 .room-change-facts__notes {

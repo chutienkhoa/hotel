@@ -2732,7 +2732,6 @@ span.flatpickr-weekday {
 .label-value-rows dd.date-value--check-in,
 .stay-extension-table td.date-value--check-in,
 .folio-facts dd.date-value--check-in,
-.room-change-facts dd.date-value--check-in,
 .cor-facts dd.date-value--check-in,
 .walk-in-summary-table td.date-value--check-in {
   color: var(--color-date-check-in);
@@ -2743,7 +2742,6 @@ span.flatpickr-weekday {
 .stay-extension-table td.date-value--check-out,
 .stay-extension-summary__range .date-value--check-out,
 .folio-facts dd.date-value--check-out,
-.room-change-facts dd.date-value--check-out,
 .cor-facts dd.date-value--check-out,
 .walk-in-summary-table td.date-value--check-out {
   color: var(--color-date-check-out);

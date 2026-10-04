@@ -1,5 +1,8 @@
 package com.example.hotel.controller.booking;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -11,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 import com.example.hotel.dto.booking.response.RoomChangeCandidateResponse;
 import com.example.hotel.dto.booking.response.RoomChangeFormResponse;
@@ -46,6 +50,7 @@ class RoomChangePageControllerTest {
 
     private static final UUID RESERVATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
     private static final UUID ROOM_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
+    private static final UUID TARGET_ROOM_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
 
     /** Selects Vietnamese through the application language cookie, the same mechanism the header switcher uses. */
     private static final Cookie VIETNAMESE = new Cookie("pms-lang", "vi");
@@ -255,6 +260,130 @@ class RoomChangePageControllerTest {
                         .param("reason", "GUEST_REQUEST"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attribute("successMessage", "Đổi phòng thành công: 201 → 305"));
+    }
+
+    /** Vietnamese: a missing Reason re-renders with the shared error dialog, the inline error and the form state kept. */
+    @Test
+    void shouldReportMissingReasonInDialogAndInlineInVietnamese() throws Exception {
+        String body = postMissingReason(VIETNAMESE);
+
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains(">Lý do</span> <span aria-hidden=\"true\" class=\"form-required\">*</span>"));
+        assertMissingReasonFeedback(body, "Không thể đổi phòng", "Vui lòng kiểm tra thông tin:", "Vui lòng chọn lý do đổi phòng.");
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("Vui lòng sửa các trường được đánh dấu."));
+    }
+
+    /** English: the same dialog, inline error and preserved state. */
+    @Test
+    void shouldReportMissingReasonInDialogAndInlineInEnglish() throws Exception {
+        String body = postMissingReason(new Cookie("pms-lang", "en"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains(">Reason</span> <span aria-hidden=\"true\" class=\"form-required\">*</span>"));
+        assertMissingReasonFeedback(body, "Unable to change room", "Please review the following information:",
+                "Please select a reason for the room change.");
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("Please correct the highlighted fields."));
+    }
+
+    /** Confirms a business rejection keeps its inline message and does not open the validation dialog. */
+    @Test
+    void shouldKeepInlineMessageForBusinessErrorsWithoutOpeningTheDialog() throws Exception {
+        UUID targetRoomId = UUID.randomUUID();
+        when(roomChangeService.review(
+                        org.mockito.ArgumentMatchers.eq(RESERVATION_ID),
+                        org.mockito.ArgumentMatchers.eq(ROOM_ID),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Room is no longer available"));
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
+        when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of());
+
+        String body = mockMvc.perform(reviewPost(targetRoomId, "GUEST_REQUEST"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("message message-error"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("<p id=\"feedback-dialog-message\"></p>"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("feedback-dialog--validation"));
+    }
+
+    /** Posts the review form with a replacement room and Notes but no Reason, and returns the re-rendered page. */
+    private String postMissingReason(Cookie language) throws Exception {
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
+        when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of(
+                new RoomChangeCandidateResponse(TARGET_ROOM_ID, "301", "Twin Room", 2, false)));
+
+        String body = mockMvc.perform(post("/reservations/{id}/rooms/{roomId}/change/review", RESERVATION_ID, ROOM_ID)
+                        .with(user("staff").authorities(changeRoomAuthority()))
+                        .with(csrf())
+                        .cookie(language)
+                        .param("targetRoomId", TARGET_ROOM_ID.toString())
+                        .param("reason", "")
+                        .param("notes", "Air conditioning is broken"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("reservation/room-change"))
+                .andReturn().getResponse().getContentAsString();
+        verify(roomChangeService, never()).review(any(), any(), any());
+        return body;
+    }
+
+    /** Asserts the dialog summary, the inline error, the focus hook and the preserved replacement room and Notes. */
+    private static void assertMissingReasonFeedback(String body, String title, String intro, String reasonMessage) {
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("must not be null"));
+        // Shared dialog: opens on load with the title, intro and the summary list; the legacy banner is gone.
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("feedback-dialog--validation"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains(">" + title + "<"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("<p id=\"feedback-dialog-message\">" + intro + "</p>"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("<li>" + reasonMessage + "</li>"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("message message-error"), "no validation banner or empty banner");
+        // Inline error directly under the Reason select, which is marked invalid for the focus hook.
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("<p class=\"field-error\" id=\"reason-error\">" + reasonMessage + "</p>"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("aria-invalid=\"true\"") && body.contains("id=\"reason\""));
+        org.junit.jupiter.api.Assertions.assertTrue(body.indexOf("id=\"reason\"") < body.indexOf("id=\"reason-error\""));
+        // Form state preserved: the chosen replacement room and the Notes.
+        String radio = body.substring(body.indexOf("id=\"target-room-" + TARGET_ROOM_ID + "\""));
+        radio = radio.substring(0, radio.indexOf(">"));
+        org.junit.jupiter.api.Assertions.assertTrue(radio.contains("checked=\"checked\""));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("Air conditioning is broken"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("room-change.js"));
+    }
+
+    /** Confirms the shared breadcrumb (Reservations / Reservation / Change Room) sits above the Back link, in English. */
+    @Test
+    void shouldRenderBreadcrumbAboveBackLinkInEnglish() throws Exception {
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
+        when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of());
+
+        String body = mockMvc.perform(get("/reservations/{id}/rooms/{roomId}/change", RESERVATION_ID, ROOM_ID)
+                        .with(user("staff").authorities(List.of(new SimpleGrantedAuthority("PERM_CHANGE_ROOM"), new SimpleGrantedAuthority("PERM_VIEW_BOOKING")))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String breadcrumb = body.substring(body.indexOf("aria-label=\"Breadcrumb\""));
+        breadcrumb = breadcrumb.substring(0, breadcrumb.indexOf("</nav>"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("href=\"/reservations\""));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains(">Reservations<"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("href=\"/reservations/" + RESERVATION_ID + "\""));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains(">Reservation R20260917-000001<"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("aria-current=\"page\" class=\"breadcrumb-current\">Change Room<"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.indexOf("aria-label=\"Breadcrumb\"") < body.indexOf("room-change-back"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("room-change-back"), "the contextual Back link remains");
+    }
+
+    /** Confirms the breadcrumb is translated in Vietnamese. */
+    @Test
+    void shouldRenderBreadcrumbInVietnamese() throws Exception {
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
+        when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of());
+
+        String body = mockMvc.perform(get("/reservations/{id}/rooms/{roomId}/change", RESERVATION_ID, ROOM_ID)
+                        .cookie(VIETNAMESE)
+                        .with(user("staff").authorities(List.of(new SimpleGrantedAuthority("PERM_CHANGE_ROOM"), new SimpleGrantedAuthority("PERM_VIEW_BOOKING")))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        String breadcrumb = body.substring(body.indexOf("aria-label=\"Breadcrumb\""));
+        breadcrumb = breadcrumb.substring(0, breadcrumb.indexOf("</nav>"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains(">Đặt phòng<"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains(">Đặt phòng R20260917-000001<"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("aria-current=\"page\" class=\"breadcrumb-current\">Đổi phòng<"));
     }
 
     /** Builds a Review POST with the given target room and reason. */

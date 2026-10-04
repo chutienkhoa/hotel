@@ -24,6 +24,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -91,6 +92,7 @@ public class RoomChangePageController {
             Model model) {
         if (bindingResult.hasErrors()) {
             addFormAttributes(model, reservationId, roomId, roomChangeForm);
+            addValidationFeedback(model, bindingResult);
             return "reservation/room-change";
         }
         try {
@@ -127,6 +129,7 @@ public class RoomChangePageController {
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
             addFormAttributes(model, reservationId, roomId, roomChangeForm);
+            addValidationFeedback(model, bindingResult);
             return "reservation/room-change";
         }
         try {
@@ -169,6 +172,27 @@ public class RoomChangePageController {
                                 .build()
                                 .toString())
                 .body(image.resource());
+    }
+
+    /** Form field order, matching the page, used to order the validation summary. */
+    private static final List<String> FIELD_ORDER = List.of("targetRoomId", "reason", "notes");
+
+    /**
+     * Adds the Task33 validation feedback for a rejected form: the shared error dialog's title, intro and the ordered,
+     * localized problems. The same messages stay inline at their fields; this summary only lists them.
+     */
+    private void addValidationFeedback(Model model, BindingResult bindingResult) {
+        java.util.Locale locale = LocaleContextHolder.getLocale();
+        List<String> problems = bindingResult.getAllErrors().stream()
+                .sorted(java.util.Comparator.comparingInt(error -> error instanceof FieldError fieldError
+                        ? Math.max(0, FIELD_ORDER.indexOf(fieldError.getField()))
+                        : -1))
+                .map(error -> messageSource.getMessage(error, locale))
+                .distinct()
+                .toList();
+        model.addAttribute("feedbackTitle", messageSource.getMessage("reservation.roomChange.error.title", null, locale));
+        model.addAttribute("errorMessage", messageSource.getMessage("reservation.roomChange.error.summaryIntro", null, locale));
+        model.addAttribute("validationSummary", problems);
     }
 
     /**

@@ -13,6 +13,6 @@ import java.util.UUID;
  */
 @RequiresNotesForOtherReason
 public record RoomChangeRequest(
-        @NotNull UUID targetRoomId,
-        @NotNull RoomChangeReason reason,
+        @NotNull(message = "{validation.roomChange.targetRoom.required}") UUID targetRoomId,
+        @NotNull(message = "{validation.roomChange.reason.required}") RoomChangeReason reason,
         @Size(max = 2000) String notes) {}

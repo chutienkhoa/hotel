@@ -115,18 +115,18 @@
                     <svg th:replace="~{layout/icons :: calendar}"></svg>
                     <h2 id="room-change-stay-heading" th:text="#{reservation.roomChange.stay.title}">Stay Information</h2>
                 </header>
-                <dl class="room-change-facts room-change-facts--review">
+                <dl class="label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--strong">
                     <div>
                         <dt th:text="#{reservation.roomChange.field.guest}">Guest</dt>
                         <dd th:text="${#strings.isEmpty(review.guestName) ? '—' : review.guestName}">—</dd>
                     </div>
                     <div>
                         <dt th:text="#{reservation.roomChange.field.checkIn}">Check-in Date</dt>
-                        <dd><span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span></dd>
+                        <dd class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span></dd>
                     </div>
                     <div>
                         <dt th:text="#{reservation.roomChange.review.plannedCheckOut}">Planned check-out date</dt>
-                        <dd><span th:replace="~{layout/datetime :: date(${review.plannedCheckOutDate})}">—</span></dd>
+                        <dd class="date-value--check-out"><span th:replace="~{layout/datetime :: date(${review.plannedCheckOutDate})}">—</span></dd>
                     </div>
                     <div>
                         <dt th:text="#{reservation.roomChange.field.nights}">Nights</dt>
@@ -144,7 +144,7 @@
                     <svg th:replace="~{layout/icons :: note}"></svg>
                     <h2 id="room-change-details-heading" th:text="#{reservation.roomChange.details.title}">Change Details</h2>
                 </header>
-                <dl class="room-change-facts room-change-facts--review">
+                <dl class="label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--strong">
                     <div>
                         <dt th:text="#{reservation.roomChange.field.reason}">Reason</dt>
                         <dd><span th:replace="~{layout/enum :: label('roomChangeReason', ${review.reason})}">Guest request</span></dd>

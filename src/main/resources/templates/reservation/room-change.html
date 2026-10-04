@@ -9,6 +9,7 @@
 
     <main class="content room-change">
         <div class="room-change-page">
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.roomChange(reservationId, currentRoom?.reservationNumber)})}"></nav>
         <a class="back-link back-link--primary room-change-back" th:href="@{/reservations/{id}(id=${reservationId})}">
             <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
             <span th:if="${currentRoom != null}"
@@ -38,13 +39,13 @@
             </li>
         </ol>
 
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <!-- Business errors keep this inline message; a rejected form is summarised in the shared error dialog below instead. -->
+        <p class="message message-error" th:if="${errorMessage != null and validationSummary == null}" th:text="${errorMessage}"></p>
 
         <form class="room-change-form" id="room-change-form" method="post"
               th:action="@{/reservations/{id}/rooms/{roomId}/change/review(id=${reservationId},roomId=${roomId})}"
-              th:object="${roomChangeForm}">
-            <p class="message message-error" th:if="${#fields.hasAnyErrors()}"
-               th:text="#{reservation.roomChange.error.fields}">Please correct the highlighted fields.</p>
+              th:object="${roomChangeForm}"
+              th:attr="data-error-title=#{reservation.roomChange.error.title},data-error-intro=#{reservation.roomChange.error.summaryIntro},data-reason-required=#{validation.roomChange.reason.required}">
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
 
             <div class="room-change-grid"
@@ -147,12 +148,12 @@
                         </header>
                         <div class="room-change-details">
                             <div class="form-field">
-                                <label for="reason" th:text="#{reservation.roomChange.field.reason}">Reason</label>
-                                <select id="reason" th:field="*{reason}">
+                                <label for="reason"><span th:text="#{reservation.roomChange.field.reason}">Reason</span> <span aria-hidden="true" class="form-required">*</span></label>
+                                <select aria-describedby="reason-error" aria-required="true" id="reason" th:attr="aria-invalid=${#fields.hasErrors('reason')}" th:field="*{reason}">
                                     <option value="" th:text="#{reservation.roomChange.field.reasonPlaceholder}">Select a reason</option>
                                     <option th:each="reasonOption : ${reasons}" th:text="${reasonOption}" th:value="${reasonOption}">GUEST_REQUEST</option>
                                 </select>
-                                <p class="field-error" th:errors="*{reason}"></p>
+                                <p class="field-error" id="reason-error" th:errors="*{reason}"></p>
                             </div>
 
                             <div class="form-field">
@@ -196,7 +197,7 @@
                                         <span th:text="${room.capacity}">3</span>
                                     </span>
                                 </span>
-                                <input class="room-change-candidate__radio" required th:field="*{targetRoomId}"
+                                <input class="room-change-candidate__radio" required th:attr="aria-invalid=${#fields.hasErrors('targetRoomId')}" th:field="*{targetRoomId}"
                                        th:id="'target-room-' + ${room.id}" th:value="${room.id}" type="radio" />
                             </label>
                         </li>
@@ -219,6 +220,14 @@
             </div>
         </div>
     </main>
+
+    <!-- Shared Task33 error dialog: the summary of a rejected form (from the server, or from room-change.js for a missing
+         Reason found in the browser). Inline errors stay at their fields. Only a validation summary opens it on load, so
+         the inline business-error message above keeps its own presentation. -->
+    <th:block th:with="errorMessage=${validationSummary != null} ? ${errorMessage} : null">
+        <th:block th:replace="~{layout/feedback-dialog :: feedbackDialog}"></th:block>
+    </th:block>
 </div>
+<script defer th:src="@{/js/reservation/room-change.js}"></script>
 </body>
 </html>

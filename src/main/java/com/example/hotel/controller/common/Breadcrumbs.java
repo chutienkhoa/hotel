@@ -202,6 +202,26 @@ public final class Breadcrumbs {
                 current("navigation.crumb.folio"));
     }
 
+    /**
+     * Change Room (select the new room), a step of the Reservation workflow. Without a known Reservation number the
+     * Reservation entry is left out, since it could not be named.
+     *
+     * @param reservationId the Reservation identifier
+     * @param reservationNumber the Reservation number shown in the parent entry, or {@code null} when unknown
+     * @return Reservations / Reservation R... / Change Room
+     */
+    public List<BreadcrumbItem> roomChange(UUID reservationId, String reservationNumber) {
+        if (reservationNumber == null) {
+            return trail(reservations(), current("reservation.roomChange.title"));
+        }
+        List<BreadcrumbItem> parents = FIND.equals(context) ? trail(reservations()) : reservationParents();
+        String detail = RESERVATIONS + "/" + reservationId;
+        return trail(parents,
+                new BreadcrumbItem(reservationLabel(reservationNumber),
+                        allowed("PERM_VIEW_BOOKING") ? (FIND.equals(context) ? detail : keep(detail)) : null),
+                current("reservation.roomChange.title"));
+    }
+
     // ---------------------------------------------------------------------------------------------- Guests
 
     /**

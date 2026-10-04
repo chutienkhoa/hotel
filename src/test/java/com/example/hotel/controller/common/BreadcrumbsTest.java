@@ -93,6 +93,10 @@ class BreadcrumbsTest {
         assertEquals(List.of("/front-desk", "/front-desk?view=in-house", "/reservations/" + ID + "?from=in-house", "-"),
                 links(crumbs("in-house", ALL).folio(ID, "R1")));
         assertEquals(List.of("/reservations", "/reservations/" + ID, "-"), links(crumbs(null, ALL).folio(ID, "R1")));
+
+        assertEquals("Reservations / Reservation R1 / Change Room", text(crumbs(null, ALL).roomChange(ID, "R1")));
+        assertEquals(List.of("/reservations", "/reservations/" + ID, "-"), links(crumbs(null, ALL).roomChange(ID, "R1")));
+        assertEquals("Reservations / Change Room", text(crumbs(null, ALL).roomChange(ID, null)));
     }
 
     /** Confirms the context is carried to the next page by keep(), and an unknown value is ignored. */
@@ -118,7 +122,8 @@ class BreadcrumbsTest {
                     Breadcrumbs::checkInWalkInSummary, Breadcrumbs::checkInOta, Breadcrumbs::checkInOtaSummary,
                     Breadcrumbs::checkOutSearch, Breadcrumbs::checkOutReview, Breadcrumbs::checkOutComplete,
                     Breadcrumbs::reservationCreate, Breadcrumbs::reservationEdit,
-                    b -> b.reservationDetail("R1"), b -> b.folio(ID, "R1"), b -> b.guestDetail("G1"));
+                    b -> b.reservationDetail("R1"), b -> b.folio(ID, "R1"), b -> b.roomChange(ID, "R1"),
+                    b -> b.guestDetail("G1"));
             for (var trail : trails) {
                 List<BreadcrumbItem> items = trail.apply(c);
                 assertTrue(items.size() >= 2 && items.size() <= 4, from + ": " + text(items));
@@ -141,5 +146,6 @@ class BreadcrumbsTest {
     void shouldTranslateTheTrails() {
         LocaleContextHolder.setLocale(Locale.forLanguageTag("vi"));
         assertEquals("Lễ tân / Nhận phòng / Tìm đặt phòng", text(crumbs(null, ALL).checkInFind()));
+        assertEquals("Đặt phòng / Đặt phòng R1 / Đổi phòng", text(crumbs(null, ALL).roomChange(ID, "R1")));
     }
 }
