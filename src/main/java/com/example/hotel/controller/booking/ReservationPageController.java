@@ -6,7 +6,7 @@ import com.example.hotel.common.i18n.UiMessages;
 import com.example.hotel.dto.booking.request.CancelReservationRequest;
 import com.example.hotel.dto.booking.request.CreateRequest;
 import com.example.hotel.dto.booking.request.NoShowReservationRequest;
-import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
+import com.example.hotel.dto.booking.request.ReservationListCriteria;
 import com.example.hotel.dto.booking.request.RoomRequest;
 import com.example.hotel.dto.booking.response.ActivityTimelineItem;
 import com.example.hotel.dto.booking.response.ChargeResponse;
@@ -136,8 +136,12 @@ public class ReservationPageController {
     }
 
     /**
-     * Displays reservations available to users with reservation-view permission.
+     * Displays the Reservation List (unified search, Stay date range, status and source filters, sortable columns,
+     * database pagination) to users with reservation-view permission.
      *
+     * @param searchCriteria submitted list filters and sort
+     * @param bindingResult structural binding result for the submitted filters
+     * @param page raw zero-based page request parameter
      * @param model model used to render the list view
      * @param authentication current browser authentication
      * @return the reservation list template name
@@ -145,23 +149,20 @@ public class ReservationPageController {
     @GetMapping("/reservations")
     @PreAuthorize("hasAuthority('PERM_VIEW_BOOKING')")
     public String list(
-            @ModelAttribute("searchCriteria") ReservationSearchCriteria searchCriteria,
+            @ModelAttribute("searchCriteria") ReservationListCriteria searchCriteria,
             BindingResult bindingResult,
             @RequestParam(required = false) String page,
             Model model,
             Authentication authentication) {
         addAuthorizationAttributes(model, authentication);
-        searchCriteria.normalizeReservationNumber();
-        searchCriteria.normalizeGuest();
-        searchCriteria.normalizeRoom();
-        searchCriteria.normalizeOtaBookingReference();
+        searchCriteria.normalize();
         model.addAttribute("reservationStatuses", ReservationStatus.values());
         model.addAttribute("bookingSources", BookingSource.values());
 
-        String sortKey = TableSorts.RESERVATION.key(searchCriteria.getSort(), searchCriteria.getDir());
+        String sortKey = TableSorts.RESERVATION_LIST.key(searchCriteria.getSort(), searchCriteria.getDir());
         String sortDir =
-                TableSorts.RESERVATION.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
-        String validationMessage = validateSearchCriteria(searchCriteria, bindingResult);
+                TableSorts.RESERVATION_LIST.activeDirection(searchCriteria.getSort(), searchCriteria.getDir());
+        String validationMessage = validateListCriteria(searchCriteria, bindingResult);
         if (validationMessage != null) {
             model.addAttribute("errorMessage", validationMessage);
             Page<?> reservationPage = Page.empty();
@@ -171,7 +172,7 @@ public class ReservationPageController {
         }
 
         int requestedPage = PaginationSupport.parsePage(page);
-        Page<?> reservationPage = reservationQueryService.findPage(searchCriteria, requestedPage);
+        Page<?> reservationPage = reservationQueryService.findListPage(searchCriteria, requestedPage);
         String redirect = PaginationSupport.redirectWhenOutOfRange(
                 reservationPage, requestedPage, "/reservations", filters(searchCriteria), sortKey, sortDir);
         if (redirect != null) {
@@ -673,43 +674,47 @@ public class ReservationPageController {
     }
 
     /**
-     * Validates structural binding and the independent one-calendar-year limits for list filters.
+     * Validates structural binding and the Stay date range of the Reservation List filters. A Stay date range needs
+     * both dates, the end strictly after the start (the range is half-open), and at most one calendar year.
      *
      * @param criteria submitted list filters
      * @param bindingResult binding result for the submitted filters
-     * @return a user-safe validation message, or {@code null} when criteria are valid
+     * @return a localized, user-safe validation message, or {@code null} when criteria are valid
      */
-    private String validateSearchCriteria(
-            ReservationSearchCriteria criteria, BindingResult bindingResult) {
+    private String validateListCriteria(ReservationListCriteria criteria, BindingResult bindingResult) {
         if (bindingResult.hasErrors()) {
-            return "Please provide valid reservation filter values.";
+            return messages.get("reservation.list.error.invalidFilters");
         }
-        String checkInError = validateDateRange(
-                criteria.getCheckInFrom(), criteria.getCheckInTo(), "Check-in");
-        if (checkInError != null) {
-            return checkInError;
+        LocalDate from = criteria.getStayFrom();
+        LocalDate to = criteria.getStayTo();
+        if (from == null && to == null) {
+            return null;
         }
-        return validateDateRange(criteria.getCheckOutFrom(), criteria.getCheckOutTo(), "Check-out");
+        if (from == null || to == null) {
+            return messages.get("reservation.list.error.stayIncomplete");
+        }
+        if (!to.isAfter(from)) {
+            return messages.get("reservation.list.error.stayOrder");
+        }
+        if (to.isAfter(from.plusYears(1))) {
+            return messages.get("reservation.list.error.stayTooLong");
+        }
+        return null;
     }
 
     /**
-     * Collects the populated Reservation list filters for pagination and sort links.
+     * Collects the populated Reservation List filters for pagination and sort links.
      *
-     * @param criteria normalized Reservation list filters
+     * @param criteria normalized Reservation List filters
      * @return populated filters keyed by request parameter name
      */
-    private Map<String, String> filters(ReservationSearchCriteria criteria) {
+    private Map<String, String> filters(ReservationListCriteria criteria) {
         Map<String, String> filters = new LinkedHashMap<>();
-        putIfPresent(filters, "reservationNumber", criteria.getReservationNumber());
-        putIfPresent(filters, "guest", criteria.getGuest());
-        putIfPresent(filters, "room", criteria.getRoom());
-        putIfPresent(filters, "source", criteria.getSource() == null ? null : criteria.getSource().name());
-        putIfPresent(filters, "otaBookingReference", criteria.getOtaBookingReference());
+        putIfPresent(filters, "search", criteria.getSearch());
+        putIfPresent(filters, "stayFrom", criteria.getStayFrom() == null ? null : criteria.getStayFrom().toString());
+        putIfPresent(filters, "stayTo", criteria.getStayTo() == null ? null : criteria.getStayTo().toString());
         putIfPresent(filters, "status", criteria.getStatus() == null ? null : criteria.getStatus().name());
-        putIfPresent(filters, "checkInFrom", criteria.getCheckInFrom() == null ? null : criteria.getCheckInFrom().toString());
-        putIfPresent(filters, "checkInTo", criteria.getCheckInTo() == null ? null : criteria.getCheckInTo().toString());
-        putIfPresent(filters, "checkOutFrom", criteria.getCheckOutFrom() == null ? null : criteria.getCheckOutFrom().toString());
-        putIfPresent(filters, "checkOutTo", criteria.getCheckOutTo() == null ? null : criteria.getCheckOutTo().toString());
+        putIfPresent(filters, "source", criteria.getSource() == null ? null : criteria.getSource().name());
         return filters;
     }
 
@@ -717,27 +722,6 @@ public class ReservationPageController {
         if (value != null) {
             filters.put(name, value);
         }
-    }
-
-    /**
-     * Validates one inclusive LocalDate range without applying a database query.
-     *
-     * @param from optional inclusive lower bound
-     * @param to optional inclusive upper bound
-     * @param label user-facing date-range label
-     * @return a user-safe validation message, or {@code null} when valid
-     */
-    private String validateDateRange(LocalDate from, LocalDate to, String label) {
-        if (from == null || to == null) {
-            return null;
-        }
-        if (to.isBefore(from)) {
-            return label + " end date must be on or after the start date.";
-        }
-        if (to.isAfter(from.plusYears(1))) {
-            return label + " date range cannot exceed one calendar year.";
-        }
-        return null;
     }
 
     /**

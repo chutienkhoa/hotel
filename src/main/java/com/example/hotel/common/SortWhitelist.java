@@ -1,5 +1,6 @@
 package com.example.hotel.common;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -20,7 +21,8 @@ public final class SortWhitelist {
     /**
      * Creates a whitelist.
      *
-     * @param properties public sort key to entity property path
+     * @param properties public sort key to entity property path; a key that orders by several columns lists their
+     *     paths separated by commas, all sorted in the requested direction
      * @param defaultSort ordering used when no valid sort is requested
      * @param tieBreakers deterministic secondary ordering appended to a user-selected sort
      */
@@ -58,10 +60,14 @@ public final class SortWhitelist {
         if (key == null) {
             return defaultSort;
         }
-        String property = properties.get(key);
-        Sort resolved = Sort.by(new Sort.Order(direction(sort, dir).equals("desc") ? Sort.Direction.DESC : Sort.Direction.ASC, property));
-        List<Sort.Order> secondary = tieBreakers.stream().filter(order -> !order.getProperty().equals(property)).toList();
-        return secondary.isEmpty() ? resolved : resolved.and(Sort.by(secondary));
+        List<String> sortProperties = List.of(properties.get(key).split(","));
+        Sort.Direction direction = direction(sort, dir).equals("desc") ? Sort.Direction.DESC : Sort.Direction.ASC;
+        List<Sort.Order> orders = new ArrayList<>();
+        for (String property : sortProperties) {
+            orders.add(new Sort.Order(direction, property));
+        }
+        tieBreakers.stream().filter(order -> !sortProperties.contains(order.getProperty())).forEach(orders::add);
+        return Sort.by(orders);
     }
 
     /**

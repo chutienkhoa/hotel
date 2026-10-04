@@ -20,6 +20,21 @@ public final class TableSorts {
             Sort.by(Sort.Order.desc("checkInDate"), Sort.Order.asc("reservationNumber")),
             List.of(Sort.Order.asc("reservationNumber")));
 
+    /**
+     * Task33 Reservation List. Guest orders by first then last name (the displayed order), Stay orders by planned
+     * check-in. Room(s) and Nights are deliberately absent: Room(s) is multi-valued and Nights is a computed value.
+     */
+    public static final SortWhitelist RESERVATION_LIST = new SortWhitelist(
+            Map.of(
+                    "reservationNumber", "reservationNumber",
+                    "guest", "guest.firstName,guest.lastName",
+                    "checkInDate", "checkInDate",
+                    "source", "source",
+                    "otaBookingReference", "otaBookingReference",
+                    "status", "status"),
+            Sort.by(Sort.Order.desc("checkInDate"), Sort.Order.asc("reservationNumber")),
+            List.of(Sort.Order.asc("reservationNumber")));
+
     /** Check-in Existing Reservation search. */
     public static final SortWhitelist CHECK_IN = RESERVATION.restrictedTo("reservationNumber", "checkInDate");
 

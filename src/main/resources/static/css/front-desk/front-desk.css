@@ -329,21 +329,8 @@
   /* One width for every row action (Review / Check in, Xem xét / Nhận phòng, ...), independent of the label. */
   width: 7rem;
 }
-/* The Action column is always the last column. When the table is wider than its scroll container, it stays pinned
-   to the right edge so the row's one primary action is reachable at any width. It only moves when the table
-   overflows; when the table fits, it sits in its normal position. It draws no separator of its own: the column
-   reads as part of the same table. */
-.front-desk-table th:last-child,
-.front-desk-table td:last-child {
-  background: var(--color-surface);
-  position: sticky;
-  right: 0;
-  z-index: 1;
-}
-.front-desk-table thead th:last-child {
-  background: var(--color-surface-muted);
-  z-index: 2;
-}
+/* No sticky or fixed columns (Task33 decision): on narrow screens the whole table, Action included, scrolls horizontally
+   as one unit inside its .table-wrap, so no column ever overlays another. */
 .front-desk-table .button svg,
 .front-desk-table .status-badge svg {
   flex: none;

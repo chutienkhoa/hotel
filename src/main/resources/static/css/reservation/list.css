@@ -1,0 +1,458 @@
+/* Reservation List (Task33). Domain stylesheet for templates/reservation/list.html: filter bar, Stay date range picker,
+   results card with the pager above the table, and the nine-column table. */
+
+/* Page-level New Reservation CTA in the header's upper-right corner (approved mockup). */
+.reservation-list .page-header .reservation-list-header-action {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Filter bar: one bordered row of Search, Stay date, Status, Source and Clear. Search is the widest field and Clear sits
+   at the far right. The Stay date column has a fixed 17rem floor, sized for the widest "dd/MM/yyyy → dd/MM/yyyy" range
+   plus the calendar icon and chevron, so the range stays readable; Search is the flexible column that gives way. */
+.reservation-list-search {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-3) var(--space-4);
+}
+.reservation-list-search__form {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 2.3fr) minmax(17rem, 1.05fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+}
+/* Hidden submit button: keeps Enter in the search field working. It must draw nothing, not even default padding. */
+.reservation-list-search__form > .visually-hidden {
+  border: 0;
+  padding: 0;
+}
+/* The single column is explicit and minmax(0, 1fr) on purpose: with no grid-template-columns the implicit track is auto,
+   which sizes to the content's min-content width. A long Stay date value would then widen the track past the form's
+   column and the control would paint over the gap into Status. */
+.reservation-list-filter {
+  display: grid;
+  gap: var(--space-1);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.reservation-list-filter > label,
+.reservation-list-filter__label {
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.reservation-list-control {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+.reservation-list-control > input,
+.reservation-list-control > select {
+  font-size: 0.9375rem;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  width: 100%;
+}
+.reservation-list-control > select {
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  padding-right: 2.25rem;
+  text-overflow: ellipsis;
+}
+.reservation-list-control > input[type="search"] {
+  padding-left: calc(var(--space-3) + var(--icon-size-action) + var(--space-2));
+}
+/* Leading icon (search, calendar) and trailing select chevron: placed on the control and vertically centred. */
+.reservation-list-control__lead,
+.reservation-list-control__chevron {
+  align-items: center;
+  bottom: 0;
+  color: var(--color-muted);
+  display: flex;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+}
+.reservation-list-control__lead {
+  left: var(--space-3);
+}
+.reservation-list-control__chevron {
+  right: var(--space-3);
+}
+.reservation-list-control__lead svg {
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.reservation-list-control__chevron svg {
+  height: 1rem;
+  width: 1rem;
+}
+.reservation-list-search__clear {
+  align-self: end;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+/* Stay date: one filter control that opens a range popover (Check-in, Check-out, two-month calendar, Clear, Apply). */
+.reservation-stay {
+  position: relative;
+}
+.reservation-stay__trigger {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.9375rem;
+  height: var(--control-height);
+  padding: 0 2.25rem 0 calc(var(--space-3) + var(--icon-size-action) + var(--space-2));
+  position: relative;
+  text-align: left;
+  width: 100%;
+}
+.reservation-stay__trigger:focus-visible,
+.reservation-stay__trigger[aria-expanded="true"] {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(23 105 170 / 15%);
+  outline: 0;
+}
+.reservation-stay__summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reservation-stay__summary--empty {
+  color: var(--color-muted);
+}
+.reservation-stay__trigger[aria-expanded="true"] .reservation-list-control__chevron svg {
+  transform: rotate(180deg);
+}
+.reservation-stay__popover {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 32px rgb(16 42 67 / 18%);
+  left: 0;
+  padding: var(--space-4);
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  width: max-content;
+  z-index: 30;
+}
+.reservation-stay__popover[hidden] {
+  display: none;
+}
+.reservation-stay__fields {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  margin-bottom: var(--space-3);
+}
+.reservation-stay__field {
+  display: grid;
+  gap: var(--space-1);
+}
+.reservation-stay__field > label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.reservation-stay__input {
+  position: relative;
+}
+.reservation-stay__input input {
+  cursor: default;
+  height: var(--control-height);
+  padding-right: 2.25rem;
+}
+.reservation-stay__input svg {
+  color: var(--color-muted);
+  height: 1rem;
+  pointer-events: none;
+  position: absolute;
+  right: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+}
+.reservation-stay__arrow {
+  color: var(--color-muted);
+  line-height: var(--control-height);
+}
+/* flatpickr keeps the input it was built on; the calendar is the only visible control. */
+.reservation-stay__calendar > input {
+  display: none;
+}
+/* The inline flatpickr calendar sits flat inside the popover: two months side by side, each a fixed width. flatpickr
+   writes pixel widths onto its containers, so these overrides need !important. */
+.reservation-stay__calendar .flatpickr-calendar {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  margin: 0 auto;
+  overflow: visible;
+  width: auto !important;
+}
+.reservation-stay__calendar .flatpickr-rContainer,
+.reservation-stay__calendar .flatpickr-innerContainer {
+  width: auto !important;
+}
+.reservation-stay__calendar .flatpickr-days {
+  display: flex;
+  gap: var(--space-4);
+  padding: 0;
+  width: auto !important;
+}
+.reservation-stay__calendar .flatpickr-weekdays {
+  background: transparent;
+  gap: var(--space-4);
+  padding: 0;
+}
+.reservation-stay__calendar .flatpickr-days .dayContainer {
+  max-width: 18.75rem;
+  min-width: 18.75rem;
+  width: 18.75rem;
+}
+.reservation-stay__calendar .flatpickr-day.selected,
+.reservation-stay__calendar .flatpickr-day.startRange,
+.reservation-stay__calendar .flatpickr-day.endRange {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+.reservation-stay__calendar .flatpickr-day.inRange {
+  background: var(--color-info-surface);
+  border-color: var(--color-info-surface);
+  box-shadow: -5px 0 0 var(--color-info-surface), 5px 0 0 var(--color-info-surface);
+  color: var(--color-text);
+}
+.reservation-stay__hint {
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+  margin: var(--space-2) 0 0;
+}
+.reservation-stay__hint[hidden] {
+  display: none;
+}
+.reservation-stay__actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-3);
+}
+
+/* Results card: heading on the left, result count and pagination above the table on the right. */
+.reservation-list-results {
+  min-width: 0;
+}
+.reservation-list-results__header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  justify-content: space-between;
+}
+.reservation-list-results__header h2 {
+  font-size: 1.25rem;
+  line-height: 1.25;
+  margin: 0;
+}
+.reservation-list-results .results-toolbar {
+  flex: none;
+  flex-wrap: nowrap;
+  gap: var(--space-4);
+  margin-left: auto;
+}
+.reservation-list-results .results-toolbar > p {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+/* Pager: separate square controls with a small gap, icon-only Previous/Next, the active page filled, and the
+   unavailable direction muted with no hover feedback. */
+.reservation-list .reservation-list-pagination {
+  gap: var(--space-1);
+}
+.reservation-list .reservation-list-pagination .pagination__segment {
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+}
+.reservation-list .reservation-list-pagination .pagination__segment + .pagination__segment {
+  border-left: 1px solid var(--color-border-strong);
+}
+.reservation-list .reservation-list-pagination .pagination__segment--icon {
+  padding: 0;
+  width: var(--control-height);
+}
+.reservation-list-pagination svg {
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+.reservation-list-pagination__prev svg {
+  transform: scaleX(-1);
+}
+.reservation-list .reservation-list-pagination .pagination__segment--disabled {
+  background: var(--color-surface-muted);
+  border-color: var(--color-border);
+  color: var(--color-muted);
+  cursor: not-allowed;
+}
+.reservation-list .reservation-list-pagination .pagination__segment--disabled:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+}
+
+/* Table: one-line cells; the table scrolls horizontally inside its .table-wrap rather than wrapping. */
+.reservation-list-table-wrap {
+  margin-top: var(--space-4);
+}
+.reservation-list-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 0;
+}
+.reservation-list-table th,
+.reservation-list-table td {
+  padding: var(--space-3);
+  white-space: nowrap;
+}
+.reservation-list-table thead th {
+  white-space: normal;
+}
+.reservation-list-sort {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  gap: var(--space-2);
+  text-decoration: none;
+  white-space: normal;
+}
+.reservation-list-sort:hover .reservation-list-sort__label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reservation-list-sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.reservation-list-sort__label {
+  line-height: 1.25;
+}
+.reservation-list-sort__icon {
+  align-items: center;
+  color: var(--color-muted);
+  display: inline-flex;
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+.reservation-list-sort__icon svg {
+  height: 1rem;
+  width: 1rem;
+}
+.reservation-list-sortable--active .reservation-list-sort__label {
+  color: var(--color-navy);
+}
+.reservation-list-sortable--active .reservation-list-sort__icon {
+  color: var(--color-primary);
+}
+/* Nights (5th column) is centred, header and values alike. */
+.reservation-list-table th:nth-child(5),
+.reservation-list-table td:nth-child(5) {
+  text-align: center;
+}
+/* No sticky or fixed columns (Task33 decision): on narrow screens the whole table, Action included, scrolls horizontally
+   as one unit inside its .table-wrap, so no column ever overlays another. */
+.reservation-list-link {
+  color: inherit;
+  font-weight: 500;
+  text-decoration: none;
+}
+.reservation-list-link:hover,
+.reservation-list-link:focus-visible {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* Stacked cells: primary value, then a muted secondary line (guest code, room type, stay end). */
+.reservation-list-stack {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+.reservation-list-secondary {
+  color: var(--color-muted);
+  display: block;
+  font-size: 0.8125rem;
+}
+.reservation-list-room + .reservation-list-room {
+  margin-top: var(--space-2);
+}
+.reservation-list-room strong {
+  display: block;
+  font-weight: 500;
+}
+.reservation-list-table .reservation-list-status {
+  height: auto;
+  min-height: 1.75rem;
+  padding: 0.25rem 0.625rem;
+}
+/* DRAFT has no shared badge modifier: an intentional neutral grey, distinct from the white checked-out badge. */
+.reservation-list-table .status-badge--draft {
+  background: #eef1f4;
+  color: var(--color-muted);
+}
+.reservation-list-table .reservation-list-action {
+  height: 2rem;
+  min-width: 4.5rem;
+  padding: 0.25rem 0.875rem;
+}
+
+@media (max-width: 64rem) {
+  .reservation-list-results .results-toolbar {
+    margin-left: 0;
+  }
+  /* Tablet: Search takes a full row, the three filters share the next row, and Clear sits under them at the right.
+     Stay date gets the larger share of that row so its range reads in full where the width allows. */
+  .reservation-list-search__form {
+    grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr));
+  }
+  .reservation-list-filter--search,
+  .reservation-list-search__clear {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 40rem) {
+  .reservation-list-results .results-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  /* Mobile: every control stacks at full width; the Stay date popover fills the filter width. */
+  .reservation-list-search__form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .reservation-list-search__clear {
+    justify-self: stretch;
+    text-align: center;
+  }
+  .reservation-stay__popover {
+    right: 0;
+    width: auto;
+  }
+  .reservation-stay__calendar .flatpickr-days .dayContainer {
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+  }
+}

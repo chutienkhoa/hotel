@@ -4,22 +4,30 @@ import com.example.hotel.common.TableSorts;
 import com.example.hotel.dto.booking.response.AccompanyingGuestResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
+import com.example.hotel.dto.booking.response.ReservationListRoomResponse;
+import com.example.hotel.dto.booking.response.ReservationListRowResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
+import com.example.hotel.dto.booking.request.ReservationListCriteria;
 import com.example.hotel.dto.booking.request.ReservationSearchCriteria;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.booking.StayRoomAssignment;
 import com.example.hotel.entity.booking.ReservationRoom;
+import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.entity.customer.Guest;
 import com.example.hotel.entity.common.AppUser;
 import com.example.hotel.mapper.booking.ReservationMapper;
 import com.example.hotel.repository.booking.ReservationGuestRepository;
 import com.example.hotel.repository.booking.ReservationRepository;
 import com.example.hotel.repository.common.AppUserRepository;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -41,6 +49,11 @@ import org.springframework.web.server.ResponseStatusException;
 public class ReservationQueryService {
 
     private static final int RESERVATION_PAGE_SIZE = 10;
+
+    /** Statuses whose rooms are still the booked {@link ReservationRoom} lines (no Stay occupancy). */
+    private static final EnumSet<ReservationStatus> PRE_STAY_STATUSES = EnumSet.of(
+            ReservationStatus.DRAFT, ReservationStatus.CONFIRMED, ReservationStatus.CANCELLED,
+            ReservationStatus.NO_SHOW);
 
 
     private final ReservationRepository reservationRepository;
@@ -117,6 +130,147 @@ public class ReservationQueryService {
         Map<UUID, String> roomNumbersByReservationId = roomNumbersByReservationId(reservationPage.getContent());
         return reservationPage.map(reservation -> reservationMapper.toSummaryResponse(
                 reservation, roomNumbersByReservationId.getOrDefault(reservation.getId(), "")));
+    }
+
+    /**
+     * Retrieves one server-side page of the Task33 Reservation List. Filtering, sorting and pagination run in the
+     * database; the operational rooms of the page's Reservations are then batch-loaded (at most three extra queries,
+     * never one per row).
+     *
+     * @param criteria normalized list filters
+     * @param page zero-based requested page number
+     * @return a page of Reservation List rows
+     */
+    @Transactional(readOnly = true)
+    public Page<ReservationListRowResponse> findListPage(ReservationListCriteria criteria, int page) {
+        Pageable pageable = PageRequest.of(
+                Math.max(page, 0),
+                RESERVATION_PAGE_SIZE,
+                TableSorts.RESERVATION_LIST.resolve(criteria.getSort(), criteria.getDir()));
+        Page<Reservation> reservationPage = reservationRepository.findAll(listSpecificationFor(criteria), pageable);
+        Map<UUID, List<ReservationListRoomResponse>> roomsByReservationId =
+                operationalRoomsByReservationId(reservationPage.getContent());
+        return reservationPage.map(reservation -> reservationMapper.toListRow(
+                reservation, roomsByReservationId.getOrDefault(reservation.getId(), List.of())));
+    }
+
+    /**
+     * Batch-loads the rooms each Reservation operationally occupies: the booked rooms before a Stay exists, the open
+     * assignments while CHECKED_IN, and the assignments closed at checkout once CHECKED_OUT.
+     *
+     * @param reservations the page's Reservations
+     * @return each Reservation identifier mapped to its rooms ordered by room number
+     */
+    private Map<UUID, List<ReservationListRoomResponse>> operationalRoomsByReservationId(List<Reservation> reservations) {
+        List<UUID> bookedIds = new ArrayList<>();
+        List<UUID> checkedInIds = new ArrayList<>();
+        List<UUID> checkedOutIds = new ArrayList<>();
+        for (Reservation reservation : reservations) {
+            switch (reservation.getStatus()) {
+                case CHECKED_IN -> checkedInIds.add(reservation.getId());
+                case CHECKED_OUT -> checkedOutIds.add(reservation.getId());
+                default -> bookedIds.add(reservation.getId());
+            }
+        }
+        Map<UUID, List<ReservationListRoomResponse>> rooms = new LinkedHashMap<>();
+        if (!bookedIds.isEmpty()) {
+            collectRooms(rooms, reservationRepository.findBookedRoomsForList(bookedIds));
+        }
+        if (!checkedInIds.isEmpty()) {
+            collectRooms(rooms, reservationRepository.findCurrentRoomsForList(checkedInIds));
+        }
+        if (!checkedOutIds.isEmpty()) {
+            collectRooms(rooms, reservationRepository.findFinalRoomsForList(checkedOutIds));
+        }
+        return rooms;
+    }
+
+    private void collectRooms(Map<UUID, List<ReservationListRoomResponse>> rooms, List<Object[]> rows) {
+        for (Object[] row : rows) {
+            rooms.computeIfAbsent((UUID) row[0], id -> new ArrayList<>())
+                    .add(new ReservationListRoomResponse((String) row[1], (String) row[2]));
+        }
+    }
+
+    /**
+     * Builds the Reservation List predicate. The unified search ORs its fields; every other filter is ANDed. A Stay
+     * date range {@code [S, E)} matches Reservations whose planned {@code [checkIn, checkOut)} overlaps it.
+     */
+    private Specification<Reservation> listSpecificationFor(ReservationListCriteria criteria) {
+        return (root, query, criteriaBuilder) -> {
+            var predicates = new ArrayList<Predicate>();
+            if (criteria.getSearch() != null) {
+                predicates.add(searchPredicate(
+                        root, query, criteriaBuilder, "%" + criteria.getSearch().toLowerCase(Locale.ROOT) + "%"));
+            }
+            if (criteria.getStatus() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("status"), criteria.getStatus()));
+            }
+            if (criteria.getSource() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("source"), criteria.getSource()));
+            }
+            if (criteria.getStayFrom() != null && criteria.getStayTo() != null) {
+                predicates.add(criteriaBuilder.lessThan(root.get("checkInDate"), criteria.getStayTo()));
+                predicates.add(criteriaBuilder.greaterThan(root.get("checkOutDate"), criteria.getStayFrom()));
+            }
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * ORs the unified search fields: reservation number, guest first/last/full name and code, OTA booking reference,
+     * and the room number under the same operational room semantics as the Room(s) column. Room matching uses EXISTS
+     * subqueries so a multi-room Reservation is never duplicated and the page total stays exact.
+     */
+    private Predicate searchPredicate(
+            Root<Reservation> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder, String pattern) {
+        Join<Reservation, Guest> guest = root.join("guest");
+        Expression<String> firstName = criteriaBuilder.coalesce(guest.<String>get("firstName"), "");
+        Expression<String> lastName = criteriaBuilder.coalesce(guest.<String>get("lastName"), "");
+        Expression<String> fullName = criteriaBuilder.trim(
+                criteriaBuilder.concat(criteriaBuilder.concat(firstName, " "), lastName));
+
+        Subquery<Integer> bookedRoom = query.subquery(Integer.class);
+        Root<ReservationRoom> reservationRoom = bookedRoom.from(ReservationRoom.class);
+        bookedRoom.select(criteriaBuilder.literal(1)).where(
+                criteriaBuilder.equal(reservationRoom.get("reservation"), root),
+                like(criteriaBuilder, reservationRoom.get("room").get("roomNumber"), pattern));
+
+        Subquery<Integer> currentRoom = query.subquery(Integer.class);
+        Root<StayRoomAssignment> openAssignment = currentRoom.from(StayRoomAssignment.class);
+        currentRoom.select(criteriaBuilder.literal(1)).where(
+                criteriaBuilder.equal(openAssignment.get("stay").get("reservation"), root),
+                criteriaBuilder.isNull(openAssignment.get("assignedTo")),
+                like(criteriaBuilder, openAssignment.get("room").get("roomNumber"), pattern));
+
+        Subquery<Integer> finalRoom = query.subquery(Integer.class);
+        Root<StayRoomAssignment> closedAssignment = finalRoom.from(StayRoomAssignment.class);
+        finalRoom.select(criteriaBuilder.literal(1)).where(
+                criteriaBuilder.equal(closedAssignment.get("stay").get("reservation"), root),
+                criteriaBuilder.isNotNull(closedAssignment.get("assignedTo")),
+                criteriaBuilder.equal(
+                        closedAssignment.get("assignedTo"), closedAssignment.get("stay").get("actualCheckOutAt")),
+                like(criteriaBuilder, closedAssignment.get("room").get("roomNumber"), pattern));
+
+        return criteriaBuilder.or(
+                like(criteriaBuilder, root.get("reservationNumber"), pattern),
+                like(criteriaBuilder, guest.get("firstName"), pattern),
+                like(criteriaBuilder, guest.get("lastName"), pattern),
+                like(criteriaBuilder, fullName, pattern),
+                like(criteriaBuilder, guest.get("guestCode"), pattern),
+                like(criteriaBuilder, root.get("otaBookingReference"), pattern),
+                criteriaBuilder.and(
+                        root.get("status").in(PRE_STAY_STATUSES), criteriaBuilder.exists(bookedRoom)),
+                criteriaBuilder.and(
+                        criteriaBuilder.equal(root.get("status"), ReservationStatus.CHECKED_IN),
+                        criteriaBuilder.exists(currentRoom)),
+                criteriaBuilder.and(
+                        criteriaBuilder.equal(root.get("status"), ReservationStatus.CHECKED_OUT),
+                        criteriaBuilder.exists(finalRoom)));
+    }
+
+    private Predicate like(CriteriaBuilder criteriaBuilder, Expression<String> expression, String pattern) {
+        return criteriaBuilder.like(criteriaBuilder.lower(expression), pattern);
     }
 
     /**

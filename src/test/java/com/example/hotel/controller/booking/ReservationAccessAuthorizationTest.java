@@ -503,27 +503,9 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(not(containsString("value=\"USD\""))));
     }
 
-    /** Confirms Reservation date fields opt in to the shared non-native date picker assets. */
+    /** Confirms the Create Reservation date fields opt in to the shared non-native date picker assets. */
     @Test
-    void shouldRenderSharedDatePickerForReservationFiltersAndCreateForm() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-
-        mockMvc.perform(get("/reservations")
-                        .param("checkInFrom", "2026-09-01")
-                        .param("checkOutTo", "2026-09-30")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString(
-                        "href=\"/css/vendor/flatpickr-4.6.13.min.css\"")))
-                .andExpect(content().string(containsString(
-                        "src=\"/js/vendor/flatpickr-4.6.13.min.js\"")))
-                .andExpect(content().string(containsString("src=\"/js/common/date-picker.js\"")))
-                .andExpect(content().string(containsString("class=\"js-date-picker\"")))
-                .andExpect(content().string(containsString("value=\"2026-09-01\"")))
-                .andExpect(content().string(containsString("value=\"2026-09-30\"")))
-                .andExpect(content().string(not(containsString("type=\"date\""))));
-
+    void shouldRenderSharedDatePickerForCreateForm() throws Exception {
         when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of());
         when(roomQueryService.findAllForReservationCreation()).thenReturn(List.of());
 
@@ -678,7 +660,7 @@ class ReservationAccessAuthorizationTest {
     /** Confirms Reservation list and detail retain the shared Reservations navigation page class. */
     @Test
     void shouldRenderReservationsNavigationForListAndDetail() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0)))
+        when(reservationQueryService.findListPage(any(), eq(0)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
 
@@ -710,7 +692,7 @@ class ReservationAccessAuthorizationTest {
     /** Confirms the ADMIN sidebar renders every currently implemented and authorized V1 section/item. */
     @Test
     void shouldRenderAdminSidebarNavigation() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(reservationQueryService.findListPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         String body = mockMvc.perform(get("/reservations").with(user("admin").authorities(fullAdminAuthorities())))
                 .andExpect(status().isOk())
@@ -734,7 +716,7 @@ class ReservationAccessAuthorizationTest {
     /** Confirms the MANAGER sidebar shows Guests, Expenses, and Additional Revenue but never Users. */
     @Test
     void shouldRenderManagerSidebarNavigation() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(reservationQueryService.findListPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         String body = mockMvc.perform(get("/reservations").with(user("manager").authorities(fullManagerAuthorities())))
                 .andExpect(status().isOk())
@@ -751,7 +733,7 @@ class ReservationAccessAuthorizationTest {
     /** Confirms STAFF sees only Reservations and never Guests, Expenses, Additional Revenue, or Dashboard. */
     @Test
     void shouldRenderStaffSidebarNavigation() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(reservationQueryService.findListPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         String body = mockMvc.perform(get("/reservations").with(user("staff").authorities(fullStaffAuthorities())))
                 .andExpect(status().isOk())
@@ -769,7 +751,7 @@ class ReservationAccessAuthorizationTest {
     /** Confirms a VIEW_BOOKING-only user without CHECK_OUT never sees the Check-out sidebar link. */
     @Test
     void shouldNotRenderCheckOutSidebarLinkWithoutCheckOutPermission() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(reservationQueryService.findListPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
@@ -779,7 +761,7 @@ class ReservationAccessAuthorizationTest {
     /** Confirms empty sections (Hotel, Finance) render no heading at all for STAFF, never an empty group. */
     @Test
     void shouldHideEmptySidebarSectionHeadingsForStaff() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        when(reservationQueryService.findListPage(any(), eq(0))).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
 
         mockMvc.perform(get("/reservations").with(user("staff").authorities(fullStaffAuthorities())))
                 .andExpect(status().isOk())
@@ -805,135 +787,6 @@ class ReservationAccessAuthorizationTest {
         assertEquals(false, body.contains(">Occupancy<"));
         assertEquals(false, body.contains("href=\"#\""));
         assertEquals(false, body.contains("javascript:void(0)"));
-    }
-
-    /** Confirms the reservation number is the sole detail link in the reservation list. */
-    @Test
-    void shouldRenderReservationNumberAsDetailLinkWithoutViewColumn() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0)))
-                .thenReturn(new PageImpl<>(
-                        List.of(new ReservationSummaryResponse(
-                                RESERVATION_ID,
-                                "R20260911-000001",
-                                "Nguyen Van A",
-                                "101",
-                                "CONFIRMED",
-                                com.example.hotel.entity.booking.BookingSource.DIRECT,
-                                null,
-                                LocalDate.of(2026, 9, 11),
-                                LocalDate.of(2026, 9, 12),
-                                BigDecimal.TEN,
-                                "VND")),
-                        PageRequest.of(0, 10),
-                        1));
-
-        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString(
-                        "href=\"/reservations/" + RESERVATION_ID + "\">R20260911-000001</a>")))
-                .andExpect(content().string(not(containsString("View details"))))
-                .andExpect(content().string(not(containsString(">View</a>"))));
-    }
-
-    /** Confirms filters are preserved in page links and use the requested server-side page. */
-    @Test
-    void shouldRenderFilterPreservingReservationPagination() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(1)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 23));
-
-        mockMvc.perform(get("/reservations")
-                        .param("reservationNumber", " R2026 ")
-                        .param("status", "CHECKED_IN")
-                        .param("checkInFrom", "2026-01-01")
-                        .param("checkInTo", "2026-12-31")
-                        .param("checkOutFrom", "2026-01-02")
-                        .param("checkOutTo", "2027-01-01")
-                        .param("page", "1")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("23")))
-                .andExpect(content().string(containsString("class=\"reservation-filter-grid\"")))
-                .andExpect(content().string(containsString("class=\"action-row reservation-filter-actions\"")))
-                .andExpect(content().string(containsString("class=\"results-toolbar\"")))
-                .andExpect(content().string(containsString("class=\"pagination reservation-pagination\"")))
-                .andExpect(content().string(containsString("value=\"R2026\"")))
-                .andExpect(content().string(containsString("value=\"CHECKED_IN\" selected=\"selected\"")))
-                .andExpect(content().string(containsString("page=0")))
-                .andExpect(content().string(containsString("page=2")))
-                .andExpect(content().string(containsString("reservationNumber=R2026")))
-                .andExpect(content().string(containsString("status=CHECKED_IN")));
-
-        ArgumentCaptor<ReservationSearchCriteria> criteriaCaptor =
-                ArgumentCaptor.forClass(ReservationSearchCriteria.class);
-        verify(reservationQueryService).findPage(criteriaCaptor.capture(), eq(1));
-        assertEquals("R2026", criteriaCaptor.getValue().getReservationNumber());
-    }
-
-    /** Confirms the first page renders a three-page window and a direct final-page link. */
-    @Test
-    void shouldRenderCompactPaginationWindowOnFirstPage() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 500));
-
-        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("pagination__segment--current")))
-                .andExpect(content().string(containsString("page=1")))
-                .andExpect(content().string(containsString("page=2")))
-                .andExpect(content().string(containsString(">...</span>")))
-                .andExpect(content().string(containsString("page=49")))
-                .andExpect(content().string(containsString("Next")))
-                .andExpect(content().string(not(containsString("Previous"))));
-    }
-
-    /** Confirms a middle page has adjacent window pages, ellipsis, and the final page. */
-    @Test
-    void shouldRenderCompactPaginationWindowOnMiddlePage() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(9)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(9, 10), 500));
-
-        mockMvc.perform(get("/reservations").param("page", "9")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Previous")))
-                .andExpect(content().string(containsString("page=8")))
-                .andExpect(content().string(containsString("page=10")))
-                .andExpect(content().string(containsString(">...</span>")))
-                .andExpect(content().string(containsString("page=49")))
-                .andExpect(content().string(containsString("Next")));
-    }
-
-    /** Confirms an adjacent final page is rendered directly without an unnecessary ellipsis. */
-    @Test
-    void shouldNotRenderEllipsisWhenFinalPageIsAdjacentToWindow() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(47)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(47, 10), 500));
-
-        mockMvc.perform(get("/reservations").param("page", "47")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("page=46")))
-                .andExpect(content().string(containsString(">48</span>")))
-                .andExpect(content().string(containsString("page=48")))
-                .andExpect(content().string(containsString("page=49")))
-                .andExpect(content().string(not(containsString(">...</span>"))));
-    }
-
-    /** Confirms the final-page window has no duplicate final page, ellipsis, or Next action. */
-    @Test
-    void shouldRenderCompactPaginationWindowOnLastPage() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(49)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(49, 10), 500));
-
-        mockMvc.perform(get("/reservations").param("page", "49")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Previous")))
-                .andExpect(content().string(containsString(">48</a>")))
-                .andExpect(content().string(containsString(">49</a>")))
-                .andExpect(content().string(containsString(">50</span>")))
-                .andExpect(content().string(not(containsString(">...</span>"))))
-                .andExpect(content().string(not(containsString("Next"))));
     }
 
     /** Confirms the Create form hides the OTA field for DIRECT and shows it for an OTA source after redisplay. */
@@ -988,103 +841,6 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Direct")))
                 .andExpect(content().string(not(containsString("Ref:"))));
-    }
-
-    /** Confirms the Reservation list renders all ten filters in the required three-column layout. */
-    @Test
-    void shouldRenderTenFiltersInThreeColumnLayout() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-
-        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"reservationNumber\"")))
-                .andExpect(content().string(containsString("id=\"guest\"")))
-                .andExpect(content().string(containsString("id=\"room\"")))
-                .andExpect(content().string(containsString("id=\"source\"")))
-                .andExpect(content().string(containsString("id=\"otaBookingReference\"")))
-                .andExpect(content().string(containsString("id=\"status\"")))
-                .andExpect(content().string(containsString("id=\"checkInFrom\"")))
-                .andExpect(content().string(containsString("id=\"checkInTo\"")))
-                .andExpect(content().string(containsString("id=\"checkOutFrom\"")))
-                .andExpect(content().string(containsString("id=\"checkOutTo\"")))
-                .andExpect(content().string(containsString("All sources")))
-                .andExpect(content().string(containsString(">Agoda<")))
-                .andExpect(content().string(containsString(">Booking.com<")))
-                .andExpect(content().string(containsString(">Airbnb<")))
-                .andExpect(content().string(not(containsString(">BOOKING_COM<"))));
-    }
-
-    /** Confirms the Reservation list table exposes the new Guest, Room, Source, and OTA columns. */
-    @Test
-    void shouldRenderGuestRoomSourceAndOtaColumnsInReservationList() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0))).thenReturn(new PageImpl<>(
-                List.of(
-                        new ReservationSummaryResponse(
-                                RESERVATION_ID,
-                                "R20260911-000001",
-                                "Nguyen Van A",
-                                "201, 202",
-                                "CONFIRMED",
-                                com.example.hotel.entity.booking.BookingSource.BOOKING_COM,
-                                "BK-987654",
-                                LocalDate.of(2026, 9, 11),
-                                LocalDate.of(2026, 9, 12),
-                                BigDecimal.TEN,
-                                "VND"),
-                        new ReservationSummaryResponse(
-                                UUID.randomUUID(),
-                                "R20260911-000002",
-                                "Tran Van B",
-                                "301",
-                                "DRAFT",
-                                com.example.hotel.entity.booking.BookingSource.DIRECT,
-                                null,
-                                LocalDate.of(2026, 9, 13),
-                                LocalDate.of(2026, 9, 14),
-                                BigDecimal.ONE,
-                                "VND")),
-                PageRequest.of(0, 10),
-                2));
-
-        mockMvc.perform(get("/reservations").with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Nguyen Van A")))
-                .andExpect(content().string(containsString("201, 202")))
-                .andExpect(content().string(containsString("Booking.com")))
-                .andExpect(content().string(containsString("BK-987654")))
-                .andExpect(content().string(containsString("Tran Van B")))
-                .andExpect(content().string(containsString("301")))
-                .andExpect(content().string(containsString("Direct")))
-                .andExpect(content().string(containsString(">—<")));
-    }
-
-    /** Confirms Reservation list filters are preserved with the four new filters in pagination links. */
-    @Test
-    void shouldPreserveNewFiltersInPaginationLinks() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(1)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(1, 10), 23));
-
-        mockMvc.perform(get("/reservations")
-                        .param("guest", "Nguyen")
-                        .param("room", "201")
-                        .param("source", "AGODA")
-                        .param("otaBookingReference", "123")
-                        .param("page", "1")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("guest=Nguyen")))
-                .andExpect(content().string(containsString("room=201")))
-                .andExpect(content().string(containsString("source=AGODA")))
-                .andExpect(content().string(containsString("otaBookingReference=123")));
-
-        ArgumentCaptor<ReservationSearchCriteria> criteriaCaptor =
-                ArgumentCaptor.forClass(ReservationSearchCriteria.class);
-        verify(reservationQueryService).findPage(criteriaCaptor.capture(), eq(1));
-        assertEquals("Nguyen", criteriaCaptor.getValue().getGuest());
-        assertEquals("201", criteriaCaptor.getValue().getRoom());
-        assertEquals(com.example.hotel.entity.booking.BookingSource.AGODA, criteriaCaptor.getValue().getSource());
-        assertEquals("123", criteriaCaptor.getValue().getOtaBookingReference());
     }
 
     /** Confirms the redesigned Reservation Information card renders all five tiles and a full-width Notes row. */
@@ -1180,21 +936,6 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(content().string(not(containsString("href=\"/guests/" + guestId + "\""))))
                 .andExpect(content().string(not(containsString("reservation-info-link"))))
                 .andExpect(content().string(containsString("GUEST-001")));
-    }
-
-    /** Confirms invalid date ranges render safely without executing an unrestricted query. */
-    @Test
-    void shouldRejectReservationDateRangeLongerThanOneCalendarYear() throws Exception {
-        mockMvc.perform(get("/reservations")
-                        .param("checkInFrom", "2026-01-01")
-                        .param("checkInTo", "2027-01-02")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Check-in date range cannot exceed one calendar year.")))
-                .andExpect(content().string(containsString("No reservations match the current filters.")))
-                .andExpect(content().string(not(containsString("Reservation pages"))));
-
-        verifyNoInteractions(reservationQueryService);
     }
 
     /** Supplies the checked-in Reservation, Stay, and authoritative balance required by detail rendering. */
@@ -1361,71 +1102,4 @@ class ReservationAccessAuthorizationTest {
     @EnableMethodSecurity
     static class MethodSecurityTestConfiguration {}
 
-    /** Confirms a page past the last page redirects to the last valid page, preserving filters and sort. */
-    @Test
-    void shouldRedirectOutOfRangeReservationPageToLastPagePreservingFilterAndSort() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(999)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(999, 10), 25));
-
-        mockMvc.perform(get("/reservations").param("page", "999").param("guest", "Ann Lee")
-                        .param("status", "CONFIRMED").param("sort", "checkInDate").param("dir", "asc")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/reservations?guest=Ann+Lee&status=CONFIRMED&sort=checkInDate&dir=asc&page=2"));
-    }
-
-    /** Confirms a genuinely empty result set never redirects, even when a page number was requested. */
-    @Test
-    void shouldNotRedirectWhenReservationResultIsTrulyEmpty() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(5)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(5, 10), 0));
-
-        mockMvc.perform(get("/reservations").param("page", "5")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("No reservations match the current filters.")));
-    }
-
-    /** Confirms sort links keep filters and drop the page, page links keep filters and sort, and the form keeps the sort. */
-    @Test
-    void shouldPreserveFiltersAndSortAcrossSortAndPageLinks() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(1)))
-                .thenReturn(new PageImpl<>(
-                        List.of(new ReservationSummaryResponse(
-                                RESERVATION_ID, "R20260911-000001", "Nguyen Van A", "101", "CONFIRMED",
-                                com.example.hotel.entity.booking.BookingSource.DIRECT, null,
-                                LocalDate.of(2026, 9, 11), LocalDate.of(2026, 9, 12), BigDecimal.TEN, "VND")),
-                        PageRequest.of(1, 10), 25));
-
-        String body = mockMvc.perform(get("/reservations").param("page", "1").param("guest", "Ann")
-                        .param("status", "CONFIRMED").param("sort", "checkInDate").param("dir", "asc")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString(
-                        "href=\"/reservations?guest=Ann&amp;status=CONFIRMED&amp;sort=reservationNumber&amp;dir=asc\"")))
-                .andExpect(content().string(containsString(
-                        "href=\"/reservations?guest=Ann&amp;status=CONFIRMED&amp;sort=checkInDate&amp;dir=desc\"")))
-                .andExpect(content().string(containsString(
-                        "href=\"/reservations?guest=Ann&amp;status=CONFIRMED&amp;sort=checkInDate&amp;dir=asc&amp;page=0\"")))
-                .andExpect(content().string(containsString("aria-sort=\"ascending\"")))
-                .andExpect(content().string(containsString("name=\"sort\" value=\"checkInDate\"")))
-                .andExpect(content().string(containsString("Showing 11\u201311 of 25")))
-                .andReturn().getResponse().getContentAsString();
-
-        org.junit.jupiter.api.Assertions.assertFalse(body.contains("sort=reservationNumber&amp;dir=asc&amp;page"));
-    }
-
-    /** Confirms an unknown sort key, unknown direction and non-numeric page fall back safely to defaults. */
-    @Test
-    void shouldFallBackSafelyForInvalidSortDirectionAndMalformedPage() throws Exception {
-        when(reservationQueryService.findPage(any(), eq(0)))
-                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
-
-        mockMvc.perform(get("/reservations").param("page", "abc").param("sort", "password_hash; DROP").param("dir", "sideways")
-                        .with(user("viewer").authorities(viewBookingAuthority())))
-                .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("aria-sort=\"ascending\""))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("aria-sort=\"descending\""))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("name=\"sort\""))));
-    }
 }

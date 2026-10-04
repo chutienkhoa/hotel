@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Fragment-only template for the Reservation List; rendered only through th:replace. -->
+
+<!-- Sortable column header. The label and its icon are one link; aria-sort reports the active state. Sorting
+     re-runs the database query before pagination and never carries a page parameter. -->
+<th th:fragment="sortColumn(label, key)" scope="col" class="reservation-list-sortable"
+    th:classappend="${tableSortKey == key} ? 'reservation-list-sortable--active'"
+    th:attr="aria-sort=${tableSortKey == key ? (tableSortDir == 'asc' ? 'ascending' : 'descending') : 'none'}">
+    <a class="reservation-list-sort"
+       th:href="${tableSortBase + 'sort=' + key + '&amp;dir=' + (tableSortKey == key and tableSortDir == 'asc' ? 'desc' : 'asc')}"
+       th:attr="aria-label=#{reservation.list.sort.by(${label})}">
+        <span class="reservation-list-sort__label" th:text="${label}">Column</span>
+        <span class="reservation-list-sort__icon" aria-hidden="true">
+            <th:block th:if="${tableSortKey != key}"><svg th:replace="~{layout/icons :: sortNeutral}"></svg></th:block>
+            <th:block th:if="${tableSortKey == key and tableSortDir == 'asc'}"><svg th:replace="~{layout/icons :: sortAsc}"></svg></th:block>
+            <th:block th:if="${tableSortKey == key and tableSortDir == 'desc'}"><svg th:replace="~{layout/icons :: sortDesc}"></svg></th:block>
+        </span>
+    </a>
+</th>
+
+<!-- Paginator, always rendered so a single page keeps the same shape: Previous and Next are disabled at the ends.
+     Links keep filters, sort and direction through tablePageBase. -->
+<nav th:fragment="pager(page, label)" class="pagination reservation-list-pagination" th:aria-label="${label}">
+    <a class="pagination__segment pagination__segment--icon reservation-list-pagination__prev" th:if="${!page.first}"
+       th:href="${tablePageBase + 'page=' + (page.number - 1)}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.previous}">Previous</span>
+    </a>
+    <span class="pagination__segment pagination__segment--icon pagination__segment--disabled reservation-list-pagination__prev"
+          aria-disabled="true" th:if="${page.first}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.previous}">Previous</span>
+    </span>
+    <th:block th:if="${page.totalPages > 0}">
+        <th:block th:each="pageNumber : ${#numbers.sequence(paginationStartPage, paginationEndPage)}">
+            <span aria-current="page" class="pagination__segment pagination__segment--current"
+                  th:if="${pageNumber == page.number}" th:text="${pageNumber + 1}">1</span>
+            <a class="pagination__segment" th:unless="${pageNumber == page.number}"
+               th:href="${tablePageBase + 'page=' + pageNumber}" th:text="${pageNumber + 1}">2</a>
+        </th:block>
+        <span class="pagination__segment pagination__segment--ellipsis"
+              th:if="${paginationEndPage + 1 < page.totalPages - 1}">...</span>
+        <a class="pagination__segment" th:if="${paginationEndPage < page.totalPages - 1}"
+           th:href="${tablePageBase + 'page=' + (page.totalPages - 1)}" th:text="${page.totalPages}">2</a>
+    </th:block>
+    <a class="pagination__segment pagination__segment--icon reservation-list-pagination__next" th:if="${!page.last}"
+       th:href="${tablePageBase + 'page=' + (page.number + 1)}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.next}">Next</span>
+    </a>
+    <span class="pagination__segment pagination__segment--icon pagination__segment--disabled reservation-list-pagination__next"
+          aria-disabled="true" th:if="${page.last}">
+        <svg th:replace="~{layout/icons :: chevronRight}"></svg>
+        <span class="visually-hidden" th:text="#{table.next}">Next</span>
+    </span>
+</nav>
+</body>
+</html>

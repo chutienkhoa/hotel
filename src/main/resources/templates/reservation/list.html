@@ -1,144 +1,196 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/reservation/list.css'">
 <head th:replace="~{layout/base :: head(#{navigation.reservations})}"></head>
 <body>
 <div class="app-shell page-reservations">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
+    <main class="content reservation-list">
         <div class="page-header">
-            <div>
-                <h1>Reservations</h1>
-                <p>View reservation status and planned stay dates.</p>
+            <div class="page-header-copy">
+                <h1 th:text="#{reservation.list.title}">Reservations</h1>
+                <p class="page-description" th:text="#{reservation.list.description}">Manage hotel reservations across all booking sources.</p>
             </div>
-            <a class="button button-primary" th:if="${canManageBooking}" th:href="@{/reservations/new}">
-                Create Reservation
+            <a class="button button-primary reservation-list-header-action" th:if="${canManageBooking}" th:href="@{/reservations/new}">
+                <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                <span th:text="#{reservation.list.action.new}">New Reservation</span>
             </a>
         </div>
 
         <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+        <p class="message message-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-        <section class="form-card" aria-label="Filter reservations">
-            <form method="get" th:action="@{/reservations}">
+        <section class="reservation-list-search" th:aria-label="#{reservation.list.search.label}">
+            <form class="reservation-list-search__form" id="reservation-list-filters" method="get" th:action="@{/reservations}">
                 <th:block th:replace="~{layout/table :: sortState}"></th:block>
-                <div class="reservation-filter-grid">
-                    <div class="form-field">
-                        <label for="reservationNumber">Reservation Number</label>
-                        <input id="reservationNumber" name="reservationNumber" type="search"
-                               th:value="${searchCriteria.reservationNumber}" />
+                <!-- Hidden submit button: Enter in the search field submits without a visible Search button. -->
+                <button class="visually-hidden" type="submit" th:text="#{common.action.search}">Search</button>
+
+                <div class="reservation-list-filter reservation-list-filter--search">
+                    <label for="reservationListSearch" th:text="#{reservation.list.search.label}">Search</label>
+                    <div class="reservation-list-control">
+                        <span class="reservation-list-control__lead"><svg th:replace="~{layout/icons :: search}"></svg></span>
+                        <input id="reservationListSearch" name="search" type="search" autocomplete="off"
+                               th:value="${searchCriteria.search}" th:placeholder="#{reservation.list.search.placeholder}" />
                     </div>
-                    <div class="form-field">
-                        <label for="guest">Guest</label>
-                        <input id="guest" name="guest" type="search" th:value="${searchCriteria.guest}" />
+                </div>
+
+                <div class="reservation-list-filter reservation-list-filter--stay">
+                    <span class="reservation-list-filter__label" id="reservationStayLabel" th:text="#{reservation.list.filter.stayDate}">Stay date</span>
+                    <div class="reservation-stay" data-stay-picker th:attr="data-from=${searchCriteria.stayFrom}, data-to=${searchCriteria.stayTo}, data-all-dates=#{reservation.list.filter.allDates}">
+                        <input type="hidden" name="stayFrom" data-stay-from th:value="${searchCriteria.stayFrom}" />
+                        <input type="hidden" name="stayTo" data-stay-to th:value="${searchCriteria.stayTo}" />
+                        <button class="reservation-stay__trigger" type="button" aria-haspopup="dialog" aria-expanded="false"
+                                aria-labelledby="reservationStayLabel reservationStaySummary" data-stay-trigger>
+                            <span class="reservation-list-control__lead"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+                            <span class="reservation-stay__summary" id="reservationStaySummary" data-stay-summary
+                                  th:classappend="${searchCriteria.stayFrom == null or searchCriteria.stayTo == null} ? 'reservation-stay__summary--empty'"
+                                  th:text="${searchCriteria.stayFrom != null and searchCriteria.stayTo != null}
+                                      ? ${T(com.example.hotel.common.DisplayFormats).formatDate(searchCriteria.stayFrom) + ' → ' + T(com.example.hotel.common.DisplayFormats).formatDate(searchCriteria.stayTo)}
+                                      : #{reservation.list.filter.allDates}">All dates</span>
+                            <span class="reservation-list-control__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+                        </button>
+                        <div class="reservation-stay__popover" role="dialog" hidden data-stay-popover th:aria-label="#{reservation.list.picker.title}">
+                            <div class="reservation-stay__fields">
+                                <div class="reservation-stay__field">
+                                    <label for="reservationStayCheckIn" th:text="#{reservation.list.picker.checkIn}">Check-in</label>
+                                    <div class="reservation-stay__input">
+                                        <input id="reservationStayCheckIn" type="text" readonly data-stay-in-display />
+                                        <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                    </div>
+                                </div>
+                                <span class="reservation-stay__arrow" aria-hidden="true">→</span>
+                                <div class="reservation-stay__field">
+                                    <label for="reservationStayCheckOut" th:text="#{reservation.list.picker.checkOut}">Check-out</label>
+                                    <div class="reservation-stay__input">
+                                        <input id="reservationStayCheckOut" type="text" readonly data-stay-out-display />
+                                        <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="reservation-stay__calendar" data-stay-calendar></div>
+                            <p class="reservation-stay__hint" role="status" hidden data-stay-hint th:text="#{reservation.list.error.stayOrder}">The stay date range must end after it starts.</p>
+                            <div class="reservation-stay__actions">
+                                <button class="button button-outline-primary" type="button" data-stay-clear th:text="#{reservation.list.picker.clear}">Clear</button>
+                                <button class="button button-primary" type="button" disabled data-stay-apply th:text="#{reservation.list.picker.apply}">Apply</button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="form-field">
-                        <label for="room">Room</label>
-                        <input id="room" name="room" type="search" th:value="${searchCriteria.room}" />
-                    </div>
-                    <div class="form-field">
-                        <label for="source">Source</label>
-                        <select id="source" name="source">
-                            <option value="" th:selected="${searchCriteria.source == null}">All sources</option>
-                            <option th:each="bookingSource : ${bookingSources}"
-                                    th:selected="${searchCriteria.source == bookingSource}"
-                                    th:text="${bookingSource.displayName}"
-                                    th:value="${bookingSource}">Direct</option>
-                        </select>
-                    </div>
-                    <div class="form-field">
-                        <label for="otaBookingReference">OTA Booking Ref.</label>
-                        <input id="otaBookingReference" name="otaBookingReference" type="search"
-                               th:value="${searchCriteria.otaBookingReference}" />
-                    </div>
-                    <div class="form-field">
-                        <label for="status">Status</label>
-                        <select id="status" name="status">
-                            <option value="" th:selected="${searchCriteria.status == null}">All statuses</option>
-                            <option th:each="reservationStatus : ${reservationStatuses}"
+                </div>
+
+                <div class="reservation-list-filter">
+                    <label for="reservationListStatus" th:text="#{reservation.list.filter.status}">Status</label>
+                    <div class="reservation-list-control">
+                        <select id="reservationListStatus" name="status">
+                            <option value="" th:selected="${searchCriteria.status == null}" th:text="#{reservation.list.filter.allStatuses}">All status</option>
+                            <option th:each="reservationStatus : ${reservationStatuses}" th:value="${reservationStatus.name()}"
                                     th:selected="${searchCriteria.status == reservationStatus}"
-                                    th:text="${reservationStatus}"
-                                    th:value="${reservationStatus}">DRAFT</option>
+                                    th:text="#{'enum.reservationStatus.' + ${reservationStatus.name()}}">Draft</option>
                         </select>
+                        <span class="reservation-list-control__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
                     </div>
-                    <div class="form-field">
-                        <label for="checkInFrom">Check-in from</label>
-                        <input class="js-date-picker" id="checkInFrom" name="checkInFrom" type="text"
-                               th:value="${searchCriteria.checkInFrom}" />
-                    </div>
-                    <div class="form-field">
-                        <label for="checkInTo">Check-in to</label>
-                        <input class="js-date-picker" id="checkInTo" name="checkInTo" type="text"
-                               th:value="${searchCriteria.checkInTo}" />
-                    </div>
-                    <div aria-hidden="true" class="room-currency-spacer"></div>
-                    <div class="form-field">
-                        <label for="checkOutFrom">Check-out from</label>
-                        <input class="js-date-picker" id="checkOutFrom" name="checkOutFrom" type="text"
-                               th:value="${searchCriteria.checkOutFrom}" />
-                    </div>
-                    <div class="form-field">
-                        <label for="checkOutTo">Check-out to</label>
-                        <input class="js-date-picker" id="checkOutTo" name="checkOutTo" type="text"
-                               th:value="${searchCriteria.checkOutTo}" />
-                    </div>
-                    <div aria-hidden="true" class="room-currency-spacer"></div>
                 </div>
-                <div class="action-row reservation-filter-actions">
-                    <a class="button button-secondary" th:href="@{/reservations}">Reset</a>
-                    <button class="button button-primary" type="submit">Search</button>
+
+                <div class="reservation-list-filter">
+                    <label for="reservationListSource" th:text="#{reservation.list.filter.source}">Source</label>
+                    <div class="reservation-list-control">
+                        <select id="reservationListSource" name="source">
+                            <option value="" th:selected="${searchCriteria.source == null}" th:text="#{reservation.list.filter.allSources}">All sources</option>
+                            <option th:each="bookingSource : ${bookingSources}" th:value="${bookingSource.name()}"
+                                    th:selected="${searchCriteria.source == bookingSource}"
+                                    th:text="#{'enum.bookingSource.' + ${bookingSource.name()}}">Direct</option>
+                        </select>
+                        <span class="reservation-list-control__chevron"><svg th:replace="~{layout/icons :: chevronDown}"></svg></span>
+                    </div>
                 </div>
+
+                <a class="button button-secondary reservation-list-search__clear" th:href="@{/reservations}" th:text="#{reservation.list.filter.clear}">Clear</a>
             </form>
         </section>
 
-        <section class="reservation-results">
-            <div class="results-toolbar">
-                <p><span th:replace="~{layout/table :: resultSummary(${reservationPage})}">Showing 1&#8211;10 of 0</span></p>
-                <nav th:replace="~{layout/table :: pagination(${reservationPage}, 'Reservation pages', 'pagination reservation-pagination')}"></nav>
+        <section class="card reservation-list-results" th:unless="${errorMessage}">
+            <div class="reservation-list-results__header">
+                <h2 th:text="#{reservation.list.results.title}">Reservations</h2>
+                <div class="results-toolbar">
+                    <p><span th:replace="~{layout/table :: resultSummary(${reservationPage})}">Showing 1&#8211;10 of 0</span></p>
+                    <th:block th:replace="~{reservation/list-fragments :: pager(${reservationPage}, #{reservation.list.pager.label})}"></th:block>
+                </div>
             </div>
 
-            <p class="empty-state" th:if="${reservationPage.empty}">
-                No reservations match the current filters.
-            </p>
+            <th:block th:if="${reservationPage.empty and !searchCriteria.hasCriteria()}">
+                <div th:replace="~{layout/empty-state :: emptyState('inbox', #{reservation.list.empty}, ${canManageBooking} ? @{/reservations/new} : null, #{reservation.list.action.new})}"></div>
+            </th:block>
+            <th:block th:if="${reservationPage.empty and searchCriteria.hasCriteria()}">
+                <div th:replace="~{layout/empty-state :: noResults(#{reservation.list.noResults}, @{/reservations})}"></div>
+            </th:block>
 
-            <div class="table-wrap" th:unless="${reservationPage.empty}">
-                <table>
+            <div class="table-wrap reservation-list-table-wrap" th:unless="${reservationPage.empty}">
+                <table class="reservation-list-table">
                     <thead>
                     <tr>
-                        <th th:replace="~{layout/table :: sortHeader('Reservation', 'reservationNumber')}"></th>
-                        <th scope="col">Guest</th>
-                        <th scope="col">Room</th>
-                        <th scope="col">Source</th>
-                        <th scope="col">OTA Booking</th>
-                        <th th:replace="~{layout/table :: sortHeader('Status', 'status')}"></th>
-                        <th th:replace="~{layout/table :: sortHeader('Check-in', 'checkInDate')}"></th>
-                        <th th:replace="~{layout/table :: sortHeader('Check-out', 'checkOutDate')}"></th>
-                        <th scope="col">Total</th>
+                        <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.reservationNo}, 'reservationNumber')}"></th>
+                        <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.guest}, 'guest')}"></th>
+                        <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.stay}, 'checkInDate')}"></th>
+                        <th scope="col" th:text="#{reservation.list.column.rooms}">Room(s)</th>
+                        <th scope="col" th:text="#{reservation.list.column.nights}">Nights</th>
+                        <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.source}, 'source')}"></th>
+                        <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.otaRef}, 'otaBookingReference')}"></th>
+                        <th th:replace="~{reservation/list-fragments :: sortColumn(#{reservation.list.column.status}, 'status')}"></th>
+                        <th scope="col" th:text="#{reservation.list.column.action}">Action</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="reservation : ${reservationPage.content}">
+                    <tr th:each="row : ${reservationPage.content}">
                         <td>
-                            <a th:href="@{/reservations/{id}(id=${reservation.id})}"
-                               th:text="${reservation.reservationNumber}">Reservation number</a>
+                            <a class="reservation-list-link" th:href="@{/reservations/{id}(id=${row.id})}"
+                               th:text="${row.reservationNumber}">R20261004-000001</a>
                         </td>
-                        <td th:text="${reservation.guestFullName}">Guest name</td>
-                        <td th:text="${reservation.roomNumbers}">101</td>
-                        <td th:text="${reservation.source.displayName}">Direct</td>
-                        <td th:text="${reservation.otaBookingReference} ?: '—'">—</td>
-                        <td><span class="status-badge" th:classappend="${' status-badge--' + #strings.toLowerCase(reservation.status)}" th:text="${reservation.status}">DRAFT</span></td>
-                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkInDate})}">—</span></td>
-                        <td class="table-date"><span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span></td>
-                        <td class="table-number"><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></td>
+                        <td>
+                            <span class="reservation-list-stack">
+                                <strong th:text="${row.guestFullName}">Nguyen Van A</strong>
+                                <span class="reservation-list-secondary" th:text="${row.guestCode}">G000001</span>
+                            </span>
+                        </td>
+                        <td>
+                            <span class="reservation-list-stack">
+                                <span th:replace="~{layout/datetime :: date(${row.checkInDate})}">04/10/2026</span>
+                                <span class="reservation-list-stay-out">
+                                    <span aria-hidden="true">&rarr;</span>
+                                    <span class="visually-hidden" th:text="#{reservation.list.stay.to}">to</span>
+                                    <span th:replace="~{layout/datetime :: date(${row.checkOutDate})}">08/10/2026</span>
+                                </span>
+                            </span>
+                        </td>
+                        <td>
+                            <div class="reservation-list-room" th:each="room : ${row.rooms}">
+                                <strong th:text="${room.roomNumber}">201</strong>
+                                <span class="reservation-list-secondary" th:text="${room.roomTypeName}">Double Room</span>
+                            </div>
+                            <span th:if="${#lists.isEmpty(row.rooms)}">&mdash;</span>
+                        </td>
+                        <td class="reservation-list-nights" th:text="${row.nights}">4</td>
+                        <td th:text="#{'enum.bookingSource.' + ${row.source.name()}}">Direct</td>
+                        <td th:text="${#strings.isEmpty(row.otaBookingReference)} ? '&mdash;' : ${row.otaBookingReference}">&mdash;</td>
+                        <td>
+                            <span class="status-badge reservation-list-status"
+                                  th:classappend="${'status-badge--' + #strings.toLowerCase(row.status.name())}"
+                                  th:text="#{'enum.reservationStatus.' + ${row.status.name()}}">Confirmed</span>
+                        </td>
+                        <td>
+                            <a class="button button-outline-primary reservation-list-action"
+                               th:href="@{/reservations/{id}(id=${row.id})}"
+                               th:attr="aria-label=#{reservation.list.action.viewAria(${row.reservationNumber})}"
+                               th:text="#{common.action.view}">View</a>
+                        </td>
                     </tr>
                     </tbody>
                 </table>
             </div>
         </section>
     </main>
-
-    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
+<script defer th:src="@{/js/reservation/list-filters.js}"></script>
 </body>
 </html>

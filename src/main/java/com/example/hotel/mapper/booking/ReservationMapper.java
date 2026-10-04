@@ -5,11 +5,14 @@ import com.example.hotel.dto.booking.response.AccompanyingGuestResponse;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.dto.booking.response.ReservationEditResponse;
+import com.example.hotel.dto.booking.response.ReservationListRoomResponse;
+import com.example.hotel.dto.booking.response.ReservationListRowResponse;
 import com.example.hotel.dto.booking.response.ReservationRoomResponse;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.entity.booking.ReservationRoom;
 import com.example.hotel.entity.booking.Reservation;
 import com.example.hotel.entity.customer.Guest;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -58,6 +61,30 @@ public class ReservationMapper {
                 reservation.getCheckOutDate(),
                 reservation.getTotalAmount(),
                 reservation.getCurrency());
+    }
+
+    /**
+     * Converts a reservation entity into one Task33 Reservation List row. Nights is the planned stay duration for every
+     * Reservation state, and the rooms are supplied separately (batch-loaded) to avoid an N+1 lookup.
+     *
+     * @param reservation the reservation entity to convert
+     * @param rooms the operational rooms already resolved for the reservation's status
+     * @return the Reservation List row
+     */
+    public ReservationListRowResponse toListRow(Reservation reservation, List<ReservationListRoomResponse> rooms) {
+        Guest guest = reservation.getGuest();
+        return new ReservationListRowResponse(
+                reservation.getId(),
+                reservation.getReservationNumber(),
+                guestFullName(guest),
+                guest == null ? "" : guest.getGuestCode(),
+                reservation.getCheckInDate(),
+                reservation.getCheckOutDate(),
+                ChronoUnit.DAYS.between(reservation.getCheckInDate(), reservation.getCheckOutDate()),
+                rooms,
+                reservation.getSource(),
+                reservation.getOtaBookingReference(),
+                reservation.getStatus());
     }
 
     /**

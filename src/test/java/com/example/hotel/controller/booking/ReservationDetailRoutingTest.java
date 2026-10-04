@@ -10,8 +10,10 @@ import com.example.hotel.config.SecurityConfig;
 import com.example.hotel.dto.booking.response.PaymentResponse;
 import com.example.hotel.dto.booking.response.PrepaymentSummaryResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
-import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
+import com.example.hotel.dto.booking.response.ReservationListRoomResponse;
+import com.example.hotel.dto.booking.response.ReservationListRowResponse;
 import com.example.hotel.entity.booking.BookingSource;
+import com.example.hotel.entity.booking.ReservationStatus;
 import com.example.hotel.repository.common.AppUserRepository;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.security.SessionUserDetailsService;
@@ -203,10 +205,11 @@ class ReservationDetailRoutingTest {
     /** Confirms the Reservation List renders each row's detail link using Reservation.id, not another identifier. */
     @Test
     void shouldRenderListDetailLinkUsingReservationId() throws Exception {
-        ReservationSummaryResponse row = new ReservationSummaryResponse(
-                RESERVATION_ID, "R20261130-000100", "Ann Lee", "101", "DRAFT", BookingSource.DIRECT, null,
-                LocalDate.of(2026, 11, 30), LocalDate.of(2026, 12, 2), BigDecimal.TEN, "VND");
-        when(reservationQueryService.findPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt()))
+        ReservationListRowResponse row = new ReservationListRowResponse(
+                RESERVATION_ID, "R20261130-000100", "Ann Lee", "G000001", LocalDate.of(2026, 11, 30),
+                LocalDate.of(2026, 12, 2), 2, List.of(new ReservationListRoomResponse("101", "Single Room")),
+                BookingSource.DIRECT, null, ReservationStatus.DRAFT);
+        when(reservationQueryService.findListPage(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/reservations")

@@ -59,6 +59,47 @@ public interface ReservationRepository
     List<Object[]> findRoomNumbersByReservationIdIn(@Param("reservationIds") Collection<UUID> reservationIds);
 
     /**
+     * Batch-loads the originally booked rooms (number and room type name) of the supplied Reservations for the
+     * Reservation List Room(s) column of Reservations that have not reached a Stay.
+     *
+     * @param reservationIds Reservation identifiers whose booked rooms are loaded
+     * @return rows of reservation identifier, room number and room type name, ordered by room number
+     */
+    @Query(
+            "SELECT rr.reservation.id, rr.room.roomNumber, rr.room.roomType.name FROM ReservationRoom rr "
+                    + "WHERE rr.reservation.id IN :reservationIds "
+                    + "ORDER BY rr.room.roomNumber")
+    List<Object[]> findBookedRoomsForList(@Param("reservationIds") Collection<UUID> reservationIds);
+
+    /**
+     * Batch-loads the current (open) Stay room assignments of the supplied CHECKED_IN Reservations for the
+     * Reservation List Room(s) column.
+     *
+     * @param reservationIds Reservation identifiers whose current rooms are loaded
+     * @return rows of reservation identifier, room number and room type name, ordered by room number
+     */
+    @Query(
+            "SELECT a.stay.reservation.id, a.room.roomNumber, a.room.roomType.name FROM StayRoomAssignment a "
+                    + "WHERE a.stay.reservation.id IN :reservationIds AND a.assignedTo IS NULL "
+                    + "ORDER BY a.room.roomNumber")
+    List<Object[]> findCurrentRoomsForList(@Param("reservationIds") Collection<UUID> reservationIds);
+
+    /**
+     * Batch-loads the final Stay room assignments (those closed at checkout) of the supplied CHECKED_OUT
+     * Reservations for the Reservation List Room(s) column. Checkout closes every open assignment at the Stay's
+     * actual check-out instant, so rooms vacated earlier by a Room Change are excluded.
+     *
+     * @param reservationIds Reservation identifiers whose final rooms are loaded
+     * @return rows of reservation identifier, room number and room type name, ordered by room number
+     */
+    @Query(
+            "SELECT a.stay.reservation.id, a.room.roomNumber, a.room.roomType.name FROM StayRoomAssignment a "
+                    + "WHERE a.stay.reservation.id IN :reservationIds "
+                    + "AND a.assignedTo IS NOT NULL AND a.assignedTo = a.stay.actualCheckOutAt "
+                    + "ORDER BY a.room.roomNumber")
+    List<Object[]> findFinalRoomsForList(@Param("reservationIds") Collection<UUID> reservationIds);
+
+    /**
      * Counts all Reservations grouped by their current lifecycle status.
      *
      * @return status and count rows in stable status order
