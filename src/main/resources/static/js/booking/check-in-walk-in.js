@@ -1,6 +1,7 @@
 (() => {
-    // Presentation behaviour for the Walk-in Reservation form only. Which rooms are offered, whether they fit the
-    // adults and every date rule stay on the server (GET /check-in/walk-in/available-rooms and the review step);
+    // Presentation behaviour for the Walk-in Reservation form and, with an editable check-in date, the OTA Booking
+    // Not Entered form. Which rooms are offered, whether they fit the adults and every date rule stay on the server
+    // (the available-rooms endpoint named by data-availability-url, default the Walk-in one, and the review step);
     // nothing here decides a business outcome.
     const form = document.getElementById("walk-in-form");
     const roomsSection = document.getElementById("walk-in-rooms");
@@ -15,7 +16,10 @@
     const adultInput = document.getElementById("adultCount");
     const guestSelect = document.getElementById("guestId");
     const nightsOutput = document.querySelector("[data-nights]");
-    const checkInDate = document.querySelector("[data-check-in]")?.dataset.checkInDate || "";
+    // Walk-in: the fixed hotel date. OTA: the operator-entered check-in date input.
+    const checkInInput = document.getElementById("checkInDate");
+    const fixedCheckIn = document.querySelector("[data-check-in]")?.dataset.checkInDate || "";
+    const currentCheckIn = () => (checkInInput ? checkInInput.value : fixedCheckIn);
     const steps = document.querySelector("[data-walk-in-steps]");
     const labels = roomsSection.dataset;
     const checkButton = roomsSection.querySelector("[data-check-availability]");
@@ -44,7 +48,7 @@
     };
 
     const nights = () => {
-        const from = parseDate(checkInDate);
+        const from = parseDate(currentCheckIn());
         const to = parseDate(checkOutInput.value);
         if (from === null || to === null || to <= from) return null;
         return Math.round((to - from) / 86400000);
@@ -60,7 +64,7 @@
         if (!steps) return;
         const complete = {
             guest: Boolean(guestSelect && guestSelect.value),
-            stay: Boolean(checkOutInput.value),
+            stay: Boolean(checkOutInput.value) && (!checkInInput || Boolean(checkInInput.value)),
             room: selection.size > 0,
             summary: false,
         };
@@ -152,6 +156,7 @@
     const buildRow = (room) => {
         const row = document.createElement("tr");
         row.dataset.roomType = room.roomTypeName || "";
+        row.dataset.roomNumber = room.roomNumber;
 
         const selectCell = document.createElement("td");
         const checkbox = document.createElement("input");
@@ -233,9 +238,11 @@
 
     const loadRooms = () => {
         const checkOut = checkOutInput.value;
+        const checkIn = currentCheckIn();
+        const ready = Boolean(checkOut) && (!checkInInput || (Boolean(checkIn) && nights() !== null));
         const current = ++requestId;
-        checkButton.disabled = !checkOut;
-        if (!checkOut) {
+        checkButton.disabled = !ready;
+        if (!ready) {
             options = [];
             rowsBody.replaceChildren();
             typeFilter.length = 1;
@@ -245,7 +252,10 @@
             return;
         }
         showState(labels.msgLoading);
-        fetch(`/check-in/walk-in/available-rooms?checkOutDate=${encodeURIComponent(checkOut)}`, {
+        const query = checkInInput
+            ? `checkInDate=${encodeURIComponent(checkIn)}&checkOutDate=${encodeURIComponent(checkOut)}`
+            : `checkOutDate=${encodeURIComponent(checkOut)}`;
+        fetch(`${labels.availabilityUrl || "/check-in/walk-in/available-rooms"}?${query}`, {
             headers: { Accept: "application/json" },
         })
             .then((response) => {
@@ -288,7 +298,7 @@
         if (count === null) return;
         const template = count === 1 ? rangeLine.dataset.msgNight : rangeLine.dataset.msgNights;
         rangeLine.querySelector("[data-room-range-text]").textContent =
-            `${formatDay(checkInDate)} – ${formatDay(checkOutInput.value)} (${(template || "{0}").replace("{0}", String(count))})`;
+            `${formatDay(currentCheckIn())} – ${formatDay(checkOutInput.value)} (${(template || "{0}").replace("{0}", String(count))})`;
     };
 
     const onCheckOutChange = () => {
@@ -397,53 +407,119 @@
 
     checkButton?.addEventListener("click", loadRooms);
 
-    // Missing nightly rate: one shared feedback dialog for all selected rooms, then focus on the first missing rate.
-    // This is usability only; the server validates every rate again and rejects a missing one regardless.
-    const selectedRateInputs = () =>
-        Array.from(rowsBody.querySelectorAll("tr"))
-            .filter((row) => row.querySelector("input[type=checkbox]").checked)
-            .map((row) => row.querySelector("input[data-nightly-rate]"));
+    // Required-field check on "Next: Reservation Summary". Every empty required field is collected (not just the
+    // first), marked invalid and listed in the shared feedback dialog; the form is not submitted. This is usability
+    // only: the server validates everything again and rejects the same fields regardless. Field names come from the
+    // same checkin.validation.field.* messages the server uses for its own dialog (data-validation-labels).
+    const validationLabels = document.querySelector("[data-validation-labels]")?.dataset || {};
+    // OTA only: the Walk-in source list is display-only text (no inputs), so there is nothing to require there.
+    const sourceInputs = Array.from(form.querySelectorAll("input[name=source]"));
+    const sourceList = sourceInputs[0]?.closest("[role=radiogroup]");
+    const referenceInput = document.getElementById("otaBookingReference");
+    // flatpickr shows an alternate input for each date field and keeps the original hidden.
+    const visibleControl = (input) => input?._flatpickr?.altInput || input;
+    const isBlank = (input) => !input || input.value.trim() === "";
 
-    const showMissingRate = (firstInvalid) => {
+    const collectMissing = () => {
+        const missing = [];
+        const add = (labelKey, marks, focus, detail) => missing.push({ labelKey, marks, focus, detail });
+        if (guestSelect && isBlank(guestSelect)) add("guestId", [guestSelect], guestSelect);
+        if (checkInInput && isBlank(checkInInput)) add("checkInDate", [checkInInput], visibleControl(checkInInput));
+        if (isBlank(checkOutInput)) add("checkOutDate", [checkOutInput], visibleControl(checkOutInput));
+        if (adultInput && isBlank(adultInput)) add("adultCount", [adultInput], adultInput);
+        if (childInput && isBlank(childInput)) add("childCount", [childInput], childInput);
+        if (sourceList && !sourceInputs.some((input) => input.checked)) add("source", [sourceList], sourceInputs[0]);
+        if (referenceInput && isBlank(referenceInput)) add("otaBookingReference", [referenceInput], referenceInput);
+        if (selection.size === 0) {
+            add("rooms", [roomsSection], rowsBody.querySelector("input[type=checkbox]") || checkButton);
+        }
+        // One entry per selected room whose rate is empty, named by Room No.
+        Array.from(rowsBody.querySelectorAll("tr")).forEach((row) => {
+            if (!row.querySelector("input[type=checkbox]").checked) return;
+            const rate = row.querySelector("input[data-nightly-rate]");
+            if (isBlank(rate)) add("nightlyRate", [rate], rate, row.dataset.roomNumber);
+        });
+        return missing;
+    };
+
+    const markInvalid = (element) => {
+        if (element === roomsSection) {
+            roomsSection.dataset.invalid = "true";
+        } else {
+            element.setAttribute("aria-invalid", "true");
+        }
+    };
+
+    const focusControl = (control) => {
+        if (!control || control.disabled) return;
+        control.scrollIntoView({ block: "center" });
+        control.focus();
+    };
+
+    const showMissing = (missing) => {
+        missing.forEach((entry) => entry.marks.forEach(markInvalid));
         const dialog = window.PmsFeedbackDialog;
-        const restoreFocus = () => {
-            if (!firstInvalid) return;
-            firstInvalid.scrollIntoView({ block: "center" });
-            firstInvalid.focus();
-        };
+        const restoreFocus = () => focusControl(missing[0].focus);
         if (!dialog) {
             restoreFocus();
             return;
         }
-        dialog.show({ title: labels.msgRateTitle, message: labels.msgRateMissing, onClose: restoreFocus });
+        dialog.show({
+            title: validationLabels.title,
+            message: validationLabels.message,
+            items: missing.map((entry) => {
+                const name = validationLabels[entry.labelKey] || entry.labelKey;
+                return entry.detail ? `${name} — ${entry.detail}` : name;
+            }),
+            onClose: restoreFocus,
+        });
     };
 
     form.addEventListener("submit", (event) => {
-        // Create New Guest also submits this form (to another action) and must keep working with rates still empty.
+        // Create New Guest also submits this form (to another action) and must keep working with fields still empty.
         if (event.submitter?.hasAttribute("formaction")) return;
-        const missing = selectedRateInputs().filter((input) => input.value.trim() === "");
+        const missing = collectMissing();
         if (missing.length === 0) return;
         event.preventDefault();
         // Keep the money-input script's submit normalisation from reformatting the entries we are keeping on screen.
         event.stopImmediatePropagation();
-        missing.forEach((input) => input.setAttribute("aria-invalid", "true"));
-        showMissingRate(missing[0]);
+        showMissing(missing);
     }, true);
 
-    if (labels.rateError === "true") {
-        // The server rejected a rate: same dialog, and the rooms render (asynchronously) with the invalid state.
-        const observer = new MutationObserver(() => {
-            if (!rowsBody.querySelector("tr")) return;
-            observer.disconnect();
-            const first = rowsBody.querySelector("input[data-nightly-rate][aria-invalid=true]");
-            if (first) showMissingRate(first);
-        });
-        observer.observe(rowsBody, { childList: true });
+    // A field stops being marked once the operator edits it.
+    const clearInvalid = (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        target.removeAttribute("aria-invalid");
+        if (target.name === "source" && sourceList) sourceList.removeAttribute("aria-invalid");
+        if (target.closest("#walk-in-rooms")) delete roomsSection.dataset.invalid;
+    };
+    form.addEventListener("input", clearInvalid);
+    form.addEventListener("change", clearInvalid);
+
+    // The server rejected required fields: its feedback dialog (already open) lists them. Once it is closed, focus the
+    // first marked field in form order.
+    const serverDialog = document.getElementById("feedback-dialog");
+    const serverList = serverDialog?.querySelector("#feedback-dialog-list");
+    if (serverDialog && serverList && !serverList.hidden) {
+        serverDialog.addEventListener("close", () => {
+            const candidates = [
+                guestSelect, visibleControl(checkInInput), visibleControl(checkOutInput), adultInput, childInput,
+                sourceInputs[0], referenceInput,
+                ...(roomsSection.dataset.invalid === "true" ? [rowsBody.querySelector("input[type=checkbox]") || checkButton] : []),
+                ...rowsBody.querySelectorAll("input[data-nightly-rate]"),
+            ];
+            const invalidOf = (control) => control?.getAttribute("aria-invalid") === "true"
+                || control?.closest("[role=radiogroup]")?.getAttribute("aria-invalid") === "true"
+                || (control?.type === "checkbox" && roomsSection.dataset.invalid === "true");
+            focusControl(candidates.find(invalidOf));
+        }, { once: true });
     }
 
-    // A walk-in stays at least one night, so the picker starts the day after the hotel date. The server still decides.
+    // A stay is at least one night, so the check-out picker starts the day after check-in (the hotel date for a
+    // Walk-in, the entered date for OTA). The server still decides.
     const restrictCheckOut = () => {
-        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(checkInDate);
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(currentCheckIn());
         const picker = checkOutInput._flatpickr;
         if (match && picker) {
             picker.set("minDate", new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1));
@@ -452,6 +528,10 @@
 
     typeFilter.addEventListener("change", applyTypeFilter);
     checkOutInput.addEventListener("change", onCheckOutChange);
+    checkInInput?.addEventListener("change", () => {
+        restrictCheckOut();
+        onCheckOutChange();
+    });
     adultInput?.addEventListener("input", updateCapacitySummary);
     adultInput?.addEventListener("input", updateGuestsContext);
     childInput?.addEventListener("input", updateGuestsContext);

@@ -130,9 +130,73 @@ class FrontDeskQueryServiceTest {
         when(stays.findReservationIdsWithStay(any())).thenReturn(stayed);
         stubGuest();
 
-        List<FrontDeskArrivalRow> recent = service.recentArrivals(1);
+        List<FrontDeskArrivalRow> recent = service.recentArrivals(1, null, null);
 
         assertEquals(List.of("R-2"), recent.stream().map(FrontDeskArrivalRow::reservationNumber).toList());
+    }
+
+    /** Confirms Nights sorts numerically (10 after 2), ascending and descending, for the landing's recent list. */
+    @Test
+    void shouldSortRecentArrivalsByNightsNumerically() {
+        reservationWithNights("R-1", TODAY, 10);
+        reservationWithNights("R-2", TODAY, 2);
+        reservationWithNights("R-3", TODAY, 3);
+        stubArrivals();
+
+        assertEquals(List.of("R-2", "R-3", "R-1"), numbers(service.recentArrivals(5, "nights", "asc")));
+        assertEquals(List.of("R-1", "R-3", "R-2"), numbers(service.recentArrivals(5, "nights", "desc")));
+    }
+
+    /** Confirms Arrival Date sorts by the date value, and the overdue text/flag does not affect the order. */
+    @Test
+    void shouldSortRecentArrivalsByArrivalDateRegardlessOfOverdue() {
+        reservationWithNights("R-1", TODAY, 2);
+        reservationWithNights("R-2", TODAY.minusDays(5), 2);
+        reservationWithNights("R-3", TODAY.minusDays(1), 2);
+        stubArrivals();
+
+        assertEquals(List.of("R-2", "R-3", "R-1"), numbers(service.recentArrivals(5, "checkInDate", "asc")));
+        assertEquals(List.of("R-1", "R-3", "R-2"), numbers(service.recentArrivals(5, "checkInDate", "desc")));
+    }
+
+    /** Confirms the sort runs over every arrival before the limit, not just the default-ordered first rows. */
+    @Test
+    void shouldSortAllArrivalsBeforeLimitingRecentArrivals() {
+        reservationWithNights("R-1", TODAY.minusDays(9), 2);
+        reservationWithNights("R-2", TODAY.minusDays(1), 2);
+        reservationWithNights("R-3", TODAY, 2);
+        stubArrivals();
+
+        assertEquals(List.of("R-3"), numbers(service.recentArrivals(1, "checkInDate", "desc")));
+    }
+
+    /** Confirms an unknown sort key (such as the non-sortable Action column) leaves the default order. */
+    @Test
+    void shouldKeepDefaultOrderForUnsupportedRecentArrivalSort() {
+        reservationWithNights("R-1", TODAY, 2);
+        reservationWithNights("R-2", TODAY.minusDays(1), 2);
+        stubArrivals();
+
+        assertEquals(numbers(service.recentArrivals(5, null, null)), numbers(service.recentArrivals(5, "action", "desc")));
+    }
+
+    private void reservationWithNights(String number, LocalDate checkIn, int nights) {
+        Guest guest = Guest.create(UUID.randomUUID(), "G-" + number, "Ann", "Lee", null, null, "Vietnam", null, null);
+        Reservation reservation = new Reservation(UUID.randomUUID(), number, guest, checkIn, checkIn.plusDays(nights),
+                BookingSource.DIRECT, null, "VND", null);
+        pending.add(reservation);
+        line(reservation, room("1" + number.substring(2), RoomStatus.AVAILABLE));
+    }
+
+    private void stubArrivals() {
+        when(reservations.findByStatusAndCheckInOnOrBefore(ReservationStatus.CONFIRMED, TODAY)).thenReturn(pending);
+        when(reservations.findBookedRoomsByReservationIdIn(any())).thenReturn(rows);
+        when(stays.findReservationIdsWithStay(any())).thenReturn(stayed);
+        stubGuest();
+    }
+
+    private static List<String> numbers(List<FrontDeskArrivalRow> arrivals) {
+        return arrivals.stream().map(FrontDeskArrivalRow::reservationNumber).toList();
     }
 
     /** Confirms a blocker means Needs Attention, ordered after overdue and before ready, with per-room issue. */

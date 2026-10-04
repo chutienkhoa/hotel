@@ -132,10 +132,13 @@
 /* Eligible state (desktop): the Available Rooms card takes the height of the left column. contain: size keeps the
    card's own content from growing the row, so only its candidate list scrolls and the header stays fixed. */
 @media (min-width: 901px) {
-  .room-change-card--rooms {
+  /* Doubled class: .room-change-card (declared further down) sets display: grid at the same specificity and would
+     otherwise win, leaving this card a stretched two-row grid instead of a top-aligned flex column. */
+  .room-change-card.room-change-card--rooms {
     contain: size;
     display: flex;
     flex-direction: column;
+    gap: var(--space-4);
     min-height: 0;
   }
 
@@ -302,9 +305,12 @@
 }
 
 /* Available rooms: one card per candidate, the whole row is the radio label so the selection is one click. */
+/* align-content: start keeps the rows at their natural height at the top of the list. Without it the grid's default
+   (stretch) hands the list's spare height, which it gets from the equal-height card on desktop, to its rows. */
 .room-change-candidates {
+  align-content: start;
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   list-style: none;
   margin: 0;
   padding: 0;

@@ -124,7 +124,10 @@ p {
   z-index: var(--z-header);
 }
 .brand {
+  align-items: center;
   color: #fff;
+  display: inline-flex;
+  gap: 0.6875rem;
   font-size: 1.125rem;
   font-weight: 750;
   letter-spacing: -0.015em;
@@ -132,6 +135,19 @@ p {
 }
 .brand:hover {
   color: #fff;
+}
+.brand-mark {
+  display: inline-flex;
+  flex: none;
+  width: 2.875rem;
+}
+.brand-mark svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+.brand-name {
+  white-space: nowrap;
 }
 .sidebar {
   align-self: start;

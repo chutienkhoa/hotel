@@ -60,8 +60,9 @@
             <p class="message message-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
             <form class="walk-in-form" id="walk-in-form" method="post" novalidate th:action="@{/check-in/walk-in/review}"
-                  th:object="${walkInForm}">
-                <p class="message message-error" role="alert" th:if="${#fields.hasAnyErrors() and !walkInRateErrorOnly}"
+                  th:object="${walkInForm}"
+                  th:with="missingPaths=${missingFields == null ? {} : missingFields.![path]}">
+                <p class="message message-error" role="alert" th:if="${#fields.hasAnyErrors() and !requiredFieldErrorsOnly}"
                    th:text="#{checkin.walkIn.error.fields}">Please correct the highlighted fields.</p>
                 <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
                 <!-- Enter in a field must continue to the Summary, never start Create New Guest, which comes first in
@@ -116,7 +117,7 @@
                                             th:text="${guest.guestCode + ' · ' + guest.fullName}"
                                             th:value="${guest.id}">G000001 · Guest name</option>
                                 </select>
-                                <p class="field-error" id="guestId-error" th:if="${#fields.hasErrors('guestId')}" th:errors="*{guestId}"></p>
+                                <p class="field-error" th:classappend="${missingPaths.contains('guestId')} ? 'visually-hidden'" id="guestId-error" th:if="${#fields.hasErrors('guestId')}" th:errors="*{guestId}"></p>
                             </div>
 
                             <p class="walk-in-guest-empty" data-guest-empty th:text="#{checkin.walkIn.guest.empty}">No guest selected.</p>
@@ -135,7 +136,7 @@
                         </section>
 
                         <section aria-labelledby="walk-in-room-heading" class="card walk-in-card walk-in-card--room walk-in-rooms" id="walk-in-rooms"
-                                 th:attr="data-room-url=${canManageRoom} ? @{/rooms/ROOM_ID},data-rate-error=${walkInRateError},data-msg-rate-title=#{checkin.walkIn.rate.missing.title},data-msg-rate-missing=#{checkin.walkIn.rate.missing.message},data-label-select=#{checkin.walkIn.room.select},data-label-rate=#{checkin.walkIn.room.rateLabel},data-msg-prompt=#{checkin.walkIn.room.hint.dates},data-msg-empty=#{checkin.walkIn.room.empty},data-msg-loading=#{checkin.walkIn.room.loading},data-msg-error=#{checkin.walkIn.room.loadError},data-msg-capacity=#{checkin.walkIn.room.capacitySummary},data-msg-available=#{checkin.walkIn.room.available},data-all-types=#{checkin.walkIn.room.type.all}">
+                                 th:attr="data-invalid=${#fields.hasErrors('rooms')},data-room-url=${canManageRoom} ? @{/rooms/ROOM_ID},data-label-select=#{checkin.walkIn.room.select},data-label-rate=#{checkin.walkIn.room.rateLabel},data-msg-prompt=#{checkin.walkIn.room.hint.dates},data-msg-empty=#{checkin.walkIn.room.empty},data-msg-loading=#{checkin.walkIn.room.loading},data-msg-error=#{checkin.walkIn.room.loadError},data-msg-capacity=#{checkin.walkIn.room.capacitySummary},data-msg-available=#{checkin.walkIn.room.available},data-all-types=#{checkin.walkIn.room.type.all}">
                             <header class="walk-in-card__header">
                                 <svg th:replace="~{layout/icons :: bed}"></svg>
                                 <h2 id="walk-in-room-heading" th:text="#{checkin.walkIn.room.title}">Room Selection</h2>
@@ -188,11 +189,13 @@
                                 </table>
                             </div>
 
-                            <p class="field-error" id="rooms-error" th:if="${#fields.hasErrors('rooms')}" th:errors="*{rooms}"></p>
+                            <p class="field-error" th:classappend="${missingPaths.contains('rooms')} ? 'visually-hidden'" id="rooms-error" th:if="${#fields.hasErrors('rooms')}" th:errors="*{rooms}"></p>
                             <th:block th:each="roomRequest, roomRowStat : *{rooms}">
-                                <p class="field-error" th:if="${#fields.hasErrors('rooms[__${roomRowStat.index}__].roomId')}"
+                                <p class="field-error" th:classappend="${missingPaths.contains('rooms[__${roomRowStat.index}__].roomId')} ? 'visually-hidden'"
+                                   th:if="${#fields.hasErrors('rooms[__${roomRowStat.index}__].roomId')}"
                                    th:errors="*{rooms[__${roomRowStat.index}__].roomId}"></p>
-                                <p class="field-error" th:if="${#fields.hasErrors('rooms[__${roomRowStat.index}__].nightlyRate')}"
+                                <p class="field-error" th:classappend="${missingPaths.contains('rooms[__${roomRowStat.index}__].nightlyRate')} ? 'visually-hidden'"
+                                   th:if="${#fields.hasErrors('rooms[__${roomRowStat.index}__].nightlyRate')}"
                                    th:errors="*{rooms[__${roomRowStat.index}__].nightlyRate}"></p>
                             </th:block>
 
@@ -228,7 +231,7 @@
                                     <input class="js-date-picker" id="checkOutDate" name="checkOutDate" required type="text"
                                            th:attr="aria-invalid=${#fields.hasErrors('checkOutDate')},aria-describedby=${#fields.hasErrors('checkOutDate')} ? 'checkOutDate-error'"
                                            th:value="${walkInForm.checkOutDate == null ? '' : #temporals.format(walkInForm.checkOutDate, 'yyyy-MM-dd')}" />
-                                    <p class="field-error" id="checkOutDate-error" th:if="${#fields.hasErrors('checkOutDate')}" th:errors="*{checkOutDate}"></p>
+                                    <p class="field-error" th:classappend="${missingPaths.contains('checkOutDate')} ? 'visually-hidden'" id="checkOutDate-error" th:if="${#fields.hasErrors('checkOutDate')}" th:errors="*{checkOutDate}"></p>
                                 </div>
                                 <div class="form-field walk-in-fields__wide">
                                     <label th:text="#{checkin.walkIn.stay.nights}">Nights</label>
@@ -241,7 +244,7 @@
                                     </label>
                                     <input id="adultCount" inputmode="numeric" min="1" required step="1" th:field="*{adultCount}" type="number"
                                            th:attr="aria-invalid=${#fields.hasErrors('adultCount')},aria-describedby=${#fields.hasErrors('adultCount')} ? 'adultCount-error'" />
-                                    <p class="field-error" id="adultCount-error" th:if="${#fields.hasErrors('adultCount')}" th:errors="*{adultCount}"></p>
+                                    <p class="field-error" th:classappend="${missingPaths.contains('adultCount')} ? 'visually-hidden'" id="adultCount-error" th:if="${#fields.hasErrors('adultCount')}" th:errors="*{adultCount}"></p>
                                 </div>
                                 <div class="form-field">
                                     <label for="childCount">
@@ -250,7 +253,7 @@
                                     </label>
                                     <input id="childCount" inputmode="numeric" min="0" required step="1" th:field="*{childCount}" type="number"
                                            th:attr="aria-invalid=${#fields.hasErrors('childCount')},aria-describedby=${#fields.hasErrors('childCount')} ? 'childCount-error'" />
-                                    <p class="field-error" id="childCount-error" th:if="${#fields.hasErrors('childCount')}" th:errors="*{childCount}"></p>
+                                    <p class="field-error" th:classappend="${missingPaths.contains('childCount')} ? 'visually-hidden'" id="childCount-error" th:if="${#fields.hasErrors('childCount')}" th:errors="*{childCount}"></p>
                                 </div>
                                 <div class="form-field walk-in-fields__wide">
                                     <label for="notes" th:text="#{checkin.walkIn.stay.notes}">Notes</label>
@@ -310,9 +313,16 @@
         </div>
     </main>
 
-    <!-- Shared Task33 feedback dialog. Its text is supplied by walk-in.js (missing nightly rate); errorMessage is
-         cleared for this inclusion so the existing inline banner above stays that message's only presentation. -->
-    <th:block th:with="errorMessage=${null},systemErrorMessage=${null}">
+    <!-- Field names for the browser-side required-field check (check-in-walk-in.js). They use the same
+         checkin.validation.field.* messages as the server-rendered list in the feedback dialog, so both paths name a
+         field identically in either language. -->
+    <div data-validation-labels hidden
+         th:attr="data-title=#{common.validation.required.title},data-message=#{common.validation.required.message},data-guest-id=#{checkin.validation.field.guestId},data-check-in-date=#{checkin.validation.field.checkInDate},data-check-out-date=#{checkin.validation.field.checkOutDate},data-adult-count=#{checkin.validation.field.adultCount},data-child-count=#{checkin.validation.field.childCount},data-source=#{checkin.validation.field.source},data-ota-booking-reference=#{checkin.validation.field.otaBookingReference},data-rooms=#{checkin.validation.field.rooms},data-nightly-rate=#{checkin.validation.field.nightlyRate}"></div>
+
+    <!-- Shared Task33 feedback dialog. Its text is the missing-required-fields summary (server-rendered for a rejected
+         form, or supplied by check-in-walk-in.js); any other errorMessage is cleared for this inclusion so the existing
+         inline banner above stays that message's only presentation. -->
+    <th:block th:with="errorMessage=${missingFields != null and !missingFields.empty} ? #{common.validation.required.message} : null,systemErrorMessage=${null}">
         <th:block th:replace="~{layout/feedback-dialog :: feedbackDialog}"></th:block>
     </th:block>
 </div>

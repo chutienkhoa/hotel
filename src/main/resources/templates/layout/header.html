@@ -23,7 +23,11 @@
             <span class="header-nav-toggle-icon-open"><svg th:replace="~{layout/icons :: menu}"></svg></span>
             <span class="header-nav-toggle-icon-close"><svg th:replace="~{layout/icons :: close}"></svg></span>
         </button>
-        <a class="brand" th:href="@{/reservations}" th:text="#{common.app.name}">Sunset House</a>
+        <a class="brand" th:href="@{/reservations}">
+            <!-- Wrapped in a span: th:replace would drop a class placed on the svg itself. -->
+            <span class="brand-mark"><svg th:replace="~{layout/icons :: sunsetMark}"></svg></span>
+            <span class="brand-name" th:text="#{common.app.name}">Sunset House</span>
+        </a>
     </div>
 
     <div class="site-header-end" th:if="${currentUsername != null}">

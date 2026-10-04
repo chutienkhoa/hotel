@@ -156,8 +156,8 @@ public class FrontDeskQueryService {
      * @return at most {@code limit} arrival rows
      */
     @Transactional(readOnly = true)
-    public List<FrontDeskArrivalRow> recentArrivals(int limit) {
-        return arrivals().stream().limit(limit).toList();
+    public List<FrontDeskArrivalRow> recentArrivals(int limit, String sort, String dir) {
+        return sortArrivals(arrivals(), sort, dir).stream().limit(limit).toList();
     }
 
     /**
@@ -611,6 +611,7 @@ public class FrontDeskQueryService {
             case "guestName" -> column(FrontDeskArrivalRow::guestName, String.CASE_INSENSITIVE_ORDER, descending);
             case "checkInDate" -> column(FrontDeskArrivalRow::checkInDate, Comparator.naturalOrder(), descending);
             case "room" -> column(FrontDeskQueryService::arrivalRoomNumber, Comparator.naturalOrder(), descending);
+            case "nights" -> column(FrontDeskArrivalRow::nights, Comparator.naturalOrder(), descending);
             case "source" -> column(FrontDeskQueryService::arrivalSourceLabel, Comparator.naturalOrder(), descending);
             case "status" -> column(FrontDeskQueryService::arrivalRank, Comparator.naturalOrder(), descending);
             default -> throw new IllegalArgumentException("Unsupported Arrivals sort key: " + key);

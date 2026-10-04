@@ -70,7 +70,7 @@ class AppShellTest {
         mockMvc.perform(get("/dashboard").with(user("admin").authorities(everyNavigationAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("class=\"brand\"")))
-                .andExpect(content().string(containsString(">Sunset House</a>")))
+                .andExpect(content().string(containsString(">Sunset House</span>")))
                 .andExpect(content().string(not(containsString("Hotel Management"))))
                 .andExpect(content().string(not(containsString("sidebar-brand"))));
     }
@@ -277,7 +277,7 @@ class AppShellTest {
     /** Creates the empty approved Dashboard shape used by MVC controller tests. */
     private DashboardResponse emptyDashboard() {
         return new DashboardResponse(
-                LocalDate.of(2026, 9, 16), "Tuesday, Sep 16, 2026", null, 0L, null, null,
+                LocalDate.of(2026, 9, 16), null, 0L, null, null,
                 List.of(), List.of(), 0L, List.of(), List.of(), List.of());
     }
 

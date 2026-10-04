@@ -242,6 +242,20 @@ public class ReservationService {
     }
 
     /**
+     * Read-only pre-check of the OTA external identity for a not-yet-created Reservation, so a pre-persistence
+     * review can report a duplicate or missing reference early. It applies exactly the rule {@link #create} applies;
+     * the creation itself (and the unique index) remain the authoritative barrier.
+     *
+     * @param source submitted booking source
+     * @param otaBookingReference submitted external booking reference
+     * @throws org.springframework.web.server.ResponseStatusException if the reference is missing or already used
+     */
+    @Transactional
+    public void requireOtaIdentityAvailableForNewReservation(BookingSource source, String otaBookingReference) {
+        requireAvailableOtaIdentity(source, otaBookingReference, NO_RESERVATION);
+    }
+
+    /**
      * Replaces all editable data and room snapshots for a draft Reservation.
      *
      * @param id Reservation identifier

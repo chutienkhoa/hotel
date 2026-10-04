@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -77,7 +78,7 @@ class DashboardPageControllerTest {
                 .andExpect(content().string(containsString("app-shell page-dashboard")))
                 .andExpect(content().string(containsString("nav-dashboard")))
                 .andExpect(content().string(containsString("Welcome back, " + username + "!")))
-                .andExpect(content().string(containsString("Tuesday, Sep 16, 2026")))
+                .andExpect(content().string(containsString("Wednesday, Sep 16, 2026")))
                 .andExpect(content().string(containsString("Available Rooms")))
                 .andExpect(content().string(containsString("Room Status")));
     }
@@ -206,11 +207,37 @@ class DashboardPageControllerTest {
                 .andExpect(status().isMethodNotAllowed());
     }
 
+    /** Confirms the Dashboard date follows the selected language cookie using locale-aware formatting. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            en | 2026-10-04 | Sunday, Oct 4, 2026
+            en | 2026-10-05 | Monday, Oct 5, 2026
+            en | 2026-10-10 | Saturday, Oct 10, 2026
+            en | 2026-12-25 | Friday, Dec 25, 2026
+            vi | 2026-10-04 | Chủ Nhật, 4 tháng 10, 2026
+            vi | 2026-10-05 | Thứ Hai, 5 tháng 10, 2026
+            vi | 2026-10-10 | Thứ Bảy, 10 tháng 10, 2026
+            vi | 2026-12-25 | Thứ Sáu, 25 tháng 12, 2026
+            """)
+    void shouldFormatDashboardDateInSelectedLanguage(String language, LocalDate date, String expected)
+            throws Exception {
+        when(dashboardService.getDashboard(any())).thenReturn(emptyDashboard(date));
+
+        mockMvc.perform(get("/dashboard")
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", language))
+                        .with(user("an.le").authorities(new SimpleGrantedAuthority("PERM_VIEW_REPORT"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">" + expected + "<")));
+    }
+
     /** Creates the Dashboard shape for a viewer with no operational permission beyond VIEW_REPORT. */
     private DashboardResponse emptyDashboard() {
+        return emptyDashboard(LocalDate.of(2026, 9, 16));
+    }
+
+    private DashboardResponse emptyDashboard(LocalDate hotelToday) {
         return new DashboardResponse(
-                LocalDate.of(2026, 9, 16),
-                "Tuesday, Sep 16, 2026",
+                hotelToday,
                 null,
                 6L,
                 null,
@@ -244,7 +271,6 @@ class DashboardPageControllerTest {
 
         return new DashboardResponse(
                 LocalDate.of(2026, 9, 16),
-                "Tuesday, Sep 16, 2026",
                 new DashboardCurrentlyStayingKpi(12L, 7L, 2L),
                 6L,
                 new DashboardArrivalsKpi(1L, 0L),

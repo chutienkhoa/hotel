@@ -132,7 +132,7 @@ public class SecurityConfig {
                         .authenticated())
                 .formLogin(formLogin -> formLogin
                         .loginPage("/login")
-                        .defaultSuccessUrl("/reservations", true)
+                        .defaultSuccessUrl("/dashboard", true)
                         .permitAll())
                 .addFilterBefore(guestMultipartUploadFilter, CsrfFilter.class)
                 .addFilterAfter(activeUserSessionFilter, UsernamePasswordAuthenticationFilter.class)

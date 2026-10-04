@@ -9,6 +9,7 @@ import com.example.hotel.dto.booking.response.ArrivalReadiness;
 import com.example.hotel.dto.booking.response.CheckInReviewResponse;
 import com.example.hotel.dto.booking.response.CheckInRoomLine;
 import com.example.hotel.dto.booking.response.CheckInTiming;
+import com.example.hotel.dto.booking.response.OtaEntryReviewResponse;
 import com.example.hotel.dto.booking.response.Response;
 import com.example.hotel.dto.booking.response.ReservationSummaryResponse;
 import com.example.hotel.dto.booking.response.WalkInReviewResponse;
@@ -248,6 +249,76 @@ public class CheckInService {
     }
 
     /**
+     * Builds the read-only OTA Reservation Summary without persisting anything. It applies the rules that
+     * {@link #createOtaEntry} enforces authoritatively later, so a rejected selection is reported on the form instead
+     * of after the user pressed Create Reservation: OTA source and a free, non-empty external identity, a stay of at
+     * least one night, distinct Rooms that are bookable and conflict-free for the whole period (the same predicate as
+     * {@link #otaRoomOptions}), and adults within the Rooms' adult capacity ({@link AdultCapacityRules}).
+     *
+     * @param request submitted OTA Reservation data
+     * @return the OTA preview, including the calculated total
+     * @throws WalkInReviewException when a selection rule is not satisfied
+     * @throws ResponseStatusException when the source, Guest or Room is invalid, or the OTA identity is unusable
+     */
+    @Transactional(readOnly = true)
+    public OtaEntryReviewResponse reviewOtaEntry(CreateRequest request) {
+        if (request.source() == BookingSource.DIRECT) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "An OTA source is required for OTA Booking Not Entered.");
+        }
+        Guest guest = guestRepository
+                .findById(request.guestId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Guest not found"));
+        if (!request.checkOutDate().isAfter(request.checkInDate())) {
+            throw new WalkInReviewException(
+                    WalkInReviewException.Reason.CHECK_OUT_NOT_AFTER_CHECK_IN,
+                    "Check-out date must be after the check-in date");
+        }
+        reservationService.requireOtaIdentityAvailableForNewReservation(request.source(), request.otaBookingReference());
+        Set<UUID> bookable = roomAvailability
+                .bookableRoomsForPeriod(request.checkInDate(), request.checkOutDate()).stream()
+                .map(RoomLookupResponse::id)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<UUID> seen = new HashSet<>();
+        List<Room> selected = new ArrayList<>();
+        for (RoomRequest roomRequest : request.rooms()) {
+            Room room = roomRepository
+                    .findById(roomRequest.roomId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Room not found"));
+            if (!seen.add(room.getId())) {
+                throw new WalkInReviewException(
+                        WalkInReviewException.Reason.DUPLICATE_ROOM,
+                        "A room can only be selected once", room.getRoomNumber());
+            }
+            if (!bookable.contains(room.getId())) {
+                throw new WalkInReviewException(
+                        WalkInReviewException.Reason.ROOM_UNAVAILABLE,
+                        "Room " + room.getRoomNumber() + " is not available for the whole stay", room.getRoomNumber());
+            }
+            selected.add(room);
+        }
+        requireAdultCapacity(request.adultCount(), selected);
+        List<CheckInRoomLine> rooms = request.rooms().stream()
+                .map(roomRequest -> toPreviewRoomLine(roomRequest, request.checkInDate(), request.checkOutDate()))
+                .toList();
+        BigDecimal total = rooms.stream().map(CheckInRoomLine::totalAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        List<GuestDocumentResponse> passports = guestDocumentService.findPassports(guest.getId());
+        return new OtaEntryReviewResponse(
+                guest.getId(),
+                guestMapper.toLookupResponse(guest).fullName(),
+                guest.getGuestCode(),
+                !passports.isEmpty(),
+                passports.isEmpty() ? null : passports.get(0).id(),
+                request.source(),
+                request.otaBookingReference(),
+                request.checkInDate(),
+                request.checkOutDate(),
+                rooms,
+                total,
+                request.currency());
+    }
+
+    /**
      * Builds the read-only Walk-in Review without persisting anything.
      *
      * @param request submitted Walk-in guest/room/date selections
@@ -294,7 +365,30 @@ public class CheckInService {
         if (!checkOutDate.isAfter(LocalDate.now(clock))) {
             return List.of();
         }
-        List<RoomLookupResponse> ready = availableRoomsForWalkIn(checkOutDate);
+        return toRoomOptions(availableRoomsForWalkIn(checkOutDate));
+    }
+
+    /**
+     * Lists the Rooms offered by the OTA Booking Not Entered Room Selection table: bookable inventory without an
+     * inventory conflict for the whole staff-entered period {@code [checkInDate, checkOutDate)}
+     * ({@link RoomAvailabilityService#bookableRoomsForPeriod}). Unlike Walk-in, today's operational readiness is not
+     * a filter, so a Room that is currently OCCUPIED, DIRTY or CLEANING may be offered for a future arrival. This is
+     * UI guidance only; {@link #reviewOtaEntry} and the Confirm inside {@link #createOtaEntry} re-validate.
+     *
+     * @param checkInDate inclusive OTA check-in date
+     * @param checkOutDate exclusive OTA check-out date
+     * @return the selectable Rooms, ordered by room number; empty when the period is not at least one night
+     */
+    @Transactional(readOnly = true)
+    public List<WalkInRoomOption> otaRoomOptions(LocalDate checkInDate, LocalDate checkOutDate) {
+        if (!checkOutDate.isAfter(checkInDate)) {
+            return List.of();
+        }
+        return toRoomOptions(roomAvailability.bookableRoomsForPeriod(checkInDate, checkOutDate));
+    }
+
+    /** Enriches Room lookups with their Room Type name and adult capacity for a Room Selection table. */
+    private List<WalkInRoomOption> toRoomOptions(List<RoomLookupResponse> ready) {
         Map<UUID, Room> roomsById = new HashMap<>();
         roomRepository.findAllById(ready.stream().map(RoomLookupResponse::id).toList())
                 .forEach(room -> roomsById.put(room.getId(), room));
@@ -346,7 +440,15 @@ public class CheckInService {
             }
             selected.add(room);
         }
-        AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(request.adultCount(), selected);
+        requireAdultCapacity(request.adultCount(), selected);
+    }
+
+    /**
+     * Applies the shared {@link AdultCapacityRules} to the selected Rooms and reports a failure as a reviewable
+     * rejection. Nothing has been mutated when this is called.
+     */
+    private void requireAdultCapacity(Integer adultCount, List<Room> selected) {
+        AdultCapacityRules.Result capacity = AdultCapacityRules.evaluate(adultCount, selected);
         switch (capacity.outcome()) {
             case INSUFFICIENT_ADULT_CAPACITY -> throw new WalkInReviewException(
                     WalkInReviewException.Reason.INSUFFICIENT_ADULT_CAPACITY,

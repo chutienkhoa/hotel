@@ -12,14 +12,24 @@
      generic system failure), so that half of this component is infrastructure only until a later batch
      has a real caller. Page-level/unrecoverable errors are instead handled by templates/error/*.html. -->
 <dialog aria-describedby="feedback-dialog-message" aria-labelledby="feedback-dialog-title"
-        class="feedback-dialog" id="feedback-dialog" th:fragment="feedbackDialog">
+        class="feedback-dialog" id="feedback-dialog" th:fragment="feedbackDialog"
+        th:classappend="${missingFields != null and !missingFields.empty} ? 'feedback-dialog--validation'">
     <div class="feedback-dialog__content">
+        <div class="feedback-dialog__header">
         <span aria-hidden="true" class="feedback-dialog__icon"><svg th:replace="~{layout/icons :: alertTriangle}"></svg></span>
         <h2 id="feedback-dialog-title"
-            th:text="${systemErrorMessage != null} ? #{common.error.system.title} : #{common.error.business.title}">
+            th:text="${systemErrorMessage != null} ? #{common.error.system.title} : (${missingFields != null and !missingFields.empty} ? #{common.validation.required.title} : #{common.error.business.title})">
             Unable to complete
         </h2>
+        </div>
         <p id="feedback-dialog-message" th:text="${systemErrorMessage} ?: ${errorMessage}"></p>
+        <!-- Optional list of missing required form fields. A page supplies missingFields (label key + optional detail,
+             see MissingRequiredField) for a rejected form, or fills this list at runtime through
+             PmsFeedbackDialog.show({ items }) when it detects the problem in the browser. -->
+        <ul class="feedback-dialog__list" id="feedback-dialog-list" th:hidden="${missingFields == null or missingFields.empty}">
+            <li th:each="missing : ${missingFields}"
+                th:text="${missing.detail == null} ? #{${'checkin.validation.field.' + missing.labelKey}} : #{${'checkin.validation.field.' + missing.labelKey}} + ' — ' + ${missing.detail}"></li>
+        </ul>
         <div class="feedback-dialog__actions">
             <button autofocus class="button button-primary" data-feedback-dialog-close th:text="#{common.action.close}" type="button">
                 Close

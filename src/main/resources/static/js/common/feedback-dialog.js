@@ -10,6 +10,7 @@
     const title = dialog.querySelector("#feedback-dialog-title");
     const message = dialog.querySelector("#feedback-dialog-message");
     const closeButton = dialog.querySelector("[data-feedback-dialog-close]");
+    const list = dialog.querySelector("#feedback-dialog-list");
 
     if (!message || !closeButton) {
         return;
@@ -26,11 +27,22 @@
     // form's missing nightly rate) without a second dialog component. Presentation only: the server still
     // validates. onClose runs once, after the dialog has closed (the page uses it to restore focus).
     window.PmsFeedbackDialog = {
-        show({ title: heading, message: text, onClose }) {
+        show({ title: heading, message: text, items, onClose }) {
             if (title && heading) {
                 title.textContent = heading;
             }
             message.textContent = text;
+            // Optional bullet list (for example the missing required fields); plain text only, never markup.
+            if (list) {
+                list.replaceChildren(...(items || []).map((item) => {
+                    const entry = document.createElement("li");
+                    entry.textContent = item;
+                    return entry;
+                }));
+                list.hidden = !items || items.length === 0;
+                // A listed set of missing fields uses the compact validation-summary layout.
+                dialog.classList.toggle("feedback-dialog--validation", !list.hidden);
+            }
             if (typeof onClose === "function") {
                 dialog.addEventListener("close", onClose, { once: true });
             }

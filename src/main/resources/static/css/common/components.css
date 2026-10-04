@@ -418,9 +418,87 @@
   color: var(--color-muted);
   margin-bottom: var(--space-5);
 }
+.feedback-dialog__list {
+  color: var(--color-text);
+  display: grid;
+  gap: var(--space-1);
+  list-style: disc;
+  margin: 0 0 var(--space-5);
+  padding-inline-start: var(--space-5);
+  text-align: start;
+}
+.feedback-dialog__list[hidden] {
+  display: none;
+}
+.feedback-dialog__content p:has(+ .feedback-dialog__list:not([hidden])) {
+  margin-bottom: var(--space-3);
+}
 .feedback-dialog__actions {
   display: flex;
   justify-content: center;
+}
+
+/* Validation summary variant (missing required fields): compact, left-aligned, icon and title on one row, the
+   missing fields grouped in a light error panel and the single action at the bottom right. Applied by the server
+   when it supplies missingFields and by feedback-dialog.js when it is shown with a list of items; business-error and
+   system-error dialogs keep the centred layout above. */
+.feedback-dialog--validation {
+  max-width: min(29.5rem, calc(100% - 2 * var(--space-4)));
+}
+.feedback-dialog--validation .feedback-dialog__content {
+  padding: var(--space-4) var(--space-5);
+  text-align: start;
+}
+.feedback-dialog--validation .feedback-dialog__header {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: var(--space-1);
+}
+.feedback-dialog--validation .feedback-dialog__icon {
+  flex: none;
+  margin: 0;
+}
+.feedback-dialog--validation .feedback-dialog__icon svg {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+.feedback-dialog--validation .feedback-dialog__content h2 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  margin: 0;
+}
+.feedback-dialog--validation .feedback-dialog__content p {
+  font-size: 0.9375rem;
+  margin: 0 0 var(--space-3);
+}
+.feedback-dialog--validation .feedback-dialog__list {
+  background: #fff5f5;
+  border: 1px solid #f3c4c4;
+  border-radius: var(--radius-sm, 0.375rem);
+  gap: 0.375rem;
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 0.625rem 0.75rem;
+}
+.feedback-dialog--validation .feedback-dialog__list li {
+  align-items: baseline;
+  display: flex;
+  gap: 0.625rem;
+}
+.feedback-dialog--validation .feedback-dialog__list li::before {
+  background: var(--color-danger);
+  border-radius: 999px;
+  content: "";
+  flex: none;
+  height: 0.4375rem;
+  transform: translateY(-0.1rem);
+  width: 0.4375rem;
+}
+.feedback-dialog--validation .feedback-dialog__actions {
+  justify-content: flex-end;
 }
 
 /* ---------------------------------------------------------------------------------------------------

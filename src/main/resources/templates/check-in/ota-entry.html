@@ -1,204 +1,336 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head('Check-in — OTA Booking Not Entered')}"></head>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org"
+      th:with="pageStylesheet='/css/front-desk/walk-in.css'">
+<head th:replace="~{layout/base :: head(#{checkin.ota.title})}"></head>
 <body>
-<div class="app-shell page-check-in">
+<div class="app-shell page-front-desk">
     <header th:replace="~{layout/header :: header}"></header>
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
-    <main class="content">
-        <a class="back-link" th:href="@{/check-in}">Back to Check-in</a>
-        <div class="page-header">
-            <div>
-                <h1>OTA Booking Not Entered</h1>
-                <p>Guest already has an Agoda / Booking.com / Airbnb booking that has not yet been entered into Hotel System. Enter it exactly as booked, then continue to Check-in Review.</p>
+    <main class="content walk-in">
+        <div class="walk-in-page">
+            <a class="back-link back-link--primary" th:href="@{/check-in}">
+                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
+                <span th:text="#{checkin.walkIn.back}">Back to Check-in Guest</span>
+            </a>
+
+            <div class="page-header walk-in-header">
+                <div>
+                    <h1 th:text="#{checkin.ota.title}">OTA Booking (Not Entered) Reservation</h1>
+                    <p th:text="#{checkin.ota.subtitle}">Create a new reservation for an OTA booking that is not yet entered in the system.</p>
+                </div>
             </div>
+
+            <!-- Progress through this page's sections, then the Summary. Initial state comes from the server-held form
+                 values; check-in-walk-in.js only keeps it in step while the operator edits (presentation only). -->
+            <ol class="walk-in-steps" data-walk-in-steps th:aria-label="#{checkin.ota.steps.label}">
+                <li class="walk-in-step" data-step="guest"
+                    th:classappend="${otaEntryForm.guestId != null} ? 'walk-in-step--complete'">
+                    <span class="walk-in-step__marker">
+                        <span class="walk-in-step__number">1</span>
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                    </span>
+                    <span class="walk-in-step__label" th:text="#{checkin.walkIn.step.guest}">Guest Information</span>
+                </li>
+                <li class="walk-in-step" data-step="stay"
+                    th:classappend="${otaEntryForm.checkInDate != null and otaEntryForm.checkOutDate != null} ? 'walk-in-step--complete'">
+                    <span class="walk-in-step__marker">
+                        <span class="walk-in-step__number">2</span>
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                    </span>
+                    <span class="walk-in-step__label" th:text="#{checkin.walkIn.step.stay}">Stay Details</span>
+                </li>
+                <li class="walk-in-step" data-step="room">
+                    <span class="walk-in-step__marker">
+                        <span class="walk-in-step__number">3</span>
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                    </span>
+                    <span class="walk-in-step__label" th:text="#{checkin.walkIn.step.room}">Room Selection</span>
+                </li>
+                <li class="walk-in-step" data-step="summary">
+                    <span class="walk-in-step__marker">
+                        <span class="walk-in-step__number">4</span>
+                        <svg th:replace="~{layout/icons :: check}"></svg>
+                    </span>
+                    <span class="walk-in-step__label" th:text="#{checkin.walkIn.step.summary}">Reservation Summary</span>
+                </li>
+            </ol>
+
+            <p class="message message-warning" role="status" th:if="${otaNotice}" th:text="#{${otaNotice}}"></p>
+            <p class="message message-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <form class="walk-in-form" id="walk-in-form" method="post" novalidate th:action="@{/check-in/ota-entry/review}"
+                  th:object="${otaEntryForm}"
+                  th:with="missingPaths=${missingFields == null ? {} : missingFields.![path]}">
+                <p class="message message-error" role="alert" th:if="${#fields.hasAnyErrors() and !requiredFieldErrorsOnly}"
+                   th:text="#{checkin.walkIn.error.fields}">Please correct the highlighted fields.</p>
+                <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                <!-- Enter in a field must continue to the Summary, never start Create New Guest, which comes first in
+                     the document: this hidden button is the form's default submit. -->
+                <button aria-hidden="true" hidden tabindex="-1" type="submit"></button>
+                <!-- OTA reservations are VND only: there is no currency choice; the value is fixed here and still validated by the server. -->
+                <input name="currency" type="hidden" value="VND" />
+                <p class="message message-error" role="alert" th:if="${#fields.hasErrors('currency')}"
+                   th:errors="*{currency}"></p>
+
+                <div class="walk-in-grid">
+                    <div class="walk-in-column">
+                        <section aria-labelledby="walk-in-guest-heading" class="card walk-in-card walk-in-card--guest" data-guest-verification>
+                            <header class="walk-in-card__header walk-in-card__header--action">
+                                <svg th:replace="~{layout/icons :: user}"></svg>
+                                <h2 id="walk-in-guest-heading" th:text="#{checkin.walkIn.guest.title}">Guest Information</h2>
+                                <div class="walk-in-card__actions">
+                                    <button aria-controls="walk-in-guest-search" aria-expanded="false" class="button button-secondary walk-in-search-toggle"
+                                            data-guest-search-toggle type="button">
+                                        <svg th:replace="~{layout/icons :: search}"></svg>
+                                        <span th:text="#{checkin.walkIn.guest.search}">Search Existing Guest</span>
+                                    </button>
+                                    <button class="button button-secondary walk-in-new-guest" formmethod="post" formnovalidate
+                                            th:formaction="@{/check-in/ota-entry/new-guest}" type="submit">
+                                        <svg th:replace="~{layout/icons :: plusCircle}"></svg>
+                                        <span th:text="#{checkin.walkIn.guest.new}">Create New Guest</span>
+                                    </button>
+                                </div>
+                            </header>
+
+                            <!-- Searches the guests already loaded into the selector below (code, name, phone, email); picking a
+                                 result selects that option. The selector remains the one submitted value. -->
+                            <div class="walk-in-guest-search" data-guest-search hidden id="walk-in-guest-search">
+                                <label class="visually-hidden" for="walk-in-guest-query" th:text="#{checkin.walkIn.guest.searchLabel}">Search guests</label>
+                                <input autocomplete="off" data-guest-query id="walk-in-guest-query" type="search"
+                                       th:placeholder="#{checkin.walkIn.guest.searchPlaceholder}" />
+                                <ul class="walk-in-guest-results" data-guest-results></ul>
+                                <p class="walk-in-hint" data-guest-no-results hidden th:text="#{checkin.walkIn.guest.noResults}">No matching guest.</p>
+                            </div>
+
+                            <div class="form-field">
+                                <label for="guestId">
+                                    <span th:text="#{checkin.walkIn.guest.label}">Guest</span>
+                                    <span aria-hidden="true" class="walk-in-required">*</span>
+                                </label>
+                                <select data-guest-select id="guestId" required th:field="*{guestId}"
+                                        th:attr="aria-invalid=${#fields.hasErrors('guestId')},aria-describedby=${#fields.hasErrors('guestId')} ? 'guestId-error'">
+                                    <option value="" th:text="#{checkin.walkIn.guest.placeholder}">Select a guest</option>
+                                    <option th:each="guest : ${guests}"
+                                            th:with="nationalityFlag=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(guest.nationality).flag},dateOfBirth=${T(com.example.hotel.common.DisplayFormats).formatDate(guest.dateOfBirth)}"
+                                            th:attr="data-guest-code=${guest.guestCode},data-full-name=${guest.fullName},data-email=${guest.email},data-phone=${guest.phone},data-nationality=${guest.nationality},data-nationality-flag=${nationalityFlag},data-date-of-birth=${dateOfBirth},data-id-document-number=${guest.idDocumentNumber}"
+                                            th:text="${guest.guestCode + ' · ' + guest.fullName}"
+                                            th:value="${guest.id}">G000001 · Guest name</option>
+                                </select>
+                                <p class="field-error" th:classappend="${missingPaths.contains('guestId')} ? 'visually-hidden'" id="guestId-error" th:if="${#fields.hasErrors('guestId')}" th:text="#{validation.walkIn.guest.required}"></p>
+                            </div>
+
+                            <p class="walk-in-guest-empty" data-guest-empty th:text="#{checkin.walkIn.guest.empty}">No guest selected.</p>
+
+                            <!-- Read-only details of the selected Guest, from the Guest record. Nothing here is submitted. -->
+                            <dl class="walk-in-guest-details" data-guest-information hidden>
+                                <div><dt th:text="#{checkin.walkIn.guest.name}">Full Name</dt><dd data-guest-full-name>—</dd></div>
+                                <div><dt th:text="#{checkin.review.guest.nationality}">Nationality</dt><dd class="walk-in-nationality"><span aria-hidden="true" class="walk-in-flag" data-guest-flag hidden></span><span data-guest-nationality>—</span></dd></div>
+                                <div><dt th:text="#{checkin.review.guest.phone}">Phone</dt><dd data-guest-phone>—</dd></div>
+                                <div><dt th:text="#{checkin.review.guest.email}">Email</dt><dd data-guest-email>—</dd></div>
+                                <div><dt th:text="#{guest.field.dateOfBirth}">Date of Birth</dt><dd data-guest-dob>—</dd></div>
+                                <div><dt th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</dt><dd data-guest-id-document>—</dd></div>
+                                <div><dt th:text="#{checkin.walkIn.guest.code}">Guest Code</dt><dd data-guest-code>—</dd></div>
+                            </dl>
+                            <p class="walk-in-hint" th:text="#{checkin.walkIn.guest.newHint}">Create the guest record, then return here with your entries kept.</p>
+                        </section>
+
+                        <section aria-labelledby="walk-in-room-heading" class="card walk-in-card walk-in-card--room walk-in-rooms" id="walk-in-rooms"
+                                 th:attr="data-invalid=${#fields.hasErrors('rooms')},data-room-url=${canManageRoom} ? @{/rooms/ROOM_ID},data-availability-url=@{/check-in/ota-entry/available-rooms},data-label-select=#{checkin.walkIn.room.select},data-label-rate=#{checkin.walkIn.room.rateLabel},data-msg-prompt=#{checkin.ota.room.hint.dates},data-msg-empty=#{checkin.ota.room.empty},data-msg-loading=#{checkin.walkIn.room.loading},data-msg-error=#{checkin.ota.room.loadError},data-msg-capacity=#{checkin.walkIn.room.capacitySummary},data-msg-available=#{checkin.walkIn.room.available},data-all-types=#{checkin.walkIn.room.type.all}">
+                            <header class="walk-in-card__header">
+                                <svg th:replace="~{layout/icons :: bed}"></svg>
+                                <h2 id="walk-in-room-heading" th:text="#{checkin.walkIn.room.title}">Room Selection</h2>
+                            </header>
+
+                            <div class="walk-in-room-toolbar">
+                                <div class="form-field">
+                                    <label for="roomTypeFilter" th:text="#{checkin.walkIn.room.type}">Room Type</label>
+                                    <select disabled id="roomTypeFilter">
+                                        <option value="" th:text="#{checkin.walkIn.room.type.all}">All room types</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <span class="walk-in-label" id="walk-in-guests-label" th:text="#{reservation.guests.title}">Guests</span>
+                                    <div aria-labelledby="walk-in-guests-label" class="walk-in-readonly" data-guests-context
+                                         th:attr="data-msg-guests=#{checkin.walkIn.room.guestsValue}">—</div>
+                                </div>
+                                <!-- Runs the same authoritative availability query that also runs when the check-out date changes. -->
+                                <button class="button button-secondary walk-in-check" data-check-availability disabled type="button">
+                                    <svg th:replace="~{layout/icons :: search}"></svg>
+                                    <span th:text="#{checkin.walkIn.room.check}">Check Availability</span>
+                                </button>
+                            </div>
+                            <p class="walk-in-room-range" data-room-range hidden
+                               th:attr="data-msg-night=#{checkin.walkIn.room.nights.one},data-msg-nights=#{checkin.walkIn.room.nights.other}">
+                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                <span data-room-range-text></span>
+                            </p>
+
+                            <p aria-live="polite" class="walk-in-capacity" data-capacity-summary hidden></p>
+                            <p class="walk-in-room-state" data-room-state role="status"
+                               th:text="#{checkin.ota.room.hint.dates}">Enter the check-in and check-out dates to see the rooms available for the whole stay.</p>
+
+                            <div class="table-wrap walk-in-room-table-wrap" data-room-table-wrap hidden>
+                                <table class="walk-in-room-table">
+                                    <thead>
+                                    <tr>
+                                        <th scope="col" th:text="#{checkin.walkIn.room.select}">Select</th>
+                                        <th scope="col" th:text="#{checkin.walkIn.room.number}">Room No.</th>
+                                        <th scope="col" th:text="#{checkin.walkIn.room.typeColumn}">Room Type</th>
+                                        <th class="walk-in-num" scope="col" th:text="#{checkin.walkIn.room.capacity}">Adult Capacity</th>
+                                        <th scope="col" th:text="#{checkin.walkIn.room.status}">Status</th>
+                                        <th class="walk-in-num" scope="col">
+                                            <span th:text="#{checkin.walkIn.room.rate}">Rate (VND / night)</span>
+                                            <span aria-hidden="true" class="walk-in-required">*</span>
+                                        </th>
+                                    </tr>
+                                    </thead>
+                                    <tbody data-room-rows></tbody>
+                                </table>
+                            </div>
+
+                            <p class="field-error" th:classappend="${missingPaths.contains('rooms')} ? 'visually-hidden'" id="rooms-error" th:if="${#fields.hasErrors('rooms')}"
+                               th:text="${#lists.isEmpty(otaEntryForm.rooms)} ? #{validation.walkIn.rooms.required} : ${#strings.listJoin(#fields.errors('rooms'), ' ')}"></p>
+                            <th:block th:each="roomRequest, roomRowStat : *{rooms}">
+                                <p class="field-error" th:classappend="${missingPaths.contains('rooms[__${roomRowStat.index}__].roomId')} ? 'visually-hidden'"
+                                   th:if="${#fields.hasErrors('rooms[__${roomRowStat.index}__].roomId')}"
+                                   th:errors="*{rooms[__${roomRowStat.index}__].roomId}"></p>
+                                <p class="field-error" th:classappend="${missingPaths.contains('rooms[__${roomRowStat.index}__].nightlyRate')} ? 'visually-hidden'"
+                                   th:if="${#fields.hasErrors('rooms[__${roomRowStat.index}__].nightlyRate')}"
+                                   th:errors="*{rooms[__${roomRowStat.index}__].nightlyRate}"></p>
+                            </th:block>
+
+                            <!-- Rooms and rates preserved by the server (Back, validation error, Create New Guest round trip);
+                                 walk-in.js re-selects them once the available rooms have loaded. -->
+                            <div hidden>
+                                <span data-selected-room th:each="roomRequest, roomRowStat : *{rooms}" th:if="${roomRequest.roomId != null}"
+                                      th:attr="data-room-id=${roomRequest.roomId},data-rate=${roomRequest.nightlyRate},data-rate-invalid=${#fields.hasErrors('rooms[__${roomRowStat.index}__].nightlyRate')}"></span>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="walk-in-column">
+                        <section aria-labelledby="walk-in-stay-heading" class="card walk-in-card walk-in-card--stay">
+                            <header class="walk-in-card__header">
+                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                <h2 id="walk-in-stay-heading" th:text="#{checkin.walkIn.stay.title}">Stay Details</h2>
+                            </header>
+
+                            <div class="walk-in-fields">
+                                <div class="form-field">
+                                    <label for="checkInDate">
+                                        <span th:text="#{checkin.walkIn.stay.checkIn}">Check-in Date</span>
+                                        <span aria-hidden="true" class="walk-in-required">*</span>
+                                    </label>
+                                    <input class="js-date-picker" id="checkInDate" name="checkInDate" required type="text"
+                                           th:attr="aria-invalid=${#fields.hasErrors('checkInDate')},aria-describedby=${#fields.hasErrors('checkInDate')} ? 'checkInDate-error'"
+                                           th:value="${otaEntryForm.checkInDate == null ? '' : #temporals.format(otaEntryForm.checkInDate, 'yyyy-MM-dd')}" />
+                                    <p class="field-error" th:classappend="${missingPaths.contains('checkInDate')} ? 'visually-hidden'" id="checkInDate-error" th:if="${#fields.hasErrors('checkInDate')}" th:text="#{checkin.ota.error.required}"></p>
+                                </div>
+                                <div class="form-field">
+                                    <label for="checkOutDate">
+                                        <span th:text="#{checkin.walkIn.stay.checkOut}">Check-out Date</span>
+                                        <span aria-hidden="true" class="walk-in-required">*</span>
+                                    </label>
+                                    <input class="js-date-picker" id="checkOutDate" name="checkOutDate" required type="text"
+                                           th:attr="aria-invalid=${#fields.hasErrors('checkOutDate')},aria-describedby=${#fields.hasErrors('checkOutDate')} ? 'checkOutDate-error'"
+                                           th:value="${otaEntryForm.checkOutDate == null ? '' : #temporals.format(otaEntryForm.checkOutDate, 'yyyy-MM-dd')}" />
+                                    <p class="field-error" th:classappend="${missingPaths.contains('checkOutDate')} ? 'visually-hidden'" id="checkOutDate-error" th:if="${#fields.hasErrors('checkOutDate')}"
+                                       th:text="${otaEntryForm.checkOutDate == null} ? #{checkin.ota.error.required} : ${#strings.listJoin(#fields.errors('checkOutDate'), ' ')}"></p>
+                                </div>
+                                <div class="form-field walk-in-fields__wide">
+                                    <label th:text="#{checkin.walkIn.stay.nights}">Nights</label>
+                                    <div class="walk-in-readonly" data-nights>—</div>
+                                </div>
+                                <div class="form-field">
+                                    <label for="adultCount">
+                                        <span th:text="#{reservation.guests.adults}">Adults</span>
+                                        <span aria-hidden="true" class="walk-in-required">*</span>
+                                    </label>
+                                    <input id="adultCount" inputmode="numeric" min="1" required step="1" th:field="*{adultCount}" type="number"
+                                           th:attr="aria-invalid=${#fields.hasErrors('adultCount')},aria-describedby=${#fields.hasErrors('adultCount')} ? 'adultCount-error'" />
+                                    <p class="field-error" th:classappend="${missingPaths.contains('adultCount')} ? 'visually-hidden'" id="adultCount-error" th:if="${#fields.hasErrors('adultCount')}" th:errors="*{adultCount}"></p>
+                                </div>
+                                <div class="form-field">
+                                    <label for="childCount">
+                                        <span th:text="#{reservation.guests.children}">Children</span>
+                                        <span aria-hidden="true" class="walk-in-required">*</span>
+                                    </label>
+                                    <input id="childCount" inputmode="numeric" min="0" required step="1" th:field="*{childCount}" type="number"
+                                           th:attr="aria-invalid=${#fields.hasErrors('childCount')},aria-describedby=${#fields.hasErrors('childCount')} ? 'childCount-error'" />
+                                    <p class="field-error" th:classappend="${missingPaths.contains('childCount')} ? 'visually-hidden'" id="childCount-error" th:if="${#fields.hasErrors('childCount')}" th:errors="*{childCount}"></p>
+                                </div>
+                                <div class="form-field walk-in-fields__wide">
+                                    <label for="notes" th:text="#{checkin.ota.stay.notes}">Notes / Special Requests</label>
+                                    <textarea id="notes" maxlength="5000" rows="3" th:field="*{notes}"></textarea>
+                                    <p class="field-error" th:if="${#fields.hasErrors('notes')}" th:errors="*{notes}"></p>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section aria-labelledby="walk-in-source-heading" class="card walk-in-card walk-in-card--source">
+                            <header class="walk-in-card__header">
+                                <svg th:replace="~{layout/icons :: building}"></svg>
+                                <h2 id="walk-in-source-heading" th:text="#{checkin.ota.source.title}">Booking Source (OTA)</h2>
+                            </header>
+                            <!-- One real radio group: only the OTA sources are offered, so DIRECT can be neither chosen nor submitted. -->
+                            <div aria-labelledby="walk-in-source-heading" class="walk-in-source-list" role="radiogroup"
+                                 th:attr="aria-invalid=${#fields.hasErrors('source')}">
+                                <label class="walk-in-source-option walk-in-source-option--choice" th:each="otaSource : ${otaSources}">
+                                    <input class="walk-in-source-input" name="source" required type="radio"
+                                           th:checked="${otaEntryForm.source == otaSource}" th:value="${otaSource.name()}" />
+                                    <span aria-hidden="true" class="walk-in-radio"></span>
+                                    <span class="walk-in-source-option__icon walk-in-source-option__icon--letter"
+                                          th:classappend="'walk-in-source-option__icon--' + ${otaSource.name().toLowerCase()}"
+                                          th:text="${otaSource.name() == 'AGODA'} ? 'A' : (${otaSource.name() == 'BOOKING_COM'} ? 'B' : 'a')">A</span>
+                                    <span class="walk-in-source-option__name"
+                                          th:text="${otaSource.name() == 'AGODA'} ? #{checkin.walkIn.source.agoda} : (${otaSource.name() == 'BOOKING_COM'} ? #{checkin.walkIn.source.bookingCom} : #{checkin.walkIn.source.airbnb})">Agoda</span>
+                                </label>
+                            </div>
+                            <p class="field-error" th:classappend="${missingPaths.contains('source')} ? 'visually-hidden'" id="source-error" th:if="${#fields.hasErrors('source')}" th:text="#{checkin.ota.error.required}"></p>
+                            <div class="form-field walk-in-reference">
+                                <label for="otaBookingReference">
+                                    <span th:text="#{checkin.ota.reference.label}">OTA Booking Reference</span>
+                                    <span aria-hidden="true" class="walk-in-required">*</span>
+                                </label>
+                                <input autocomplete="off" id="otaBookingReference" maxlength="255" name="otaBookingReference" required type="text"
+                                       th:attr="aria-invalid=${#fields.hasErrors('otaBookingReference') or missingPaths.contains('otaBookingReference')},aria-describedby=${#fields.hasErrors('otaBookingReference')} ? 'otaBookingReference-error'"
+                                       th:value="${otaEntryForm.otaBookingReference}" />
+                                <p class="field-error" th:classappend="${missingPaths.contains('otaBookingReference')} ? 'visually-hidden'" id="otaBookingReference-error" th:if="${#fields.hasErrors('otaBookingReference')}"
+                                   th:text="${#strings.isEmpty(otaEntryForm.otaBookingReference)} ? #{validation.reservation.otaReference.required} : ${#strings.listJoin(#fields.errors('otaBookingReference'), ' ')}"></p>
+                            </div>
+                            <p class="walk-in-hint" th:text="#{checkin.ota.source.hint}">OTA reservations are created in VND.</p>
+                        </section>
+                    </div>
+                </div>
+            </form>
         </div>
 
-        <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
-        <form class="form-card" data-confirm-label="Create &amp; Continue" data-confirm-message="Create this reservation and continue to Check-in review?"
-              data-confirm-severity="NORMAL" data-confirm-title="Create reservation" method="post"
-              th:action="@{/check-in/ota-entry}" th:object="${otaEntryForm}">
-            <p class="message message-error" th:if="${#fields.hasAnyErrors()}">
-                Please correct the highlighted fields.
-            </p>
-            <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
-
-            <fieldset aria-label="Reservation information" class="reservation-overview-section">
-                <section aria-labelledby="guest-section-title" class="reservation-form-section">
-                    <h2 id="guest-section-title">Guest</h2>
-                    <div class="form-field" data-guest-verification>
-                        <label for="guestId">Guest</label>
-                        <select data-guest-select id="guestId" required th:field="*{guestId}">
-                            <option value="">Select a guest</option>
-                            <option th:each="guest : ${guests}"
-                                    th:attr="data-guest-code=${guest.guestCode},data-full-name=${guest.fullName},data-email=${guest.email},data-phone=${guest.phone},data-nationality=${guest.nationality}"
-                                    th:text="${guest.guestCode + ' · ' + guest.fullName}"
-                                    th:value="${guest.id}">G000001 · Guest name</option>
-                        </select>
-                        <p class="field-error" th:errors="*{guestId}"></p>
-                    </div>
-
-                    <div class="reservation-guest-actions">
-                        <details class="guest-information" data-guest-information hidden>
-                            <summary>Guest Information</summary>
-                            <dl class="guest-information__list">
-                                <div><dt>Guest Code</dt><dd data-guest-code>G000001</dd></div>
-                                <div><dt>Full Name</dt><dd data-guest-full-name>Guest name</dd></div>
-                                <div><dt>Email</dt><dd data-guest-email>guest@example.com</dd></div>
-                                <div><dt>Phone</dt><dd data-guest-phone>Phone number</dd></div>
-                                <div><dt>Nationality</dt><dd data-guest-nationality>Nationality</dd></div>
-                            </dl>
-                        </details>
-                        <button class="inline-link" formnovalidate th:formaction="@{/check-in/ota-entry/new-guest}"
-                                formmethod="post" type="submit">+ Create New Guest</button>
-                    </div>
-                </section>
-
-                <section aria-labelledby="reservation-details-section-title" class="reservation-form-section">
-                    <h2 id="reservation-details-section-title">OTA Booking Details</h2>
-                    <div class="reservation-details-row">
-                        <div class="form-grid reservation-details-grid">
-                            <div class="form-field">
-                                <label for="checkInDate">Check-in date</label>
-                                <input class="js-date-picker" id="checkInDate" required
-                                       name="checkInDate"
-                                       th:value="${otaEntryForm.checkInDate == null ? '' : #temporals.format(otaEntryForm.checkInDate, 'yyyy-MM-dd')}"
-                                       type="text" />
-                                <p class="field-error" th:errors="*{checkInDate}"></p>
-                            </div>
-
-                            <div class="form-field">
-                                <label for="checkOutDate">Check-out date</label>
-                                <input class="js-date-picker" id="checkOutDate" required
-                                       name="checkOutDate"
-                                       th:value="${otaEntryForm.checkOutDate == null ? '' : #temporals.format(otaEntryForm.checkOutDate, 'yyyy-MM-dd')}"
-                                       type="text" />
-                                <p class="field-error" th:errors="*{checkOutDate}"></p>
-                            </div>
-
-                            <div class="form-field">
-                                <label for="adultCount" th:text="#{reservation.guests.adults} + ' *'">Adults *</label>
-                                <input id="adultCount" inputmode="numeric" min="1" required step="1" th:field="*{adultCount}" type="number" />
-                                <p class="field-error" th:errors="*{adultCount}"></p>
-                            </div>
-
-                            <div class="form-field">
-                                <label for="childCount" th:text="#{reservation.guests.children} + ' *'">Children *</label>
-                                <input id="childCount" inputmode="numeric" min="0" required step="1" th:field="*{childCount}" type="number" />
-                                <p class="field-error" th:errors="*{childCount}"></p>
-                            </div>
-
-                            <div class="form-field">
-                                <label for="source">Source</label>
-                                <select id="source" required th:field="*{source}">
-                                    <option value="">Select OTA source</option>
-                                    <option th:each="source : ${otaSources}"
-                                            th:text="${source.displayName}"
-                                            th:value="${source}">
-                                        Agoda
-                                    </option>
-                                </select>
-                                <p class="field-error" th:errors="*{source}"></p>
-                            </div>
-                        </div>
-                        <span aria-hidden="true" class="button button-danger reservation-details-row__spacer">Remove</span>
-                    </div>
-
-                    <div class="form-field">
-                        <label for="otaBookingReference">OTA Booking Reference *</label>
-                        <input id="otaBookingReference" required th:field="*{otaBookingReference}" type="text" />
-                        <p class="field-error" th:errors="*{otaBookingReference}"></p>
-                    </div>
-
-                    <div class="form-field reservation-notes">
-                        <label for="notes">Notes</label>
-                        <textarea id="notes" maxlength="5000" rows="3" th:field="*{notes}"></textarea>
-                        <p class="field-error" th:errors="*{notes}"></p>
-                    </div>
-                </section>
-            </fieldset>
-
-            <fieldset class="reservation-rooms-section">
-                <legend>Rooms</legend>
-                <p class="field-error" th:errors="*{rooms}"></p>
-                <div id="room-rows">
-                    <div class="room-row" th:each="roomRequest, roomRowStat : *{rooms}">
-                        <div class="room-fields-three-column-grid">
-                            <div class="form-field">
-                                <label th:for="${'room-' + roomRowStat.index}">Room</label>
-                                <select required th:field="*{rooms[__${roomRowStat.index}__].roomId}"
-                                        th:id="${'room-' + roomRowStat.index}">
-                                    <option value="">Select a room</option>
-                                    <option th:each="room : ${rooms}"
-                                            th:text="${room.status == 'AVAILABLE' ? room.roomNumber : room.roomNumber + ' — ' + room.status}"
-                                            th:value="${room.id}">
-                                        Room
-                                    </option>
-                                </select>
-                            </div>
-                            <div class="form-field">
-                                <label th:for="${'nightly-rate-' + roomRowStat.index}">Nightly rate</label>
-                                <input class="js-money-input" inputmode="decimal" required
-                                       th:field="*{rooms[__${roomRowStat.index}__].nightlyRate}"
-                                       th:id="${'nightly-rate-' + roomRowStat.index}"
-                                       type="text" />
-                            </div>
-                            <div class="form-field room-currency-field" th:if="${roomRowStat.first}">
-                                <label for="currency">Currency</label>
-                                <select id="currency" required th:field="*{currency}">
-                                    <option value="">Select currency</option>
-                                    <option value="VND">VND</option>
-                                </select>
-                                <p class="field-error" th:errors="*{currency}"></p>
-                            </div>
-                            <div aria-hidden="true" class="room-currency-spacer" th:unless="${roomRowStat.first}"></div>
-                        </div>
-                        <button class="button button-danger remove-room" type="button">
-                            Remove
-                        </button>
-                    </div>
-                </div>
-                <button class="button button-secondary" id="add-room" type="button">Add room</button>
-            </fieldset>
-
-            <div class="form-actions">
-                <a class="button button-secondary" th:href="@{/check-in}">Cancel</a>
-                <button class="button button-primary" type="submit">Create &amp; Continue</button>
-            </div>
-        </form>
-
-        <template id="room-row-template">
-            <div class="room-row">
-                <div class="room-fields-three-column-grid">
-                    <div class="form-field">
-                        <label>Room
-                            <select data-room-id required>
-                                <option value="">Select a room</option>
-                                <option th:each="room : ${rooms}"
-                                        th:text="${room.status == 'AVAILABLE' ? room.roomNumber : room.roomNumber + ' — ' + room.status}"
-                                        th:value="${room.id}">
-                                    Room
-                                </option>
-                            </select>
-                        </label>
-                    </div>
-                    <div class="form-field">
-                        <label>Nightly rate
-                            <input class="js-money-input" data-nightly-rate inputmode="decimal" required type="text" />
-                        </label>
-                    </div>
-                    <div aria-hidden="true" class="room-currency-spacer"></div>
-                </div>
-                <button class="button button-danger remove-room" type="button">
-                    Remove
+        <div class="walk-in-actions">
+            <div class="walk-in-actions__inner">
+                <a class="button button-secondary" th:href="@{/check-in}" th:text="#{checkin.walkIn.cancel}">Cancel</a>
+                <button class="button button-primary" form="walk-in-form" type="submit">
+                    <span th:text="#{checkin.walkIn.cta.next}">Next: Reservation Summary</span>
+                    <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
                 </button>
             </div>
-        </template>
+        </div>
     </main>
 
-    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
+    <!-- Field names for the browser-side required-field check (check-in-walk-in.js). They use the same
+         checkin.validation.field.* messages as the server-rendered list in the feedback dialog, so both paths name a
+         field identically in either language. -->
+    <div data-validation-labels hidden
+         th:attr="data-title=#{common.validation.required.title},data-message=#{common.validation.required.message},data-guest-id=#{checkin.validation.field.guestId},data-check-in-date=#{checkin.validation.field.checkInDate},data-check-out-date=#{checkin.validation.field.checkOutDate},data-adult-count=#{checkin.validation.field.adultCount},data-child-count=#{checkin.validation.field.childCount},data-source=#{checkin.validation.field.source},data-ota-booking-reference=#{checkin.validation.field.otaBookingReference},data-rooms=#{checkin.validation.field.rooms},data-nightly-rate=#{checkin.validation.field.nightlyRate}"></div>
+
+    <!-- Shared Task33 feedback dialog. Its text is the missing-required-fields summary (server-rendered for a rejected
+         form, or supplied by check-in-walk-in.js); any other errorMessage is cleared for this inclusion so the existing
+         inline banner above stays that message's only presentation. -->
+    <th:block th:with="errorMessage=${missingFields != null and !missingFields.empty} ? #{common.validation.required.message} : null,systemErrorMessage=${null}">
+        <th:block th:replace="~{layout/feedback-dialog :: feedbackDialog}"></th:block>
+    </th:block>
 </div>
 <script defer th:src="@{/js/reservation/form.js}"></script>
+<script defer th:src="@{/js/booking/check-in-walk-in.js}"></script>
 </body>
 </html>

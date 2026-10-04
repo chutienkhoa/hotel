@@ -97,16 +97,16 @@
 
             <p class="empty-state" th:if="${recentArrivals.empty}" th:text="#{reservation.frontDesk.arrivals.empty}">No arrivals.</p>
             <div class="table-wrap front-desk-table-wrap" th:unless="${recentArrivals.empty}">
-                <table class="front-desk-table front-desk-table--arrivals">
+                <table class="front-desk-table front-desk-table--arrivals front-desk-table--recent">
                     <thead>
                     <tr>
-                        <th scope="col" th:text="#{checkin.landing.column.reservation}">Reservation No.</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.guest}">Guest</th>
-                        <th scope="col" th:text="#{checkin.landing.column.arrivalDate}">Arrival Date</th>
-                        <th scope="col" th:text="#{checkin.landing.column.rooms}">Room(s)</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.nights}">Nights</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.source}">Source</th>
-                        <th scope="col" th:text="#{reservation.frontDesk.column.status}">Status</th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.landing.column.reservation}, 'reservationNumber')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.landing.column.arrivalDate}, 'checkInDate')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{checkin.landing.column.rooms}, 'room')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
+                        <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'status')}"></th>
                         <th scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
                     </tr>
                     </thead>

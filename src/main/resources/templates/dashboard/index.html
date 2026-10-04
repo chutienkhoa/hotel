@@ -12,7 +12,7 @@
                 <h1 th:text="#{dashboard.greeting(${currentUsername})}">Welcome back, admin!</h1>
                 <p th:text="#{dashboard.subtitle}">Here's what's happening at your hotel today.</p>
             </div>
-            <p class="dashboard-date" th:text="${dashboard.hotelDateLabel}">Tuesday, Sep 16, 2026</p>
+            <p class="dashboard-date" th:text="${#temporals.format(dashboard.hotelToday, #messages.msg('common.date.long.pattern'), #locale)}">Tuesday, Sep 16, 2026</p>
         </div>
 
         <section aria-label="KPI" class="card-grid">

@@ -1,0 +1,625 @@
+/* Check-in Review (templates/check-in/review.html): one compact operational review screen. Scoped to .check-in-review;
+   shared tokens, cards, buttons and badges come from layout.css / components.css. */
+
+.check-in-review {
+  min-width: 0;
+}
+.cir-page {
+  /* The right-hand track of every multi-column row (Booking Contact, Room Status, Prepayments + Documents), so those cards
+     share one left edge, one right edge and one width. Percentages resolve against each row's own, identical, width. */
+  --cir-side: minmax(18rem, 30%);
+  column-gap: var(--space-4);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--space-4);
+}
+.cir-page > * {
+  min-width: 0;
+}
+.cir-back,
+.cir-full {
+  grid-column: 1 / -1;
+}
+.cir-back {
+  align-items: center;
+  color: var(--color-primary);
+  font-weight: 600;
+  display: inline-flex;
+  gap: var(--space-2);
+  justify-self: start;
+  margin: 0;
+}
+.cir-back svg {
+  height: 1rem;
+  width: 1rem;
+}
+.cir-title h1 {
+  margin: 0;
+}
+.cir-title .page-description {
+  margin: var(--space-1) 0 0;
+}
+.cir-title {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+/* Final action. Last in the document (it ends the mobile flow); on desktop it sits at the top right of the header. */
+.cir-action {
+  align-self: start;
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+  text-align: end;
+}
+.cir-action form {
+  margin: 0;
+}
+.cir-action__button {
+  gap: var(--space-2);
+  min-height: 2.75rem;
+  padding-inline: var(--space-5);
+}
+.cir-action__button svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.cir-action__blocked {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 0;
+  max-width: 20rem;
+}
+
+.cir-card {
+  margin: 0;
+  padding: var(--space-4);
+}
+.cir-card h2 {
+  font-size: 1rem;
+  margin: 0 0 var(--space-3);
+}
+.cir-label {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+}
+.cir-hint {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  margin: var(--space-3) 0 0;
+}
+
+/* Notices (not confirmed / early / late): compact, same tone as the shared message components. */
+.cir-notice {
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+.cir-notice h2 {
+  font-size: 0.9375rem;
+  margin: 0 0 var(--space-1);
+}
+.cir-notice p {
+  font-size: 0.875rem;
+  margin: 0;
+}
+.cir-notice--blocked {
+  background: var(--color-danger-surface);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.cir-notice--warning {
+  background: var(--color-warning-surface);
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
+/* Reservation overview: identity left, then one row of facts that wraps naturally. */
+.cir-overview {
+  display: grid;
+  gap: var(--space-3);
+}
+.cir-overview__identity {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.cir-overview__number {
+  color: var(--color-navy);
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0;
+}
+.cir-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  justify-content: space-between;
+  margin: 0;
+}
+.cir-fact {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+.cir-fact dt {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+.cir-fact dd {
+  font-weight: 700;
+  margin: 0;
+  white-space: nowrap;
+}
+.cir-fact__note {
+  color: var(--color-muted);
+  white-space: normal !important;
+  font-size: 0.8125rem;
+  font-weight: 600 !important;
+}
+.cir-fact__note--danger {
+  color: var(--color-danger);
+}
+.cir-fact__icon {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: none;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+.cir-fact__icon svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.cir-fact__icon--green,
+.cir-icon-ok {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.cir-fact__icon--blue {
+  background: var(--color-info-surface);
+  color: var(--color-info);
+}
+.cir-fact__icon--amber,
+.cir-icon-warn {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+.cir-fact__icon--purple {
+  background: var(--color-purple-surface);
+  color: var(--color-purple);
+}
+.cir-fact__icon--slate {
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+}
+
+/* Arrival Readiness: prominent but compact; the whole card takes the state's tone. */
+.cir-readiness {
+  border-inline-start: 4px solid var(--color-success);
+}
+.cir-readiness--attention {
+  border-inline-start-color: var(--color-warning);
+}
+.cir-readiness__head {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+.cir-readiness__head h2 {
+  margin: 0;
+}
+.cir-readiness__icon {
+  color: var(--color-success);
+  display: inline-flex;
+  flex: none;
+}
+.cir-readiness--attention .cir-readiness__icon {
+  color: var(--color-warning);
+}
+.cir-readiness__icon svg {
+  height: 1.75rem;
+  width: 1.75rem;
+}
+.cir-readiness__state {
+  color: var(--color-success);
+  font-size: 1.125rem;
+  font-weight: 800;
+  margin: 0;
+}
+.cir-readiness--attention .cir-readiness__state {
+  color: var(--color-warning);
+}
+.cir-issues {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+}
+.cir-issue {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+.cir-issue__severity {
+  border-radius: 999px;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  padding: 0.125rem var(--space-2);
+  text-transform: uppercase;
+}
+.cir-issue--blocker .cir-issue__severity {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.cir-issue--warning .cir-issue__severity {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+.cir-issue--info .cir-issue__severity {
+  background: var(--color-info-surface);
+  color: var(--color-info);
+}
+.cir-issue__text {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.cir-issue .reassign-room-link {
+  flex: none;
+}
+
+/* Mockup composition: Guest | Guests | Booking Contact; Room Assignment | Room Status; Stay Details | Prepayments + Documents. */
+.cir-duo {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+}
+.cir-pair {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr) var(--cir-side);
+}
+.cir-pair--stay {
+  align-items: start;
+}
+.cir-duo,
+.cir-duo > .cir-card,
+.cir-pair > .cir-card {
+  min-width: 0;
+}
+.cir-column {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+/* Label/value rows: one consistent row height and hierarchy. */
+.cir-rows {
+  margin: 0;
+}
+.cir-row {
+  align-items: baseline;
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(5rem, 7.5rem) minmax(0, 1fr);
+  min-height: 2rem;
+  padding: 0.375rem 0;
+}
+.cir-row:last-child {
+  border-bottom: 0;
+}
+.cir-row dt {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+.cir-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.cir-row__strong {
+  font-weight: 700;
+}
+.cir-rows--amounts .cir-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.cir-rows--amounts dd {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: end;
+}
+.cir-row--total {
+  background: var(--color-info-surface);
+  border-radius: var(--radius-sm);
+  padding-inline: var(--space-2);
+}
+.cir-flag {
+  font-size: 1.25rem;
+  line-height: 1;
+  margin-inline-end: var(--space-1);
+  vertical-align: -0.125em;
+}
+.cir-companions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Guests: three compact counters. */
+.cir-stats {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--space-2);
+}
+.cir-stat {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+}
+.cir-stat strong {
+  font-size: 1.25rem;
+  line-height: 1.1;
+}
+
+/* Rooms. */
+.cir-rooms {
+  display: grid;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cir-room {
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-3);
+}
+.cir-room__photo {
+  border-radius: var(--radius-sm);
+  flex: none;
+  height: 4rem;
+  object-fit: cover;
+  width: 6rem;
+}
+.cir-room__body {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+.cir-room__number {
+  font-size: 1.125rem;
+  font-weight: 800;
+  margin: 0;
+}
+.cir-room__meta {
+  color: var(--color-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.875rem;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+}
+
+/* Stay table: compact; scrolls inside its card on narrow screens, never the page. */
+.cir-table-wrap {
+  margin: 0;
+  overflow-x: auto;
+}
+.cir-table {
+  min-width: 0;
+  width: 100%;
+}
+.cir-table th,
+.cir-table td {
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+}
+.cir-table tfoot td {
+  font-weight: 800;
+}
+.cir-num {
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* Documents. */
+.cir-doc {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+.cir-doc__icon {
+  align-items: center;
+  background: var(--color-info-surface);
+  border-radius: var(--radius-sm);
+  color: var(--color-info);
+  display: inline-flex;
+  flex: none;
+  height: 2.5rem;
+  justify-content: center;
+  width: 2.5rem;
+}
+.cir-doc__name {
+  font-weight: 700;
+  margin: 0;
+}
+.cir-doc__state {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+@media (max-width: 64rem) {
+  .cir-duo,
+  .cir-pair,
+  .cir-pair--stay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Mobile: single column; the final action ends the flow and fills the width. */
+@media (max-width: 48rem) {
+  .cir-page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cir-title,
+  .cir-action {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-self: stretch;
+    text-align: start;
+  }
+  .cir-action__button {
+    justify-content: center;
+    width: 100%;
+  }
+  .cir-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .cir-rows--amounts .cir-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .cir-overview__number {
+    font-size: 1.25rem;
+  }
+}
+
+/* Overview Status pill. */
+.cir-state {
+  border-radius: 999px;
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 0.875rem;
+  padding: 0.125rem var(--space-3);
+}
+.cir-state--ready {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.cir-state--attention {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+
+/* Guest identity block: neutral icon (never a passport image), name, then code. */
+.cir-identity {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.cir-identity__icon {
+  align-items: center;
+  background: var(--color-info-surface);
+  border-radius: 999px;
+  color: var(--color-info);
+  display: inline-flex;
+  flex: none;
+  height: 3rem;
+  justify-content: center;
+  width: 3rem;
+}
+.cir-identity__icon svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+.cir-identity__name {
+  font-size: 1.125rem;
+  font-weight: 800;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.cir-identity__code {
+  color: var(--color-muted);
+  margin: 0;
+}
+
+/* Room card: image left, identity middle, action right. */
+.cir-room__photo--empty {
+  align-items: center;
+  background: var(--color-surface-muted);
+  border: 1px dashed var(--color-border-strong);
+  color: var(--color-muted);
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 0.75rem;
+  gap: var(--space-1);
+  justify-content: center;
+  text-align: center;
+}
+.cir-room__photo--empty svg {
+  height: 1.5rem;
+  width: 1.5rem;
+}
+.cir-room__photo {
+  height: 5.5rem;
+  width: 8rem;
+}
+.cir-room__type {
+  margin: var(--space-1) 0 0;
+}
+.cir-type-badge {
+  background: var(--color-info-surface);
+  border-radius: 999px;
+  color: var(--color-info);
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.125rem var(--space-3);
+}
+.cir-room__meta svg {
+  height: 1rem;
+  width: 1rem;
+}
+.cir-room__meta {
+  align-items: center;
+  gap: var(--space-1);
+}
+.cir-room__action {
+  margin-inline-start: auto;
+}
+.cir-room__action .button {
+  gap: var(--space-2);
+}
+.cir-room__action svg {
+  height: 1rem;
+  width: 1rem;
+}
+
+/* Room Status card. */
+.cir-roomstatus {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+}
+.cir-roomstatus li {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+  justify-content: space-between;
+}

@@ -450,6 +450,173 @@ class CheckInServiceTest {
     }
 
     /** A wired Walk-in review scenario: one room in the given state with the given adult capacity, and one Guest. */
+    // ---- OTA Booking Not Entered: date-aware availability, pre-persistence review, create + confirm only ------------
+
+    /**
+     * Confirms the OTA room list is bookable inventory for the entered period, not current readiness: an OCCUPIED,
+     * DIRTY or CLEANING Room is offered for a future arrival, MAINTENANCE and OUT_OF_ORDER are not, and a Room with
+     * an inventory conflict for the period is excluded.
+     */
+    @Test
+    void shouldOfferBookableRoomsForTheFuturePeriodRegardlessOfCurrentReadiness() {
+        Fixture fixture = fixture(Clock.fixed(LocalDate.of(2026, 9, 20).atTime(10, 0).atZone(ZONE).toInstant(), ZONE));
+        Room occupiedToday = activeRoom(RoomStatus.OCCUPIED);
+        Room dirty = activeRoom(RoomStatus.DIRTY);
+        Room conflicting = activeRoom(RoomStatus.AVAILABLE);
+        when(fixture.roomRepository.findByActiveTrue()).thenReturn(List.of(
+                occupiedToday, dirty, conflicting, activeRoom(RoomStatus.MAINTENANCE), activeRoom(RoomStatus.OUT_OF_ORDER)));
+        LocalDate checkIn = LocalDate.of(2026, 12, 1);
+        LocalDate checkOut = LocalDate.of(2026, 12, 4);
+        when(fixture.roomRepository.findRoomIdsWithInventoryConflict(
+                        any(), eq(checkIn), eq(checkOut), any(), any(), anyBoolean(), any(), any(), any(), any()))
+                .thenReturn(List.of(conflicting.getId()));
+        when(fixture.roomRepository.findAllById(any())).thenReturn(List.of(occupiedToday, dirty));
+
+        List<com.example.hotel.dto.booking.response.WalkInRoomOption> options =
+                fixture.service.otaRoomOptions(checkIn, checkOut);
+
+        assertEquals(
+                java.util.Set.of(occupiedToday.getId(), dirty.getId()),
+                options.stream().map(com.example.hotel.dto.booking.response.WalkInRoomOption::id)
+                        .collect(java.util.stream.Collectors.toSet()));
+        assertEquals(2, options.get(0).adultCapacity());
+    }
+
+    /** Confirms no OTA room is offered, and nothing is queried, when the period is not at least one night. */
+    @Test
+    void shouldOfferNoOtaRoomsWhenCheckOutIsNotAfterCheckIn() {
+        Fixture fixture = fixture(Clock.systemDefaultZone());
+        LocalDate day = LocalDate.of(2026, 12, 1);
+
+        assertTrue(fixture.service.otaRoomOptions(day, day).isEmpty());
+        assertTrue(fixture.service.otaRoomOptions(day, day.minusDays(1)).isEmpty());
+        verify(fixture.roomRepository, never()).findByActiveTrue();
+    }
+
+    /** Confirms the OTA review prices a future stay on a currently OCCUPIED Room, multi-room, without persisting. */
+    @Test
+    void shouldReviewFutureOtaStayWithMultipleRoomsWithoutPersisting() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.OCCUPIED, 2);
+        Room second = Room.create(UUID.randomUUID(), "102", f.room().getRoomType(), "1");
+        when(f.fixture().roomRepository.findById(second.getId())).thenReturn(Optional.of(second));
+        when(f.fixture().roomRepository.findByActiveTrue()).thenReturn(List.of(f.room(), second));
+        CreateRequest request = otaRequest(f, BookingSource.AGODA, "AG-1", 3, new RoomRequest(f.room().getId(), new BigDecimal("1000000")),
+                new RoomRequest(second.getId(), new BigDecimal("1200000")));
+
+        com.example.hotel.dto.booking.response.OtaEntryReviewResponse review = f.fixture().service.reviewOtaEntry(request);
+
+        assertEquals(0, new BigDecimal("6600000").compareTo(review.totalAmount()));
+        assertEquals(2, review.rooms().size());
+        assertEquals(BookingSource.AGODA, review.source());
+        assertEquals("AG-1", review.otaBookingReference());
+        verify(f.fixture().reservationService).requireOtaIdentityAvailableForNewReservation(BookingSource.AGODA, "AG-1");
+        verify(f.fixture().reservationService, never()).create(any());
+        verify(f.fixture().reservationService, never()).confirm(any());
+        verify(f.fixture().reservationService, never()).checkIn(any());
+    }
+
+    /** Confirms every OTA source is reviewable and DIRECT is rejected by the review as it is by creation. */
+    @Test
+    void shouldReviewEachOtaSourceAndRejectDirect() {
+        for (BookingSource source : List.of(BookingSource.AGODA, BookingSource.BOOKING_COM, BookingSource.AIRBNB)) {
+            WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+            when(f.fixture().roomRepository.findByActiveTrue()).thenReturn(List.of(f.room()));
+            assertEquals(source, f.fixture().service.reviewOtaEntry(
+                    otaRequest(f, source, "REF-1", 1, new RoomRequest(f.room().getId(), BigDecimal.TEN))).source());
+        }
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        assertThrows(ResponseStatusException.class, () -> f.fixture().service.reviewOtaEntry(
+                otaRequest(f, BookingSource.DIRECT, null, 1, new RoomRequest(f.room().getId(), BigDecimal.TEN))));
+    }
+
+    /** Confirms a duplicate OTA identity found by the existing rule is reported by the review before any creation. */
+    @Test
+    void shouldReportDuplicateOtaIdentityFromTheReview() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        org.mockito.Mockito.doThrow(new com.example.hotel.exception.LocalizedResponseStatusException(
+                        org.springframework.http.HttpStatus.CONFLICT, "reservation.ota.error.duplicateIdentity", "dup", "AGODA", "AG-1"))
+                .when(f.fixture().reservationService)
+                .requireOtaIdentityAvailableForNewReservation(BookingSource.AGODA, "AG-1");
+
+        com.example.hotel.exception.LocalizedResponseStatusException exception = assertThrows(
+                com.example.hotel.exception.LocalizedResponseStatusException.class,
+                () -> f.fixture().service.reviewOtaEntry(otaRequest(
+                        f, BookingSource.AGODA, "AG-1", 1, new RoomRequest(f.room().getId(), BigDecimal.TEN))));
+
+        assertEquals("reservation.ota.error.duplicateIdentity", exception.getMessageKey());
+        verify(f.fixture().reservationService, never()).create(any());
+    }
+
+    /** Confirms the OTA review rejects a Room that is not bookable, or conflicts, for the whole period. */
+    @Test
+    void shouldRejectOtaReviewForRoomsNotBookableForThePeriod() {
+        for (RoomStatus status : List.of(RoomStatus.MAINTENANCE, RoomStatus.OUT_OF_ORDER)) {
+            WalkInReviewFixture f = walkInReviewFixture(status, 2);
+            when(f.fixture().roomRepository.findByActiveTrue()).thenReturn(List.of(f.room()));
+            assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE,
+                    assertThrows(com.example.hotel.exception.WalkInReviewException.class,
+                            () -> f.fixture().service.reviewOtaEntry(otaRequest(
+                                    f, BookingSource.AGODA, "AG-1", 1, new RoomRequest(f.room().getId(), BigDecimal.TEN))))
+                            .getReason());
+        }
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        when(f.fixture().roomRepository.findByActiveTrue()).thenReturn(List.of(f.room()));
+        when(f.fixture().roomRepository.findRoomIdsWithInventoryConflict(
+                        any(), any(), any(), any(), any(), anyBoolean(), any(), any(), any(), any()))
+                .thenReturn(List.of(f.room().getId()));
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE,
+                assertThrows(com.example.hotel.exception.WalkInReviewException.class,
+                        () -> f.fixture().service.reviewOtaEntry(otaRequest(
+                                f, BookingSource.AGODA, "AG-1", 1, new RoomRequest(f.room().getId(), BigDecimal.TEN))))
+                        .getReason());
+    }
+
+    /** Confirms OTA review applies the shared adult capacity rule and rejects a duplicate Room and a bad period. */
+    @Test
+    void shouldRejectOtaReviewForCapacityDuplicateRoomAndPeriod() {
+        WalkInReviewFixture f = walkInReviewFixture(RoomStatus.AVAILABLE, 2);
+        when(f.fixture().roomRepository.findByActiveTrue()).thenReturn(List.of(f.room()));
+        RoomRequest line = new RoomRequest(f.room().getId(), BigDecimal.TEN);
+
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.INSUFFICIENT_ADULT_CAPACITY,
+                assertThrows(com.example.hotel.exception.WalkInReviewException.class,
+                        () -> f.fixture().service.reviewOtaEntry(otaRequest(f, BookingSource.AIRBNB, "AB-1", 3, line)))
+                        .getReason());
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.DUPLICATE_ROOM,
+                assertThrows(com.example.hotel.exception.WalkInReviewException.class,
+                        () -> f.fixture().service.reviewOtaEntry(otaRequest(f, BookingSource.AIRBNB, "AB-1", 1, line, line)))
+                        .getReason());
+        CreateRequest sameDay = new CreateRequest(f.guestId(), LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 1), 1, 0,
+                BookingSource.AIRBNB, "AB-1", "VND", null, List.of(line), List.of());
+        assertEquals(com.example.hotel.exception.WalkInReviewException.Reason.CHECK_OUT_NOT_AFTER_CHECK_IN,
+                assertThrows(com.example.hotel.exception.WalkInReviewException.class,
+                        () -> f.fixture().service.reviewOtaEntry(sameDay)).getReason());
+    }
+
+    /** Confirms Create Reservation creates and confirms only: the guest is never checked in, so no Stay is created. */
+    @Test
+    void shouldNeverCheckInWhenCreatingAnOtaEntry() {
+        Fixture fixture = fixture(Clock.systemDefaultZone());
+        UUID reservationId = UUID.randomUUID();
+        CreateRequest request = new CreateRequest(
+                UUID.randomUUID(), LocalDate.now(), LocalDate.now().plusDays(1), 2, 0, BookingSource.BOOKING_COM, "BK-1", "VND",
+                null, List.of(new RoomRequest(UUID.randomUUID(), BigDecimal.TEN)), List.of());
+        when(fixture.reservationService.create(request))
+                .thenReturn(new Response(reservationId, "R1", "DRAFT", BigDecimal.TEN, "VND"));
+        when(fixture.reservationService.confirm(reservationId))
+                .thenReturn(new Response(reservationId, "R1", "CONFIRMED", BigDecimal.TEN, "VND"));
+
+        assertEquals("CONFIRMED", fixture.service.createOtaEntry(request).status());
+
+        verify(fixture.reservationService, never()).checkIn(any());
+    }
+
+    private CreateRequest otaRequest(
+            WalkInReviewFixture f, BookingSource source, String reference, int adults, RoomRequest... rooms) {
+        return new CreateRequest(f.guestId(), LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 4), adults, 0, source,
+                reference, "VND", null, List.of(rooms), List.of());
+    }
+
     private WalkInReviewFixture walkInReviewFixture(RoomStatus status, int capacity) {
         Clock clock = Clock.fixed(LocalDate.of(2026, 9, 20).atTime(10, 0).atZone(ZONE).toInstant(), ZONE);
         Fixture fixture = fixture(clock);

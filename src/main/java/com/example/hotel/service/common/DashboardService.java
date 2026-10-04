@@ -19,11 +19,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -44,9 +42,6 @@ public class DashboardService {
      * and never the reported count.
      */
     private static final int DASHBOARD_ROW_LIMIT = 5;
-
-    private static final DateTimeFormatter HOTEL_DATE_LABEL_FORMAT =
-            DateTimeFormatter.ofPattern("EEEE, MMM d, yyyy", Locale.ENGLISH);
 
     private final RoomRepository roomRepository;
     private final StayRepository stayRepository;
@@ -144,7 +139,6 @@ public class DashboardService {
 
         return new DashboardResponse(
                 hotelToday,
-                hotelToday.format(HOTEL_DATE_LABEL_FORMAT),
                 currentlyStaying,
                 availableRooms,
                 arrivalsKpi,

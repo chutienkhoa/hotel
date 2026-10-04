@@ -63,6 +63,7 @@ public final class TableSorts {
                     "guestName", "guestName",
                     "checkInDate", "checkInDate",
                     "room", "room",
+                    "nights", "nights",
                     "source", "source",
                     "status", "status"),
             Sort.by(Sort.Order.asc("checkInDate"), Sort.Order.asc("reservationNumber")),

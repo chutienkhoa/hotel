@@ -12,7 +12,6 @@ import java.util.List;
  * {@code null}, so the template omits the block entirely rather than rendering it disabled.
  *
  * @param hotelToday the hotel's current date, for template logic shared with Front Desk fragments
- * @param hotelDateLabel the hotel's current date, formatted for the page header
  * @param currentlyStaying Currently Staying KPI, or {@code null} without {@code PERM_CHECK_OUT}
  * @param availableRooms current available-room count; always present ({@code PERM_VIEW_REPORT} only)
  * @param arrivalsKpi Today's Arrivals KPI, or {@code null} without {@code PERM_CHECK_IN}
@@ -31,7 +30,6 @@ import java.util.List;
  */
 public record DashboardResponse(
         LocalDate hotelToday,
-        String hotelDateLabel,
         DashboardCurrentlyStayingKpi currentlyStaying,
         long availableRooms,
         DashboardArrivalsKpi arrivalsKpi,

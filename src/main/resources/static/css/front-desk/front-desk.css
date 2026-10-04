@@ -299,6 +299,16 @@
 .front-desk-sortable--active .front-desk-sort__icon {
   color: var(--color-primary);
 }
+/* Nights is centred, header link and values alike: Check-in landing "Recent Confirmed Reservations" and Front Desk
+   Departures (5th column), and Front Desk In-house (6th). Arrivals has no Nights column. */
+.front-desk-table--recent th:nth-child(5),
+.front-desk-table--recent td:nth-child(5),
+.front-desk-table--departures th:nth-child(5),
+.front-desk-table--departures td:nth-child(5),
+.front-desk-table--in-house th:nth-child(6),
+.front-desk-table--in-house td:nth-child(6) {
+  text-align: center;
+}
 .front-desk-table .front-desk-action {
   white-space: nowrap;
 }

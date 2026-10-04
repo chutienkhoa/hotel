@@ -158,8 +158,20 @@
 .walk-in-card input:invalid:not(:placeholder-shown) {
   border-color: var(--color-border-strong);
 }
-.walk-in-card :is(input, select, textarea)[aria-invalid="true"] {
+/* The doubled class lifts this above the pristine-required rule just above, which would otherwise keep an empty
+   required input neutral even after it has been marked invalid. */
+.walk-in-card.walk-in-card :is(input, select, textarea)[aria-invalid="true"],
+/* A date field's visible input is flatpickr's alternate input, inserted right after the (hidden) original. */
+.walk-in-card input.js-date-picker[aria-invalid="true"] + input {
   border-color: var(--color-danger);
+}
+.walk-in-source-list[aria-invalid="true"],
+.walk-in-card[data-invalid="true"] {
+  border-color: var(--color-danger);
+  outline: 1px solid var(--color-danger);
+}
+.walk-in-source-list[aria-invalid="true"] {
+  border-radius: var(--radius-md);
 }
 
 /* Guest Information: Search Existing Guest and Create New Guest in the card header, the selector, then the read-only
@@ -419,18 +431,30 @@
 }
 .walk-in-room-table {
   min-width: 34rem;
+  table-layout: fixed;
+  width: 100%;
 }
+/* Every column, header and body alike, is centred; fixed layout with balanced widths keeps each header directly
+   above its content. Headers may wrap (long Vietnamese labels, the Rate required marker) instead of widening a column. */
 .walk-in-room-table th,
 .walk-in-room-table td {
   padding: var(--space-2) var(--space-2);
+  text-align: center;
   vertical-align: middle;
   white-space: nowrap;
 }
-/* The required marker made the Rate header the widest cell and pushed it (and the marker) past the card edge;
-   let this one header wrap so "Rate (VND / night) *" stays fully visible without horizontal scrolling. */
-.walk-in-room-table th:last-child {
-  min-width: 8rem;
+.walk-in-room-table th {
   white-space: normal;
+}
+.walk-in-room-table th:nth-child(1) { width: 11%; }
+.walk-in-room-table th:nth-child(2) { width: 17%; }
+.walk-in-room-table th:nth-child(3) { width: 17%; }
+.walk-in-room-table th:nth-child(4) { width: 17%; }
+.walk-in-room-table th:nth-child(5) { width: 16%; }
+.walk-in-room-table th:nth-child(6) { width: 22%; }
+.walk-in-room-table input[type="checkbox"] {
+  display: block;
+  margin: 0 auto;
 }
 .walk-in-room-table tbody tr {
   cursor: pointer;
@@ -471,12 +495,13 @@
   border-color: var(--color-danger);
 }
 .walk-in-num {
-  text-align: right;
+  text-align: center;
 }
 .walk-in-rate {
   height: 2rem;
+  margin: 0 auto;
   max-width: 9rem;
-  text-align: right;
+  text-align: center;
 }
 .walk-in-rate:disabled {
   background: transparent;
@@ -549,6 +574,75 @@
   color: var(--color-muted);
   font-size: 0.875rem;
   font-weight: 800;
+}
+
+/* OTA Booking Not Entered: the source rows are one real radio group. The native input is visually hidden (still
+   focusable and keyboard operable); the custom radio and the row reflect its checked and focus state. */
+.walk-in-source-option--choice {
+  cursor: pointer;
+  position: relative;
+}
+.walk-in-source-input {
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  width: 1px;
+}
+.walk-in-source-option--choice:has(.walk-in-source-input:checked) {
+  background: var(--color-info-surface);
+  border-color: var(--color-primary);
+  font-weight: 700;
+}
+.walk-in-source-option--choice:has(.walk-in-source-input:checked) .walk-in-radio {
+  border-color: var(--color-primary);
+}
+.walk-in-source-option--choice:has(.walk-in-source-input:checked) .walk-in-radio::after {
+  background: var(--color-primary);
+  border-radius: 999px;
+  content: "";
+  inset: 0.2rem;
+  position: absolute;
+}
+.walk-in-source-option--choice:has(.walk-in-source-input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.walk-in-source-option--choice:hover {
+  border-color: var(--color-primary);
+}
+.walk-in-source-option__icon--agoda,
+.walk-in-source-option__icon--booking_com,
+.walk-in-source-option__icon--airbnb {
+  color: #fff;
+}
+.walk-in-source-option__icon--agoda {
+  background: #e5382f;
+}
+.walk-in-source-option__icon--booking_com {
+  background: #1c4a9c;
+}
+.walk-in-source-option__icon--airbnb {
+  background: #ff5a5f;
+}
+.walk-in-reference {
+  margin-top: var(--space-4);
+}
+.walk-in-source--ota {
+  align-items: flex-start;
+}
+.walk-in-source--ota .walk-in-source__value {
+  margin-bottom: var(--space-2);
+}
+.walk-in-source__reference-label {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+  margin: 0;
+}
+.walk-in-source__reference {
+  font-weight: 700;
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Bottom action bar: Cancel / Back on the left, the one primary action on the right, on the content edges. */
