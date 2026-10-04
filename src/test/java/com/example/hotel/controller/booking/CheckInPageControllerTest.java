@@ -70,6 +70,9 @@ class CheckInPageControllerTest {
     private com.example.hotel.service.booking.PrepaymentService prepaymentService;
 
     @MockitoBean
+    private com.example.hotel.service.room.RoomImageService roomImageService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms ADMIN, MANAGER, and STAFF can all access the Check-in landing page. */
@@ -414,7 +417,7 @@ class CheckInPageControllerTest {
                 com.example.hotel.exception.WalkInReviewException.Reason.INSUFFICIENT_ADULT_CAPACITY,
                 "capacity", 2, 1));
 
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+        submitAndFollow(walkInPost("/check-in/walk-in/review", "VND"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Insufficient room capacity: 2 adults, but the selected rooms support only 1 adults.")))
                 .andExpect(content().string(containsString("aria-describedby=\"adultCount-error\"")))
@@ -428,7 +431,7 @@ class CheckInPageControllerTest {
         when(checkInService.reviewWalkIn(any())).thenThrow(new com.example.hotel.exception.WalkInReviewException(
                 com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE, "unavailable", "DEMO-101"));
 
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+        submitAndFollow(walkInPost("/check-in/walk-in/review", "VND"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Room DEMO-101 is not available for the whole stay.")))
                 .andExpect(content().string(containsString("id=\"rooms-error\"")));
@@ -437,7 +440,7 @@ class CheckInPageControllerTest {
     /** Confirms missing Guest, check-out and rooms are reported next to their own fields without calling the service. */
     @Test
     void shouldReportMissingWalkInFieldsNextToTheirFields() throws Exception {
-        mockMvc.perform(post("/check-in/walk-in/review")
+        submitAndFollow(post("/check-in/walk-in/review")
                         .param("adultCount", "1")
                         .param("childCount", "0")
                         .param("currency", "VND")
@@ -455,7 +458,7 @@ class CheckInPageControllerTest {
     /** Confirms an invalid (non-positive) nightly rate is rejected with a localized message and never reaches the service. */
     @Test
     void shouldRejectNonPositiveWalkInNightlyRate() throws Exception {
-        mockMvc.perform(post("/check-in/walk-in/review")
+        submitAndFollow(post("/check-in/walk-in/review")
                         .param("guestId", GUEST_ID.toString())
                         .param("checkOutDate", LocalDate.now().plusDays(2).toString())
                         .param("adultCount", "2")
@@ -481,13 +484,14 @@ class CheckInPageControllerTest {
                         new java.math.BigDecimal("2400000"), 2, "AVAILABLE")),
                 new java.math.BigDecimal("2400000"), "VND"));
 
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+        summaryPage(checkInAuthority())
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Reservation Summary")))
                 .andExpect(content().string(containsString("Direct (Walk-in)")))
                 .andExpect(content().string(containsString("Double Room")))
-                .andExpect(content().string(containsString("1,200,000 VND")))
-                .andExpect(content().string(containsString("2,400,000 VND")))
+                .andExpect(content().string(containsString("Price Summary (VND)")))
+                .andExpect(content().string(containsString("Room 101 (2 nights × 1,200,000)")))
+                .andExpect(content().string(containsString("2,400,000")))
                 .andExpect(content().string(containsString("Confirm &amp; Check-in")));
         verify(checkInService, never()).confirmWalkIn(any());
     }
@@ -498,7 +502,7 @@ class CheckInPageControllerTest {
         when(checkInService.reviewWalkIn(any())).thenThrow(new com.example.hotel.exception.WalkInReviewException(
                 com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE, "unavailable", "DEMO-101"));
 
-        mockMvc.perform(walkInPost("/check-in/walk-in/confirm", "VND"))
+        submitAndFollow(walkInPost("/check-in/walk-in/confirm", "VND"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Room DEMO-101 is not available for the whole stay.")));
         verify(checkInService, never()).confirmWalkIn(any());
@@ -508,7 +512,7 @@ class CheckInPageControllerTest {
     @Test
     void shouldRejectUsdWalkInBeforeReachingTheService() throws Exception {
         for (String path : List.of("/check-in/walk-in/review", "/check-in/walk-in/confirm")) {
-            mockMvc.perform(walkInPost(path, "USD"))
+            submitAndFollow(walkInPost(path, "USD"))
                     .andExpect(status().isOk())
                     .andExpect(content().string(containsString("Reservation currency must be VND.")));
         }
@@ -589,56 +593,6 @@ class CheckInPageControllerTest {
                         .with(user("staff").authorities(checkInAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(containsString("selected=\"selected\""))));
-    }
-
-    /** Confirms Walk-in Review -&gt; Back redisplays the form with every previously entered value intact (spec 9.3.3a). */
-    @Test
-    void shouldPreserveWalkInFieldsOnBackFromReview() throws Exception {
-        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
-        UUID roomId = UUID.randomUUID();
-
-        mockMvc.perform(post("/check-in/walk-in/back")
-                        .param("guestId", GUEST_ID.toString())
-                        .param("checkOutDate", LocalDate.now().plusDays(3).toString())
-                        .param("adultCount", "2")
-                        .param("childCount", "1")
-                        .param("currency", "VND")
-                        .param("notes", "Late arrival expected")
-                        .param("rooms[0].roomId", roomId.toString())
-                        .param("rooms[0].nightlyRate", "1200000")
-                        .with(user("staff").authorities(checkInAuthority()))
-                        .with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString(selectedGuestOptionFragment())))
-                .andExpect(content().string(containsString("Late arrival expected")));
-        verify(checkInService, never()).confirmWalkIn(any());
-        verify(checkInService, never()).reviewWalkIn(any());
-    }
-
-    /** Confirms the Walk-in Back action requires CSRF like every other mutating action. */
-    @Test
-    void shouldRequireCsrfForWalkInBack() throws Exception {
-        mockMvc.perform(post("/check-in/walk-in/back").with(user("staff").authorities(checkInAuthority())))
-                .andExpect(status().isForbidden());
-    }
-
-    /**
-     * Confirms the rendered Walk-in Review page wires its "Back to Walk-in" control to resubmit the
-     * reviewed selections to the new Back endpoint (spec 9.3.3a), rather than a plain link that
-     * would discard them on a blank GET.
-     */
-    @Test
-    void shouldRenderWalkInReviewBackControlWiredToPreserveState() throws Exception {
-        when(checkInService.reviewWalkIn(any())).thenReturn(new com.example.hotel.dto.booking.response.WalkInReviewResponse(
-                GUEST_ID, "Ann Lee", "G000001", false, null,
-                LocalDate.now(), LocalDate.now().plusDays(2), Instant.now(),
-                List.of(), java.math.BigDecimal.TEN, "VND"));
-
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
-                .andExpect(status().isOk())
-                .andExpect(content().string(containsString("form=\"walk-in-confirm-form\"")))
-                .andExpect(content().string(containsString("formaction=\"/check-in/walk-in/back\"")))
-                .andExpect(content().string(containsString("id=\"walk-in-confirm-form\"")));
     }
 
     /**
@@ -779,15 +733,215 @@ class CheckInPageControllerTest {
 
     /** Confirms the new Walk-in/OTA Create-New-Guest wiring stays behind the existing CHECK_IN authorization. */
     @Test
-    void shouldForbidNewGuestAndBackActionsWithoutCheckInPermission() throws Exception {
+    void shouldForbidNewGuestAndSummaryActionsWithoutCheckInPermission() throws Exception {
         var noPermission = List.of(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
 
-        mockMvc.perform(post("/check-in/walk-in/back").with(user("viewer").authorities(noPermission)).with(csrf()))
+        mockMvc.perform(get("/check-in/walk-in/review").with(user("viewer").authorities(noPermission)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/check-in/walk-in/review").with(user("viewer").authorities(noPermission)).with(csrf()))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/check-in/walk-in/new-guest").with(user("viewer").authorities(noPermission)).with(csrf()))
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/check-in/ota-entry/new-guest").with(user("viewer").authorities(noPermission)).with(csrf()))
                 .andExpect(status().isForbidden());
+    }
+
+    // ---- POST / Redirect / GET contract of the Walk-in wizard -------------------------------------------------
+
+    /** Posts a request, then performs the GET it redirects to with the same session and flash attributes. */
+    private org.springframework.test.web.servlet.ResultActions submitAndFollow(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) throws Exception {
+        return submitAndFollow(request, checkInAuthority());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions submitAndFollow(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request,
+            List<SimpleGrantedAuthority> authorities) throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        org.springframework.test.web.servlet.MvcResult posted = mockMvc.perform(request.session(session))
+                .andExpect(status().is3xxRedirection())
+                .andReturn();
+        String location = posted.getResponse().getRedirectedUrl();
+        org.junit.jupiter.api.Assertions.assertNotNull(location);
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder follow =
+                get(location).session(session).with(user("staff").authorities(authorities));
+        if (!posted.getFlashMap().isEmpty()) {
+            follow.flashAttrs(posted.getFlashMap());
+        }
+        return mockMvc.perform(follow);
+    }
+
+    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder getAs(String path, MockHttpSession session) {
+        return get(path).session(session).with(user("staff").authorities(checkInAuthority()));
+    }
+
+    /** Confirms the POST that prepares the Summary redirects to a GET Summary and does not render it itself. */
+    @Test
+    void shouldRedirectWalkInReviewPostToAGetSummary() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/check-in/walk-in/review"))
+                .andExpect(content().string(not(containsString("Reservation Summary"))));
+        verify(checkInService, never()).confirmWalkIn(any());
+    }
+
+    /** Confirms the GET Summary renders from the prepared state and can be refreshed repeatedly without side effects. */
+    @Test
+    void shouldRenderSummaryFromPreparedStateAndSurviveRefreshBackAndForward() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND").param("notes", "Late arrival expected").session(session))
+                .andExpect(status().is3xxRedirection());
+
+        // Summary, refresh, browser Back to the form, browser Forward to the Summary, refresh again.
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(getAs("/check-in/walk-in/review", session))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString("Reservation Summary")))
+                    .andExpect(content().string(containsString("Confirm &amp; Check-in")));
+            mockMvc.perform(getAs("/check-in/walk-in", session))
+                    .andExpect(status().isOk())
+                    .andExpect(content().string(containsString(selectedGuestOptionFragment())))
+                    .andExpect(content().string(containsString("Late arrival expected")));
+        }
+        mockMvc.perform(getAs("/check-in/walk-in/review", session)).andExpect(status().isOk());
+        verify(checkInService, never()).confirmWalkIn(any());
+    }
+
+    /** Confirms the Summary's Back and Edit controls are plain GET links to the Walk-in form, never a POST. */
+    @Test
+    void shouldRenderSummaryBackAsAPlainGetLink() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+
+        String html = submitAndFollow(walkInPost("/check-in/walk-in/review", "VND"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("<a class=\"back-link back-link--primary\" href=\"/check-in/walk-in\">"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("class=\"button button-secondary walk-in-edit\" href=\"/check-in/walk-in\""));
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("walk-in/back"));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("id=\"walk-in-confirm-form\""));
+    }
+
+    /** Confirms a Summary requested without prepared state redirects to the Walk-in form with a notice, never a 500. */
+    @Test
+    void shouldRedirectSummaryToWalkInWhenThereIsNoPreparedState() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        org.springframework.test.web.servlet.MvcResult redirected = mockMvc.perform(getAs("/check-in/walk-in/review", session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/check-in/walk-in"))
+                .andReturn();
+
+        mockMvc.perform(getAs("/check-in/walk-in", session).flashAttrs(redirected.getFlashMap()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("The Walk-in summary is no longer available.")));
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms an incomplete prepared form (for example one kept for Create New Guest) never reaches the Summary. */
+    @Test
+    void shouldNotShowSummaryForAnIncompletePreparedForm() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(post("/check-in/walk-in/new-guest").session(session)
+                        .param("adultCount", "2").param("childCount", "0").param("currency", "VND")
+                        .with(user("staff").authorities(checkInAuthority())).with(csrf()))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(getAs("/check-in/walk-in/review", session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/check-in/walk-in"));
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms a prepared form that became invalid (room taken) is sent back to the form with the error, not a 500. */
+    @Test
+    void shouldReturnToWalkInWithTheErrorWhenThePreparedSelectionWentStale() throws Exception {
+        when(checkInService.reviewWalkIn(any()))
+                .thenReturn(walkInReview())
+                .thenThrow(new com.example.hotel.exception.WalkInReviewException(
+                        com.example.hotel.exception.WalkInReviewException.Reason.ROOM_UNAVAILABLE, "gone", "DEMO-101"));
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND").session(session)).andExpect(status().is3xxRedirection());
+
+        org.springframework.test.web.servlet.MvcResult stale = mockMvc.perform(getAs("/check-in/walk-in/review", session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/check-in/walk-in"))
+                .andReturn();
+        mockMvc.perform(getAs("/check-in/walk-in", session).flashAttrs(stale.getFlashMap()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Room DEMO-101 is not available for the whole stay.")));
+    }
+
+    /** Confirms a rejected submission is redirected back to the form (never rendered from the POST), values and errors kept. */
+    @Test
+    void shouldRedirectInvalidWalkInSubmissionBackToTheFormWithItsValues() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        org.springframework.test.web.servlet.MvcResult posted = mockMvc.perform(post("/check-in/walk-in/review").session(session)
+                        .param("adultCount", "2").param("childCount", "0").param("currency", "VND")
+                        .param("notes", "Keep me")
+                        .with(user("staff").authorities(checkInAuthority())).with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/check-in/walk-in"))
+                .andReturn();
+
+        mockMvc.perform(getAs("/check-in/walk-in", session).flashAttrs(posted.getFlashMap()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Select a guest.")))
+                .andExpect(content().string(containsString("Keep me")));
+        verify(checkInService, never()).reviewWalkIn(any());
+    }
+
+    /** Confirms the prepared form survives viewing the Summary and Create New Guest, and is removed only by completion. */
+    @Test
+    void shouldKeepPreparedStateUntilTheWalkInIsCreated() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+        when(checkInService.confirmWalkIn(any())).thenReturn(new com.example.hotel.dto.booking.response.Response(
+                UUID.randomUUID(), "R1", "CHECKED_IN", java.math.BigDecimal.TEN, "VND"));
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND").session(session)).andExpect(status().is3xxRedirection());
+        mockMvc.perform(getAs("/check-in/walk-in/review", session)).andExpect(status().isOk());
+
+        // The Create New Guest round trip keeps working on top of the same state.
+        mockMvc.perform(post("/check-in/walk-in/new-guest").session(session)
+                        .param("checkOutDate", LocalDate.now().plusDays(4).toString())
+                        .param("adultCount", "3").param("childCount", "0").param("currency", "VND")
+                        .param("notes", "Needs late checkout")
+                        .param("rooms[0].roomId", UUID.randomUUID().toString()).param("rooms[0].nightlyRate", "900000")
+                        .with(user("staff").authorities(checkInAuthority())).with(csrf()))
+                .andExpect(redirectedUrl("/guests/new?returnTo=/check-in/walk-in"));
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+        mockMvc.perform(getAs("/check-in/walk-in", session).flashAttr("createdGuestId", GUEST_ID))
+                .andExpect(content().string(containsString(selectedGuestOptionFragment())))
+                .andExpect(content().string(containsString("Needs late checkout")));
+
+        // Completing the Walk-in creates once, redirects, and clears the state.
+        mockMvc.perform(walkInPost("/check-in/walk-in/confirm", "VND").session(session))
+                .andExpect(status().is3xxRedirection());
+        verify(checkInService, org.mockito.Mockito.times(1)).confirmWalkIn(any());
+        mockMvc.perform(getAs("/check-in/walk-in/review", session))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/check-in/walk-in"));
+        mockMvc.perform(getAs("/check-in/walk-in", session))
+                .andExpect(content().string(not(containsString("Needs late checkout"))));
+    }
+
+    /** Confirms returning to the Check-in Guest landing abandons the in-progress Walk-in, so it cannot leak into a new one. */
+    @Test
+    void shouldDropTheInProgressWalkInWhenReturningToTheLanding() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND").param("notes", "Stale note").session(session))
+                .andExpect(status().is3xxRedirection());
+
+        mockMvc.perform(getAs("/check-in", session)).andExpect(status().isOk());
+
+        mockMvc.perform(getAs("/check-in/walk-in", session))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("Stale note"))));
     }
 
     /** Builds a representative created-Guest lookup entry matching {@code GUEST_ID}. */
@@ -854,7 +1008,7 @@ class CheckInPageControllerTest {
     @Test
     void shouldRejectMissingNightlyRateOnTheServerAndPreserveTheEnteredState() throws Exception {
         UUID otherRoom = UUID.randomUUID();
-        mockMvc.perform(post("/check-in/walk-in/review")
+        submitAndFollow(post("/check-in/walk-in/review")
                         .param("guestId", GUEST_ID.toString())
                         .param("checkOutDate", LocalDate.now().plusDays(2).toString())
                         .param("adultCount", "2")
@@ -882,7 +1036,7 @@ class CheckInPageControllerTest {
     void shouldProceedToTheSummaryWhenEveryRateIsPresent() throws Exception {
         when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
 
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+        summaryPage(checkInAuthority())
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Reservation Summary")))
                 .andExpect(content().string(not(containsString("data-rate-error"))));
@@ -898,8 +1052,7 @@ class CheckInPageControllerTest {
         mockMvc.perform(get("/check-in/walk-in")
                         .with(user("staff").authorities(checkInAndRoomAuthority())))
                 .andExpect(content().string(containsString("data-room-url=\"/rooms/ROOM_ID\"")));
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND")
-                        .with(user("staff").authorities(checkInAndRoomAuthority())))
+        summaryPage(checkInAndRoomAuthority())
                 .andExpect(content().string(containsString("<a class=\"record-link\" href=\"/rooms/" + ROOM_ID + "\">101</a>")));
     }
 
@@ -910,9 +1063,25 @@ class CheckInPageControllerTest {
 
         mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(checkInAuthority())))
                 .andExpect(content().string(not(containsString("data-room-url="))));
-        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND"))
+        summaryPage(checkInAuthority())
                 .andExpect(content().string(not(containsString("href=\"/rooms/"))))
                 .andExpect(content().string(containsString(">101</span>")));
+    }
+
+    /**
+     * Prepares the Walk-in through the real POST (which keeps the form in the session and redirects) and then opens
+     * the Summary as the plain GET page the browser lands on.
+     */
+    private org.springframework.test.web.servlet.ResultActions summaryPage(List<SimpleGrantedAuthority> authorities)
+            throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND")
+                        .session(session)
+                        .with(user("staff").authorities(authorities)))
+                .andExpect(redirectedUrl("/check-in/walk-in/review"));
+        return mockMvc.perform(get("/check-in/walk-in/review")
+                .session(session)
+                .with(user("staff").authorities(authorities)));
     }
 
     private com.example.hotel.dto.booking.response.WalkInReviewResponse walkInReview() {
@@ -923,6 +1092,101 @@ class CheckInPageControllerTest {
                         ROOM_ID, "101", "Double Room", today, today.plusDays(2), new java.math.BigDecimal("1200000"), 2,
                         new java.math.BigDecimal("2400000"), 2, "AVAILABLE")),
                 new java.math.BigDecimal("2400000"), "VND");
+    }
+
+    /** Confirms the Summary renders the selected Guest's stored contact, nationality with flag, DOB and ID, and the passport document. */
+    @Test
+    void shouldRenderSummaryGuestIdentityAndPassportDocument() throws Exception {
+        UUID documentId = UUID.randomUUID();
+        LocalDate today = LocalDate.now();
+        when(checkInService.reviewWalkIn(any())).thenReturn(new com.example.hotel.dto.booking.response.WalkInReviewResponse(
+                GUEST_ID, "Ann Lee", "G000001", true, documentId, today, today.plusDays(2), Instant.now(),
+                walkInReview().rooms(), new java.math.BigDecimal("2400000"), "VND"));
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(new GuestLookupResponse(
+                GUEST_ID, "G000001", "Ann Lee", "ann@example.com", "0123456", "Japan",
+                LocalDate.of(1971, 2, 2), "ID-777123"));
+
+        String passportUrl = "/guests/" + GUEST_ID + "/documents/" + documentId + "/passport";
+        summaryPage(checkInAuthority())
+                .andExpect(content().string(containsString("Ann Lee")))
+                .andExpect(content().string(containsString("🇯🇵")))
+                .andExpect(content().string(containsString(">Japan<")))
+                .andExpect(content().string(containsString("0123456")))
+                .andExpect(content().string(containsString("ann@example.com")))
+                .andExpect(content().string(containsString("02/02/1971")))
+                .andExpect(content().string(containsString("ID-777123")))
+                .andExpect(content().string(containsString("src=\"" + passportUrl + "\"")))
+                .andExpect(content().string(containsString("class=\"walk-in-doc\"")));
+    }
+
+    /** Confirms a Guest without DOB, ID or passport shows the placeholder and the missing-document text, never a broken image. */
+    @Test
+    void shouldRenderSummaryPlaceholdersWhenTheGuestHasNoIdentityOrPassport() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+        when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guestLookup());
+
+        summaryPage(checkInAuthority())
+                .andExpect(content().string(containsString("No passport image on file.")))
+                .andExpect(content().string(not(containsString("<img"))))
+                .andExpect(content().string(not(containsString("null"))));
+    }
+
+    /** Confirms Room Details shows the room's type, capacity, guests, rate, nights, total and the Stay/Notes data from the prepared form. */
+    @Test
+    void shouldRenderSummaryRoomDetailsStayAndNotes() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND")
+                        .param("notes", "Quiet room please")
+                        .session(session))
+                .andExpect(redirectedUrl("/check-in/walk-in/review"));
+        mockMvc.perform(get("/check-in/walk-in/review").session(session)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(containsString("Total Room Charge (VND)")))
+                .andExpect(content().string(containsString("Adults: 2 · Children: 0")))
+                .andExpect(content().string(containsString("1,200,000")))
+                .andExpect(content().string(containsString("Quiet room please")))
+                .andExpect(content().string(containsString("Actual check-in (preview)")))
+                .andExpect(content().string(containsString("Additional Information")))
+                .andExpect(content().string(containsString("date-value--check-in")))
+                .andExpect(content().string(containsString("Confirm &amp; Check-in")))
+                .andExpect(content().string(not(containsString("Create Reservation"))))
+                .andExpect(content().string(not(containsString("OTA Booking Reference"))))
+                .andExpect(content().string(not(containsString("AGODA"))));
+    }
+
+    /** Confirms the primary room image is shown only to users who may open Room Detail, from the authenticated Room endpoint. */
+    @Test
+    void shouldRenderPrimaryRoomImageOnlyForRoomManagers() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+        UUID imageId = UUID.randomUUID();
+        when(roomImageService.findByRoomId(ROOM_ID)).thenReturn(List.of(
+                new com.example.hotel.dto.room.response.RoomImageResponse(UUID.randomUUID(), "other.jpg", false),
+                new com.example.hotel.dto.room.response.RoomImageResponse(imageId, "primary.jpg", true)));
+
+        summaryPage(checkInAndRoomAuthority())
+                .andExpect(content().string(containsString(
+                        "src=\"/rooms/" + ROOM_ID + "/images/" + imageId + "/file\"")));
+        summaryPage(checkInAuthority())
+                .andExpect(content().string(not(containsString("/images/"))))
+                .andExpect(content().string(containsString("No room image")));
+    }
+
+    /** Confirms the Summary renders in Vietnamese with the localized section titles and the unchanged Confirm &amp; Check-in action. */
+    @Test
+    void shouldRenderSummaryInVietnamese() throws Exception {
+        when(checkInService.reviewWalkIn(any())).thenReturn(walkInReview());
+        MockHttpSession session = new MockHttpSession();
+        mockMvc.perform(walkInPost("/check-in/walk-in/review", "VND").session(session))
+                .andExpect(redirectedUrl("/check-in/walk-in/review"));
+
+        mockMvc.perform(get("/check-in/walk-in/review").param("lang", "vi").session(session)
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(content().string(containsString("Thông tin bổ sung")))
+                .andExpect(content().string(containsString("Tổng tiền phòng (VND)")))
+                .andExpect(content().string(containsString("Xác nhận &amp; Nhận phòng")))
+                .andExpect(content().string(containsString("Phòng 101 (2 đêm × 1,200,000)")));
     }
 
     private GuestLookupResponse guestLookup() {

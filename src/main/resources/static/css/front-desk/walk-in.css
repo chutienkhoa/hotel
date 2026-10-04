@@ -657,6 +657,104 @@
   font-size: inherit;
 }
 
+/* Reservation Summary composition (approved mockup): a document/photo beside a bordered key/value table in the Guest and
+   Room cards, bordered tables elsewhere, and a banded Price Summary. */
+/* Summary card headers have no leading icon: title, then the Edit button at the end. */
+.walk-in-grid--summary .walk-in-card__header--action {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.walk-in-summary-body {
+  align-items: start;
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: 11rem minmax(0, 1fr);
+}
+.walk-in-summary-body + .walk-in-summary-body {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+}
+.walk-in-summary-table--boxed {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.walk-in-summary-table--boxed th,
+.walk-in-summary-table--boxed td {
+  padding: var(--space-2) var(--space-3);
+}
+.walk-in-summary-table--boxed th {
+  background: var(--color-surface-muted);
+  width: 40%;
+}
+/* The passport is a document, not an avatar: shown whole (contain) in a plain bordered frame, never circular. */
+.walk-in-doc {
+  align-items: center;
+  aspect-ratio: 4 / 3;
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  padding: var(--space-1);
+}
+.walk-in-doc img {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+.walk-in-doc--empty,
+.walk-in-room-photo--empty {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+  margin: 0;
+  padding: var(--space-3);
+  text-align: center;
+}
+.walk-in-room-photo {
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  display: block;
+  object-fit: cover;
+  width: 100%;
+}
+.walk-in-room-photo--empty {
+  align-items: center;
+  background: var(--color-surface-muted);
+  display: flex;
+  justify-content: center;
+}
+.walk-in-doc-row {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--space-3);
+}
+.walk-in-doc-thumb {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  height: 2.25rem;
+  object-fit: contain;
+  width: 3rem;
+}
+.walk-in-summary-table .walk-in-flag {
+  margin-inline-end: var(--space-1);
+}
+.walk-in-summary-table .record-link:hover,
+.walk-in-summary-table .record-link:focus-visible {
+  text-decoration: underline;
+}
+.walk-in-price__row--total {
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  font-size: 1.25rem;
+  margin-inline: calc(var(--space-2) * -1);
+  padding: var(--space-2);
+}
+
 @media (max-width: 64rem) {
   .walk-in {
     --walk-in-inset: var(--space-5);
@@ -683,6 +781,13 @@
   .walk-in-card--source {
     order: 4;
   }
+  /* Summary order: Guest, Booking Source, Stay, Room, Additional Information, Price. */
+  .walk-in-card--sum-guest { order: 1; }
+  .walk-in-card--sum-source { order: 2; }
+  .walk-in-card--sum-stay { order: 3; }
+  .walk-in-card--sum-room { order: 4; }
+  .walk-in-card--sum-additional { order: 5; }
+  .walk-in-card--sum-price { order: 6; }
 }
 
 @media (max-width: 40rem) {
@@ -720,6 +825,9 @@
   .walk-in-card__header--action {
     grid-template-columns: auto minmax(0, 1fr);
   }
+  .walk-in-grid--summary .walk-in-card__header--action {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
   .walk-in-card__actions {
     grid-column: 1 / -1;
     justify-content: stretch;
@@ -740,7 +848,11 @@
   .walk-in-summary-table th {
     width: 45%;
   }
-  .walk-in-lines {
-    min-width: 30rem;
+  .walk-in-summary-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .walk-in-doc,
+  .walk-in-room-photo {
+    max-width: 16rem;
   }
 }

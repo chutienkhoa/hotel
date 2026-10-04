@@ -139,6 +139,9 @@
         if (!labels.roomUrl) return td;
         const link = document.createElement("a");
         link.className = "record-link";
+        // Opens beside the form: leaving it in this tab would drop whatever has been typed and not yet submitted.
+        link.target = "_blank";
+        link.rel = "noopener";
         link.href = labels.roomUrl.replace("ROOM_ID", encodeURIComponent(room.id));
         link.textContent = room.roomNumber;
         td.textContent = "";

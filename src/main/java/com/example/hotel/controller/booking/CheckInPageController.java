@@ -54,10 +54,11 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 public class CheckInPageController {
 
     /**
-     * Session key holding one stashed, possibly incomplete, Walk-in form while the user visits the
-     * existing Guest creation form (spec 9.2.5 / 9.3.3a). Scoped to the Walk-in flow only; the OTA
-     * Booking Not Entered flow uses its own separate key so the two flows can never contaminate
-     * each other.
+     * Session key holding the in-progress Walk-in form (plain request data, never an entity). It is written when the
+     * form is submitted to the Summary or sent to Create New Guest, and read WITHOUT being consumed by the Walk-in form
+     * and the Summary, so browser Back, Forward and Refresh never lose it. It is removed only when the Walk-in
+     * completes, or when the user returns to the Check-in Guest landing (the flow was abandoned), so it cannot leak
+     * into a genuinely new Walk-in. The OTA Booking Not Entered flow uses its own separate key.
      */
     private static final String WALK_IN_WIZARD_SESSION_KEY = "checkIn.walkIn.stashedForm";
 
@@ -78,6 +79,8 @@ public class CheckInPageController {
     private final GuestQueryService guestQueryService;
     private final RoomQueryService roomQueryService;
     private final FrontDeskQueryService frontDeskQueryService;
+    private final com.example.hotel.service.room.RoomImageService roomImageService;
+    private final jakarta.validation.Validator validator;
 
     /**
      * Creates the Check-in MVC controller with its collaborators.
@@ -87,13 +90,19 @@ public class CheckInPageController {
      * @param roomQueryService service used to load Room choices for OTA Booking Not Entered
      * @param prepaymentService read-only prepayment summary shown on the Review
      * @param frontDeskQueryService read model for the landing's Recent Confirmed Reservations
+     * @param roomImageService read model for the primary Room image shown on the Walk-in Summary
+     * @param validator Bean Validation, used to re-check the prepared Walk-in form before the Summary is shown
      */
     public CheckInPageController(
             CheckInService checkInService,
             GuestQueryService guestQueryService,
             RoomQueryService roomQueryService,
             com.example.hotel.service.booking.PrepaymentService prepaymentService,
-            FrontDeskQueryService frontDeskQueryService) {
+            FrontDeskQueryService frontDeskQueryService,
+            com.example.hotel.service.room.RoomImageService roomImageService,
+            jakarta.validation.Validator validator) {
+        this.validator = validator;
+        this.roomImageService = roomImageService;
         this.frontDeskQueryService = frontDeskQueryService;
         this.prepaymentService = prepaymentService;
         this.checkInService = checkInService;
@@ -106,11 +115,13 @@ public class CheckInPageController {
      * arrivals (the Front Desk Arrivals read model, so readiness and overdue rules are not duplicated here).
      *
      * @param model model used to render the landing page
+     * @param session HTTP session; returning to the landing abandons any in-progress Walk-in
      * @return the Check-in landing template name
      */
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
-    public String landing(Model model) {
+    public String landing(HttpSession session, Model model) {
+        session.removeAttribute(WALK_IN_WIZARD_SESSION_KEY);
         model.addAttribute("recentArrivals", frontDeskQueryService.recentArrivals(RECENT_ARRIVALS_LIMIT));
         model.addAttribute("hotelToday", frontDeskQueryService.hotelToday());
         return "check-in/landing";
@@ -271,21 +282,25 @@ public class CheckInPageController {
      * {@code GuestPageController.create} already sets. An absent or invalid stash/{@code
      * createdGuestId} safely falls back to the ordinary empty form.</p>
      *
-     * @param session HTTP session possibly holding a stashed in-progress Walk-in form
+     * @param session HTTP session possibly holding the in-progress Walk-in form
      * @param model model used to render the form
      * @return the Walk-in template name
      */
     @GetMapping("/walk-in")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
     public String walkInForm(HttpSession session, Model model) {
-        WalkInRequest walkInForm = withCreatedGuestIfAny(consumeStashedWalkInForm(session), model);
-        addWalkInFormAttributes(model, walkInForm, List.of());
+        // A form flashed by a redirected validation failure carries its own errors; otherwise the in-progress form
+        // comes from the session, or the form is empty.
+        WalkInRequest walkInForm = model.asMap().get("walkInForm") instanceof WalkInRequest flashed
+                ? flashed
+                : inProgressWalkInForm(session);
+        addWalkInFormAttributes(model, withCreatedGuestIfAny(walkInForm, model), List.of());
         return "check-in/walk-in";
     }
 
     /**
-     * Stashes the Walk-in form's current, possibly incomplete, field values for exactly one
-     * subsequent Guest-creation round trip, then redirects to the existing Guest creation form. No
+     * Keeps the Walk-in form's current, possibly incomplete, field values in the session for the
+     * Guest-creation round trip, then redirects to the existing Guest creation form. No
      * Reservation or Guest is created by this step (spec 9.2.5): it only preserves already-entered
      * Walk-in fields so they are not lost while the user visits Guest creation and returns.
      *
@@ -298,23 +313,6 @@ public class CheckInPageController {
     public String walkInNewGuest(@ModelAttribute("walkInForm") WalkInRequest walkInForm, HttpSession session) {
         session.setAttribute(WALK_IN_WIZARD_SESSION_KEY, walkInForm);
         return "redirect:/guests/new?returnTo=" + WALK_IN_RETURN_TARGET;
-    }
-
-    /**
-     * Returns from the read-only Walk-in Review step to the editable Walk-in form without losing
-     * any previously entered selection, closing the Back/state-loss gap recorded in spec 9.3.3a.
-     * Nothing is persisted or re-validated here; the values resubmitted from Review are redisplayed
-     * exactly as entered so the user can keep editing.
-     *
-     * @param walkInForm Walk-in field values resubmitted from the Review step
-     * @param model model used to render the Walk-in form
-     * @return the Walk-in template name, pre-filled with the preserved selections
-     */
-    @PostMapping("/walk-in/back")
-    @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
-    public String walkInBack(@ModelAttribute("walkInForm") WalkInRequest walkInForm, Model model) {
-        addWalkInFormAttributes(model, walkInForm, List.of());
-        return "check-in/walk-in";
     }
 
     /**
@@ -335,37 +333,72 @@ public class CheckInPageController {
     }
 
     /**
-     * Validates the submitted Walk-in selections and displays a read-only Review before the
-     * atomic "Confirm &amp; Check-in" operation. Nothing is persisted by this step.
+     * Validates the submitted Walk-in selections and prepares the Reservation Summary. Nothing is persisted. A valid
+     * form is kept in the session and the browser is redirected to the Summary (POST/Redirect/GET), so the Summary is
+     * a normal GET page in the browser history; an invalid form is redirected back to the Walk-in form with its
+     * errors, never rendered from this POST.
      *
      * @param walkInForm submitted Walk-in guest/room/date selections
      * @param bindingResult structural validation result
-     * @param model model used to render the Review or redisplay the form after a safe error
-     * @return the Walk-in Review template, or the form template on validation failure
+     * @param session HTTP session that keeps the prepared form
+     * @param redirectAttributes carries a rejected form and its errors across the redirect
+     * @return a redirect to the Summary, or to the Walk-in form on a validation failure
      */
     @PostMapping("/walk-in/review")
     @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
     public String walkInReview(
-            @Valid @ModelAttribute("walkInForm") WalkInRequest walkInForm, BindingResult bindingResult, Model model) {
+            @Valid @ModelAttribute("walkInForm") WalkInRequest walkInForm,
+            BindingResult bindingResult,
+            HttpSession session,
+            RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
-            addNightlyRateErrorFlags(model, bindingResult);
-            addWalkInFormAttributes(model, walkInForm, List.of());
-            return "check-in/walk-in";
+            return redirectToWalkInForm(walkInForm, bindingResult, null, session, redirectAttributes);
         }
+        try {
+            checkInService.reviewWalkIn(walkInForm);
+        } catch (WalkInReviewException exception) {
+            rejectWalkInSelection(bindingResult, exception);
+            return redirectToWalkInForm(walkInForm, bindingResult, null, session, redirectAttributes);
+        } catch (ResponseStatusException exception) {
+            return redirectToWalkInForm(walkInForm, bindingResult, safeMessage(exception), session, redirectAttributes);
+        }
+        session.setAttribute(WALK_IN_WIZARD_SESSION_KEY, walkInForm);
+        return "redirect:/check-in/walk-in/review";
+    }
+
+    /**
+     * Displays the read-only Walk-in Reservation Summary for the form prepared in the session. It is a plain GET
+     * resource: refreshing it, or arriving at it by browser Back/Forward, repeats nothing and creates nothing, and it
+     * does not clear the prepared form. When no valid prepared form exists (direct URL, expired session, completed
+     * Walk-in) or it is no longer valid, the user is sent back to the Walk-in form instead of seeing an error.
+     *
+     * @param session HTTP session holding the prepared form
+     * @param model model used to render the Summary
+     * @param authentication current browser authentication
+     * @param redirectAttributes carries the notice or errors to the Walk-in form when the Summary cannot be shown
+     * @return the Summary template, or a redirect to the Walk-in form
+     */
+    @GetMapping("/walk-in/review")
+    @PreAuthorize("hasAuthority('PERM_CHECK_IN')")
+    public String walkInSummary(
+            HttpSession session, Model model, Authentication authentication, RedirectAttributes redirectAttributes) {
+        if (!(session.getAttribute(WALK_IN_WIZARD_SESSION_KEY) instanceof WalkInRequest walkInForm)
+                || !validator.validate(walkInForm).isEmpty()) {
+            redirectAttributes.addFlashAttribute("walkInNotice", "checkin.walkIn.summary.missing");
+            return "redirect:/check-in/walk-in";
+        }
+        BindingResult errors = new org.springframework.validation.DirectFieldBindingResult(walkInForm, "walkInForm");
         try {
             WalkInReviewResponse review = checkInService.reviewWalkIn(walkInForm);
             model.addAttribute("review", review);
             model.addAttribute("walkInForm", walkInForm);
+            addWalkInSummaryAttributes(model, review, authentication);
             return "check-in/walk-in-review";
         } catch (WalkInReviewException exception) {
-            rejectWalkInSelection(bindingResult, exception);
-            addNightlyRateErrorFlags(model, bindingResult);
-            addWalkInFormAttributes(model, walkInForm, List.of());
-            return "check-in/walk-in";
+            rejectWalkInSelection(errors, exception);
+            return redirectToWalkInForm(walkInForm, errors, null, session, redirectAttributes);
         } catch (ResponseStatusException exception) {
-            model.addAttribute("errorMessage", safeMessage(exception));
-            addWalkInFormAttributes(model, walkInForm, List.of());
-            return "check-in/walk-in";
+            return redirectToWalkInForm(walkInForm, errors, safeMessage(exception), session, redirectAttributes);
         }
     }
 
@@ -384,34 +417,60 @@ public class CheckInPageController {
     public String walkInConfirm(
             @Valid @ModelAttribute("walkInForm") WalkInRequest walkInForm,
             BindingResult bindingResult,
-            Model model,
             HttpSession session,
             RedirectAttributes redirectAttributes) {
         if (bindingResult.hasErrors()) {
-            addNightlyRateErrorFlags(model, bindingResult);
-            addWalkInFormAttributes(model, walkInForm, List.of());
-            return "check-in/walk-in";
+            return redirectToWalkInForm(walkInForm, bindingResult, null, session, redirectAttributes);
         }
         try {
             // The same read-only rules as the Review, so a selection that went stale after the Summary was shown is
             // reported next to its field; confirmWalkIn then re-validates authoritatively under the room locks.
             checkInService.reviewWalkIn(walkInForm);
             Response response = checkInService.confirmWalkIn(walkInForm);
-            // The wizard has completed, so any stashed in-progress state from an earlier Create New
-            // Guest round trip is no longer needed and must not leak into a later, unrelated visit.
+            // The Walk-in has completed: the in-progress form is removed so it cannot leak into a later Walk-in.
             session.removeAttribute(WALK_IN_WIZARD_SESSION_KEY);
             redirectAttributes.addFlashAttribute("successMessage", "Walk-in guest checked in successfully.");
             return "redirect:/reservations/" + response.id();
         } catch (WalkInReviewException exception) {
             rejectWalkInSelection(bindingResult, exception);
-            addNightlyRateErrorFlags(model, bindingResult);
-            addWalkInFormAttributes(model, walkInForm, List.of());
-            return "check-in/walk-in";
+            return redirectToWalkInForm(walkInForm, bindingResult, null, session, redirectAttributes);
         } catch (ResponseStatusException exception) {
-            model.addAttribute("errorMessage", safeMessage(exception));
-            addWalkInFormAttributes(model, walkInForm, List.of());
-            return "check-in/walk-in";
+            return redirectToWalkInForm(walkInForm, bindingResult, safeMessage(exception), session, redirectAttributes);
         }
+    }
+
+    /**
+     * Redirects a rejected Walk-in form back to the Walk-in page (POST/Redirect/GET) so that no history entry is a
+     * rendered POST. The form is kept in the session and flashed with its errors, so the page shows the entered values
+     * and the messages next to their fields.
+     *
+     * @param walkInForm the rejected form
+     * @param bindingResult its validation errors
+     * @param errorMessage optional general error text
+     * @param session HTTP session that keeps the in-progress form
+     * @param redirectAttributes flash carrier
+     * @return the redirect to the Walk-in form
+     */
+    private String redirectToWalkInForm(
+            WalkInRequest walkInForm,
+            BindingResult bindingResult,
+            String errorMessage,
+            HttpSession session,
+            RedirectAttributes redirectAttributes) {
+        session.setAttribute(WALK_IN_WIZARD_SESSION_KEY, walkInForm);
+        redirectAttributes.addFlashAttribute("walkInForm", walkInForm);
+        redirectAttributes.addFlashAttribute(BindingResult.MODEL_KEY_PREFIX + "walkInForm", bindingResult);
+        if (errorMessage != null) {
+            redirectAttributes.addFlashAttribute("errorMessage", errorMessage);
+        }
+        boolean rateError = bindingResult.getFieldErrors().stream()
+                .anyMatch(error -> error.getField().endsWith(".nightlyRate"));
+        boolean otherError = bindingResult.getAllErrors().stream()
+                .anyMatch(error -> !(error instanceof org.springframework.validation.FieldError fieldError
+                        && fieldError.getField().endsWith(".nightlyRate")));
+        redirectAttributes.addFlashAttribute("walkInRateError", rateError);
+        redirectAttributes.addFlashAttribute("walkInRateErrorOnly", rateError && !otherError);
+        return "redirect:/check-in/walk-in";
     }
 
     /**
@@ -429,21 +488,24 @@ public class CheckInPageController {
     }
 
     /**
-     * Tells the Walk-in form whether the validation errors include a selected room's nightly rate, and whether
-     * they are only that, so the form can present a missing rate through the shared feedback dialog instead of
-     * the generic "correct the highlighted fields" banner. The errors themselves stay on the binding result.
+     * Adds the read-only presentation data of the Walk-in Summary that the review response does not carry: the
+     * selected Guest's contact and identity fields, and each selected Room's primary image. A Room image is only
+     * offered to users who may open Room Detail, because its file endpoint requires that same permission.
      *
-     * @param model model used to render the form
-     * @param bindingResult validation result of the submitted Walk-in form
+     * @param model model used to render the Summary
+     * @param review Summary review response
+     * @param authentication current browser authentication
      */
-    private void addNightlyRateErrorFlags(Model model, BindingResult bindingResult) {
-        boolean rateError = bindingResult.getFieldErrors().stream()
-                .anyMatch(error -> error.getField().endsWith(".nightlyRate"));
-        boolean otherError = bindingResult.getAllErrors().stream()
-                .anyMatch(error -> !(error instanceof org.springframework.validation.FieldError fieldError
-                        && fieldError.getField().endsWith(".nightlyRate")));
-        model.addAttribute("walkInRateError", rateError);
-        model.addAttribute("walkInRateErrorOnly", rateError && !otherError);
+    private void addWalkInSummaryAttributes(Model model, WalkInReviewResponse review, Authentication authentication) {
+        model.addAttribute("summaryGuest", guestQueryService.findForReservationCreation(review.guestId()));
+        Map<UUID, UUID> primaryImageIds = new java.util.HashMap<>();
+        if (hasAuthority(authentication, "PERM_MANAGE_ROOM")) {
+            review.rooms().forEach(room -> roomImageService.findByRoomId(room.roomId()).stream()
+                    .filter(com.example.hotel.dto.room.response.RoomImageResponse::primary)
+                    .findFirst()
+                    .ifPresent(image -> primaryImageIds.put(room.roomId(), image.id())));
+        }
+        model.addAttribute("roomImageIds", primaryImageIds);
     }
 
     /**
@@ -500,16 +562,13 @@ public class CheckInPageController {
     }
 
     /**
-     * Retrieves and clears any Walk-in form stashed by {@link #walkInNewGuest}, so the stash is
-     * consumed exactly once and can never leak into a later, unrelated Walk-in visit.
+     * Returns the in-progress Walk-in form from the session WITHOUT removing it, so Back, Forward and Refresh keep it.
      *
      * @param session current HTTP session
-     * @return the stashed Walk-in form, or a fresh empty form when nothing was stashed
+     * @return the in-progress Walk-in form, or a fresh empty form when there is none
      */
-    private WalkInRequest consumeStashedWalkInForm(HttpSession session) {
-        Object stashed = session.getAttribute(WALK_IN_WIZARD_SESSION_KEY);
-        session.removeAttribute(WALK_IN_WIZARD_SESSION_KEY);
-        return stashed instanceof WalkInRequest stashedForm ? stashedForm : emptyWalkInForm();
+    private WalkInRequest inProgressWalkInForm(HttpSession session) {
+        return session.getAttribute(WALK_IN_WIZARD_SESSION_KEY) instanceof WalkInRequest form ? form : emptyWalkInForm();
     }
 
     /**

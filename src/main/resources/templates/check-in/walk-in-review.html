@@ -10,15 +10,14 @@
     <main class="content walk-in">
         <div class="walk-in-page">
             <!--
-                Back and every Edit button resubmit all entered Walk-in selections to the Walk-in form instead of
-                navigating to a blank GET, so Back preserves state (spec 9.3.3a). They are associated with the Confirm &
-                Check-in form below (not nested inside it) through the HTML "form" attribute.
+                Back and every Edit are plain links to the Walk-in form (GET). The entered selections are kept in the
+                session, not resubmitted, so Back, browser Back/Forward and Refresh all return to the same populated form
+                (spec 9.3.3a) without a POST in the browser history.
             -->
-            <button class="back-link back-link--primary" form="walk-in-confirm-form" formnovalidate
-                    th:formaction="@{/check-in/walk-in/back}" formmethod="post" type="submit">
+            <a class="back-link back-link--primary" th:href="@{/check-in/walk-in}">
                 <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
                 <span th:text="#{checkin.walkIn.summary.back}">Back to Walk-in Reservation</span>
-            </button>
+            </a>
 
             <div class="page-header walk-in-header">
                 <div>
@@ -61,79 +60,110 @@
                     <input th:name="${'rooms[' + roomRowStat.index + '].nightlyRate'}" th:value="${roomRequest.nightlyRate}" type="hidden" />
                 </th:block>
 
-                <div class="walk-in-grid">
+                <div class="walk-in-grid walk-in-grid--summary">
                     <div class="walk-in-column">
-                        <section aria-labelledby="walk-in-summary-guest" class="card walk-in-card">
+                        <!-- Guest Information: the passport as a document preview beside the selected Guest's stored details. -->
+                        <section aria-labelledby="walk-in-summary-guest" class="card walk-in-card walk-in-card--sum-guest">
                             <header class="walk-in-card__header walk-in-card__header--action">
-                                <svg th:replace="~{layout/icons :: user}"></svg>
                                 <h2 id="walk-in-summary-guest" th:text="#{checkin.walkIn.guest.title}">Guest Information</h2>
-                                <button class="button button-secondary walk-in-edit" form="walk-in-confirm-form" formmethod="post" formnovalidate
-                                        th:formaction="@{/check-in/walk-in/back}" type="submit">
+                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
                                     <svg th:replace="~{layout/icons :: edit}"></svg>
                                     <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
-                                </button>
+                                </a>
                             </header>
-                            <table class="walk-in-summary-table">
-                                <tbody>
-                                <tr><th scope="row" th:text="#{checkin.walkIn.guest.name}">Full Name</th><td th:text="${review.guestFullName}">Guest name</td></tr>
-                                <tr><th scope="row" th:text="#{checkin.walkIn.guest.code}">Guest Code</th><td th:text="${review.guestCode}">GUEST-001</td></tr>
-                                <tr>
-                                    <th scope="row" th:text="#{checkin.review.documents.title}">Documents</th>
-                                    <td>
-                                        <span th:unless="${review.passportAvailable}" th:text="#{checkin.review.documents.none}">No passport image on file.</span>
-                                        <a th:if="${review.passportAvailable}" target="_blank" rel="noopener"
-                                           th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${review.guestId},documentId=${review.firstPassportDocumentId})}"
-                                           th:text="#{checkin.review.documents.viewPassport}">View Passport</a>
-                                    </td>
-                                </tr>
-                                </tbody>
-                            </table>
-                        </section>
-
-                        <section aria-labelledby="walk-in-summary-rooms" class="card walk-in-card">
-                            <header class="walk-in-card__header walk-in-card__header--action">
-                                <svg th:replace="~{layout/icons :: bed}"></svg>
-                                <h2 id="walk-in-summary-rooms" th:text="#{checkin.walkIn.summary.rooms}">Room Details</h2>
-                                <button class="button button-secondary walk-in-edit" form="walk-in-confirm-form" formmethod="post" formnovalidate
-                                        th:formaction="@{/check-in/walk-in/back}" type="submit">
-                                    <svg th:replace="~{layout/icons :: edit}"></svg>
-                                    <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
-                                </button>
-                            </header>
-                            <div class="table-wrap">
-                                <table class="walk-in-lines">
-                                    <thead>
-                                    <tr>
-                                        <th scope="col" th:text="#{checkin.walkIn.room.number}">Room No.</th>
-                                        <th scope="col" th:text="#{checkin.walkIn.room.typeColumn}">Room Type</th>
-                                        <th class="walk-in-num" scope="col" th:text="#{checkin.walkIn.room.capacity}">Adult Capacity</th>
-                                        <th class="walk-in-num" scope="col" th:text="#{checkin.walkIn.summary.nightlyRate}">Rate (VND / night)</th>
-                                        <th class="walk-in-num" scope="col" th:text="#{checkin.walkIn.summary.nights}">Nights</th>
-                                        <th class="walk-in-num" scope="col" th:text="#{checkin.walkIn.summary.lineTotal}">Total (VND)</th>
-                                    </tr>
-                                    </thead>
+                            <div class="walk-in-summary-body" th:with="nationality=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(summaryGuest?.nationality)}">
+                                <a class="walk-in-doc" rel="noopener" target="_blank" th:if="${review.passportAvailable}"
+                                   th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${review.guestId},documentId=${review.firstPassportDocumentId})}"
+                                   th:title="#{checkin.review.documents.viewPassport}">
+                                    <img th:alt="#{checkin.walkIn.summary.passportAlt}" th:src="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${review.guestId},documentId=${review.firstPassportDocumentId})}" />
+                                </a>
+                                <p class="walk-in-doc walk-in-doc--empty" th:unless="${review.passportAvailable}" th:text="#{checkin.review.documents.none}">No passport image on file.</p>
+                                <table class="walk-in-summary-table walk-in-summary-table--boxed">
                                     <tbody>
-                                    <tr th:each="room : ${review.rooms}">
-                                        <td class="walk-in-room-number">
-                                            <a class="record-link" th:if="${canManageRoom}" th:href="@{/rooms/{id}(id=${room.roomId})}" th:text="${room.roomNumber}">101</a>
-                                            <span th:unless="${canManageRoom}" th:text="${room.roomNumber}">101</span>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.guest.name}">Full Name</th><td th:text="${review.guestFullName}">Guest name</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.review.guest.nationality}">Nationality</th>
+                                        <td th:if="${summaryGuest?.nationality != null}">
+                                            <span aria-hidden="true" class="walk-in-flag" th:if="${nationality.flag != null}" th:text="${nationality.flag}"></span>
+                                            <span th:text="${summaryGuest.nationality}">Vietnamese</span>
                                         </td>
-                                        <td th:text="${room.roomTypeName} ?: '—'">—</td>
-                                        <td class="walk-in-num" th:text="${room.roomTypeCapacity} ?: '—'">2</td>
-                                        <td class="walk-in-num"><span th:replace="~{layout/money :: amount(${room.nightlyRate}, ${review.currency})}">0 VND</span></td>
-                                        <td class="walk-in-num" th:text="${room.nights}">2</td>
-                                        <td class="walk-in-num"><span th:replace="~{layout/money :: amount(${room.totalAmount}, ${review.currency})}">0 VND</span></td>
-                                    </tr>
+                                        <td th:unless="${summaryGuest?.nationality != null}">—</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.review.guest.phone}">Phone</th><td th:text="${summaryGuest?.phone} ?: '—'">—</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.review.guest.email}">Email</th><td th:text="${summaryGuest?.email} ?: '—'">—</td></tr>
+                                    <tr><th scope="row" th:text="#{guest.field.dateOfBirth}">Date of Birth</th>
+                                        <td th:text="${summaryGuest?.dateOfBirth == null} ? '—' : ${T(com.example.hotel.common.DisplayFormats).formatDate(summaryGuest.dateOfBirth)}">—</td></tr>
+                                    <tr><th scope="row" th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</th><td th:text="${summaryGuest?.idDocumentNumber} ?: '—'">—</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.guest.code}">Guest Code</th><td th:text="${review.guestCode}">G000001</td></tr>
                                     </tbody>
                                 </table>
                             </div>
                         </section>
+
+                        <section aria-labelledby="walk-in-summary-rooms" class="card walk-in-card walk-in-card--sum-room">
+                            <header class="walk-in-card__header walk-in-card__header--action">
+                                <h2 id="walk-in-summary-rooms" th:text="#{checkin.walkIn.summary.rooms}">Room Details</h2>
+                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
+                                    <svg th:replace="~{layout/icons :: edit}"></svg>
+                                    <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
+                                </a>
+                            </header>
+                            <div class="walk-in-summary-body" th:each="room : ${review.rooms}">
+                                <img class="walk-in-room-photo" th:if="${roomImageIds.get(room.roomId) != null}"
+                                     th:alt="#{checkin.walkIn.summary.roomImageAlt(${room.roomNumber})}"
+                                     th:src="@{/rooms/{roomId}/images/{imageId}/file(roomId=${room.roomId},imageId=${roomImageIds.get(room.roomId)})}" />
+                                <p class="walk-in-room-photo walk-in-room-photo--empty" th:unless="${roomImageIds.get(room.roomId) != null}" th:text="#{checkin.walkIn.summary.noRoomImage}">No room image</p>
+                                <table class="walk-in-summary-table walk-in-summary-table--boxed">
+                                    <tbody>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.room.number}">Room No.</th>
+                                        <td class="walk-in-room-number">
+                                            <a class="record-link" th:if="${canManageRoom}" th:href="@{/rooms/{id}(id=${room.roomId})}" th:text="${room.roomNumber}">101</a>
+                                            <span th:unless="${canManageRoom}" th:text="${room.roomNumber}">101</span>
+                                        </td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.room.typeColumn}">Room Type</th><td th:text="${room.roomTypeName} ?: '—'">—</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.room.capacity}">Adult Capacity</th><td th:text="${room.roomTypeCapacity} ?: '—'">2</td></tr>
+                                    <tr><th scope="row" th:text="#{reservation.guests.title}">Guests</th>
+                                        <td th:text="#{checkin.walkIn.room.guestsValue(${walkInForm.adultCount}, ${walkInForm.childCount})}">Adults: 2 · Children: 0</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.summary.nightlyRate}">Rate (VND / night)</th>
+                                        <td><span th:replace="~{layout/money :: rate(${room.nightlyRate})}">0</span></td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.summary.nights}">Nights</th><td th:text="${room.nights}">2</td></tr>
+                                    <tr><th scope="row" th:text="#{checkin.walkIn.summary.roomCharge}">Total Room Charge (VND)</th>
+                                        <td><span th:replace="~{layout/money :: rate(${room.totalAmount})}">0</span></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <section aria-labelledby="walk-in-summary-additional" class="card walk-in-card walk-in-card--sum-additional">
+                            <header class="walk-in-card__header walk-in-card__header--action">
+                                <h2 id="walk-in-summary-additional" th:text="#{checkin.walkIn.summary.additional}">Additional Information</h2>
+                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
+                                    <svg th:replace="~{layout/icons :: edit}"></svg>
+                                    <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
+                                </a>
+                            </header>
+                            <table class="walk-in-summary-table walk-in-summary-table--boxed">
+                                <tbody>
+                                <tr><th scope="row" th:text="#{checkin.walkIn.summary.passportImage}">Passport Image</th>
+                                    <td>
+                                        <span class="walk-in-doc-row" th:if="${review.passportAvailable}">
+                                            <img alt="" class="walk-in-doc-thumb"
+                                                 th:src="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${review.guestId},documentId=${review.firstPassportDocumentId})}" />
+                                            <a rel="noopener" target="_blank"
+                                               th:href="@{/guests/{guestId}/documents/{documentId}/passport(guestId=${review.guestId},documentId=${review.firstPassportDocumentId})}"
+                                               th:text="#{checkin.review.documents.viewPassport}">View Passport</a>
+                                        </span>
+                                        <span th:unless="${review.passportAvailable}" th:text="#{checkin.review.documents.none}">No passport image on file.</span>
+                                    </td></tr>
+                                <tr><th scope="row" th:text="#{checkin.walkIn.stay.notes}">Notes</th>
+                                    <td th:text="${#strings.isEmpty(walkInForm.notes)} ? '—' : ${walkInForm.notes}">—</td></tr>
+                                </tbody>
+                            </table>
+                        </section>
                     </div>
 
                     <div class="walk-in-column">
-                        <section aria-labelledby="walk-in-summary-source" class="card walk-in-card">
+                        <!-- Walk-in reservations are always Direct: read-only here, no OTA reference. -->
+                        <section aria-labelledby="walk-in-summary-source" class="card walk-in-card walk-in-card--sum-source">
                             <header class="walk-in-card__header">
-                                <svg th:replace="~{layout/icons :: building}"></svg>
                                 <h2 id="walk-in-summary-source" th:text="#{checkin.walkIn.source.title}">Booking Source</h2>
                             </header>
                             <div class="walk-in-source">
@@ -142,17 +172,15 @@
                             </div>
                         </section>
 
-                        <section aria-labelledby="walk-in-summary-stay" class="card walk-in-card">
+                        <section aria-labelledby="walk-in-summary-stay" class="card walk-in-card walk-in-card--sum-stay">
                             <header class="walk-in-card__header walk-in-card__header--action">
-                                <svg th:replace="~{layout/icons :: calendar}"></svg>
                                 <h2 id="walk-in-summary-stay" th:text="#{checkin.walkIn.stay.title}">Stay Details</h2>
-                                <button class="button button-secondary walk-in-edit" form="walk-in-confirm-form" formmethod="post" formnovalidate
-                                        th:formaction="@{/check-in/walk-in/back}" type="submit">
+                                <a class="button button-secondary walk-in-edit" th:href="@{/check-in/walk-in}">
                                     <svg th:replace="~{layout/icons :: edit}"></svg>
                                     <span th:text="#{checkin.walkIn.summary.edit}">Edit</span>
-                                </button>
+                                </a>
                             </header>
-                            <table class="walk-in-summary-table">
+                            <table class="walk-in-summary-table walk-in-summary-table--boxed">
                                 <tbody>
                                 <tr><th scope="row" th:text="#{checkin.walkIn.stay.checkIn}">Check-in Date</th>
                                     <td class="date-value--check-in"><span th:replace="~{layout/datetime :: date(${review.checkInDate})}">—</span></td></tr>
@@ -162,27 +190,24 @@
                                     <td th:text="${T(java.time.temporal.ChronoUnit).DAYS.between(review.checkInDate, review.checkOutDate)}">2</td></tr>
                                 <tr><th scope="row" th:text="#{reservation.guests.adults}">Adults</th><td th:text="${walkInForm.adultCount}">2</td></tr>
                                 <tr><th scope="row" th:text="#{reservation.guests.children}">Children</th><td th:text="${walkInForm.childCount}">0</td></tr>
-                                <tr><th scope="row" th:text="#{checkin.walkIn.stay.notes}">Notes</th>
-                                    <td th:text="${#strings.isEmpty(walkInForm.notes)} ? '—' : ${walkInForm.notes}">—</td></tr>
                                 <tr><th scope="row" th:text="#{checkin.walkIn.summary.actualCheckIn}">Actual check-in (preview)</th>
                                     <td><span th:replace="~{layout/datetime :: dateTime(${review.actualCheckInPreview})}">—</span></td></tr>
                                 </tbody>
                             </table>
                         </section>
 
-                        <section aria-labelledby="walk-in-summary-price" class="card walk-in-card">
+                        <section aria-labelledby="walk-in-summary-price" class="card walk-in-card walk-in-card--sum-price">
                             <header class="walk-in-card__header">
-                                <svg th:replace="~{layout/icons :: coins}"></svg>
                                 <h2 id="walk-in-summary-price" th:text="#{checkin.walkIn.summary.price}">Price Summary (VND)</h2>
                             </header>
                             <div class="walk-in-price">
                                 <div class="walk-in-price__row" th:each="room : ${review.rooms}">
-                                    <span th:text="#{checkin.walkIn.summary.priceLine(${room.roomNumber}, ${room.nights})}">Room 101 (2 nights)</span>
-                                    <span th:replace="~{layout/money :: amount(${room.totalAmount}, ${review.currency})}">0 VND</span>
+                                    <span th:text="#{checkin.walkIn.summary.priceLineRate(${room.roomNumber}, ${room.nights}, ${#numbers.formatDecimal(room.nightlyRate, 1, 'COMMA', 0, 'POINT')})}">Room 101 (2 nights × 1,200,000)</span>
+                                    <span th:replace="~{layout/money :: rate(${room.totalAmount})}">0</span>
                                 </div>
                                 <div class="walk-in-price__row walk-in-price__row--total">
-                                    <span th:text="#{checkin.walkIn.summary.total}">Total</span>
-                                    <span th:replace="~{layout/money :: amount(${review.totalAmount}, ${review.currency})}">0 VND</span>
+                                    <span th:text="#{checkin.walkIn.summary.lineTotal}">Total (VND)</span>
+                                    <span th:replace="~{layout/money :: rate(${review.totalAmount})}">0</span>
                                 </div>
                             </div>
                         </section>
@@ -193,8 +218,7 @@
 
         <div class="walk-in-actions">
             <div class="walk-in-actions__inner">
-                <button class="button button-secondary" form="walk-in-confirm-form" formmethod="post" formnovalidate
-                        th:formaction="@{/check-in/walk-in/back}" type="submit" th:text="#{checkin.walkIn.summary.backButton}">Back</button>
+                <a class="button button-secondary" th:href="@{/check-in/walk-in}" th:text="#{checkin.walkIn.summary.backButton}">Back</a>
                 <button class="button button-primary" form="walk-in-confirm-form" type="submit">
                     <span th:text="#{checkin.walkIn.summary.cta}">Confirm &amp; Check-in</span>
                     <svg th:replace="~{layout/icons :: arrowLeft}"></svg>

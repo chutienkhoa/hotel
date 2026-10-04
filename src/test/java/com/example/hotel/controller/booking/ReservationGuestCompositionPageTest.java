@@ -63,6 +63,9 @@ class ReservationGuestCompositionPageTest {
     private com.example.hotel.service.booking.FrontDeskQueryService frontDeskQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.room.RoomImageService roomImageService;
+
+    @MockitoBean
     private ReservationQueryService reservationQueryService;
 
     @MockitoBean
@@ -218,7 +221,9 @@ class ReservationGuestCompositionPageTest {
                 GUEST_ID, "Ann Lee", "G-1", false, null, LocalDate.of(2026, 9, 21), LocalDate.of(2026, 9, 23),
                 Instant.parse("2026-09-21T03:00:00Z"), List.of(), BigDecimal.TEN, "VND"));
 
+        org.springframework.mock.web.MockHttpSession session = new org.springframework.mock.web.MockHttpSession();
         mockMvc.perform(post("/check-in/walk-in/review")
+                        .session(session)
                         .param("guestId", GUEST_ID.toString())
                         .param("checkOutDate", "2026-09-23")
                         .param("adultCount", "3")
@@ -228,6 +233,10 @@ class ReservationGuestCompositionPageTest {
                         .param("rooms[0].nightlyRate", "100000")
                         .with(user("staff").authorities(new SimpleGrantedAuthority("PERM_CHECK_IN")))
                         .with(csrf()))
+                .andExpect(status().is3xxRedirection());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/check-in/walk-in/review")
+                        .session(session)
+                        .with(user("staff").authorities(new SimpleGrantedAuthority("PERM_CHECK_IN"))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("name=\"adultCount\" value=\"3\"")))
                 .andExpect(content().string(containsString("name=\"childCount\" value=\"1\"")))

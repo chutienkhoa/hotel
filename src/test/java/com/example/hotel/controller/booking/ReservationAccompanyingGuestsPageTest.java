@@ -73,6 +73,9 @@ class ReservationAccompanyingGuestsPageTest {
     private com.example.hotel.service.booking.FrontDeskQueryService frontDeskQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.room.RoomImageService roomImageService;
+
+    @MockitoBean
     private ReservationQueryService reservationQueryService;
 
     @MockitoBean

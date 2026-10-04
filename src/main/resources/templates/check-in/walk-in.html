@@ -56,6 +56,7 @@
                 </li>
             </ol>
 
+            <p class="message message-warning" role="status" th:if="${walkInNotice}" th:text="#{${walkInNotice}}"></p>
             <p class="message message-error" role="alert" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
             <form class="walk-in-form" id="walk-in-form" method="post" novalidate th:action="@{/check-in/walk-in/review}"
