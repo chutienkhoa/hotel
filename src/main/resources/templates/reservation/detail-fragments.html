@@ -22,6 +22,12 @@
     </button>
 </th>
 
+<!-- A Reservation Number that links to Reservation Detail for a user who may view bookings (PERM_VIEW_BOOKING). -->
+<th:block th:fragment="reservationLink(reservationId, reservationNumber)">
+    <a class="record-link" th:href="@{/reservations/{id}(id=${reservationId})}" th:if="${canViewBooking}" th:text="${reservationNumber}">R20260903-000062</a>
+    <span th:unless="${canViewBooking}" th:text="${reservationNumber}">R20260903-000062</span>
+</th:block>
+
 <!-- A Guest Code that links to Guest Detail for a user who may manage guests. -->
 <th:block th:fragment="guestLink(guestId, guestCode)">
     <a class="record-link" th:href="@{/guests/{id}(id=${guestId})}" th:if="${canManageGuest}" th:text="${guestCode}">G000001</a>

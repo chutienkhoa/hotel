@@ -243,6 +243,15 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 
+/* Current Room Information reads like the Reservation Detail info cards: medium-weight muted labels and navy values, not a
+   bold value column. Size is unchanged; identifiers stand out through the shared .record-link colour, not through weight. */
+.room-change-current__facts dt {
+  font-weight: 500;
+}
+.room-change-current__facts dd {
+  font-weight: 500;
+}
+
 .room-change-details .form-required {
   color: var(--color-danger);
   margin-left: 2px;
@@ -521,11 +530,6 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   min-width: 0;
-}
-
-/* Inline status pills sit on the same 1.5rem line as the sentence; the shared badge is control-height otherwise. */
-.room-change-effects__text .status-badge {
-  height: 1.5rem;
 }
 
 @media (max-width: 900px) {

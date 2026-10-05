@@ -54,10 +54,6 @@
   overflow-wrap: anywhere;
 }
 
-.folio-header h1 .status-badge {
-  font-size: 0.8125rem;
-}
-
 .folio-identity {
   align-items: center;
   color: var(--color-muted);
@@ -215,13 +211,23 @@
   margin: 0;
 }
 
-/* Overview body: Charges, Payments and Outstanding on the left (about 70%), Stay Summary, Quick Actions and
-   Recent Activity on the right (about 30%). Both columns start at the same top edge. Stacks below 64rem. */
+/* Overview body: Charges, Payments and Outstanding on the left, Stay Summary, Quick Actions and Recent Activity on the
+   right. Both columns start at the same top edge. The tracks are Reservation Detail's (.rd-layout in
+   reservation/detail.css): three equal tracks with the main column spanning two, so the right column is exactly as wide
+   as Reservation Detail's; from 80rem down it becomes 2fr/1fr, as there. Stacks below 64rem. */
 .folio-overview {
   align-items: start;
   display: grid;
   gap: var(--space-5);
-  grid-template-columns: minmax(0, 2.5fr) minmax(16rem, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.folio-overview__main {
+  grid-column: span 2;
+}
+
+.folio-overview__side {
+  grid-column: 3;
 }
 
 .folio-overview__main,
@@ -537,6 +543,18 @@
   color: var(--color-muted);
   font-size: 0.8125rem;
   margin: var(--space-2) 0 0;
+}
+
+/* Overview: below 80rem the right column keeps Reservation Detail's 2fr/1fr proportions. */
+@media (max-width: 80rem) {
+  .folio-overview {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .folio-overview__main,
+  .folio-overview__side {
+    grid-column: auto;
+  }
 }
 
 /* Tablet: KPI cards wrap into three equal columns, so every card keeps the same size within this breakpoint.

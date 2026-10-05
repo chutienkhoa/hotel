@@ -152,6 +152,19 @@ class BreadcrumbsTest {
         }
     }
 
+    /**
+     * Confirms the Reservation List is the one root trail: a single entry that links to the list itself (the only trail whose
+     * last entry carries a link), plain text without the right to open it, and translated.
+     */
+    @Test
+    void shouldBuildTheReservationListRootTrail() {
+        assertEquals("Reservations", text(crumbs(null, ALL).reservationList()));
+        assertEquals(List.of("/reservations"), links(crumbs(null, ALL).reservationList()));
+        assertEquals(List.of("-"), links(crumbs(null).reservationList()));
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("vi"));
+        assertEquals("Đặt phòng", text(crumbs(null, ALL).reservationList()));
+    }
+
     /** Confirms an entry the user cannot open is plain text, never a dead link. */
     @Test
     void shouldNotLinkADestinationTheUserCannotOpen() {

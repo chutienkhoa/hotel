@@ -8,6 +8,8 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content reservation-list">
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.reservationList()})}"></nav>
+
         <div class="page-header">
             <div class="page-header-copy">
                 <h1 th:text="#{reservation.list.title}">Reservations</h1>
@@ -174,7 +176,7 @@
                         <td th:text="#{'enum.bookingSource.' + ${row.source.name()}}">Direct</td>
                         <td th:text="${#strings.isEmpty(row.otaBookingReference)} ? '&mdash;' : ${row.otaBookingReference}">&mdash;</td>
                         <td>
-                            <span class="status-badge reservation-list-status"
+                            <span class="status-badge"
                                   th:classappend="${'status-badge--' + #strings.toLowerCase(row.status.name())}"
                                   th:text="#{'enum.reservationStatus.' + ${row.status.name()}}">Confirmed</span>
                         </td>

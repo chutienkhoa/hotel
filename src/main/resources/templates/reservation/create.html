@@ -21,8 +21,8 @@
                 <form class="rc-cancel-form" data-discard-form data-confirm-severity="WARNING" method="get"
                       th:action="@{/reservations}"
                       th:attr="data-confirm-title=#{reservation.create.discard.title},data-confirm-message=#{reservation.create.discard.message},data-confirm-label=#{reservation.create.discard.confirm}">
-                    <button class="button button-primary" type="submit">
-                        <svg th:replace="~{layout/icons :: close}"></svg>
+                    <button class="button button-danger" type="submit">
+                        <svg th:replace="~{layout/icons :: trash}"></svg>
                         <span th:text="#{common.action.cancel}">Cancel</span>
                     </button>
                 </form>

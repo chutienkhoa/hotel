@@ -20,7 +20,7 @@
 
             <div class="cor-title">
                 <h1>
-                    <span th:text="#{checkout.review.heading(${review.reservationNumber})}">Checkout Review</span>
+                    <span th:text="#{checkout.review.heading}">Checkout Review</span>
                     <span th:replace="~{layout/enum :: badge('reservationStatus', ${review.status}, ${'status-badge--' + #strings.toLowerCase(review.status)})}">CHECKED_IN</span>
                     <!-- Same readiness as the card below, repeated here so it stays visible first on narrow screens. -->
                     <span class="status-badge" id="readiness-chip" th:if="${isCheckedIn}"

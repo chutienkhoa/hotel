@@ -165,6 +165,16 @@ public final class Breadcrumbs {
 
     // ---------------------------------------------------------------------------------------------- Reservations
 
+    /**
+     * The Reservation List, the root of the Reservations area: one entry that links to the list itself (a plain entry
+     * when the user may not open it), rendered with a trailing separator.
+     *
+     * @return the trail
+     */
+    public List<BreadcrumbItem> reservationList() {
+        return trail(reservations());
+    }
+
     /** @return Reservations / Create Reservation */
     public List<BreadcrumbItem> reservationCreate() {
         return trail(reservations(), current("reservation.create.title"));

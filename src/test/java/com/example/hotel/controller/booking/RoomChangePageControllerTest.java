@@ -49,6 +49,7 @@ import org.springframework.web.server.ResponseStatusException;
 class RoomChangePageControllerTest {
 
     private static final UUID RESERVATION_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
+    private static final UUID GUEST_ID = UUID.fromString("44444444-4444-4444-4444-444444444444");
     private static final UUID ROOM_ID = UUID.fromString("33333333-3333-3333-3333-333333333333");
     private static final UUID TARGET_ROOM_ID = UUID.fromString("66666666-6666-6666-6666-666666666666");
 
@@ -424,6 +425,9 @@ class RoomChangePageControllerTest {
         when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(new RoomChangeFormResponse(
                 RESERVATION_ID,
                 "R20260917-000001",
+                GUEST_ID,
+                "G-001",
+                "Linh Do",
                 ROOM_ID,
                 "201",
                 "Double Room",
@@ -521,6 +525,65 @@ class RoomChangePageControllerTest {
                 .andExpect(content().string(org.hamcrest.Matchers.not(containsString("389"))));
     }
 
+    /**
+     * Confirms the Current Room card lists Reservation No., Guest Code and Guest Name before Room No. (in the card's
+     * own label/value list), and that Stay Information does not repeat them.
+     */
+    @Test
+    void shouldListReservationAndGuestFirstInTheCurrentRoomCard() throws Exception {
+        when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
+        when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of());
+
+        for (String language : List.of("vi", "en")) {
+            String html = mockMvc.perform(get("/reservations/{id}/rooms/{roomId}/change", RESERVATION_ID, ROOM_ID)
+                            .cookie(new jakarta.servlet.http.Cookie("pms-lang", language))
+                            .with(user("staff").authorities(linkAuthorities())))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String card = html.substring(html.indexOf("id=\"room-change-current-heading\""));
+            String stay = card.substring(card.indexOf("id=\"room-change-stay-heading\""));
+            card = card.substring(0, card.indexOf("id=\"room-change-stay-heading\""));
+            boolean vi = "vi".equals(language);
+
+            List<String> labels = vi
+                    ? List.of("Mã đặt phòng", "Mã khách", "Tên khách", "Số phòng", "Loại phòng")
+                    : List.of("Reservation No.", "Guest Code", "Guest Name", "Room No.", "Room Type");
+            int previous = -1;
+            for (String label : labels) {
+                int at = card.indexOf(">" + label + "<");
+                org.junit.jupiter.api.Assertions.assertTrue(at > previous, label + " in order");
+                previous = at;
+            }
+            org.junit.jupiter.api.Assertions.assertTrue(card.contains(">R20260917-000001</a>"));
+            org.junit.jupiter.api.Assertions.assertTrue(card.contains(">G-001</a>"));
+            org.junit.jupiter.api.Assertions.assertTrue(card.contains(">Linh Do</dd>"));
+            // The three identifiers link to their detail pages (the test user may view bookings, guests and rooms); names don't.
+            org.junit.jupiter.api.Assertions.assertTrue(card.contains(
+                    "href=\"/reservations/" + RESERVATION_ID + "\"") && card.contains("class=\"record-link\""));
+            org.junit.jupiter.api.Assertions.assertTrue(card.contains("href=\"/guests/" + GUEST_ID + "\""));
+            org.junit.jupiter.api.Assertions.assertTrue(card.contains("href=\"/rooms/" + ROOM_ID + "\""));
+            org.junit.jupiter.api.Assertions.assertEquals(3, card.split("class=\"record-link\"", -1).length - 1);
+            org.junit.jupiter.api.Assertions.assertFalse(stay.contains("R20260917-000001"));
+            org.junit.jupiter.api.Assertions.assertFalse(stay.contains("Linh Do"));
+        }
+
+        // Without the view/manage rights the same values are plain text: a link is a convenience, never the authorization.
+        String restricted = mockMvc.perform(get("/reservations/{id}/rooms/{roomId}/change", RESERVATION_ID, ROOM_ID)
+                        .with(user("staff").authorities(changeRoomAuthority())))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String restrictedCard = restricted.substring(restricted.indexOf("id=\"room-change-current-heading\""));
+        restrictedCard = restrictedCard.substring(0, restrictedCard.indexOf("id=\"room-change-stay-heading\""));
+        org.junit.jupiter.api.Assertions.assertFalse(restrictedCard.contains("record-link"));
+        org.junit.jupiter.api.Assertions.assertTrue(restrictedCard.contains("R20260917-000001"));
+    }
+
+    private static List<SimpleGrantedAuthority> linkAuthorities() {
+        return List.of(
+                new SimpleGrantedAuthority("PERM_CHANGE_ROOM"), new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
+                new SimpleGrantedAuthority("PERM_MANAGE_GUEST"), new SimpleGrantedAuthority("PERM_MANAGE_ROOM"));
+    }
+
     /** Builds an open Room Change form view for the test room. */
     private static RoomChangeFormResponse openFormView(boolean currentRoomHasImage) {
         return openFormView(currentRoomHasImage, true);
@@ -531,6 +594,9 @@ class RoomChangePageControllerTest {
         return new RoomChangeFormResponse(
                 RESERVATION_ID,
                 "R20260917-000001",
+                GUEST_ID,
+                "G-001",
+                "Linh Do",
                 ROOM_ID,
                 "201",
                 "Double Room",
@@ -553,7 +619,8 @@ class RoomChangePageControllerTest {
     void shouldRenderStayDatesWithSharedClassesAndOverdueSuffix() throws Exception {
         RoomChangeFormResponse base = openFormView(false);
         when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(new RoomChangeFormResponse(
-                base.reservationId(), base.reservationNumber(), base.currentRoomId(), base.currentRoomNumber(),
+                base.reservationId(), base.reservationNumber(), base.guestId(), base.guestCode(), base.guestFullName(),
+                base.currentRoomId(), base.currentRoomNumber(),
                 base.currentRoomTypeName(), base.currentRoomStatus(), base.checkInDate(), base.checkOutDate(),
                 base.nights(), base.adultCount(), base.childCount(), base.nightlyRate(), base.totalAmount(),
                 base.currency(), false, false, 3));

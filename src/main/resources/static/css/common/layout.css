@@ -33,10 +33,15 @@
   --radius-lg: 0.875rem;
   --shadow-dropdown: 0 12px 24px rgb(16 42 67 / 16%);
   --dropdown-gap: 0.3125rem;
-  --color-dropdown-surface: #2c2f33;
-  --color-dropdown-border: #44494f;
-  --color-dropdown-text: #f2f4f7;
-  --color-dropdown-hover: #3d444d;
+  /* The one open-menu palette every PMS select and combobox popup uses (light, like the rest of the PMS). */
+  --color-dropdown-surface: #ffffff;
+  --color-dropdown-border: #d7e2ee;
+  --color-dropdown-text: var(--color-navy);
+  --color-dropdown-hover: #f1f6fa;
+  --color-dropdown-selected: #e6f2fb;
+  --color-dropdown-selected-text: var(--color-primary);
+  --color-dropdown-disabled-text: var(--color-muted);
+  --color-dropdown-disabled-surface: var(--color-surface-muted);
   --radius-sm: 0.375rem;
   --radius-md: 0.625rem;
   --space-1: 0.25rem;
@@ -1053,6 +1058,9 @@ tbody tr:last-child td {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The one PMS status badge (Reservation Detail's approved look): compact uppercase pill. The status only chooses the colour
+   (.status-badge--<status> below); size, type and shape are the same on every screen. --small is the same badge for tight
+   places such as table cells and inline sentences. A screen never resizes or restyles the badge. */
 .status,
 .status-badge {
   align-items: center;
@@ -1061,13 +1069,20 @@ tbody tr:last-child td {
   border-radius: 999px;
   color: #334e68;
   display: inline-flex;
-  font-size: var(--font-size-badge);
+  font-size: 0.8125rem;
   font-weight: 750;
-  height: var(--control-height);
+  height: 1.75rem;
   justify-content: center;
+  letter-spacing: 0.03em;
   line-height: 1.25;
-  padding: 0.25rem 0.625rem;
+  padding: 0 0.75rem;
+  text-transform: uppercase;
   white-space: nowrap;
+}
+.status-badge--small {
+  font-size: var(--font-size-badge);
+  height: 1.5rem;
+  padding: 0 0.625rem;
 }
 .status-badge--confirmed,
 .status-badge--submitted {
@@ -1093,11 +1108,14 @@ tbody tr:last-child td {
   background: var(--color-danger-surface);
   color: var(--color-danger);
 }
-.status-badge--no_show,
 .status-badge--dirty,
 .status-badge--pending {
   background: var(--color-warning-surface);
   color: var(--color-warning);
+}
+.status-badge--no_show {
+  background: #fde9c4;
+  color: #a0520a;
 }
 .status-badge--cleaning {
   background: #dff7fa;
@@ -1107,12 +1125,20 @@ tbody tr:last-child td {
   background: #ffead5;
   color: #a04300;
 }
-.status-badge--checked_out,
 .status-badge--posted,
 .status-badge--refunded {
   background: var(--color-surface);
   border-color: var(--color-border-strong);
   color: var(--color-muted);
+}
+.status-badge--draft {
+  background: #e6e9ee;
+  color: #475467;
+}
+.status-badge--checked_out {
+  background: #e3e8ee;
+  border-color: #cdd6df;
+  color: #3e4c59;
 }
 
 .detail-grid {
@@ -1189,9 +1215,6 @@ dt {
   color: var(--color-navy);
   font-size: 0.9375rem;
   font-weight: 700;
-}
-.label-value-rows--strong dd .status-badge {
-  font-size: 0.75rem;
 }
 .label-value-rows--divided > div {
   border-bottom: 1px solid var(--color-border);
@@ -1978,7 +2001,9 @@ textarea {
 }
 /* Native selects: where the browser supports customizable selects, the open menu is anchored below the control with a
    small gap (never over it), overlays the page from the top layer, and flips above only when there is no room below.
-   Other browsers keep their built-in menu. Closed-control styling above is unchanged. The menu itself is dark. */
+   Other browsers keep their built-in menu. Closed-control styling above is unchanged. This block is the ONE definition of
+   the open menu for every native select in the PMS (light panel, hover, selected + check mark, disabled): a screen never
+   restyles it, and a new select gets it automatically. Palette: the --color-dropdown-* tokens in :root. */
 @supports (appearance: base-select) {
   select:not([multiple]):not([size]),
   select:not([multiple]):not([size])::picker(select) {
@@ -1998,14 +2023,36 @@ textarea {
     position-try-fallbacks: flip-block;
   }
   select:not([multiple]):not([size]) option {
+    border-radius: var(--radius-sm);
     color: var(--color-dropdown-text);
+    padding: var(--space-2) var(--space-3);
   }
   select:not([multiple]):not([size]) option:hover,
   select:not([multiple]):not([size]) option:focus-visible {
     background: var(--color-dropdown-hover);
   }
-  select:not([multiple]):not([size]) option::checkmark {
-    color: var(--color-dropdown-text);
+  /* Selected: keeps its tint while hovered or focused; a keyboard-focused selected option gets a ring so the cursor shows. */
+  select:not([multiple]):not([size]) option:checked {
+    background: var(--color-dropdown-selected);
+    color: var(--color-dropdown-selected-text);
+    font-weight: 600;
+  }
+  select:not([multiple]):not([size]) option:checked:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+  }
+  select:not([multiple]):not([size]) option::checkmark,
+  select:not([multiple]):not([size]) option:checked::checkmark {
+    color: var(--color-dropdown-selected-text);
+  }
+  /* Disabled: muted text on a subtle surface, and no hover or focus highlight that would suggest it can be chosen. */
+  select:not([multiple]):not([size]) option:disabled,
+  select:not([multiple]):not([size]) option:disabled:hover,
+  select:not([multiple]):not([size]) option:disabled:focus-visible {
+    background: var(--color-dropdown-disabled-surface);
+    color: var(--color-dropdown-disabled-text);
+    cursor: not-allowed;
+    font-weight: 400;
   }
   /* Selects that draw their own trailing chevron (Front Desk and Reservation List filters) must not get a second one. */
   select:has(+ [class$="__chevron"])::picker-icon {

@@ -22,6 +22,32 @@
   gap: var(--space-3);
   margin: 0;
 }
+/* Title row: page name, reservation-number identifier badge, status badge; centred on one line and wrapping as whole
+   badges on narrow screens. */
+.rd-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+/* Identifier badge: a neutral gray pill with white text (not a status colour; one class for every status), smaller than
+   the H1, never broken mid-number. #667085 on white is about 5:1, above the 4.5:1 text contrast minimum. The border stays
+   transparent so the box is exactly as before. */
+.rd-reference {
+  align-items: center;
+  background: #667085;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 0.875rem;
+  font-weight: 600;
+  height: 1.75rem;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  padding: 0 0.75rem;
+  white-space: nowrap;
+}
 .rd-subtitle {
   color: var(--color-muted);
   font-size: 1rem;
@@ -44,45 +70,6 @@
 }
 
 /* Status badge: grey draft, blue confirmed, green checked in, slate checked out, soft red cancelled, amber no-show. */
-.rd-status {
-  border: 1px solid transparent;
-  font-size: 0.8125rem;
-  height: 1.75rem;
-  letter-spacing: 0.03em;
-  padding: 0 0.75rem;
-  text-transform: uppercase;
-}
-.rd-status--small {
-  font-size: 0.75rem;
-  height: 1.5rem;
-  padding: 0 0.625rem;
-}
-.rd-status--draft {
-  background: #e6e9ee;
-  color: #475467;
-}
-.rd-status--confirmed {
-  background: var(--color-info-surface);
-  color: var(--color-info);
-}
-.rd-status--checked_in {
-  background: var(--color-success-surface);
-  color: var(--color-success);
-}
-.rd-status--checked_out {
-  background: #e3e8ee;
-  border-color: #cdd6df;
-  color: #3e4c59;
-}
-.rd-status--cancelled {
-  background: var(--color-danger-surface);
-  color: var(--color-danger);
-}
-.rd-status--no_show {
-  background: #fde9c4;
-  color: #a0520a;
-}
-
 /* ------------------------------------------------------------------ More menu */
 .rd-menu {
   position: relative;
@@ -232,11 +219,20 @@
 }
 
 /* ------------------------------------------------------------------ Overview layout */
+/* The same three-track grid as .rd-top (same gap): the main column spans two tracks and the sidebar takes the third, so
+   the sidebar cards share Reservation Information's exact left edge, width and right edge. Where .rd-top stops being
+   three columns (see Responsive) this layout returns to its two-column form. */
 .rd-layout {
   align-items: start;
   display: grid;
   gap: var(--space-5);
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.rd-main {
+  grid-column: span 2;
+}
+.rd-side {
+  grid-column: 3;
 }
 .rd-main,
 .rd-side {
@@ -431,11 +427,6 @@
 }
 .rd-table .button-compact {
   padding: 0.3rem 0.5rem;
-}
-.rd-current-badge {
-  font-size: 0.75rem;
-  height: 1.5rem;
-  padding: 0 0.625rem;
 }
 .rd-total-band {
   align-items: baseline;
@@ -726,6 +717,13 @@
 /* Three cards need roughly 300px each beside the sidebar; below that the first row becomes two columns, with Reservation
    Information spanning the full width, then one column on small screens. */
 @media (max-width: 80rem) {
+  .rd-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+  .rd-main,
+  .rd-side {
+    grid-column: auto;
+  }
   .rd-top {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

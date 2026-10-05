@@ -59,10 +59,25 @@
                                     <svg th:replace="~{layout/icons :: bed}"></svg>
                                 </th:block>
                             </div>
-                            <dl class="label-value-rows label-value-rows--divided label-value-rows--strong">
+                            <dl class="label-value-rows label-value-rows--divided label-value-rows--strong room-change-current__facts">
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.reservationNo}">Reservation No.</dt>
+                                    <dd><th:block th:replace="~{reservation/detail-fragments :: reservationLink(${currentRoom.reservationId}, ${currentRoom.reservationNumber})}"></th:block></dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.guestCode}">Guest Code</dt>
+                                    <dd>
+                                        <th:block th:if="${currentRoom.guestCode != null}"><th:block th:replace="~{reservation/detail-fragments :: guestLink(${currentRoom.guestId}, ${currentRoom.guestCode})}"></th:block></th:block>
+                                        <span th:if="${currentRoom.guestCode == null}">—</span>
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt th:text="#{reservation.roomChange.field.guestName}">Guest Name</dt>
+                                    <dd th:text="${currentRoom.guestFullName ?: '—'}">Linh Do</dd>
+                                </div>
                                 <div>
                                     <dt th:text="#{reservation.roomChange.field.roomNo}">Room No.</dt>
-                                    <dd th:text="${currentRoom.currentRoomNumber}">101</dd>
+                                    <dd><th:block th:replace="~{reservation/detail-fragments :: roomLink(${currentRoom.currentRoomId}, ${currentRoom.currentRoomNumber})}"></th:block></dd>
                                 </div>
                                 <div>
                                     <dt th:text="#{reservation.roomChange.field.roomType}">Room Type</dt>

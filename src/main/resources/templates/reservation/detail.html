@@ -27,10 +27,12 @@
         <!-- ============================ Header ============================ -->
         <div class="rd-header">
             <div class="rd-header__copy">
-                <h1 class="rd-title">
-                    <span th:text="#{reservation.detail.title(${reservation.reservationNumber})}">Reservation #R20261004-000001</span>
-                    <span th:replace="~{layout/enum :: badge('reservationStatus', ${reservation.status}, ${'rd-status rd-status--' + statusClass})}">CONFIRMED</span>
-                </h1>
+                <!-- Title row: the H1 is only the page name; the reservation number is an identifier badge and the status badge follows it. -->
+                <div class="rd-title-row">
+                    <h1 class="rd-title" th:text="#{reservation.detail.title}">Reservation</h1>
+                    <span class="rd-reference" id="reservation-number" th:text="${reservation.reservationNumber}">R20261004-000001</span>
+                    <span th:replace="~{layout/enum :: badge('reservationStatus', ${reservation.status}, ${'status-badge--' + statusClass})}">CONFIRMED</span>
+                </div>
                 <th:block th:switch="${reservation.status}">
                     <th:block th:case="'DRAFT'">
                         <p class="rd-subtitle" th:if="${reservation.reservedAt != null and reservation.createdByUsername != null}"
@@ -354,7 +356,7 @@
                     <dl class="label-value-rows label-value-rows--divided label-value-rows--fit rd-fields rd-fields--compact-labels">
                         <div>
                             <dt th:text="#{reservation.detail.reservationInfo.status}">Status</dt>
-                            <dd><span th:replace="~{layout/enum :: badge('reservationStatus', ${reservation.status}, ${'rd-status rd-status--small rd-status--' + statusClass})}">CONFIRMED</span></dd>
+                            <dd><span th:replace="~{layout/enum :: badge('reservationStatus', ${reservation.status}, ${'status-badge--small status-badge--' + statusClass})}">CONFIRMED</span></dd>
                         </div>
                         <div>
                             <dt th:text="#{reservation.detail.reservationInfo.source}">Source</dt>
@@ -529,7 +531,7 @@
                                     <td>
                                         <span class="rd-cell-with-badge">
                                             <span th:replace="~{layout/datetime :: date(${reservation.checkOutDate})}">—</span>
-                                            <span class="status-badge status-badge--current rd-current-badge" th:text="#{reservation.detail.rooms.current}">Current</span>
+                                            <span class="status-badge status-badge--small status-badge--current" th:text="#{reservation.detail.rooms.current}">Current</span>
                                         </span>
                                     </td>
                                     <td th:if="${canChangeRoom and currentRoomCount > 1}">
@@ -820,7 +822,7 @@
                             <td th:text="${line.roomTypeName ?: '—'}">Double Room</td>
                             <td><span th:replace="~{layout/datetime :: dateTime(${line.assignedFrom})}">—</span></td>
                             <td>
-                                <span class="status-badge status-badge--current rd-current-badge" th:if="${line.assignedTo == null}" th:text="#{reservation.detail.rooms.current}">Current</span>
+                                <span class="status-badge status-badge--small status-badge--current" th:if="${line.assignedTo == null}" th:text="#{reservation.detail.rooms.current}">Current</span>
                                 <th:block th:if="${line.assignedTo != null}">
                                     <span th:replace="~{layout/datetime :: dateTime(${line.assignedTo})}">—</span>
                                 </th:block>
@@ -886,7 +888,7 @@
                             <td th:text="${item.label}">Reservation created</td>
                             <td>
                                 <th:block th:if="${item.reservationStatus != null}">
-                                    <span th:replace="~{layout/enum :: badge('reservationStatus', ${item.reservationStatus}, ${'rd-status rd-status--small rd-status--' + #strings.toLowerCase(item.reservationStatus)})}">CONFIRMED</span>
+                                    <span th:replace="~{layout/enum :: badge('reservationStatus', ${item.reservationStatus}, ${'status-badge--small status-badge--' + #strings.toLowerCase(item.reservationStatus)})}">CONFIRMED</span>
                                 </th:block>
                                 <span th:if="${item.reservationStatus == null}">—</span>
                             </td>

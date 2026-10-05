@@ -108,6 +108,41 @@ class ReservationDetailLifecycleTest {
                 .andExpect(content().string(not(containsString("id=\"room-history-heading\""))));
     }
 
+    /**
+     * Confirms the H1 is only the page name and the reservation number is an identifier badge right after it, followed by
+     * the status badge, with no "#" prefix, for every status and in both languages.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {"DRAFT", "CONFIRMED", "CHECKED_IN", "CHECKED_OUT", "CANCELLED", "NO_SHOW"})
+    void shouldShowTheReservationNumberAsABadgeBetweenTheTitleAndTheStatus(String reservationStatus) throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation(reservationStatus));
+
+        for (String language : List.of("vi", "en")) {
+            String html = mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
+                            .cookie(new jakarta.servlet.http.Cookie("pms-lang", language))
+                            .with(user("admin").authorities(allAuthorities())))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String row = html.substring(html.indexOf("<div class=\"rd-title-row\">"));
+            row = row.substring(0, row.indexOf("</div>"));
+
+            String h1 = row.substring(row.indexOf("<h1"), row.indexOf("</h1>") + 5);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    h1.matches("(?s).*>" + ("vi".equals(language) ? "Đặt phòng" : "Reservation") + "</h1>"), h1);
+            org.junit.jupiter.api.Assertions.assertFalse(h1.contains("R20260917-000001"), h1);
+
+            int title = row.indexOf("</h1>");
+            int reference = row.indexOf("class=\"rd-reference\"");
+            int badge = row.indexOf("class=\"status-badge");
+            org.junit.jupiter.api.Assertions.assertTrue(title < reference && reference < badge, row);
+            org.junit.jupiter.api.Assertions.assertTrue(row.contains(">R20260917-000001</span>"), row);
+            org.junit.jupiter.api.Assertions.assertFalse(row.contains("#"), row);
+            org.junit.jupiter.api.Assertions.assertFalse(
+                    row.substring(reference, badge).contains("status-badge"), "the identifier is not a status badge");
+        }
+    }
+
     /** Confirms CHECKED_IN shows Current rooms sourced from StayRoomAssignment and Room History. */
     @Test
     void shouldShowCurrentRoomsAndHistoryForCheckedIn() throws Exception {

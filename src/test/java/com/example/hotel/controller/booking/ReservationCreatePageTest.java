@@ -3,6 +3,7 @@ package com.example.hotel.controller.booking;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
@@ -175,6 +176,31 @@ class ReservationCreatePageTest {
         int summary = html.indexOf("data-summary");
         assertTrue(guest > 0 && guest < stay && stay < rooms && rooms < contact && contact < notes && notes < summary,
                 "cards must follow the approved order");
+    }
+
+    /**
+     * Confirms Cancel is the shared danger button with the shared trash icon (icon before the label), still a GET submit to
+     * the Reservation List behind the discard dialog, while Save as Draft stays the blue primary button.
+     */
+    @Test
+    void shouldStyleCancelAsADangerButtonWithATrashIconAndKeepSaveAsDraftPrimary() throws Exception {
+        String html = mockMvc.perform(get("/reservations/new").with(manager()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String form = html.substring(html.indexOf("<form class=\"rc-cancel-form\""));
+        form = form.substring(0, form.indexOf("</form>"));
+
+        assertTrue(form.contains("method=\"get\"") && form.contains("action=\"/reservations\"")
+                && form.contains("data-discard-form"), form);
+        assertTrue(form.contains("<button class=\"button button-danger\" type=\"submit\">"), form);
+        assertFalse(form.contains("button-primary"), form);
+        assertTrue(form.contains("M4.5 7h15"), "the shared trash icon");
+        assertFalse(form.contains("M6 6l12 12") || form.contains("M18 6 6 18"), "no close (X) icon");
+        assertTrue(form.indexOf("<svg") < form.indexOf("<span"), "icon before the label");
+
+        String save = html.substring(html.indexOf("data-save-draft") - 40);
+        save = save.substring(0, save.indexOf("</button>"));
+        assertTrue(save.contains("button button-primary"), save);
     }
 
     /** Confirms the hotel date, the defaults and the VND-only money columns are rendered; no Currency selector. */

@@ -201,6 +201,33 @@ class ReservationListPageTest {
                 .andExpect(content().string(not(containsString(">Reservation No.<"))));
     }
 
+    /**
+     * Confirms the list opens with the shared breadcrumb above the title: a link to the list followed by a trailing
+     * separator, rendered by the same component as the other pages, with no new markup around it.
+     */
+    @Test
+    void shouldRenderTheSharedRootBreadcrumbAboveTheTitle() throws Exception {
+        stubRows();
+
+        for (String language : List.of("vi", "en")) {
+            String html = mockMvc.perform(get("/reservations").with(perm("PERM_VIEW_BOOKING", "PERM_MANAGE_BOOKING"))
+                            .cookie(new Cookie("pms-lang", language)))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+            String nav = html.substring(html.indexOf("<nav aria-label=\"Breadcrumb\""));
+            nav = nav.substring(0, nav.indexOf("</nav>"));
+            String label = "vi".equals(language) ? "Đặt phòng" : "Reservations";
+
+            org.junit.jupiter.api.Assertions.assertTrue(nav.contains("class=\"breadcrumb\""), nav);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    nav.matches("(?s).*<a aria-current=\"page\" href=\"/reservations\">" + label + "</a>.*"), nav);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    nav.matches("(?s).*</a>\\s*<span aria-hidden=\"true\" class=\"breadcrumb-separator\">/</span>\\s*"), nav);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    html.indexOf("<nav aria-label=\"Breadcrumb\"") < html.indexOf("<h1"), "breadcrumb is above the title");
+        }
+    }
+
     // ---- header / permissions ---------------------------------------------------------------------------------
 
     /** Confirms New Reservation links to the real create route only for a user who can manage bookings. */

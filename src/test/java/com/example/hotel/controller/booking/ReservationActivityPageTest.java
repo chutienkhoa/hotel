@@ -121,9 +121,9 @@ class ReservationActivityPageTest {
                 .andReturn().getResponse().getContentAsString();
         String audit = en.substring(en.indexOf("id=\"audit-log\""));
 
-        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("rd-status--draft"));
-        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("rd-status--confirmed"));
-        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("rd-status--checked_in"));
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("status-badge--draft"));
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("status-badge--confirmed"));
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("status-badge--checked_in"));
         org.junit.jupiter.api.Assertions.assertTrue(audit.contains(">DRAFT<") || audit.contains(">Draft<"));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("vi"))
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))

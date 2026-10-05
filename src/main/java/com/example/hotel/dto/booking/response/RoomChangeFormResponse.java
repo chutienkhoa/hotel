@@ -10,6 +10,9 @@ import java.util.UUID;
  *
  * @param reservationId Reservation identifier
  * @param reservationNumber Reservation display number
+ * @param guestId the Reservation's primary guest identifier, or {@code null} when it has no guest
+ * @param guestCode the Reservation's primary guest code, or {@code null} when it has no guest
+ * @param guestFullName the Reservation's primary guest full name (first and last name), or {@code null} when none
  * @param currentRoomId the currently occupied room identifier
  * @param currentRoomNumber the currently occupied room's display number
  * @param currentRoomTypeName the currently occupied room's Room Type name
@@ -29,6 +32,9 @@ import java.util.UUID;
 public record RoomChangeFormResponse(
         UUID reservationId,
         String reservationNumber,
+        UUID guestId,
+        String guestCode,
+        String guestFullName,
         UUID currentRoomId,
         String currentRoomNumber,
         String currentRoomTypeName,

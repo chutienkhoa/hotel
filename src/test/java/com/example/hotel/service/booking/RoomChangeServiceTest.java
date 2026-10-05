@@ -469,6 +469,22 @@ class RoomChangeServiceTest {
         assertEquals("VND", form.currency());
     }
 
+    /** Confirms the form context carries the primary guest's code and full name, and tolerates a Reservation with no guest. */
+    @Test
+    void shouldExposeThePrimaryGuestCodeAndFullName() {
+        Fixture fixture = fixture(clockOn(CHECK_IN.plusDays(1)));
+        assertEquals(null, fixture.service.formView(fixture.reservationId, fixture.room201.getId()).guestCode());
+
+        org.springframework.test.util.ReflectionTestUtils.setField(fixture.reservation, "guest",
+                com.example.hotel.entity.customer.Guest.create(
+                        UUID.randomUUID(), "DEMO-G062", " Linh ", "Do", null, null, "Vietnam", null, null));
+        RoomChangeFormResponse form = fixture.service.formView(fixture.reservationId, fixture.room201.getId());
+
+        assertEquals("DEMO-G062", form.guestCode());
+        assertEquals("Linh Do", form.guestFullName());
+        assertEquals("R20260917-000001", form.reservationNumber());
+    }
+
     /** Confirms each replacement candidate carries its Room Type name and capacity for display. */
     @Test
     void shouldExposeRoomTypeAndCapacityOnCandidates() {

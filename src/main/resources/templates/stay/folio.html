@@ -14,7 +14,7 @@
             <div class="page-header folio-header">
                 <div class="folio-header__title">
                     <h1>
-                        <span th:text="#{payment.folio.heading(${reservation.reservationNumber})}">Folio</span>
+                        <span th:text="#{payment.folio.heading}">Folio</span>
                         <span class="status-badge folio-header__status"
                               th:replace="~{layout/enum :: badge('reservationStatus', ${reservation.status}, 'status-badge--' + ${#strings.toLowerCase(reservation.status)})}">CHECKED_IN</span>
                     </h1>
@@ -230,6 +230,10 @@
                                 </h2>
                             </div>
                             <dl class="label-value-rows label-value-rows--divided label-value-rows--fit folio-stay-facts">
+                                <div>
+                                    <dt th:text="#{payment.folio.stay.reservationNumber}">Reservation No.</dt>
+                                    <dd id="folio-reservation-number" th:text="${reservation.reservationNumber}">R20260903-000062</dd>
+                                </div>
                                 <div>
                                     <dt th:text="#{payment.folio.stay.roomNumber}">Room No.</dt>
                                     <dd>

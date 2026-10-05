@@ -155,6 +155,9 @@ public class RoomChangeService {
         return new RoomChangeFormResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
+                reservation.getGuest() == null ? null : reservation.getGuest().getId(),
+                reservation.getGuest() == null ? null : reservation.getGuest().getGuestCode(),
+                guestFullName(reservation.getGuest()),
                 currentRoom.getId(),
                 currentRoom.getRoomNumber(),
                 currentRoom.getRoomType().getName(),
@@ -172,6 +175,23 @@ public class RoomChangeService {
                 reservation.getStatus() == ReservationStatus.CHECKED_IN
                         ? OverdueDeparture.overdueDays(reservation.getCheckOutDate(), today)
                         : 0);
+    }
+
+    /**
+     * Builds the guest's display name the same way the Guest screens do: first and last name, trimmed and joined.
+     *
+     * @param guest the Reservation's primary guest, possibly {@code null}
+     * @return the display name, or {@code null} when there is no guest or no name component
+     */
+    private static String guestFullName(com.example.hotel.entity.customer.Guest guest) {
+        if (guest == null) {
+            return null;
+        }
+        String name = java.util.stream.Stream.of(guest.getFirstName(), guest.getLastName())
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .collect(java.util.stream.Collectors.joining(" "));
+        return name.isEmpty() ? null : name;
     }
 
     /**

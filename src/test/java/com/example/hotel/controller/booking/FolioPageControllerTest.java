@@ -1112,6 +1112,39 @@ class FolioPageControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * Confirms the Folio title is just "Folio" / "Hóa đơn" followed by the status badge (no reservation number), and the
+     * Stay Summary starts with the real reservation number, for every status a Folio exists in and in both languages.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"CHECKED_IN", "CHECKED_OUT"})
+    void shouldShowASimpleTitleAndPutTheReservationNumberFirstInStaySummary(String status) throws Exception {
+        stubFolio(status, BigDecimal.ZERO, "PAID");
+
+        for (String language : List.of("vi", "en")) {
+            String html = mockMvc.perform(get(FOLIO_PATH).cookie(language(language))
+                            .with(user("manager").authorities(managePayment())))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString();
+
+            String title = html.substring(html.indexOf("<h1>", html.indexOf("folio-header__title")));
+            title = title.substring(0, title.indexOf("</h1>"));
+            String word = "vi".equals(language) ? "Hóa đơn" : "Folio";
+            org.junit.jupiter.api.Assertions.assertTrue(title.contains(">" + word + "</span>"), title);
+            org.junit.jupiter.api.Assertions.assertFalse(title.contains("R20260911-000001"), title);
+            org.junit.jupiter.api.Assertions.assertFalse(title.contains("—"), title);
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    title.indexOf("status-badge") > title.indexOf(word), "the badge follows the title");
+
+            String summary = html.substring(html.indexOf("id=\"folio-stay-heading\""));
+            String firstRow = summary.substring(summary.indexOf("<dt"), summary.indexOf("</div>", summary.indexOf("<dt")));
+            org.junit.jupiter.api.Assertions.assertTrue(firstRow.contains(
+                    "vi".equals(language) ? "Mã đặt phòng" : "Reservation No."), firstRow);
+            org.junit.jupiter.api.Assertions.assertTrue(firstRow.contains("R20260911-000001"), firstRow);
+            org.junit.jupiter.api.Assertions.assertFalse(firstRow.contains("#"), firstRow);
+        }
+    }
+
     /** Confirms the Overview shows the reservation, stay and room context with real navigation targets. */
     @Test
     void shouldRenderReservationAndStayContextWithRealNavigation() throws Exception {
@@ -1119,8 +1152,7 @@ class FolioPageControllerTest {
 
         mockMvc.perform(get(FOLIO_PATH).with(user("manager").authorities(managePayment())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Folio — Reservation R20260911-000001")))
-                .andExpect(content().string(containsString("Reservation R20260911-000001")))
+                .andExpect(content().string(not(containsString("Folio — Reservation"))))
                 .andExpect(content().string(containsString("breadcrumb-current\">Folio</span>")))
                 .andExpect(content().string(containsString("Nguyen Van A")))
                 .andExpect(content().string(containsString("Room 101")))

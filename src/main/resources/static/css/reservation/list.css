@@ -1,6 +1,11 @@
 /* Reservation List (Task33). Domain stylesheet for templates/reservation/list.html: filter bar, Stay date range picker,
    results card with the pager above the table, and the nine-column table. */
 
+/* Breadcrumb -> title gap is Front Desk's and Create Reservation's (--space-5), not the looser 2rem section rhythm. */
+.reservation-list > .breadcrumb + .page-header {
+  margin-top: var(--space-5);
+}
+
 /* Page-level New Reservation CTA in the header's upper-right corner (approved mockup). */
 .reservation-list .page-header .reservation-list-header-action {
   flex: none;
@@ -251,16 +256,6 @@
 .reservation-list-room strong {
   display: block;
   font-weight: 500;
-}
-.reservation-list-table .reservation-list-status {
-  height: auto;
-  min-height: 1.75rem;
-  padding: 0.25rem 0.625rem;
-}
-/* DRAFT has no shared badge modifier: an intentional neutral grey, distinct from the white checked-out badge. */
-.reservation-list-table .status-badge--draft {
-  background: #eef1f4;
-  color: var(--color-muted);
 }
 
 @media (max-width: 64rem) {
