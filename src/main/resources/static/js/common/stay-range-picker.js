@@ -3,7 +3,17 @@
 // the whole range is highlighted. Apply is enabled only for a complete range that ends on a later day than it starts
 // (the range is half-open, so a same-day range is empty). Used by the Reservation List Stay filter and Create
 // Reservation; each page supplies what happens after Apply / Clear and keeps its own validation (the server validates
-// again). Markup: see the [data-stay-picker] block in reservation/list.html and reservation/create.html.
+// again). Markup: the shared layout/stay-picker fragment (Walk-in, OTA), and the [data-stay-picker] blocks in
+// reservation/list.html and reservation/create.html.
+//
+// The popover is an overlay and is positioned on every open (and on resize) so it never changes the page layout: it is
+// placed below the control (above it when there is no room below), aligned to the control's left edge, or to its right edge
+// with data-popover-align="end" (the calendar then grows toward the left), and clamped inside the main content area so it can
+// never overflow the page sideways. When two months do not fit the available width it shows one.
+//
+// Optional data-fixed-from="yyyy-MM-dd" on the root locks the check-in (the Walk-in check-in is the hotel date, set by the
+// server): the calendar then starts at that day and cannot go before it, any single click picks the check-out, and the range
+// is highlighted from the fixed day to it. Clear empties only the check-out.
 (function () {
     "use strict";
 
@@ -62,12 +72,76 @@
         var applyButton = root.querySelector("[data-stay-apply]");
         var clearButton = root.querySelector("[data-stay-clear]");
         var emptyText = root.getAttribute("data-all-dates") || "";
+        var fixedFrom = root.getAttribute("data-fixed-from") || "";
+        var alignEnd = root.getAttribute("data-popover-align") === "end";
+        var MARGIN = 8;
+        if (fixedFrom) {
+            fromField.value = fixedFrom;
+        }
 
         // The calendar is built on first open, while the popover is visible: flatpickr measures its month width at
         // build time, which is zero inside a hidden container.
         var picker = null;
+        var shownMonths = 1;
+        // Width of the two-month popover once measured, so a roomier viewport can switch back from one month.
+        var twoMonthWidth = 0;
+
+        // The area the popover must stay inside: the main content area (never the sidebar), within the viewport.
+        function boundsRect() {
+            var area = root.closest("main") || document.documentElement;
+            var rect = area.getBoundingClientRect();
+            return { left: Math.max(rect.left, 0), right: Math.min(rect.right, document.documentElement.clientWidth) };
+        }
+
+        // Positions the (visible) popover as an overlay: horizontally by alignment, clamped into the content area; vertically
+        // below the control, or above it when there is no room below and more above.
+        function place() {
+            popover.style.left = "";
+            popover.style.right = "";
+            popover.style.top = "";
+            popover.style.bottom = "";
+            // Narrow screens (the shared CSS media query): the popover takes the control's width with one month, so only the
+            // vertical placement below applies.
+            var narrow = window.matchMedia("(max-width: 40rem)").matches;
+            var bounds = boundsRect();
+            var available = bounds.right - bounds.left - 2 * MARGIN;
+            var box = popover.getBoundingClientRect();
+            if (picker && narrow && shownMonths === 2) {
+                shownMonths = 1;
+                picker.set("showMonths", 1);
+                box = popover.getBoundingClientRect();
+            } else if (picker && !narrow && shownMonths === 2) {
+                twoMonthWidth = box.width;
+                if (box.width > available) {
+                    shownMonths = 1;
+                    picker.set("showMonths", 1);
+                    box = popover.getBoundingClientRect();
+                }
+            } else if (picker && !narrow && twoMonthWidth && twoMonthWidth <= available) {
+                shownMonths = 2;
+                picker.set("showMonths", 2);
+                box = popover.getBoundingClientRect();
+            }
+            var anchor = root.getBoundingClientRect();
+            if (!narrow) {
+                var left = alignEnd ? anchor.right - box.width : anchor.left;
+                left = Math.max(bounds.left + MARGIN, Math.min(left, bounds.right - MARGIN - box.width));
+                popover.style.left = (left - anchor.left) + "px";
+                popover.style.right = "auto";
+            }
+            var below = window.innerHeight - anchor.bottom - MARGIN;
+            var above = anchor.top - MARGIN;
+            if (box.height > below && above > below) {
+                popover.style.top = "auto";
+                popover.style.bottom = "calc(100% + var(--dropdown-gap))";
+            }
+        }
 
         function appliedRange() {
+            if (fixedFrom) {
+                // The fixed check-in is always selected, so the calendar shows it as the start of the range.
+                return toField.value ? [fixedFrom, toField.value] : [fixedFrom];
+            }
             return fromField.value && toField.value ? [fromField.value, toField.value] : [];
         }
 
@@ -75,6 +149,7 @@
             if (picker) {
                 return picker;
             }
+            shownMonths = window.matchMedia("(min-width: 40rem)").matches ? 2 : 1;
             var calendarInput = document.createElement("input");
             calendarInput.type = "hidden";
             calendarHost.appendChild(calendarInput);
@@ -82,10 +157,16 @@
                 inline: true,
                 mode: "range",
                 dateFormat: "Y-m-d",
-                showMonths: window.matchMedia("(min-width: 40rem)").matches ? 2 : 1,
+                showMonths: shownMonths,
                 locale: document.documentElement.lang === "vi" ? VIETNAMESE : { firstDayOfWeek: 1 },
                 defaultDate: appliedRange(),
-                onChange: function (dates) {
+                minDate: fixedFrom || undefined,
+                onChange: function (dates, text, instance) {
+                    // Locked check-in: a click on any other day is the check-out, so the range always starts at the fixed day.
+                    if (fixedFrom && dates.length === 1 && iso(dates[0]) !== fixedFrom) {
+                        instance.setDate([fixedFrom, iso(dates[0])], false);
+                        dates = instance.selectedDates;
+                    }
                     refresh(dates);
                 }
             });
@@ -95,7 +176,7 @@
         // Mirrors the calendar selection into the Check-in / Check-out fields and enables Apply only for a complete,
         // ordered range.
         function refresh(dates) {
-            inDisplay.value = dates.length > 0 ? display(dates[0]) : "";
+            inDisplay.value = fixedFrom ? display(parseIso(fixedFrom)) : dates.length > 0 ? display(dates[0]) : "";
             outDisplay.value = dates.length > 1 ? display(dates[1]) : "";
             var complete = dates.length === 2;
             var ordered = complete && iso(dates[1]) > iso(dates[0]);
@@ -119,9 +200,12 @@
             var calendar = ensurePicker();
             calendar.setDate(appliedRange(), false);
             refresh(calendar.selectedDates);
+            place();
+            window.addEventListener("resize", place);
         }
 
         function close(returnFocus) {
+            window.removeEventListener("resize", place);
             popover.hidden = true;
             trigger.setAttribute("aria-expanded", "false");
             if (returnFocus) {
@@ -152,14 +236,17 @@
         });
 
         clearButton.addEventListener("click", function () {
-            var hadRange = Boolean(fromField.value || toField.value);
+            var hadRange = Boolean(fixedFrom ? toField.value : fromField.value || toField.value);
             if (picker) {
                 picker.clear(false);
+                if (fixedFrom) {
+                    picker.setDate([fixedFrom], false);
+                }
             }
-            fromField.value = "";
+            fromField.value = fixedFrom;
             toField.value = "";
             setSummary("", "");
-            refresh([]);
+            refresh(fixedFrom && picker ? picker.selectedDates : []);
             close(true);
             if (settings.onClear) {
                 settings.onClear(hadRange);
@@ -187,7 +274,7 @@
             trigger: trigger,
             // Sets the applied range programmatically (for example when a page restores saved input).
             setRange: function (from, to) {
-                fromField.value = from || "";
+                fromField.value = fixedFrom || from || "";
                 toField.value = to || "";
                 setSummary(fromField.value, toField.value);
                 if (picker) {

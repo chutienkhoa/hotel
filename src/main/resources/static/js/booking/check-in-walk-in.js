@@ -16,9 +16,13 @@
     const adultInput = document.getElementById("adultCount");
     const guestSelect = document.getElementById("guestId");
     const nightsOutput = document.querySelector("[data-nights]");
-    // Walk-in: the fixed hotel date. OTA: the operator-entered check-in date input.
+    // The stay dates are ONE shared range picker (layout/stay-picker); #checkInDate / #checkOutDate are its hidden inputs, the
+    // values that are submitted. Walk-in: the check-in is the fixed hotel date (the picker's data-fixed-from, no #checkInDate
+    // input). OTA: the operator-chosen check-in date input.
+    const stayRoot = form.querySelector("[data-stay-picker]");
+    const stayTrigger = stayRoot?.querySelector("[data-stay-trigger]");
     const checkInInput = document.getElementById("checkInDate");
-    const fixedCheckIn = document.querySelector("[data-check-in]")?.dataset.checkInDate || "";
+    const fixedCheckIn = stayRoot?.dataset.fixedFrom || "";
     const currentCheckIn = () => (checkInInput ? checkInInput.value : fixedCheckIn);
     const steps = document.querySelector("[data-walk-in-steps]");
     const labels = roomsSection.dataset;
@@ -347,6 +351,20 @@
         fill("[data-guest-dob]", option.dataset.dateOfBirth);
         fill("[data-guest-id-document]", option.dataset.idDocumentNumber);
         fill("[data-guest-code]", option.dataset.guestCode);
+        // The Guest Code is a link only for a user who may open Guest Detail (the fragment renders an anchor then).
+        const code = guestInfo.querySelector("[data-guest-code]");
+        if (code.tagName === "A") code.href = guestInfo.dataset.guestUrlBase + option.value;
+        // Passport preview: the guest's first passport image through the existing secure route, or the empty-state message.
+        const passportLink = guestInfo.querySelector("[data-guest-passport-link]");
+        const passportEmpty = guestInfo.querySelector("[data-guest-passport-empty]");
+        const documentId = option.dataset.passportDocumentId;
+        if (documentId) {
+            const url = `${guestInfo.dataset.guestUrlBase}${option.value}/documents/${documentId}/passport`;
+            passportLink.href = url;
+            passportLink.querySelector("[data-guest-passport-image]").src = url;
+        }
+        passportLink.hidden = !documentId;
+        passportEmpty.hidden = Boolean(documentId);
     };
 
     const guestMatches = (option, text) =>
@@ -423,16 +441,16 @@
     const sourceInputs = Array.from(form.querySelectorAll("input[name=source]"));
     const sourceList = sourceInputs[0]?.closest("[role=radiogroup]");
     const referenceInput = document.getElementById("otaBookingReference");
-    // flatpickr shows an alternate input for each date field and keeps the original hidden.
-    const visibleControl = (input) => input?._flatpickr?.altInput || input;
+    // The stay dates are drawn by the range picker's trigger button; the hidden inputs hold only the values.
+    const visibleControl = (input) => (input?.type === "hidden" ? stayTrigger : input);
     const isBlank = (input) => !input || input.value.trim() === "";
 
     const collectMissing = () => {
         const missing = [];
         const add = (labelKey, marks, focus, detail) => missing.push({ labelKey, marks, focus, detail });
         if (guestSelect && isBlank(guestSelect)) add("guestId", [guestSelect], guestSelect);
-        if (checkInInput && isBlank(checkInInput)) add("checkInDate", [checkInInput], visibleControl(checkInInput));
-        if (isBlank(checkOutInput)) add("checkOutDate", [checkOutInput], visibleControl(checkOutInput));
+        if (checkInInput && isBlank(checkInInput)) add("checkInDate", [stayTrigger], stayTrigger);
+        if (isBlank(checkOutInput)) add("checkOutDate", [stayTrigger], stayTrigger);
         if (adultInput && isBlank(adultInput)) add("adultCount", [adultInput], adultInput);
         if (childInput && isBlank(childInput)) add("childCount", [childInput], childInput);
         if (sourceList && !sourceInputs.some((input) => input.checked)) add("source", [sourceList], sourceInputs[0]);
@@ -523,28 +541,22 @@
         }, { once: true });
     }
 
-    // A stay is at least one night, so the check-out picker starts the day after check-in (the hotel date for a
-    // Walk-in, the entered date for OTA). The server still decides.
-    const restrictCheckOut = () => {
-        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(currentCheckIn());
-        const picker = checkOutInput._flatpickr;
-        if (match && picker) {
-            picker.set("minDate", new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1));
-        }
-    };
-
     typeFilter.addEventListener("change", applyTypeFilter);
-    checkOutInput.addEventListener("change", onCheckOutChange);
-    checkInInput?.addEventListener("change", () => {
-        restrictCheckOut();
+    // Runs after the range picker applies or clears a range: refreshes Nights, the range line, the available rooms and the
+    // steps. (The picker only applies an ordered range of at least one night; the server still decides.)
+    const onStayChanged = () => {
+        stayTrigger?.removeAttribute("aria-invalid");
         onCheckOutChange();
-    });
+        updateSteps();
+    };
+    if (stayRoot && window.PmsStayRangePicker) {
+        window.PmsStayRangePicker.init(stayRoot, { onApply: onStayChanged, onClear: onStayChanged });
+    }
     adultInput?.addEventListener("input", updateCapacitySummary);
     adultInput?.addEventListener("input", updateGuestsContext);
     childInput?.addEventListener("input", updateGuestsContext);
     guestSelect?.addEventListener("change", updateSteps);
 
-    restrictCheckOut();
     const initialNights = nights();
     nightsOutput.textContent = initialNights === null ? "—" : String(initialNights);
     updateGuestsContext();

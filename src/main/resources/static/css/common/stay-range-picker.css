@@ -19,6 +19,10 @@
   text-align: left;
   width: 100%;
 }
+/* A date range the server rejected (or a required one left empty) is marked on the one control, like any other field. */
+.reservation-stay__trigger[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
 .reservation-stay__trigger:focus-visible,
 .reservation-stay__trigger[aria-expanded="true"] {
   border-color: var(--color-primary);

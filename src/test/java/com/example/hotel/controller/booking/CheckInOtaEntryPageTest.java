@@ -120,6 +120,37 @@ class CheckInOtaEntryPageTest {
         org.junit.jupiter.api.Assertions.assertTrue(html.contains("data-nationality=\"Japan\""));
     }
 
+    /**
+     * Confirms the stay dates are ONE shared range picker (no separate visible date fields): empty it shows the localized
+     * placeholder, and after a rejected submission it shows the saved range. The submitted form model is unchanged: hidden
+     * checkInDate and checkOutDate inputs carrying ISO dates, and no fixed check-in.
+     */
+    @Test
+    void shouldRenderTheStayDatesAsOneSharedRangePicker() throws Exception {
+        stubGuests();
+        String empty = mockMvc.perform(get("/check-in/ota-entry").param("lang", "vi").with(staff()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(empty.contains("Chọn ngày nhận phòng → ngày trả phòng"));
+        org.junit.jupiter.api.Assertions.assertTrue(empty.contains(">Ngày lưu trú</span>"));
+        org.junit.jupiter.api.Assertions.assertTrue(empty.contains("reservation-stay__summary--empty"));
+
+        MockHttpSession session = new MockHttpSession();
+        MvcResult posted = mockMvc.perform(otaPost("/check-in/ota-entry/review", "otaBookingReference", "").session(session))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        String html = mockMvc.perform(getAs("/check-in/ota-entry", session).flashAttrs(posted.getFlashMap()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, html.split("data-stay-picker", -1).length - 1);
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("js-date-picker"), "no separate date inputs");
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("data-fixed-from"), "OTA check-in is editable");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("data-popover-align=\"end\""), "calendar aligns to the right edge");
+        org.junit.jupiter.api.Assertions.assertTrue(java.util.regex.Pattern.compile(
+                "<input data-stay-from type=\"hidden\"\\s+id=\"checkInDate\" name=\"checkInDate\"\\s+value=\"2026-12-01\"").matcher(html).find());
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains(
+                "<input data-stay-to id=\"checkOutDate\" name=\"checkOutDate\" type=\"hidden\"\n           value=\"2026-12-04\""));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("01/12/2026 → 04/12/2026"));
+    }
+
     /** Confirms the entry form renders in Vietnamese. */
     @Test
     void shouldRenderTheOtaEntryFormInVietnamese() throws Exception {
@@ -599,6 +630,50 @@ class CheckInOtaEntryPageTest {
         GuestLookupResponse guest = guest();
         when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guest));
         when(guestQueryService.findForReservationCreation(GUEST_ID)).thenReturn(guest);
+    }
+
+    /**
+     * Confirms the selected-guest details render as the shared compact information table, with the seven rows in order,
+     * and that the Guest Code is a link only for a user who may manage guests.
+     */
+    @Test
+    void shouldRenderTheSelectedGuestAsPassportPreviewBesideTheSharedInformationTable() throws Exception {
+        stubGuests();
+        java.util.UUID passportId = java.util.UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(checkInService.firstPassportDocumentIds()).thenReturn(java.util.Map.of(GUEST_ID, passportId));
+        String withLink = mockMvc.perform(get("/check-in/ota-entry").with(user("staff").authorities(
+                        new SimpleGrantedAuthority("PERM_CHECK_IN"), new SimpleGrantedAuthority("PERM_MANAGE_GUEST"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String withoutLink = mockMvc.perform(get("/check-in/ota-entry").with(user("staff").authorities(
+                        new SimpleGrantedAuthority("PERM_CHECK_IN"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        for (String html : new String[] {withLink, withoutLink}) {
+            String section = html.substring(html.indexOf("<div class=\"walk-in-summary-body walk-in-guest-body\""));
+            section = section.substring(0, section.indexOf("</dl>"));
+            org.junit.jupiter.api.Assertions.assertTrue(section.contains("data-guest-url-base=\"/guests/\""), section);
+            // Passport preview first (left), then the information table (right), in the shared summary composition.
+            int link = section.indexOf("data-guest-passport-link");
+            int empty = section.indexOf("data-guest-passport-empty");
+            int table = section.indexOf("label-value-rows--info");
+            org.junit.jupiter.api.Assertions.assertTrue(link > 0 && link < empty && empty < table, section);
+            org.junit.jupiter.api.Assertions.assertTrue(section.contains("<img data-guest-passport-image"), section);
+            org.junit.jupiter.api.Assertions.assertTrue(section.contains("label-value-rows--divided")
+                    && section.contains("label-value-rows--fit"), section);
+            int previous = table;
+            for (String hook : new String[] {"data-guest-code", "data-guest-full-name", "data-guest-nationality", "data-guest-phone",
+                    "data-guest-email", "data-guest-dob", "data-guest-id-document"}) {
+                int at = section.indexOf(hook, previous);
+                org.junit.jupiter.api.Assertions.assertTrue(at > previous, hook + " in order");
+                previous = at;
+            }
+            // The selector option carries the guest's first passport document, used to build the secure image URL.
+            org.junit.jupiter.api.Assertions.assertTrue(html.contains("data-passport-document-id=\"" + passportId + "\""));
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(
+                withLink.contains("<a class=\"record-link\" data-guest-code"), "linked with MANAGE_GUEST");
+        org.junit.jupiter.api.Assertions.assertFalse(
+                withoutLink.contains("<a class=\"record-link\" data-guest-code"), "plain text without it");
     }
 
     private static GuestLookupResponse guest() {

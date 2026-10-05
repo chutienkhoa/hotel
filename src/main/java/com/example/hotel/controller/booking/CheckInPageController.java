@@ -611,6 +611,7 @@ public class CheckInPageController {
     private void addOtaEntryFormAttributes(Model model, CreateRequest otaEntryForm) {
         model.addAttribute("otaEntryForm", otaEntryForm);
         model.addAttribute("guests", guestQueryService.findAllForReservationCreation());
+        model.addAttribute("passportDocumentIds", checkInService.firstPassportDocumentIds());
         model.addAttribute(
                 "otaSources", Arrays.stream(BookingSource.values()).filter(source -> source != BookingSource.DIRECT).toList());
     }
@@ -660,6 +661,7 @@ public class CheckInPageController {
     private void addWalkInFormAttributes(Model model, WalkInRequest walkInForm, List<RoomLookupResponse> assignedRooms) {
         model.addAttribute("walkInForm", walkInForm);
         model.addAttribute("guests", guestQueryService.findAllForReservationCreation());
+        model.addAttribute("passportDocumentIds", checkInService.firstPassportDocumentIds());
         model.addAttribute("rooms", assignedRooms);
         model.addAttribute("hotelToday", frontDeskQueryService.hotelToday());
     }

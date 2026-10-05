@@ -43,6 +43,28 @@ class GuestDocumentServiceTest {
     @TempDir
     Path storageDirectory;
 
+    /** Confirms each Guest maps to its OLDEST passport image (rows arrive oldest first), and a Guest without one is absent. */
+    @Test
+    void shouldMapEachGuestToItsFirstPassportDocument() {
+        GuestDocumentRepository repository = mock(GuestDocumentRepository.class);
+        GuestDocumentService service = new GuestDocumentService(repository, mock(GuestDocumentStorageService.class));
+        java.util.UUID guestA = java.util.UUID.randomUUID();
+        java.util.UUID guestB = java.util.UUID.randomUUID();
+        java.util.UUID noPassport = java.util.UUID.randomUUID();
+        java.util.UUID firstA = java.util.UUID.randomUUID();
+        java.util.UUID secondA = java.util.UUID.randomUUID();
+        java.util.UUID onlyB = java.util.UUID.randomUUID();
+        when(repository.findGuestAndDocumentIdsByDocumentType(
+                        com.example.hotel.entity.customer.GuestDocumentType.PASSPORT_IMAGE))
+                .thenReturn(List.<Object[]>of(
+                        new Object[] {guestA, firstA}, new Object[] {guestB, onlyB}, new Object[] {guestA, secondA}));
+
+        java.util.Map<java.util.UUID, java.util.UUID> result = service.firstPassportDocumentIds();
+
+        assertEquals(java.util.Map.of(guestA, firstA, guestB, onlyB), result);
+        assertFalse(result.containsKey(noPassport));
+    }
+
     /** Confirms a valid JPEG creates metadata with a server-generated key rather than the upload filename. */
     @Test
     void shouldStoreValidJpegWithServerGeneratedStorageKey() {

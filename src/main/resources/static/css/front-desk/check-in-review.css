@@ -292,7 +292,10 @@
   gap: var(--space-4);
   grid-template-columns: minmax(0, 1fr) var(--cir-side);
 }
-.cir-pair--stay {
+/* Room Assignment + Stay Details | Room Status + Prepayments + Documents: two independent columns. Each is a .cir-column that
+   flows on its own height (standard --space-4 card gap), so a tall card on one side never leaves a gap in the other, and
+   align-items: start keeps a column from being stretched to its neighbour. */
+.cir-pair--columns {
   align-items: start;
 }
 .cir-duo,
@@ -473,9 +476,29 @@
 
 @media (max-width: 64rem) {
   .cir-duo,
-  .cir-pair,
-  .cir-pair--stay {
+  .cir-pair {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* One column: the two column wrappers dissolve and their cards stack in the page's original reading order (a blocker in
+     Room Status stays right after the room it concerns), set with order rather than by reordering the markup. */
+  .cir-column--main,
+  .cir-column--side {
+    display: contents;
+  }
+  #room-assignment {
+    order: 1;
+  }
+  #arrival-readiness {
+    order: 2;
+  }
+  #stay-details {
+    order: 3;
+  }
+  #prepayment-summary {
+    order: 4;
+  }
+  #documents {
+    order: 5;
   }
 }
 

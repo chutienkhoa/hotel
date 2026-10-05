@@ -335,6 +335,83 @@ class CheckInPageControllerTest {
     }
 
     /**
+     * Confirms the Walk-in stay dates are ONE shared range picker whose check-in is locked to the hotel date: it carries
+     * data-fixed-from, submits only checkOutDate (the check-in is the server's, so no checkInDate input), shows the localized
+     * placeholder when empty and "today → check-out" once a check-out was saved.
+     */
+    @Test
+    void shouldRenderTheWalkInStayAsOneRangePickerWithTheHotelDateFixed() throws Exception {
+        when(frontDeskQueryService.hotelToday()).thenReturn(LocalDate.of(2026, 10, 2));
+        String empty = mockMvc.perform(get("/check-in/walk-in").param("lang", "vi")
+                        .with(user("staff").authorities(checkInAuthority())))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(empty.contains("Chọn ngày nhận phòng → ngày trả phòng"));
+        org.junit.jupiter.api.Assertions.assertTrue(empty.contains(">Ngày lưu trú</span>"));
+        org.junit.jupiter.api.Assertions.assertTrue(empty.contains("data-fixed-from=\"2026-10-02\""));
+
+        MockHttpSession session = new MockHttpSession();
+        org.springframework.test.web.servlet.MvcResult posted = mockMvc.perform(post("/check-in/walk-in/review").session(session)
+                        .param("checkOutDate", "2026-10-05").param("adultCount", "2").param("childCount", "0")
+                        .param("currency", "VND")
+                        .with(user("staff").authorities(checkInAuthority())).with(csrf()))
+                .andExpect(status().is3xxRedirection()).andReturn();
+        String html = mockMvc.perform(getAs("/check-in/walk-in", session).flashAttrs(posted.getFlashMap()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, html.split("data-stay-picker", -1).length - 1);
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("js-date-picker"), "no separate date inputs");
+        org.junit.jupiter.api.Assertions.assertFalse(html.contains("name=\"checkInDate\""), "the check-in is not submitted");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("data-popover-align=\"end\""), "calendar aligns to the right edge");
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains(
+                "<input data-stay-to id=\"checkOutDate\" name=\"checkOutDate\" type=\"hidden\"\n           value=\"2026-10-05\""));
+        org.junit.jupiter.api.Assertions.assertTrue(html.contains("02/10/2026 → 05/10/2026"));
+    }
+
+    /**
+     * Confirms the selected-guest details render as the shared compact information table, with the seven rows in order,
+     * and that the Guest Code is a link only for a user who may manage guests.
+     */
+    @Test
+    void shouldRenderTheSelectedGuestAsPassportPreviewBesideTheSharedInformationTable() throws Exception {
+        when(guestQueryService.findAllForReservationCreation()).thenReturn(List.of(guestLookup()));
+        java.util.UUID passportId = java.util.UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(checkInService.firstPassportDocumentIds()).thenReturn(java.util.Map.of(GUEST_ID, passportId));
+        String withLink = mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(
+                        new SimpleGrantedAuthority("PERM_CHECK_IN"), new SimpleGrantedAuthority("PERM_MANAGE_GUEST"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String withoutLink = mockMvc.perform(get("/check-in/walk-in").with(user("staff").authorities(
+                        new SimpleGrantedAuthority("PERM_CHECK_IN"))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        for (String html : new String[] {withLink, withoutLink}) {
+            String section = html.substring(html.indexOf("<div class=\"walk-in-summary-body walk-in-guest-body\""));
+            section = section.substring(0, section.indexOf("</dl>"));
+            org.junit.jupiter.api.Assertions.assertTrue(section.contains("data-guest-url-base=\"/guests/\""), section);
+            // Passport preview first (left), then the information table (right), in the shared summary composition.
+            int link = section.indexOf("data-guest-passport-link");
+            int empty = section.indexOf("data-guest-passport-empty");
+            int table = section.indexOf("label-value-rows--info");
+            org.junit.jupiter.api.Assertions.assertTrue(link > 0 && link < empty && empty < table, section);
+            org.junit.jupiter.api.Assertions.assertTrue(section.contains("<img data-guest-passport-image"), section);
+            org.junit.jupiter.api.Assertions.assertTrue(section.contains("label-value-rows--divided")
+                    && section.contains("label-value-rows--fit"), section);
+            int previous = table;
+            for (String hook : new String[] {"data-guest-code", "data-guest-full-name", "data-guest-nationality", "data-guest-phone",
+                    "data-guest-email", "data-guest-dob", "data-guest-id-document"}) {
+                int at = section.indexOf(hook, previous);
+                org.junit.jupiter.api.Assertions.assertTrue(at > previous, hook + " in order");
+                previous = at;
+            }
+            // The selector option carries the guest's first passport document, used to build the secure image URL.
+            org.junit.jupiter.api.Assertions.assertTrue(html.contains("data-passport-document-id=\"" + passportId + "\""));
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(
+                withLink.contains("<a class=\"record-link\" data-guest-code"), "linked with MANAGE_GUEST");
+        org.junit.jupiter.api.Assertions.assertFalse(
+                withoutLink.contains("<a class=\"record-link\" data-guest-code"), "plain text without it");
+    }
+
+    /**
      * Confirms the Walk-in form fixes the currency to VND and the source to Direct: no currency or source choice is
      * rendered, and no OTA source or OTA booking reference is offered.
      */

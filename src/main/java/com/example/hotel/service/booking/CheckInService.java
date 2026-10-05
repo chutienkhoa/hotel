@@ -109,6 +109,18 @@ public class CheckInService {
 
 
     /**
+     * Supplies the read-only passport preview data of the Walk-in and OTA Booking Not Entered guest selectors: the oldest
+     * passport image of every Guest that has one. Nothing is created or changed, and the image itself is only ever served
+     * by the existing secure passport route.
+     *
+     * @return the first passport document identifier by Guest identifier
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<java.util.UUID, java.util.UUID> firstPassportDocumentIds() {
+        return guestDocumentService.firstPassportDocumentIds();
+    }
+
+    /**
      * Searches CONFIRMED Reservations only, reusing the existing Reservation list query
      * infrastructure. Search is local-database only; no external OTA API is contacted.
      *

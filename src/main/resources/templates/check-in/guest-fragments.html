@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Fragment-only template shared by the Walk-in and OTA Booking Not Entered pages; rendered only through th:replace. -->
+
+<!-- Selected Guest: the passport preview on the left and the compact information table (shared .label-value-rows--info) on the
+     right, in the same walk-in-summary-body / walk-in-doc composition as the Walk-in and OTA summary screens. Read-only: the
+     details and the preview come from the chosen option's data attributes, filled by check-in-walk-in.js when a guest is
+     selected, and nothing here is submitted. The preview image is served by the existing secure passport route (shown only
+     when the guest has a passport image; otherwise the empty-state message). Guest Code opens Guest Detail in a new tab (so
+     the entries on this page are kept) for a user who may manage guests; otherwise it is plain text. -->
+<div class="walk-in-summary-body walk-in-guest-body" data-guest-information hidden th:attr="data-guest-url-base=@{/guests/}"
+     th:fragment="selectedGuest">
+    <a class="walk-in-doc" data-guest-passport-link hidden rel="noopener" target="_blank"
+       th:title="#{checkin.review.documents.viewPassport}">
+        <img data-guest-passport-image th:alt="#{checkin.walkIn.summary.passportAlt}" />
+    </a>
+    <p class="walk-in-doc walk-in-doc--empty" data-guest-passport-empty th:text="#{checkin.review.documents.none}">No passport image on file.</p>
+    <dl class="walk-in-guest-details label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--info">
+        <div>
+            <dt th:text="#{checkin.walkIn.guest.code}">Guest Code</dt>
+            <dd>
+                <a class="record-link" data-guest-code rel="noopener" target="_blank" th:if="${canManageGuest}">—</a>
+                <span data-guest-code th:unless="${canManageGuest}">—</span>
+            </dd>
+        </div>
+        <div><dt th:text="#{checkin.walkIn.guest.name}">Full Name</dt><dd data-guest-full-name>—</dd></div>
+        <div><dt th:text="#{checkin.review.guest.nationality}">Nationality</dt><dd class="walk-in-nationality"><span aria-hidden="true" class="walk-in-flag" data-guest-flag hidden></span><span data-guest-nationality>—</span></dd></div>
+        <div><dt th:text="#{checkin.review.guest.phone}">Phone</dt><dd data-guest-phone>—</dd></div>
+        <div><dt th:text="#{checkin.review.guest.email}">Email</dt><dd data-guest-email>—</dd></div>
+        <div><dt th:text="#{guest.field.dateOfBirth}">Date of Birth</dt><dd data-guest-dob>—</dd></div>
+        <div><dt th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</dt><dd data-guest-id-document>—</dd></div>
+    </dl>
+</div>
+</body>
+</html>

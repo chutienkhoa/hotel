@@ -113,6 +113,22 @@ public class GuestDocumentService {
     }
 
     /**
+     * Returns the oldest passport image of every Guest that has one, for read-only previews of many Guests at once (the
+     * Check-in guest selectors) without one query per Guest. A Guest without a passport image is simply absent.
+     *
+     * @return the first passport document identifier by Guest identifier
+     */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, UUID> firstPassportDocumentIds() {
+        java.util.Map<UUID, UUID> firstByGuest = new java.util.HashMap<>();
+        for (Object[] row : guestDocumentRepository.findGuestAndDocumentIdsByDocumentType(
+                GuestDocumentType.PASSPORT_IMAGE)) {
+            firstByGuest.putIfAbsent((UUID) row[0], (UUID) row[1]);
+        }
+        return java.util.Map.copyOf(firstByGuest);
+    }
+
+    /**
      * Determines whether a Guest has at least one passport image on file. V1 does not require
      * the passport image count to match the number of staying people.
      *

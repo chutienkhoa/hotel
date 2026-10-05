@@ -2,6 +2,7 @@
   --color-navy: #102a43;
   --color-navy-strong: #0b2035;
   --color-primary: #1769aa;
+  --color-primary-subtle: #2b78b6; /* quieter blue for secondary outline actions; about 4.7:1 on white, still readable text */
   --color-primary-hover: #12578d;
   --color-page: #f4f7fb;
   --color-surface: #ffffff;
@@ -774,6 +775,18 @@ fieldset {
   border-color: var(--color-primary-hover);
   color: var(--color-primary-hover);
 }
+/* Subtle outline-blue: a quieter sibling of .button-outline-primary for the secondary action beside a primary-blue one (white
+   background; border, text and icon in the same subtle blue). Hover: very light blue background and the stronger primary blue. */
+.button-outline-subtle {
+  background: var(--color-surface);
+  border-color: var(--color-primary-subtle);
+  color: var(--color-primary-subtle);
+}
+.button-outline-subtle:hover {
+  background: var(--color-info-surface);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
 .button-danger {
   background: var(--color-danger);
   color: #fff;
@@ -1234,6 +1247,29 @@ dt {
 }
 .label-value-rows--fit dt {
   white-space: nowrap;
+}
+/* --info: the compact bordered information table of the PMS guest cards (the look of Reservation Detail's Guest Information):
+   rounded outer border, muted-gray label cells, white value cells, medium-weight type at the normal field sizes, content
+   centred vertically. Combine with --divided (row rules) and --fit (label column = longest label). */
+.label-value-rows--info {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.label-value-rows--info dt,
+.label-value-rows--info dd {
+  align-content: center;
+  padding: 0.375rem var(--space-3);
+}
+.label-value-rows--info dt {
+  color: var(--color-muted);
+  font-size: var(--font-size-field-label);
+  font-weight: 500;
+}
+.label-value-rows--info dd {
+  color: var(--color-navy);
+  font-size: var(--font-size-field-value);
+  font-weight: 500;
 }
 
 dd {

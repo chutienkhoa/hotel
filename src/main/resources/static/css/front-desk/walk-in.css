@@ -118,6 +118,9 @@
   min-width: 0;
 }
 .walk-in-card {
+  /* The one card-header row height: the height of a header action button. A header with actions (Guest) and one without
+     (Stay, Rooms, Source) then have the same row, so every card's icon and title sit the same distance below the top border. */
+  --walk-in-header-height: 2.25rem;
   display: grid;
   gap: var(--space-3);
   min-width: 0;
@@ -136,6 +139,10 @@
 .walk-in-card__header h2 {
   font-size: var(--font-size-card-title);
   margin: 0;
+}
+/* Walk-in and OTA entry forms: every card header is the same row height (the summary screens keep their own). */
+.walk-in-grid:not(.walk-in-grid--summary) .walk-in-card__header {
+  min-height: var(--walk-in-header-height);
 }
 .walk-in-required {
   color: var(--color-danger);
@@ -181,7 +188,7 @@
   justify-content: flex-end;
 }
 .walk-in-card__actions .button {
-  height: 2.25rem;
+  height: var(--walk-in-header-height);
   padding: 0 var(--space-3);
   white-space: nowrap;
 }
@@ -257,41 +264,22 @@
 .walk-in-guest-empty[hidden] {
   display: none;
 }
-.walk-in-guest-details {
-  display: grid;
-  gap: var(--space-3) var(--space-4);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0;
-}
-.walk-in-guest-details[hidden] {
+/* The selected Guest: passport preview + the shared information table (.label-value-rows--info), laid out by the same
+   .walk-in-summary-body and .walk-in-doc as the summary screens (see the guest-fragments template). Only the hidden state they
+   must keep is local, because their own display would otherwise override [hidden]. */
+.walk-in-guest-body[hidden],
+.walk-in-doc[hidden] {
   display: none;
 }
-.walk-in-guest-details div {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-}
-.walk-in-guest-details dt {
-  color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-.walk-in-guest-details dd {
-  align-items: center;
-  background: var(--color-surface-muted);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  display: flex;
-  font-size: 0.9375rem;
-  font-weight: 600;
-  margin: 0;
-  min-height: var(--control-height);
-  overflow-wrap: anywhere;
-  padding: 0.35rem var(--space-3);
-}
 .walk-in-nationality {
+  align-items: center;
+  display: flex;
   gap: 0.5rem;
   white-space: nowrap;
+}
+/* Inside the information table the flag matches the text scale. */
+.walk-in-guest-details .walk-in-flag {
+  font-size: 1.125rem;
 }
 .walk-in-nationality [data-guest-nationality] {
   min-width: 0;
@@ -900,8 +888,7 @@
     display: inline;
   }
   .walk-in-room-toolbar,
-  .walk-in-fields,
-  .walk-in-guest-details {
+  .walk-in-fields {
     grid-template-columns: minmax(0, 1fr);
   }
   .walk-in-card__header--action {

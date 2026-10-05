@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Shared Stay date-range picker field markup (driven by static/js/common/stay-range-picker.js, styled by
+     static/css/common/stay-range-picker.css): ONE full-width control with a calendar icon at the right that opens a range
+     calendar (two months, one on a narrow screen) with Clear and Apply. It is only the UI for the existing form values: the
+     hidden inputs are what is submitted, so the form model is unchanged. Used by Walk-in and OTA Booking Not Entered.
+
+     pickerId      prefix of the generated ids; the caller renders the label as <span id="{pickerId}-label"> above the field
+     fromName      name of the hidden check-in input (also its id), or null when the check-in is fixed and not submitted
+     from, to      the current LocalDate values, or null
+     fixedFrom     the locked check-in LocalDate (Walk-in: the hotel date), or null for an editable check-in
+     placeholder   text shown before a range is chosen
+     invalid       whether the server reported an error on the dates, for aria-invalid
+     popoverAlign  'end' to align the calendar's right edge with the control's (it grows toward the left), else 'start'
+     The calendar is an overlay: stay-range-picker.js places it below (or above) the control and keeps it inside the main
+     content area, so opening it never changes the page layout.
+     The check-out hidden input is always checkOutDate. -->
+<div class="reservation-stay" data-stay-picker th:fragment="stayPicker(pickerId, fromName, from, to, fixedFrom, placeholder, invalid, popoverAlign)"
+     th:attr="data-popover-align=${popoverAlign},data-all-dates=${placeholder},data-fixed-from=${fixedFrom == null ? null : #temporals.format(fixedFrom, 'yyyy-MM-dd')}">
+    <input data-stay-from type="hidden"
+           th:id="${fromName != null ? fromName : pickerId + '-from'}" th:name="${fromName}"
+           th:value="${fixedFrom != null ? #temporals.format(fixedFrom, 'yyyy-MM-dd') : (from == null ? '' : #temporals.format(from, 'yyyy-MM-dd'))}" />
+    <input data-stay-to id="checkOutDate" name="checkOutDate" type="hidden"
+           th:value="${to == null ? '' : #temporals.format(to, 'yyyy-MM-dd')}" />
+    <button aria-expanded="false" aria-haspopup="dialog" aria-required="true" class="reservation-stay__trigger"
+            data-stay-trigger type="button"
+            th:attr="aria-invalid=${invalid},aria-labelledby=${pickerId + '-label ' + pickerId + '-summary'},aria-describedby=${(fromName != null ? 'checkInDate-error ' : '') + 'checkOutDate-error'}"
+            th:id="${pickerId + '-trigger'}">
+        <span class="reservation-stay__summary" data-stay-summary th:id="${pickerId + '-summary'}"
+              th:classappend="${to == null or (from == null and fixedFrom == null)} ? 'reservation-stay__summary--empty'"
+              th:text="${to != null and (from != null or fixedFrom != null)}
+                  ? ${T(com.example.hotel.common.DisplayFormats).formatDate(fixedFrom != null ? fixedFrom : from) + ' → ' + T(com.example.hotel.common.DisplayFormats).formatDate(to)}
+                  : ${placeholder}">Select check-in date → check-out date</span>
+        <span class="reservation-stay__trail"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+    </button>
+    <div class="reservation-stay__popover" data-stay-popover hidden role="dialog" th:aria-label="#{reservation.list.picker.title}">
+        <div class="reservation-stay__fields">
+            <div class="reservation-stay__field">
+                <label th:for="${pickerId + '-check-in'}" th:text="#{reservation.list.picker.checkIn}">Check-in</label>
+                <div class="reservation-stay__input">
+                    <input data-stay-in-display readonly th:id="${pickerId + '-check-in'}" type="text" />
+                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                </div>
+            </div>
+            <span aria-hidden="true" class="reservation-stay__arrow">→</span>
+            <div class="reservation-stay__field">
+                <label th:for="${pickerId + '-check-out'}" th:text="#{reservation.list.picker.checkOut}">Check-out</label>
+                <div class="reservation-stay__input">
+                    <input data-stay-out-display readonly th:id="${pickerId + '-check-out'}" type="text" />
+                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                </div>
+            </div>
+        </div>
+        <div class="reservation-stay__calendar" data-stay-calendar></div>
+        <p class="reservation-stay__hint" data-stay-hint hidden role="status" th:text="#{reservation.list.error.stayOrder}">The stay date range must end after it starts.</p>
+        <div class="reservation-stay__actions">
+            <button class="button button-outline-primary" data-stay-clear th:text="#{reservation.list.picker.clear}" type="button">Clear</button>
+            <button class="button button-primary" data-stay-apply disabled th:text="#{reservation.list.picker.apply}" type="button">Apply</button>
+        </div>
+    </div>
+</div>
+</body>
+</html>

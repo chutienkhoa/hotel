@@ -82,7 +82,7 @@
                                         <svg th:replace="~{layout/icons :: search}"></svg>
                                         <span th:text="#{checkin.walkIn.guest.search}">Search Existing Guest</span>
                                     </button>
-                                    <button class="button button-secondary walk-in-new-guest" formmethod="post" formnovalidate
+                                    <button class="button button-outline-subtle walk-in-new-guest" formmethod="post" formnovalidate
                                             th:formaction="@{/check-in/walk-in/new-guest}" type="submit">
                                         <svg th:replace="~{layout/icons :: plusCircle}"></svg>
                                         <span th:text="#{checkin.walkIn.guest.new}">Create New Guest</span>
@@ -110,7 +110,7 @@
                                     <option value="" th:text="#{checkin.walkIn.guest.placeholder}">Select a guest</option>
                                     <option th:each="guest : ${guests}"
                                             th:with="nationalityFlag=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(guest.nationality).flag},dateOfBirth=${T(com.example.hotel.common.DisplayFormats).formatDate(guest.dateOfBirth)}"
-                                            th:attr="data-guest-code=${guest.guestCode},data-full-name=${guest.fullName},data-email=${guest.email},data-phone=${guest.phone},data-nationality=${guest.nationality},data-nationality-flag=${nationalityFlag},data-date-of-birth=${dateOfBirth},data-id-document-number=${guest.idDocumentNumber}"
+                                            th:attr="data-guest-code=${guest.guestCode},data-passport-document-id=${passportDocumentIds?.get(guest.id)},data-full-name=${guest.fullName},data-email=${guest.email},data-phone=${guest.phone},data-nationality=${guest.nationality},data-nationality-flag=${nationalityFlag},data-date-of-birth=${dateOfBirth},data-id-document-number=${guest.idDocumentNumber}"
                                             th:text="${guest.guestCode + ' · ' + guest.fullName}"
                                             th:value="${guest.id}">G000001 · Guest name</option>
                                 </select>
@@ -120,15 +120,7 @@
                             <p class="walk-in-guest-empty" data-guest-empty th:text="#{checkin.walkIn.guest.empty}">No guest selected.</p>
 
                             <!-- Read-only details of the selected Guest, from the Guest record. Nothing here is submitted. -->
-                            <dl class="walk-in-guest-details" data-guest-information hidden>
-                                <div><dt th:text="#{checkin.walkIn.guest.name}">Full Name</dt><dd data-guest-full-name>—</dd></div>
-                                <div><dt th:text="#{checkin.review.guest.nationality}">Nationality</dt><dd class="walk-in-nationality"><span aria-hidden="true" class="walk-in-flag" data-guest-flag hidden></span><span data-guest-nationality>—</span></dd></div>
-                                <div><dt th:text="#{checkin.review.guest.phone}">Phone</dt><dd data-guest-phone>—</dd></div>
-                                <div><dt th:text="#{checkin.review.guest.email}">Email</dt><dd data-guest-email>—</dd></div>
-                                <div><dt th:text="#{guest.field.dateOfBirth}">Date of Birth</dt><dd data-guest-dob>—</dd></div>
-                                <div><dt th:text="#{guest.field.idDocumentNumber}">ID / Passport Number</dt><dd data-guest-id-document>—</dd></div>
-                                <div><dt th:text="#{checkin.walkIn.guest.code}">Guest Code</dt><dd data-guest-code>—</dd></div>
-                            </dl>
+                            <th:block th:replace="~{check-in/guest-fragments :: selectedGuest}"></th:block>
                             <p class="walk-in-hint" th:text="#{checkin.walkIn.guest.newHint}">Create the guest record, then return here with your entries kept.</p>
                         </section>
 
@@ -213,22 +205,12 @@
                             </header>
 
                             <div class="walk-in-fields">
-                                <div class="form-field">
-                                    <label th:text="#{checkin.walkIn.stay.checkIn}">Check-in Date</label>
-                                    <div class="walk-in-readonly" data-check-in th:attr="data-check-in-date=${hotelToday}">
-                                        <span th:replace="~{layout/datetime :: date(${hotelToday})}">—</span>
-                                    </div>
-                                    <p class="walk-in-hint" th:text="#{checkin.walkIn.stay.checkInHint}">Today (hotel date)</p>
-                                </div>
-                                <div class="form-field">
-                                    <label for="checkOutDate">
-                                        <span th:text="#{checkin.walkIn.stay.checkOut}">Check-out Date</span>
-                                        <span aria-hidden="true" class="walk-in-required">*</span>
-                                    </label>
-                                    <input class="js-date-picker" id="checkOutDate" name="checkOutDate" required type="text"
-                                           th:attr="aria-invalid=${#fields.hasErrors('checkOutDate')},aria-describedby=${#fields.hasErrors('checkOutDate')} ? 'checkOutDate-error'"
-                                           th:value="${walkInForm.checkOutDate == null ? '' : #temporals.format(walkInForm.checkOutDate, 'yyyy-MM-dd')}" />
-                                    <p class="field-error" th:classappend="${missingPaths.contains('checkOutDate')} ? 'visually-hidden'" id="checkOutDate-error" th:if="${#fields.hasErrors('checkOutDate')}" th:errors="*{checkOutDate}"></p>
+                                <!-- One Stay range picker (shared layout/stay-picker fragment). It is only the UI for the existing
+                                     form values: the hidden date inputs are what is submitted. The check-in is the hotel date, fixed by the server, so only the check-out is chosen. -->
+                                <div class="form-field walk-in-fields__wide">
+                                    <span class="walk-in-label" id="walk-in-stay-label"><span th:text="#{checkin.walkIn.stay.range}">Stay Dates</span> <span aria-hidden="true" class="walk-in-required">*</span></span>
+                                    <div th:replace="~{layout/stay-picker :: stayPicker('walk-in-stay', null, null, ${walkInForm.checkOutDate}, ${hotelToday}, #{checkin.walkIn.stay.range.placeholder}, ${#fields.hasErrors('checkOutDate')}, 'end')}"></div>
+                                <p class="field-error" th:classappend="${missingPaths.contains('checkOutDate')} ? 'visually-hidden'" id="checkOutDate-error" th:if="${#fields.hasErrors('checkOutDate')}" th:errors="*{checkOutDate}"></p>
                                 </div>
                                 <div class="form-field walk-in-fields__wide">
                                     <label th:text="#{checkin.walkIn.stay.nights}">Nights</label>

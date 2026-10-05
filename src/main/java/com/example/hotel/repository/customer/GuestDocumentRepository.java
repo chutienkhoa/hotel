@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 /** Provides persistence access to the sensitive document metadata owned by Guests. */
 public interface GuestDocumentRepository extends JpaRepository<GuestDocument, UUID> {
@@ -39,4 +41,15 @@ public interface GuestDocumentRepository extends JpaRepository<GuestDocument, UU
      * @return {@code true} when at least one matching document exists
      */
     boolean existsByGuestIdAndDocumentType(UUID guestId, GuestDocumentType documentType);
+
+    /**
+     * Lists the owning Guest and the identifier of every document of a given type, oldest first, without loading the
+     * documents or their Guests. Used to find each Guest's first passport image in a single query.
+     *
+     * @param documentType requested document type
+     * @return rows of {@code [guestId, documentId]} ordered by creation time, then identifier
+     */
+    @Query("SELECT d.guest.id, d.id FROM GuestDocument d WHERE d.documentType = :documentType "
+            + "ORDER BY d.createdAt ASC, d.id ASC")
+    List<Object[]> findGuestAndDocumentIdsByDocumentType(@Param("documentType") GuestDocumentType documentType);
 }
