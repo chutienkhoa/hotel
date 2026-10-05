@@ -167,7 +167,7 @@
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
-                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.checkOutDate}, 'plannedCheckOutDate')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.status}, 'status')}"></th>
@@ -222,8 +222,8 @@
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.rooms}, 'room')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.guest}, 'guestName')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.reservation}, 'reservationNumber')}"></th>
-                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.checkedIn}, 'checkedIn')}"></th>
-                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.plannedCheckout}, 'plannedCheckOutDate')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.checkInDate}, 'checkedIn')}"></th>
+                <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.checkOutDate}, 'plannedCheckOutDate')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.nights}, 'nights')}"></th>
                 <th th:replace="~{front-desk/fragments :: sortColumn(#{reservation.frontDesk.column.source}, 'source')}"></th>
                 <th class="table-action-column" scope="col" th:text="#{reservation.frontDesk.column.action}">Action</th>
@@ -240,7 +240,7 @@
                 <td th:text="${row.source.displayName}">Direct</td>
                 <td class="table-action-column">
                     <a class="button button-outline-primary table-row-action front-desk-action" th:if="${canViewBooking}"
-                       th:href="@{/reservations/{id}(id=${row.reservationId},from='in-house')}" th:text="#{common.action.view}">View</a>
+                       th:href="@{/reservations/{id}(id=${row.reservationId},from='in-house')}" th:text="#{reservation.frontDesk.action.reviewStay}">Review</a>
                 </td>
             </tr>
             </tbody>

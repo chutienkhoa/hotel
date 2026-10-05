@@ -26,7 +26,6 @@
     const currentCheckIn = () => (checkInInput ? checkInInput.value : fixedCheckIn);
     const steps = document.querySelector("[data-walk-in-steps]");
     const labels = roomsSection.dataset;
-    const checkButton = roomsSection.querySelector("[data-check-availability]");
     const guestsContext = roomsSection.querySelector("[data-guests-context]");
     const rangeLine = roomsSection.querySelector("[data-room-range]");
     const childInput = document.getElementById("childCount");
@@ -252,7 +251,6 @@
         const checkIn = currentCheckIn();
         const ready = Boolean(checkOut) && (!checkInInput || (Boolean(checkIn) && nights() !== null));
         const current = ++requestId;
-        checkButton.disabled = !ready;
         if (!ready) {
             options = [];
             rowsBody.replaceChildren();
@@ -430,7 +428,6 @@
     }
     guestSelect?.addEventListener("change", showGuest);
 
-    checkButton?.addEventListener("click", loadRooms);
 
     // Required-field check on "Next: Reservation Summary". Every empty required field is collected (not just the
     // first), marked invalid and listed in the shared feedback dialog; the form is not submitted. This is usability
@@ -456,7 +453,7 @@
         if (sourceList && !sourceInputs.some((input) => input.checked)) add("source", [sourceList], sourceInputs[0]);
         if (referenceInput && isBlank(referenceInput)) add("otaBookingReference", [referenceInput], referenceInput);
         if (selection.size === 0) {
-            add("rooms", [roomsSection], rowsBody.querySelector("input[type=checkbox]") || checkButton);
+            add("rooms", [roomsSection], rowsBody.querySelector("input[type=checkbox]") || stayTrigger);
         }
         // One entry per selected room whose rate is empty, named by Room No.
         Array.from(rowsBody.querySelectorAll("tr")).forEach((row) => {
@@ -531,7 +528,7 @@
             const candidates = [
                 guestSelect, visibleControl(checkInInput), visibleControl(checkOutInput), adultInput, childInput,
                 sourceInputs[0], referenceInput,
-                ...(roomsSection.dataset.invalid === "true" ? [rowsBody.querySelector("input[type=checkbox]") || checkButton] : []),
+                ...(roomsSection.dataset.invalid === "true" ? [rowsBody.querySelector("input[type=checkbox]") || stayTrigger] : []),
                 ...rowsBody.querySelectorAll("input[data-nightly-rate]"),
             ];
             const invalidOf = (control) => control?.getAttribute("aria-invalid") === "true"

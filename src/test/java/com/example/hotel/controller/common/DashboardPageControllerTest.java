@@ -114,7 +114,9 @@ class DashboardPageControllerTest {
                 .andExpect(content().string(containsString(">Room Management<")))
                 .andExpect(content().string(containsString(">View Reports<")))
                 .andExpect(content().string(containsString("href=\"/check-in/reservations/" + RESERVATION_ID + "\"")))
-                .andExpect(content().string(containsString("href=\"/check-out/" + RESERVATION_ID + "\"")));
+                .andExpect(content().string(containsString("href=\"/check-out/" + RESERVATION_ID + "\"")))
+                .andExpect(content().string(containsString("class=\"button button-outline-subtle dashboard-action\"")))
+                .andExpect(content().string(not(containsString("class=\"button button-primary\" href=\"/check-in"))));
     }
 
     /** Verifies a VIEW_REPORT-only viewer never sees operational/guest-identifying blocks (no leak, no disabled render). */

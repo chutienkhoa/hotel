@@ -130,6 +130,11 @@
   margin-bottom: 0;
   min-width: 0;
 }
+/* The Notes textarea is a little shorter than the shared 7rem minimum, so Stay Details finishes level with the Guest card beside
+   it on a desktop-width screen. Its content height still grows with the text (resize stays vertical). */
+.walk-in-card textarea {
+  min-height: 6.2rem;
+}
 .walk-in-card__header {
   align-items: center;
   column-gap: var(--space-3);
@@ -309,6 +314,12 @@
 .walk-in-fields__wide {
   grid-column: 1 / -1;
 }
+/* The Stay range picker's value starts at the same left edge as the other field values (the readonly Nights box below it uses the
+   same --space-3): the shared trigger reserves extra left padding for a leading icon that this picker does not have. The right
+   padding, and with it the calendar icon, is untouched. */
+.walk-in-card .reservation-stay__trigger {
+  padding-left: var(--space-3);
+}
 .walk-in-readonly {
   align-items: center;
   background: var(--color-surface-muted);
@@ -348,21 +359,24 @@
   margin: 0;
 }
 
-/* Room Selection: type filter, the guests the rooms are for, and Check Availability above the stay range and the table
-   of rooms the server offers. */
+/* Room Selection: the type filter and the guests the rooms are for, sharing the row equally above the stay range and the table of
+   rooms the server offers. The rooms load by themselves when the stay dates change and the type filters the list when it changes, so
+   there is no separate "check" action. */
 .walk-in-room-toolbar {
-  align-items: end;
+  align-items: stretch;
   display: grid;
   gap: var(--space-3) var(--space-4);
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.walk-in-check {
-  height: var(--control-height);
-  white-space: nowrap;
+/* Label above, control filling the rest of the row: the read-only Guests box takes the height of the Room Type select beside
+   it (a select is a little taller than the plain boxes), so both labels and both controls line up without shrinking either. */
+.walk-in-room-toolbar > .form-field {
+  display: grid;
+  grid-template-rows: auto 1fr;
 }
-.walk-in-check svg {
-  height: 1.125rem;
-  width: 1.125rem;
+.walk-in-room-toolbar .walk-in-readonly {
+  height: auto;
+  min-height: var(--control-height);
 }
 .walk-in-room-range {
   align-items: center;
@@ -891,21 +905,37 @@
   .walk-in-fields {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* Room table on phones: at the 34rem minimum the Status column (16%) is narrower than its badge, which spilled into the Rate
+     column and touched the price field. A wider minimum (the wrapper scrolls it inside the card, never the page), a wider Status
+     column that holds the whole badge, and extra left padding on the Rate column (header and cells alike) leave a clear gap
+     between the badge and the price input. Sizes, fonts and the badge itself are untouched. */
+  .walk-in-room-table {
+    min-width: 42rem;
+  }
+  .walk-in-room-table th:nth-child(1) { width: 9%; }
+  .walk-in-room-table th:nth-child(2) { width: 18%; }
+  .walk-in-room-table th:nth-child(3) { width: 16%; }
+  .walk-in-room-table th:nth-child(4) { width: 14%; }
+  .walk-in-room-table th:nth-child(5) { width: 19%; }
+  .walk-in-room-table th:nth-child(6) { width: 24%; }
+  .walk-in-room-table th:nth-child(6),
+  .walk-in-room-table td:nth-child(6) {
+    padding-left: var(--space-3);
+  }
   .walk-in-card__header--action {
     grid-template-columns: auto minmax(0, 1fr);
+  }
+  /* Entry forms: once the actions drop under the title, a standard gap (--space-3, 12px) separates the title row from the button row. */
+  .walk-in-grid:not(.walk-in-grid--summary) .walk-in-card__header--action {
+    row-gap: var(--space-3);
   }
   .walk-in-grid--summary .walk-in-card__header--action {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+  /* The header actions drop to their own row under the title, right-aligned, each button only as wide as its content (the base
+     rules: one flex row, small gap, wrapping only as a last resort). */
   .walk-in-card__actions {
     grid-column: 1 / -1;
-    justify-content: stretch;
-  }
-  .walk-in-card__actions .button,
-  .walk-in-check {
-    flex: 1 1 100%;
-    justify-content: center;
-    width: 100%;
   }
   .walk-in-actions__inner {
     align-items: stretch;
@@ -923,5 +953,24 @@
   .walk-in-doc,
   .walk-in-room-photo {
     max-width: 16rem;
+  }
+  /* Guest card on the entry forms: the passport image / empty-state box is one column wide on phones, so it is centred in it.
+     Its size is unchanged (its own width, capped at 16rem by the rule above, and its 4:3 ratio); only the free space is shared
+     between both sides. */
+  .walk-in-guest-body .walk-in-doc {
+    margin-inline: auto;
+    width: 100%;
+  }
+}
+
+/* Narrow phones: tighten the header actions' horizontal padding and gaps (never the font size) so "Search Existing Guest" and
+   "Create New Guest" still fit on one row; if they truly cannot, they wrap, still right-aligned. */
+@media (max-width: 26rem) {
+  .walk-in-card__actions {
+    gap: 0.375rem;
+  }
+  .walk-in-card__actions .button {
+    gap: 0.25rem;
+    padding: 0 var(--space-2);
   }
 }

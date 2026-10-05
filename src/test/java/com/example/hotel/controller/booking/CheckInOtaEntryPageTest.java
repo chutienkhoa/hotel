@@ -160,7 +160,7 @@ class CheckInOtaEntryPageTest {
                 .andExpect(content().string(containsString("Đặt phòng OTA (chưa nhập)")))
                 .andExpect(content().string(containsString("Nguồn đặt phòng (OTA)")))
                 .andExpect(content().string(containsString("Mã đặt phòng OTA")))
-                .andExpect(content().string(containsString("Kiểm tra phòng trống")))
+                .andExpect(content().string(not(containsString("Kiểm tra phòng trống"))))
                 .andExpect(content().string(containsString("Giá (VND / đêm)")))
                 .andExpect(content().string(containsString("Tiếp theo: Tóm tắt đặt phòng")));
     }

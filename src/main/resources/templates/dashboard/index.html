@@ -87,8 +87,8 @@
                                 <span class="status-badge housekeeping-urgent" th:if="${row.overdue}" th:text="#{reservation.frontDesk.overdueArrival}">Overdue Arrival</span>
                             </td>
                             <td>
-                                <a class="button button-primary" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
-                                   th:text="${row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkIn}">Review</a>
+                                <a class="button button-outline-subtle dashboard-action" th:href="@{/check-in/reservations/{id}(id=${row.reservationId})}"
+                                   th:text="${row.needsAttention} ? #{dashboard.action.review} : #{reservation.frontDesk.action.checkIn}">Review</a>
                             </td>
                         </tr>
                         </tbody>
@@ -149,7 +149,7 @@
                             <td th:text="${stayRow.nights}">2</td>
                             <td><span th:replace="~{layout/enum :: badge('reservationStatus', 'CHECKED_IN', 'status-badge--checked_in')}">Checked In</span></td>
                             <td>
-                                <a class="button button-secondary" th:href="@{/reservations/{id}(id=${stayRow.row.reservationId})}"
+                                <a class="button button-outline-subtle dashboard-action" th:href="@{/reservations/{id}(id=${stayRow.row.reservationId})}"
                                    th:text="#{reservation.frontDesk.action.openReservation}">View</a>
                             </td>
                         </tr>
@@ -188,8 +188,8 @@
                                       th:text="${stayRow.row.paymentRequired} ? #{reservation.frontDesk.paymentRequired} : #{reservation.frontDesk.readyForCheckout}">Ready</span>
                             </td>
                             <td>
-                                <a class="button button-primary" th:href="@{/check-out/{id}(id=${stayRow.row.reservationId})}"
-                                   th:text="${stayRow.row.needsAttention} ? #{reservation.frontDesk.action.review} : #{reservation.frontDesk.action.checkOut}">Review</a>
+                                <a class="button button-outline-subtle dashboard-action" th:href="@{/check-out/{id}(id=${stayRow.row.reservationId})}"
+                                   th:text="${stayRow.row.needsAttention} ? #{dashboard.action.review} : #{reservation.frontDesk.action.checkOut}">Review</a>
                             </td>
                         </tr>
                         </tbody>

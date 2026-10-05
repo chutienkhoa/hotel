@@ -63,4 +63,50 @@ class WalkInCardHeaderAlignmentTest {
             assertFalse(html.contains("walk-in-card__header\" style"), page);
         }
     }
+
+    /**
+     * Confirms Stay Details ends level with the Guest card by a slightly shorter Notes textarea (below the shared 7rem minimum)
+     * rather than by a fixed card height, a transform or a negative margin, and that both entry pages share that one rule.
+     */
+    @Test
+    void stayDetailsFinishesLevelWithTheGuestCardThroughTheNotesTextarea() throws IOException {
+        String css = Files.readString(CSS).replaceAll("(?s)/\\*.*?\\*/", "");
+        Matcher textarea = Pattern.compile("\\.walk-in-card textarea\\s*\\{([^}]*)}").matcher(css);
+        assertTrue(textarea.find());
+        assertTrue(textarea.group(1).contains("min-height: 6.2rem"), textarea.group(1));
+
+        String layout = Files.readString(Path.of("src/main/resources/static/css/common/layout.css")).replaceAll("(?s)/\\*.*?\\*/", "");
+        assertTrue(layout.contains("min-height: 7rem"), "the shared textarea minimum is unchanged for every other page");
+
+        Matcher rules = Pattern.compile("([^{}]+)\\{([^{}]*)}").matcher(css);
+        while (rules.find()) {
+            String selector = rules.group(1);
+            if (selector.contains("walk-in-card--stay") || selector.contains("walk-in-card--guest")
+                    || selector.contains("walk-in-fields")) {
+                assertFalse(Pattern.compile("(^|[;\\s])(height|transform)\\s*:|margin[a-z-]*:\\s*-").matcher(rules.group(2)).find(),
+                        selector + " must not fix a height or use a transform / negative margin");
+            }
+        }
+        for (String page : List.of("walk-in.html", "ota-entry.html")) {
+            assertTrue(Files.readString(TEMPLATES.resolve(page)).contains("<textarea id=\"notes\""), page);
+        }
+    }
+
+    /**
+     * Confirms the Stay range picker's value is inset like the other field values (the Nights box uses the same --space-3), by
+     * the standard token on the trigger's LEFT padding only, so the right padding and the calendar icon are untouched.
+     */
+    @Test
+    void stayRangeValueUsesTheStandardFieldInset() throws IOException {
+        String css = Files.readString(CSS).replaceAll("(?s)/\\*.*?\\*/", "");
+        Matcher trigger = Pattern.compile("\\.walk-in-card \\.reservation-stay__trigger\\s*\\{([^}]*)}").matcher(css);
+        assertTrue(trigger.find());
+        assertTrue(trigger.group(1).contains("padding-left: var(--space-3)"), trigger.group(1));
+        assertFalse(trigger.group(1).contains("padding-right") || trigger.group(1).contains("height")
+                || trigger.group(1).contains("width") || trigger.group(1).contains("font-size"), trigger.group(1));
+
+        Matcher readonly = Pattern.compile("\\.walk-in-readonly\\s*\\{([^}]*)}").matcher(css);
+        assertTrue(readonly.find());
+        assertTrue(readonly.group(1).contains("padding: 0 var(--space-3)"), "the Nights box is the reference inset");
+    }
 }

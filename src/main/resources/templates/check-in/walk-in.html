@@ -143,11 +143,6 @@
                                     <div aria-labelledby="walk-in-guests-label" class="walk-in-readonly" data-guests-context
                                          th:attr="data-msg-guests=#{checkin.walkIn.room.guestsValue}">—</div>
                                 </div>
-                                <!-- Runs the same authoritative availability query that also runs when the check-out date changes. -->
-                                <button class="button button-secondary walk-in-check" data-check-availability disabled type="button">
-                                    <svg th:replace="~{layout/icons :: search}"></svg>
-                                    <span th:text="#{checkin.walkIn.room.check}">Check Availability</span>
-                                </button>
                             </div>
                             <p class="walk-in-room-range" data-room-range hidden
                                th:attr="data-msg-night=#{checkin.walkIn.room.nights.one},data-msg-nights=#{checkin.walkIn.room.nights.other}">

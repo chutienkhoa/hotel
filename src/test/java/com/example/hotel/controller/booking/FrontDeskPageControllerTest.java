@@ -334,6 +334,35 @@ class FrontDeskPageControllerTest {
                 .andExpect(content().string(not(containsString("href=\"/reservations/" + RES + "\""))));
     }
 
+    /** Confirms In-house and Departures label their date columns Ngày nhận phòng / Ngày trả phòng (labels only). */
+    @Test
+    void shouldLabelTheStayDateColumnsOnInHouseAndDepartures() throws Exception {
+        String inHouse = mockMvc.perform(get("/front-desk").param("view", "in-house")
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")).with(perm("PERM_CHECK_OUT", "PERM_VIEW_BOOKING")))
+                .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(inHouse.contains("Ngày nhận phòng"));
+        org.junit.jupiter.api.Assertions.assertTrue(inHouse.contains("Ngày trả phòng"));
+        org.junit.jupiter.api.Assertions.assertFalse(inHouse.contains("Ngày trả phòng dự kiến"));
+        org.junit.jupiter.api.Assertions.assertFalse(inHouse.contains("Đã nhận phòng</"));
+        org.junit.jupiter.api.Assertions.assertTrue(inHouse.contains("data-sort=\"checkedIn\"")
+                || inHouse.contains("sort=checkedIn"), "sorting by the same column key");
+        String departures = mockMvc.perform(get("/front-desk").param("view", "departures")
+                        .cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi")).with(perm("PERM_CHECK_OUT")))
+                .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertTrue(departures.contains("Ngày trả phòng"));
+        org.junit.jupiter.api.Assertions.assertFalse(departures.contains("Ngày trả phòng dự kiến"));
+    }
+
+    /** Confirms the In-house row action is labelled Xét duyệt in Vietnamese (display text only; the link is unchanged). */
+    @Test
+    void shouldLabelTheInHouseRowActionXetDuyet() throws Exception {
+        mockMvc.perform(get("/front-desk").param("view", "in-house").cookie(new jakarta.servlet.http.Cookie("pms-lang", "vi"))
+                        .with(perm("PERM_CHECK_OUT", "PERM_VIEW_BOOKING")))
+                .andExpect(content().string(containsString("?from=in-house\"")))
+                .andExpect(content().string(containsString(">Xét duyệt</a>")))
+                .andExpect(content().string(not(containsString(">Xem</a>"))));
+    }
+
     /** Confirms Departures links its one primary action to the Checkout Review route. */
     @Test
     void shouldLinkDepartureActionToCheckoutReview() throws Exception {

@@ -461,7 +461,7 @@ class CheckInPageControllerTest {
                 .andExpect(content().string(containsString("data-guest-dob")))
                 .andExpect(content().string(containsString("ID / Passport Number")))
                 .andExpect(content().string(containsString("Date of Birth")))
-                .andExpect(content().string(containsString("data-check-availability")));
+                .andExpect(content().string(not(containsString("data-check-availability"))));
     }
 
     /** Confirms the selected Guest's identity values come from the Guest read model and are exposed on the option. */

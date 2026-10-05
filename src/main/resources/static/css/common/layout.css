@@ -667,6 +667,14 @@ fieldset {
 .dashboard-table-wrap .button {
   white-space: nowrap;
 }
+/* The one Dashboard row-action button (Review, Check in, Open, Check out): the subtle outline-blue secondary style at one
+   fixed width and height, so every row action looks identical whatever its label. */
+.dashboard-table-wrap .dashboard-action {
+  box-sizing: border-box;
+  justify-content: center;
+  padding-inline: 0;
+  width: 7rem;
+}
 .quick-actions-grid {
   display: grid;
   gap: var(--space-4);
