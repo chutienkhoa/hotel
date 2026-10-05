@@ -35,6 +35,10 @@
             <li th:each="problem : ${validationSummary}" th:text="${problem}"></li>
         </ul>
         <div class="feedback-dialog__actions">
+            <!-- Optional recovery link supplied by the controller (feedbackActionUrl + feedbackActionLabel), for example
+                 View Prepayments when a prepayment blocks a cancellation. Plain in-app navigation. -->
+            <a class="button button-secondary" id="feedback-dialog-action"
+               th:href="@{${feedbackActionUrl}}" th:if="${feedbackActionUrl != null}" th:text="${feedbackActionLabel}">View</a>
             <button autofocus class="button button-primary" data-feedback-dialog-close th:text="#{common.action.close}" type="button">
                 Close
             </button>

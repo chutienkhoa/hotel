@@ -1,23 +1,40 @@
 (() => {
-    const tabs = document.querySelectorAll(".detail-tabs .detail-tab");
-    if (!tabs.length) return;
-    const panels = document.querySelectorAll(".detail-tab-panel");
+    "use strict";
 
-    const activate = (tab) => {
+    // Reservation Detail tabs. A tab with data-detail-tab swaps in the panel "panel-<key>"; Folio and Payments are
+    // plain links to the Folio page and are not handled here. A control with data-detail-tab-target (for example
+    // Recent Activity's "View All") activates the named tab.
+    const tabs = Array.from(document.querySelectorAll("[data-detail-tab]"));
+    if (tabs.length === 0) {
+        return;
+    }
+
+    const panelFor = (key) => document.getElementById(`panel-${key}`);
+
+    const activate = (tab, moveFocus) => {
         tabs.forEach((other) => {
-            const isActive = other === tab;
-            other.classList.toggle("detail-tab--active", isActive);
-            other.setAttribute("aria-selected", String(isActive));
+            const active = other === tab;
+            other.classList.toggle("rd-tab--active", active);
+            other.setAttribute("aria-selected", String(active));
+            const panel = panelFor(other.dataset.detailTab);
+            if (panel) {
+                panel.hidden = !active;
+            }
         });
-        const targetId = tab.dataset.tabPanel;
-        panels.forEach((panel) => {
-            panel.hidden = panel.id !== targetId;
-        });
-        const scrollId = tab.dataset.tabScroll;
-        if (!scrollId) return;
-        const scrollTarget = document.getElementById(scrollId);
-        if (scrollTarget) scrollTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (moveFocus) {
+            tab.focus();
+            tab.scrollIntoView({ block: "nearest" });
+        }
     };
 
-    tabs.forEach((tab) => tab.addEventListener("click", () => activate(tab)));
+    tabs.forEach((tab) => tab.addEventListener("click", () => activate(tab, false)));
+
+    document.querySelectorAll("[data-detail-tab-target]").forEach((control) => {
+        control.addEventListener("click", () => {
+            const target = tabs.find((tab) => tab.dataset.detailTab === control.dataset.detailTabTarget);
+            if (target) {
+                activate(target, true);
+            }
+        });
+    });
 })();

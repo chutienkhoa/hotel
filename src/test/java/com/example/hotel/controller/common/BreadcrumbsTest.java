@@ -53,6 +53,19 @@ class BreadcrumbsTest {
         return trail.stream().map(item -> item.href() == null ? "-" : item.href()).toList();
     }
 
+    /** Confirms Reassign Room opened from Reservation Detail leads back to that Reservation, not to Front Desk. */
+    @Test
+    void shouldBuildTheReassignTrailForAReservationOpenedFromDetail() {
+        Breadcrumbs c = crumbs(null, ALL);
+
+        assertEquals("Reservations / Reservation R20261004-000001 / Reassign Room",
+                text(c.reassignFromReservation(ID, "R20261004-000001")));
+        assertEquals(List.of("/reservations", "/reservations/" + ID, "-"),
+                links(c.reassignFromReservation(ID, "R20261004-000001")));
+        // Without VIEW_BOOKING neither the list nor the Reservation can be opened, so both entries are plain text.
+        assertEquals(List.of("-", "-", "-"), links(crumbs(null, "PERM_CHECK_IN").reassignFromReservation(ID, "R1")));
+    }
+
     /** Confirms the Front Desk views, Check-in, Walk-in, OTA and Check-out flows follow the approved naming. */
     @Test
     void shouldBuildTheFrontDeskTrails() {
@@ -97,6 +110,13 @@ class BreadcrumbsTest {
         assertEquals("Reservations / Reservation R1 / Change Room", text(crumbs(null, ALL).roomChange(ID, "R1")));
         assertEquals(List.of("/reservations", "/reservations/" + ID, "-"), links(crumbs(null, ALL).roomChange(ID, "R1")));
         assertEquals("Reservations / Change Room", text(crumbs(null, ALL).roomChange(ID, null)));
+
+        assertEquals("Reservations / Reservation R1 / Extend Stay", text(crumbs(null, ALL).stayExtension(ID, "R1")));
+        assertEquals(List.of("/reservations", "/reservations/" + ID, "-"), links(crumbs(null, ALL).stayExtension(ID, "R1")));
+        assertEquals("Reservations / Extend Stay", text(crumbs(null, ALL).stayExtension(ID, null)));
+
+        assertEquals("Reservations / Reservation R1 / Change Stay Dates", text(crumbs(null, ALL).changeDates(ID, "R1")));
+        assertEquals(List.of("/reservations", "/reservations/" + ID, "-"), links(crumbs(null, ALL).changeDates(ID, "R1")));
     }
 
     /** Confirms the context is carried to the next page by keep(), and an unknown value is ignored. */
@@ -122,7 +142,7 @@ class BreadcrumbsTest {
                     Breadcrumbs::checkInWalkInSummary, Breadcrumbs::checkInOta, Breadcrumbs::checkInOtaSummary,
                     Breadcrumbs::checkOutSearch, Breadcrumbs::checkOutReview, Breadcrumbs::checkOutComplete,
                     Breadcrumbs::reservationCreate, Breadcrumbs::reservationEdit,
-                    b -> b.reservationDetail("R1"), b -> b.folio(ID, "R1"), b -> b.roomChange(ID, "R1"),
+                    b -> b.reservationDetail("R1"), b -> b.folio(ID, "R1"), b -> b.roomChange(ID, "R1"), b -> b.stayExtension(ID, "R1"), b -> b.changeDates(ID, "R1"),
                     b -> b.guestDetail("G1"));
             for (var trail : trails) {
                 List<BreadcrumbItem> items = trail.apply(c);
@@ -147,5 +167,7 @@ class BreadcrumbsTest {
         LocaleContextHolder.setLocale(Locale.forLanguageTag("vi"));
         assertEquals("Lễ tân / Nhận phòng / Tìm đặt phòng", text(crumbs(null, ALL).checkInFind()));
         assertEquals("Đặt phòng / Đặt phòng R1 / Đổi phòng", text(crumbs(null, ALL).roomChange(ID, "R1")));
+        assertEquals("Đặt phòng / Đặt phòng R1 / Gia hạn lưu trú", text(crumbs(null, ALL).stayExtension(ID, "R1")));
+        assertEquals("Đặt phòng / Đặt phòng R1 / Đổi ngày đặt phòng", text(crumbs(null, ALL).changeDates(ID, "R1")));
     }
 }

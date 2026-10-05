@@ -61,14 +61,6 @@
   gap: var(--space-2);
   margin: 0 0 var(--space-3);
 }
-/* One shared section-icon rule: every heading icon on this page has the same size, stroke weight and gap. */
-.cor-card h2 svg {
-  color: var(--color-primary);
-  flex: none;
-  height: 1.375rem;
-  stroke-width: 2.2;
-  width: 1.375rem;
-}
 .cor-card__head {
   align-items: center;
   display: flex;
@@ -510,11 +502,6 @@
   font-size: 0.9375rem;
   gap: var(--space-2);
   margin: 0;
-}
-.cor-card h3 svg {
-  color: var(--color-primary);
-  height: 1.125rem;
-  width: 1.125rem;
 }
 
 .cop-totals {

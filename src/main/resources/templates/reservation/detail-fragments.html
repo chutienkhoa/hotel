@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- Reservation Detail fragments shared by every state of the page (reservation/detail.html). Navigation links follow
+     the Task33 convention: blue link text, no underline by default, underline on hover and keyboard focus (.record-link),
+     and only when the user may open the destination; otherwise the same text is shown plainly. -->
+
+<!-- Client-sortable column header of the Activity Log. Same indicator as the Reservation List's sortable headers
+     (the shared sortNeutral/sortAsc/sortDesc icons, aria-sort on the th); detail-activity-sort.js reveals the icon that
+     matches the state and re-orders the rows from their data-sort-* values. The server renders the default state
+     (key 'time', descending). -->
+<th th:fragment="activitySortColumn(label, key)" scope="col" class="rd-sortable"
+    th:classappend="${key == 'time'} ? 'rd-sortable--active'"
+    th:attr="aria-sort=${key == 'time' ? 'descending' : 'none'}">
+    <button class="rd-sort" th:attr="data-sort-key=${key},aria-label=#{reservation.list.sort.by(${label})}" type="button">
+        <span class="rd-sort__label" th:text="${label}">Column</span>
+        <span class="rd-sort__icon" aria-hidden="true">
+            <span data-sort-icon="neutral" th:attr="hidden=${key == 'time'} ? 'hidden' : null"><svg th:replace="~{layout/icons :: sortNeutral}"></svg></span>
+            <span data-sort-icon="asc" hidden><svg th:replace="~{layout/icons :: sortAsc}"></svg></span>
+            <span data-sort-icon="desc" th:attr="hidden=${key != 'time'} ? 'hidden' : null"><svg th:replace="~{layout/icons :: sortDesc}"></svg></span>
+        </span>
+    </button>
+</th>
+
+<!-- A Guest Code that links to Guest Detail for a user who may manage guests. -->
+<th:block th:fragment="guestLink(guestId, guestCode)">
+    <a class="record-link" th:href="@{/guests/{id}(id=${guestId})}" th:if="${canManageGuest}" th:text="${guestCode}">G000001</a>
+    <span th:unless="${canManageGuest}" th:text="${guestCode}">G000001</span>
+</th:block>
+
+<!-- A Room Code that links to Room Detail for a user who may manage rooms. -->
+<th:block th:fragment="roomLink(roomId, roomNumber)">
+    <a class="record-link" th:href="@{/rooms/{id}(id=${roomId})}" th:if="${canManageRoom and roomId != null}" th:text="${roomNumber}">101</a>
+    <span th:unless="${canManageRoom and roomId != null}" th:text="${roomNumber}">101</span>
+</th:block>
+
+<!-- A date with its abbreviated weekday, for example 07/10/2026 (Tue). -->
+<th:block th:fragment="dateWithWeekday(date)">
+    <span th:replace="~{layout/datetime :: date(${date})}">—</span>
+    <span class="rd-weekday" th:if="${date != null}" th:text="|(${#temporals.format(date, 'EEE')})|">(Tue)</span>
+</th:block>
+
+<!-- The staff-friendly folio indicator: "settled" when the balance is zero and nothing is flagged, "needs review" only when
+     the existing reconciliation reports a problem. Nothing technical is shown. -->
+<th:block th:fragment="folioIndicator(code)">
+    <p class="rd-folio-indicator rd-folio-indicator--settled" id="folio-indicator" th:if="${code == 'SETTLED'}">
+        <svg th:replace="~{layout/icons :: checkCircle}"></svg>
+        <span th:text="#{reservation.detail.financialSummary.folioSettled}">Folio settled</span>
+    </p>
+    <p class="rd-folio-indicator rd-folio-indicator--review" id="folio-indicator" th:if="${code == 'NEEDS_REVIEW'}">
+        <svg th:replace="~{layout/icons :: alertTriangle}"></svg>
+        <span th:text="#{reservation.detail.financialSummary.folioNeedsReview}">Folio needs review</span>
+    </p>
+</th:block>
+
+<!-- One label/value row; the value is a plain string, "—" when empty. -->
+<div th:fragment="textRow(label, value)">
+    <dt th:text="${label}">Label</dt>
+    <dd th:text="${#strings.isEmpty(value) ? '—' : value}">Value</dd>
+</div>
+
+<!-- One label/value row whose value is an Instant shown in the hotel time zone, "—" when unknown. -->
+<div th:fragment="dateTimeRow(label, instant)">
+    <dt th:text="${label}">Label</dt>
+    <dd><span th:replace="~{layout/datetime :: dateTime(${instant})}">—</span></dd>
+</div>
+</body>
+</html>

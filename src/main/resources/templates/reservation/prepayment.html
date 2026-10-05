@@ -1,6 +1,6 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
-<head th:replace="~{layout/base :: head(#{payment.prepayment.form.title})}"></head>
+<html th:lang="${#locale.language}" th:with="pageStylesheet='/css/reservation/prepayment.css'" xmlns:th="https://www.thymeleaf.org">
+<head th:replace="~{layout/base :: head(#{payment.prepayment.title})}"></head>
 <body>
 <div class="app-shell page-reservations">
     <header th:replace="~{layout/header :: header}"></header>
@@ -10,11 +10,12 @@
         <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}" th:text="#{payment.prepayment.back}">Back to reservation</a>
         <div class="page-header">
             <div>
-                <h1 th:text="#{payment.prepayment.form.title}">Record Prepayment</h1>
-                <p th:text="#{payment.prepayment.form.description}">Money received before check-in.</p>
+                <h1 th:text="#{payment.prepayment.title}">Prepayments</h1>
+                <p th:text="#{payment.prepayment.page.description}">Review, refund or void the prepayments of this reservation, or record a new one.</p>
             </div>
         </div>
 
+        <p class="message message-success" th:if="${successMessage}" th:text="${successMessage}"></p>
         <p class="message message-error" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
         <dl class="detail-list">
@@ -24,7 +25,68 @@
             <dd><span th:replace="~{layout/money :: amount(${reservation.totalAmount}, ${reservation.currency})}">0 VND</span></dd>
         </dl>
 
+        <section aria-labelledby="prepayment-list-heading" class="card" id="prepayment-list">
+            <h2 id="prepayment-list-heading" th:text="#{payment.prepayment.list.title}">Recorded prepayments</h2>
+            <dl class="label-value-rows label-value-rows--divided label-value-rows--fit">
+                <div>
+                    <dt th:text="#{payment.prepayment.active}">Active Prepayment</dt>
+                    <dd id="prepayment-active"><span th:replace="~{layout/money :: amount(${prepaymentSummary.activeTotal}, ${prepaymentSummary.currency})}">0</span></dd>
+                </div>
+                <div>
+                    <dt th:text="#{payment.prepayment.refundedTotal}">Refunded</dt>
+                    <dd><span th:replace="~{layout/money :: amount(${prepaymentSummary.refundedTotal}, ${prepaymentSummary.currency})}">0</span></dd>
+                </div>
+            </dl>
+            <p th:if="${#lists.isEmpty(prepaymentSummary.payments)}" th:text="#{payment.prepayment.none}">No prepayments recorded.</p>
+            <div class="table-wrap" th:unless="${#lists.isEmpty(prepaymentSummary.payments)}">
+                <table>
+                    <thead>
+                    <tr>
+                        <th scope="col" th:text="#{payment.prepayment.col.date}">Date</th>
+                        <th scope="col" th:text="#{payment.prepayment.col.method}">Method</th>
+                        <th scope="col" th:text="#{payment.prepayment.col.amount}">Amount</th>
+                        <th scope="col" th:text="#{payment.prepayment.col.applied}">Applied Amount</th>
+                        <th scope="col" th:text="#{payment.prepayment.col.status}">Status</th>
+                        <th scope="col" th:text="#{payment.prepayment.col.reference}">Reference</th>
+                        <th scope="col" th:text="#{payment.prepayment.col.actions}">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="payment : ${prepaymentSummary.payments}">
+                        <td><span th:replace="~{layout/datetime :: dateTime(${payment.paidAt})}">—</span></td>
+                        <td><span th:replace="~{layout/enum :: label('paymentMethod', ${payment.method})}">Cash</span></td>
+                        <td><span th:replace="~{layout/money :: amount(${payment.amount}, ${payment.currency})}">0</span></td>
+                        <td><span th:replace="~{layout/money :: amount(${payment.appliedAmount}, ${prepaymentSummary.currency})}">0</span></td>
+                        <td><span th:replace="~{layout/enum :: badge('paymentStatus', ${payment.status}, ${'status-badge--' + #strings.toLowerCase(payment.status)})}">PAID</span></td>
+                        <td th:text="${payment.reference ?: '—'}">—</td>
+                        <td>
+                            <div class="prepayment-actions" th:if="${payment.status == 'PAID'}">
+                                <form class="prepayment-action-form" method="post"
+                                      th:action="@{/reservations/{id}/prepayments/{paymentId}/refund(id=${reservation.id},paymentId=${payment.id})}"
+                                      th:attr="data-confirm-title=#{payment.prepayment.refund.confirmTitle},data-confirm-message=#{payment.prepayment.refund.confirmMessage},data-confirm-label=#{payment.prepayment.refund},data-confirm-severity='WARNING'">
+                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                    <input maxlength="500" name="reason" required th:aria-label="#{payment.prepayment.refundReason}" th:placeholder="#{payment.prepayment.refundReason}" type="text" />
+                                    <button class="button button-secondary button-compact" th:text="#{payment.prepayment.refund}" type="submit">Refund Prepayment</button>
+                                </form>
+                                <form class="prepayment-action-form" method="post"
+                                      th:action="@{/reservations/{id}/prepayments/{paymentId}/void(id=${reservation.id},paymentId=${payment.id})}"
+                                      th:attr="data-confirm-title=#{payment.prepayment.void.confirmTitle},data-confirm-message=#{payment.prepayment.void.confirmMessage},data-confirm-label=#{payment.prepayment.void},data-confirm-severity='DANGER'">
+                                    <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
+                                    <input maxlength="500" name="reason" required th:aria-label="#{payment.prepayment.voidReason}" th:placeholder="#{payment.prepayment.voidReason}" type="text" />
+                                    <button class="button button-danger button-compact" th:text="#{payment.prepayment.void}" type="submit">Void Prepayment</button>
+                                </form>
+                            </div>
+                            <span th:unless="${payment.status == 'PAID'}">—</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <form class="form-card" method="post" th:action="@{/reservations/{id}/prepayments(id=${reservation.id})}" th:object="${prepaymentForm}">
+            <h2 th:text="#{payment.prepayment.form.title}">Record Prepayment</h2>
+            <p th:text="#{payment.prepayment.form.description}">Money received before check-in.</p>
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
             <div class="form-grid reservation-details-grid">
                 <div class="form-field">
@@ -66,6 +128,7 @@
             </div>
         </form>
     </main>
+    <th:block th:replace="~{layout/confirmation :: confirmation}"></th:block>
 </div>
 </body>
 </html>

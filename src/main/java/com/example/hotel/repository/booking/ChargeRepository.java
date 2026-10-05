@@ -37,6 +37,30 @@ public interface ChargeRepository extends JpaRepository<Charge, UUID> {
     BigDecimal sumAmountByStayId(@Param("stayId") UUID stayId);
 
     /**
+     * Sums the ACTIVE Charge amounts of one Stay that are ROOM Charges (the accommodation created by check-in and Stay
+     * Extension), using the same ACTIVE filter as {@link #sumAmountByStayId}.
+     *
+     * @param stayId owning Stay identifier
+     * @return total ACTIVE ROOM Charge amount, or zero when there is none
+     */
+    @Query("SELECT COALESCE(SUM(c.amount), 0) FROM Charge c "
+            + "WHERE c.stay.id = :stayId AND c.status = com.example.hotel.entity.booking.ChargeStatus.ACTIVE "
+            + "AND c.type = com.example.hotel.entity.booking.ChargeType.ROOM")
+    BigDecimal sumRoomAmountByStayId(@Param("stayId") UUID stayId);
+
+    /**
+     * Sums the ACTIVE Charge amounts of one Stay that are not ROOM Charges (manually recorded additional charges),
+     * using the same ACTIVE filter as {@link #sumAmountByStayId}.
+     *
+     * @param stayId owning Stay identifier
+     * @return total ACTIVE non-ROOM Charge amount, or zero when there is none
+     */
+    @Query("SELECT COALESCE(SUM(c.amount), 0) FROM Charge c "
+            + "WHERE c.stay.id = :stayId AND c.status = com.example.hotel.entity.booking.ChargeStatus.ACTIVE "
+            + "AND c.type <> com.example.hotel.entity.booking.ChargeType.ROOM")
+    BigDecimal sumAdditionalAmountByStayId(@Param("stayId") UUID stayId);
+
+    /**
      * Sums ACTIVE Charge amounts per Stay for many Stays in one grouped query. Stays without ACTIVE
      * Charges are absent.
      *

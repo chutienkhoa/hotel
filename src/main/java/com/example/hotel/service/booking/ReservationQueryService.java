@@ -381,7 +381,8 @@ public class ReservationQueryService {
                 contact.phone(),
                 contact.email(),
                 contact.fromPrimaryGuest(),
-                resolveUsername(reservation.getCreatedBy()));
+                resolveUsername(reservation.getCreatedBy()),
+                resolveUsername(reservation.getUpdatedBy()));
     }
 
     /**

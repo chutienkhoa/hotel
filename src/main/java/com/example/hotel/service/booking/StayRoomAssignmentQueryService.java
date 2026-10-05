@@ -55,11 +55,7 @@ public class StayRoomAssignmentQueryService {
                 .map(assignments::findOpenByStayId)
                 .orElseGet(List::of)
                 .stream()
-                .map(assignment -> new CurrentRoomResponse(
-                        assignment.getId(),
-                        assignment.getRoom().getId(),
-                        assignment.getRoom().getRoomNumber(),
-                        assignment.getAssignedFrom()))
+                .map(this::toCurrentRoom)
                 .toList();
     }
 
@@ -93,11 +89,7 @@ public class StayRoomAssignmentQueryService {
     @Transactional(readOnly = true)
     public List<CurrentRoomResponse> findFinalRooms(UUID reservationId) {
         return finalAssignments(reservationId).stream()
-                .map(assignment -> new CurrentRoomResponse(
-                        assignment.getId(),
-                        assignment.getRoom().getId(),
-                        assignment.getRoom().getRoomNumber(),
-                        assignment.getAssignedFrom()))
+                .map(this::toCurrentRoom)
                 .toList();
     }
 
@@ -114,6 +106,17 @@ public class StayRoomAssignmentQueryService {
         finalAssignments(reservationId).forEach(assignment -> rates.put(
                 assignment.getRoom().getId(), assignment.getOriginalReservationRoom().getNightlyRate()));
         return rates;
+    }
+
+    private CurrentRoomResponse toCurrentRoom(StayRoomAssignment assignment) {
+        var room = assignment.getRoom();
+        return new CurrentRoomResponse(
+                assignment.getId(),
+                room.getId(),
+                room.getRoomNumber(),
+                assignment.getAssignedFrom(),
+                room.getRoomType() == null ? null : room.getRoomType().getName(),
+                room.getRoomType() == null ? null : room.getRoomType().getCapacity());
     }
 
     private List<StayRoomAssignment> finalAssignments(UUID reservationId) {
@@ -153,7 +156,11 @@ public class StayRoomAssignmentQueryService {
                         assignment.getAssignedTo(),
                         assignment.getReason() == null ? "Initial Check-in" : assignment.getReason().getDisplayName(),
                         usernamesById.getOrDefault(assignment.getCreatedBy(), "—"),
-                        assignment.getRoom().getId()))
+                        assignment.getRoom().getId(),
+                        assignment.getRoom().getRoomType() == null
+                                ? null
+                                : assignment.getRoom().getRoomType().getName(),
+                        assignment.getReason() == null ? null : assignment.getReason().name()))
                 .toList();
     }
 

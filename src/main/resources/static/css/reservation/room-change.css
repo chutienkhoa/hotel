@@ -54,16 +54,17 @@
   margin-bottom: var(--space-4);
 }
 
+/* Title and subtitle rhythm is the Reservation Detail header's (.rd-title / .rd-subtitle): the shared h1 line height and a
+   --space-2 gap to the subtitle. The gap under the breadcrumb is the shared page rhythm (.content > * + *, --space-6). */
 .room-change-header h1 {
   font-size: 2rem;
-  line-height: 1.15;
   margin: 0;
 }
 
 .room-change-header p {
   color: var(--color-muted);
   font-size: 0.9375rem;
-  margin: var(--space-1) 0 0;
+  margin: var(--space-2) 0 0;
 }
 
 /* Three-step indicator: step 1 is the active blue marker, later steps are grey (spec 8.3 wizard pattern). */
@@ -177,13 +178,8 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 
-.room-change-card__header > svg {
-  color: var(--color-primary);
-  flex: none;
-}
-
 .room-change-card__header h2 {
-  font-size: 1.0625rem;
+  font-size: var(--font-size-card-title);
   margin: 0;
 }
 
@@ -194,8 +190,7 @@
   margin: var(--space-1) 0 0;
 }
 
-/* Section icons (card headers, step markers): the top of the 20-22px section range. */
-.room-change-card__header > svg,
+/* Step marker icons: the top of the 20-22px section range. */
 .room-change-step__marker svg {
   height: 1.375rem;
   width: 1.375rem;
@@ -358,6 +353,9 @@
 /* Legitimate blocked state: no candidate selection and no Next action; Cancel remains the only exit. */
 .room-change-card--blocked .room-change-card__header > svg {
   color: var(--color-warning);
+  flex: none;
+  height: var(--icon-size-section);
+  width: var(--icon-size-section);
 }
 
 /* Review Change (step 2): the Current -> New comparison is the primary focus. Each side shows the room, its type and

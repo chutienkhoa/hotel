@@ -11,9 +11,13 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.example.hotel.config.I18nConfig;
+import com.example.hotel.dto.booking.response.PaymentResponse;
+import com.example.hotel.dto.booking.response.PrepaymentSummaryResponse;
 import com.example.hotel.dto.booking.response.ReservationDetailResponse;
 import com.example.hotel.exception.LocalizedResponseStatusException;
 import com.example.hotel.security.JwtService;
@@ -21,6 +25,7 @@ import com.example.hotel.service.booking.PrepaymentService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import jakarta.servlet.http.Cookie;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -64,6 +69,79 @@ class PrepaymentPageTest {
                 com.example.hotel.entity.booking.BookingSource.DIRECT, null,
                 java.time.LocalDate.of(2026, 9, 20), java.time.LocalDate.of(2026, 9, 22), 1, 0,
                 new BigDecimal("4000000"), "VND", null, List.of(), List.of()));
+        when(service.summary(ID)).thenReturn(summary(List.of()));
+    }
+
+    private static PrepaymentSummaryResponse summary(List<PaymentResponse> payments) {
+        return new PrepaymentSummaryResponse("VND", new BigDecimal("4000000"), new BigDecimal("1000000"),
+                new BigDecimal("500000"), new BigDecimal("1500000"), new BigDecimal("3000000"), payments);
+    }
+
+    private static PaymentResponse payment(UUID id, String status, String amount) {
+        return new PaymentResponse(id, null, new BigDecimal(amount), "VND", null, new BigDecimal(amount), "CASH", status,
+                Instant.parse("2026-09-20T03:00:00Z"), "REF-" + status, null, null);
+    }
+
+    /** Confirms the page lists the prepayments and offers the existing Refund and Void only for an active (PAID) one. */
+    @Test
+    void shouldListPrepaymentsWithRefundAndVoidForActiveOnes() throws Exception {
+        reservation();
+        UUID paid = UUID.fromString("22222222-2222-2222-2222-222222222222");
+        UUID refunded = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        when(service.summary(ID)).thenReturn(summary(List.of(payment(paid, "PAID", "1000000"), payment(refunded, "REFUNDED", "500000"))));
+
+        mockMvc.perform(get("/reservations/{id}/prepayments", ID).with(payer()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Recorded prepayments")))
+                .andExpect(content().string(containsString("REF-PAID")))
+                .andExpect(content().string(containsString("REF-REFUNDED")))
+                .andExpect(content().string(containsString("/reservations/" + ID + "/prepayments/" + paid + "/refund")))
+                .andExpect(content().string(containsString("/reservations/" + ID + "/prepayments/" + paid + "/void")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("/prepayments/" + refunded + "/refund"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("/prepayments/" + refunded + "/void"))));
+        mockMvc.perform(get("/reservations/{id}/prepayments", ID).with(payer()).cookie(new Cookie("pms-lang", "vi")))
+                .andExpect(content().string(containsString("Các khoản thanh toán trước đã ghi nhận")));
+    }
+
+    /** Confirms an empty prepayment list shows the empty state rather than an empty table. */
+    @Test
+    void shouldShowTheEmptyStateWhenNothingWasRecorded() throws Exception {
+        reservation();
+
+        mockMvc.perform(get("/reservations/{id}/prepayments", ID).with(payer()))
+                .andExpect(content().string(containsString("No prepayments recorded.")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("/refund"))));
+    }
+
+    /** Confirms Refund and Void keep their existing rules and now return to the Prepayments page. */
+    @Test
+    void shouldReturnToThePrepaymentsPageAfterRefundAndVoid() throws Exception {
+        UUID paymentId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+
+        mockMvc.perform(post("/reservations/{id}/prepayments/{p}/refund", ID, paymentId).with(payer()).with(csrf())
+                        .param("reason", "Guest cancelled"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + ID + "/prepayments"))
+                .andExpect(flash().attribute("successMessage", "Prepayment refunded."));
+        mockMvc.perform(post("/reservations/{id}/prepayments/{p}/void", ID, paymentId).with(payer()).with(csrf())
+                        .param("reason", "Recorded twice"))
+                .andExpect(redirectedUrl("/reservations/" + ID + "/prepayments"))
+                .andExpect(flash().attribute("successMessage", "Prepayment voided."));
+        verify(service).refund(eq(ID), eq(paymentId), any());
+        verify(service).voidPrepayment(eq(ID), eq(paymentId), any());
+    }
+
+    /** Confirms a refused Refund returns to the Prepayments page with the localized reason. */
+    @Test
+    void shouldReportARefusedRefundOnThePrepaymentsPage() throws Exception {
+        UUID paymentId = UUID.randomUUID();
+        when(service.refund(eq(ID), eq(paymentId), any())).thenThrow(new LocalizedResponseStatusException(
+                HttpStatus.CONFLICT, "payment.prepayment.error.refundState", "x"));
+
+        mockMvc.perform(post("/reservations/{id}/prepayments/{p}/refund", ID, paymentId).with(payer()).with(csrf())
+                        .param("reason", "x"))
+                .andExpect(redirectedUrl("/reservations/" + ID + "/prepayments"))
+                .andExpect(flash().attribute("errorMessage", "Only an active prepayment of this reservation can be refunded here."));
     }
 
     /** Confirms a MANAGE_PAYMENT user gets the form with the credential-safety hint and no card fields. */

@@ -1,0 +1,767 @@
+/* Reservation Detail (Task33 spec 9.3.4): one shell for every Reservation state, matching the six approved evidence images
+   in docs/specs/evidence/task33/reservations/. Page-local styling only; shared primitives (.card, .button, .record-link,
+   .label-value-rows, .table-wrap, .status-badge, .card-title-icon) come from common/layout.css and are reused as is. */
+
+/* ------------------------------------------------------------------ Header */
+.rd-header {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+.rd-header__copy {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+.rd-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: clamp(1.5rem, 2.2vw, 1.875rem);
+  gap: var(--space-3);
+  margin: 0;
+}
+.rd-subtitle {
+  color: var(--color-muted);
+  font-size: 1rem;
+  margin: var(--space-2) 0 0;
+}
+.rd-subtitle--hint {
+  font-size: 0.875rem;
+  margin-top: 0.125rem;
+}
+.rd-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+.rd-inline-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+/* Status badge: grey draft, blue confirmed, green checked in, slate checked out, soft red cancelled, amber no-show. */
+.rd-status {
+  border: 1px solid transparent;
+  font-size: 0.8125rem;
+  height: 1.75rem;
+  letter-spacing: 0.03em;
+  padding: 0 0.75rem;
+  text-transform: uppercase;
+}
+.rd-status--small {
+  font-size: 0.75rem;
+  height: 1.5rem;
+  padding: 0 0.625rem;
+}
+.rd-status--draft {
+  background: #e6e9ee;
+  color: #475467;
+}
+.rd-status--confirmed {
+  background: var(--color-info-surface);
+  color: var(--color-info);
+}
+.rd-status--checked_in {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.rd-status--checked_out {
+  background: #e3e8ee;
+  border-color: #cdd6df;
+  color: #3e4c59;
+}
+.rd-status--cancelled {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.rd-status--no_show {
+  background: #fde9c4;
+  color: #a0520a;
+}
+
+/* ------------------------------------------------------------------ More menu */
+.rd-menu {
+  position: relative;
+}
+.rd-menu__panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgb(16 42 67 / 16%);
+  display: grid;
+  min-width: 14rem;
+  padding: var(--space-2);
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.375rem);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  z-index: 30;
+}
+.rd-menu__panel[hidden] {
+  display: none;
+}
+.rd-menu__panel--start {
+  left: 0;
+  right: auto;
+}
+.rd-menu__item {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-navy);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.9375rem;
+  gap: var(--space-3);
+  padding: 0.55rem var(--space-3);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rd-menu__item svg {
+  color: var(--color-muted);
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.rd-menu__item:hover,
+.rd-menu__item:focus-visible {
+  background: var(--color-surface-muted);
+  color: var(--color-navy);
+}
+.rd-menu__item--danger,
+.rd-menu__item--danger svg {
+  color: var(--color-danger);
+}
+.rd-menu__item--danger:hover,
+.rd-menu__item--danger:focus-visible {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.rd-menu__divider {
+  background: var(--color-border);
+  height: 1px;
+  margin: var(--space-2) var(--space-3);
+}
+
+/* ------------------------------------------------------------------ Summary strip */
+.rd-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-5);
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+}
+.rd-summary__item {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.rd-summary__body {
+  min-width: 0;
+}
+.rd-summary__value--rooms {
+  column-gap: 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+}
+.rd-room-item {
+  display: inline-flex;
+}
+.rd-summary__body p {
+  margin: 0;
+}
+.rd-summary__label {
+  color: var(--color-muted);
+  font-size: var(--font-size-summary-label);
+  font-weight: 500;
+}
+.rd-summary__value {
+  color: var(--color-navy);
+  font-size: var(--font-size-summary-value);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.rd-summary__sub {
+  color: var(--color-muted);
+  font-size: var(--font-size-secondary);
+  font-weight: 500;
+}
+.rd-summary__sub--alert {
+  color: var(--color-date-check-out);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ Tabs */
+.rd-tabs {
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-5);
+}
+.rd-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-navy);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin-bottom: -1px;
+  padding: var(--space-3) var(--space-1);
+  text-decoration: none;
+}
+.rd-tab:hover {
+  color: var(--color-primary);
+}
+.rd-tab--active {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.rd-panel[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ Overview layout */
+.rd-layout {
+  align-items: start;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+}
+.rd-main,
+.rd-side {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+/* First row of the Overview: Guest, Stay and Reservation Information side by side. The cards share one height (the
+   tallest of the three); the rows inside keep their natural height, so nothing is stretched artificially. */
+.rd-top {
+  align-items: stretch;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--space-5);
+}
+.rd-card {
+  display: block;
+  min-width: 0;
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+.rd-card__header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+/* First-row cards keep one header height whether or not a compact Edit button sits in it, so their field tables start level. */
+.rd-top .rd-card__header {
+  min-height: 1.875rem;
+}
+.rd-card__header h2 {
+  font-size: var(--font-size-card-title);
+  margin: 0;
+}
+.rd-edit {
+  margin-left: auto;
+}
+.rd-fields {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.rd-fields dt,
+.rd-fields dd {
+  padding: 0.375rem var(--space-3);
+}
+.rd-fields dt {
+  font-size: var(--font-size-field-label);
+}
+.rd-fields dd {
+  font-size: var(--font-size-field-value);
+}
+.rd-fields {
+  --label-value-label-width: 9.5rem;
+}
+/* The sidebar cards (Booking Contact) define the label column width; Reservation Information, stacked above it, uses the
+   same value so the label/value divider of the two cards sits at the same distance from their left edges. */
+.rd-page {
+  --rd-booking-contact-label-width: 10rem;
+}
+.rd-fields.rd-fields--compact-labels {
+  --label-value-label-width: var(--rd-booking-contact-label-width);
+}
+.rd-side .rd-fields {
+  --label-value-label-width: var(--rd-booking-contact-label-width);
+}
+.rd-fields dt {
+  color: var(--color-muted);
+  font-weight: 500;
+  white-space: normal;
+}
+.rd-fields dd {
+  color: var(--color-navy);
+  font-weight: 500;
+}
+.rd-weekday {
+  color: var(--color-muted);
+  margin-left: 0.25rem;
+}
+
+/* Cancellation / No-show Information in the state's own tone. */
+.rd-state-card--danger {
+  background: #fff6f5;
+  border-color: #f4c7c2;
+}
+.rd-state-card--danger .rd-state-icon {
+  color: var(--color-danger);
+}
+.rd-state-card--danger .label-value-rows dt {
+  background: rgb(180 35 24 / 7%);
+}
+.rd-state-card--warning {
+  background: #fffaf0;
+  border-color: #f3d9a6;
+}
+.rd-state-card--warning .rd-state-icon {
+  color: #c2570a;
+}
+.rd-state-card--warning .label-value-rows dt {
+  background: rgb(194 87 10 / 8%);
+}
+.rd-state-card .rd-fields {
+  --label-value-label-width: 12rem;
+}
+.rd-state-card .label-value-rows dd {
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ Tables */
+.rd-table {
+  box-shadow: none;
+  /* Contains the visually-hidden "Actions" header text, which is absolutely positioned, inside the scroll area. */
+  position: relative;
+}
+.rd-table table {
+  min-width: 34rem;
+}
+/* Header and body typography come from the shared table rules (th / td in common/layout.css); only padding is local. */
+.rd-table th {
+  padding: 0.6rem 0.55rem;
+}
+.rd-table td {
+  padding: 0.65rem 0.55rem;
+}
+.rd-table .table-number {
+  text-align: right;
+}
+.rd-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+/* Sortable Activity Log headers: the same look as the Reservation List's sortable headers (label plus a 1rem shared
+   sort icon; the active column uses navy text and a primary-blue icon). The button only replaces the list's link. */
+.rd-sort {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: var(--space-2);
+  letter-spacing: inherit;
+  padding: 0;
+  text-align: left;
+  text-transform: inherit;
+}
+.rd-sort:hover .rd-sort__label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rd-sort:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.rd-sort__icon {
+  align-items: center;
+  color: var(--color-muted);
+  display: inline-flex;
+  flex: none;
+  height: 1rem;
+  width: 1rem;
+}
+.rd-sort__icon > span {
+  display: inline-flex;
+}
+.rd-sort__icon > span[hidden] {
+  display: none;
+}
+.rd-sort__icon svg {
+  height: 1rem;
+  width: 1rem;
+}
+.rd-sortable--active .rd-sort__label {
+  color: var(--color-navy);
+}
+.rd-sortable--active .rd-sort__icon {
+  color: var(--color-primary);
+}
+.rd-cell-with-badge {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+}
+.rd-table td.rd-wrap {
+  min-width: 6.5rem;
+  white-space: normal;
+}
+.rd-table .button-compact {
+  padding: 0.3rem 0.5rem;
+}
+.rd-current-badge {
+  font-size: 0.75rem;
+  height: 1.5rem;
+  padding: 0 0.625rem;
+}
+.rd-total-band {
+  align-items: baseline;
+  background: var(--color-info-surface);
+  border-radius: var(--radius-sm);
+  color: var(--color-primary);
+  display: flex;
+  flex-wrap: wrap;
+  font-weight: 600;
+  gap: var(--space-2) var(--space-5);
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+  padding: 0.85rem var(--space-5);
+}
+.rd-total-band strong {
+  color: var(--color-navy);
+  font-size: 1.125rem;
+}
+
+/* ------------------------------------------------------------------ Money summaries */
+.rd-money-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+}
+.rd-money-row {
+  align-items: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.rd-money-row__action {
+  align-self: center;
+  margin-left: auto;
+}
+.rd-money-cell {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  flex: 1 1 10rem;
+  padding: var(--space-3) var(--space-4);
+}
+.rd-money-cell p {
+  margin: 0;
+}
+.rd-money-cell__label {
+  color: var(--color-muted);
+  font-size: var(--font-size-field-label);
+}
+.rd-money-cell__value {
+  color: var(--color-navy);
+  font-size: 1.0625rem;
+  font-weight: 750;
+  margin-top: 0.125rem;
+}
+.rd-money-cell--total {
+  background: var(--color-info-surface);
+  border-color: #c5dcf2;
+}
+.rd-money-cell--outstanding {
+  background: #fef6e0;
+  border-color: #f6d9a0;
+}
+.rd-money-cell--outstanding .rd-money-cell__value {
+  color: #b45309;
+}
+.rd-money-cell--settled {
+  background: var(--color-success-surface);
+  border-color: #a6e9bf;
+}
+.rd-money-cell--settled .rd-money-cell__value {
+  color: var(--color-success);
+}
+.rd-closed-summary {
+  align-items: start;
+  display: grid;
+  gap: var(--space-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.rd-closed-summary dl {
+  margin: 0;
+}
+.rd-sum-row {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+  padding: 0.55rem var(--space-3);
+}
+.rd-sum-row dt {
+  color: var(--color-muted);
+}
+.rd-sum-row dd {
+  color: var(--color-navy);
+  font-weight: 700;
+  margin: 0;
+  text-align: right;
+}
+.rd-sum-row--total {
+  background: var(--color-info-surface);
+}
+.rd-sum-row--total dt {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+.rd-sum-row--outstanding {
+  background: #fef6e0;
+}
+.rd-sum-row--outstanding dd {
+  color: #b45309;
+}
+.rd-sum-row--settled {
+  background: var(--color-success-surface);
+}
+.rd-sum-row--settled dt,
+.rd-sum-row--settled dd {
+  color: var(--color-success);
+}
+.rd-folio-indicator {
+  align-items: center;
+  display: flex;
+  font-weight: 700;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+.rd-folio-indicator svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.rd-folio-indicator--settled {
+  color: var(--color-success);
+}
+.rd-folio-indicator--review {
+  color: var(--color-warning);
+}
+.rd-note {
+  align-items: center;
+  background: var(--color-info-surface);
+  border-radius: var(--radius-sm);
+  color: var(--color-info);
+  display: flex;
+  font-size: var(--font-size-field-label);
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0.6rem var(--space-3);
+}
+.rd-note svg {
+  flex: none;
+  height: var(--icon-size-action);
+  width: var(--icon-size-action);
+}
+.rd-note--plain {
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0;
+}
+
+/* ------------------------------------------------------------------ Notes */
+.rd-notes {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 4.5rem;
+  padding: var(--space-3);
+}
+.rd-notes__text {
+  color: var(--color-text);
+  flex: 1;
+  font-size: var(--font-size-field-value);
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+.rd-notes__text--full {
+  margin: 0;
+}
+.rd-notes__counter {
+  color: var(--color-muted);
+  font-size: var(--font-size-secondary);
+  margin: 0;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------ Recent Activity */
+.rd-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rd-timeline__item {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 0.75rem minmax(0, 1fr);
+  padding-bottom: var(--space-3);
+  position: relative;
+}
+.rd-timeline__item:last-child {
+  padding-bottom: 0;
+}
+.rd-timeline__item::before {
+  background: var(--color-border);
+  bottom: 0;
+  content: "";
+  left: 0.3125rem;
+  position: absolute;
+  top: 1rem;
+  width: 1px;
+}
+.rd-timeline__item:last-child::before {
+  display: none;
+}
+.rd-timeline__dot {
+  background: #98a2b3;
+  border-radius: 50%;
+  height: 0.625rem;
+  margin-top: 0.3rem;
+  width: 0.625rem;
+}
+.rd-timeline__dot--success {
+  background: #12a150;
+}
+.rd-timeline__dot--danger {
+  background: var(--color-danger);
+}
+.rd-timeline__dot--warning {
+  background: #f59e0b;
+}
+.rd-timeline__body {
+  align-items: baseline;
+  column-gap: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  min-width: 0;
+}
+.rd-timeline__body p {
+  margin: 0;
+}
+.rd-timeline__label {
+  color: var(--color-navy);
+  font-size: var(--font-size-field-value);
+  font-weight: 600;
+}
+.rd-timeline__meta {
+  color: var(--color-muted);
+  font-size: var(--font-size-secondary);
+}
+
+/* ------------------------------------------------------------------ Cancel / No-show dialogs */
+.rd-dialog {
+  border: 0;
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 56px rgb(16 42 67 / 28%);
+  max-height: calc(100vh - 2rem);
+  max-width: calc(100vw - 2rem);
+  padding: 0;
+  width: 32rem;
+}
+.rd-dialog::backdrop {
+  background: rgb(16 42 67 / 45%);
+}
+.rd-dialog__form {
+  padding: var(--space-5);
+}
+.rd-dialog__form h2 {
+  margin-bottom: var(--space-2);
+}
+.rd-dialog__form textarea,
+.rd-dialog__form select {
+  width: 100%;
+}
+.rd-dialog__form [aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.rd-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+  margin-top: var(--space-4);
+}
+
+/* ------------------------------------------------------------------ Responsive */
+/* Three cards need roughly 300px each beside the sidebar; below that the first row becomes two columns, with Reservation
+   Information spanning the full width, then one column on small screens. */
+@media (max-width: 80rem) {
+  .rd-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rd-top > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 64rem) {
+  .rd-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 48rem) {
+  .rd-top,
+  .rd-closed-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rd-top > :last-child {
+    grid-column: auto;
+  }
+  .rd-actions {
+    justify-content: flex-start;
+  }
+  .rd-card {
+    padding: var(--space-4);
+  }
+  .rd-summary {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rd-money-row__action {
+    margin-left: 0;
+  }
+}
+@media (max-width: 30rem) {
+  .rd-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

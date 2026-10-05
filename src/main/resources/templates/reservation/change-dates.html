@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html th:lang="${#locale.language}" xmlns:th="https://www.thymeleaf.org">
+<html th:lang="${#locale.language}" th:with="pageStylesheet='/css/reservation/change-dates.css'" xmlns:th="https://www.thymeleaf.org">
 <head th:replace="~{layout/base :: head(#{reservation.changeDates.title})}"></head>
 <body>
 <div class="app-shell page-reservations">
@@ -7,8 +7,7 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <a class="back-link" th:href="@{/reservations/{id}(id=${reservation.id})}"
-           th:text="#{reservation.modification.back}">Back to reservation</a>
+        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.changeDates(reservation.id, reservation.reservationNumber)})}"></nav>
         <div class="page-header">
             <div>
                 <h1 th:text="#{reservation.changeDates.title}">Change Reservation Dates</h1>
@@ -34,19 +33,56 @@
                th:text="#{reservation.modification.fixErrors}">Please correct the highlighted fields.</p>
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
 
-            <div class="form-grid reservation-details-grid">
-                <div class="form-field">
-                    <label for="newCheckInDate" th:text="#{reservation.changeDates.newCheckIn} + ' *'">New check-in *</label>
-                    <input id="newCheckInDate" name="newCheckInDate" required th:min="${hotelToday}" type="date"
+            <!-- One Stay range picker (the shared one used by Create Reservation and the Reservation List filter). It is only
+                 the UI for the two existing values: the hidden newCheckInDate / newCheckOutDate inputs are what is submitted,
+                 and the server validates them again. -->
+            <div class="form-field change-dates-stay">
+                <label id="cd-stay-label" for="cd-stay-trigger"><span th:text="#{reservation.changeDates.newStay}">New Stay Dates</span> <span aria-hidden="true">*</span></label>
+                <div class="reservation-stay" data-stay-picker data-change-dates-picker
+                     th:attr="data-all-dates=#{reservation.create.stay.range.placeholder}">
+                    <input data-stay-from id="newCheckInDate" name="newCheckInDate" type="hidden"
                            th:value="${dateChangeForm.newCheckInDate == null ? '' : #temporals.format(dateChangeForm.newCheckInDate, 'yyyy-MM-dd')}" />
-                    <p class="field-error" th:errors="*{newCheckInDate}"></p>
-                </div>
-                <div class="form-field">
-                    <label for="newCheckOutDate" th:text="#{reservation.changeDates.newCheckOut} + ' *'">New check-out *</label>
-                    <input id="newCheckOutDate" name="newCheckOutDate" required type="date"
+                    <input data-stay-to id="newCheckOutDate" name="newCheckOutDate" type="hidden"
                            th:value="${dateChangeForm.newCheckOutDate == null ? '' : #temporals.format(dateChangeForm.newCheckOutDate, 'yyyy-MM-dd')}" />
-                    <p class="field-error" th:errors="*{newCheckOutDate}"></p>
+                    <button aria-describedby="newCheckInDate-error newCheckOutDate-error" aria-expanded="false" aria-haspopup="dialog"
+                            aria-labelledby="cd-stay-label cd-stay-summary" aria-required="true"
+                            class="reservation-stay__trigger" data-stay-trigger id="cd-stay-trigger" type="button"
+                            th:attr="aria-invalid=${#fields.hasErrors('newCheckInDate') or #fields.hasErrors('newCheckOutDate')}">
+                        <span class="reservation-stay__summary" data-stay-summary id="cd-stay-summary"
+                              th:classappend="${dateChangeForm.newCheckInDate == null or dateChangeForm.newCheckOutDate == null} ? 'reservation-stay__summary--empty'"
+                              th:text="${dateChangeForm.newCheckInDate != null and dateChangeForm.newCheckOutDate != null}
+                                  ? ${T(com.example.hotel.common.DisplayFormats).formatDate(dateChangeForm.newCheckInDate) + ' → ' + T(com.example.hotel.common.DisplayFormats).formatDate(dateChangeForm.newCheckOutDate)}
+                                  : #{reservation.create.stay.range.placeholder}">21/12/2026 → 23/12/2026</span>
+                        <span class="reservation-stay__trail"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
+                    </button>
+                    <div class="reservation-stay__popover" data-stay-popover hidden role="dialog" th:aria-label="#{reservation.list.picker.title}">
+                        <div class="reservation-stay__fields">
+                            <div class="reservation-stay__field">
+                                <label for="cd-stay-check-in" th:text="#{reservation.list.picker.checkIn}">Check-in</label>
+                                <div class="reservation-stay__input">
+                                    <input data-stay-in-display id="cd-stay-check-in" readonly type="text" />
+                                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                </div>
+                            </div>
+                            <span aria-hidden="true" class="reservation-stay__arrow">→</span>
+                            <div class="reservation-stay__field">
+                                <label for="cd-stay-check-out" th:text="#{reservation.list.picker.checkOut}">Check-out</label>
+                                <div class="reservation-stay__input">
+                                    <input data-stay-out-display id="cd-stay-check-out" readonly type="text" />
+                                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="reservation-stay__calendar" data-stay-calendar></div>
+                        <p class="reservation-stay__hint" data-stay-hint hidden role="status" th:text="#{reservation.list.error.stayOrder}">The stay date range must end after it starts.</p>
+                        <div class="reservation-stay__actions">
+                            <button class="button button-outline-primary" data-stay-clear th:text="#{reservation.list.picker.clear}" type="button">Clear</button>
+                            <button class="button button-primary" data-stay-apply disabled th:text="#{reservation.list.picker.apply}" type="button">Apply</button>
+                        </div>
+                    </div>
                 </div>
+                <p class="field-error" id="newCheckInDate-error" th:errors="*{newCheckInDate}"></p>
+                <p class="field-error" id="newCheckOutDate-error" th:errors="*{newCheckOutDate}"></p>
             </div>
 
             <p class="text-muted" th:text="#{reservation.changeDates.rateNotice}">
@@ -61,5 +97,6 @@
         </form>
     </main>
 </div>
+<script defer th:src="@{/js/reservation/change-dates.js}"></script>
 </body>
 </html>

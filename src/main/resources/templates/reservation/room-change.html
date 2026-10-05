@@ -10,12 +10,6 @@
     <main class="content room-change">
         <div class="room-change-page">
         <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.roomChange(reservationId, currentRoom?.reservationNumber)})}"></nav>
-        <a class="back-link back-link--primary room-change-back" th:href="@{/reservations/{id}(id=${reservationId})}">
-            <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-            <span th:if="${currentRoom != null}"
-                  th:text="#{reservation.roomChange.backToReservation(${currentRoom.reservationNumber})}">Back to Reservation</span>
-            <span th:unless="${currentRoom != null}" th:text="#{reservation.roomChange.title}">Change Room</span>
-        </a>
 
         <div class="page-header room-change-header">
             <div>
@@ -53,7 +47,7 @@
                 <div class="room-change-column">
                     <section class="card room-change-card" th:if="${currentRoom != null}" aria-labelledby="room-change-current-heading">
                         <header class="room-change-card__header">
-                            <svg th:replace="~{layout/icons :: bed}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('room')}"></span>
                             <h2 id="room-change-current-heading" th:text="#{reservation.roomChange.current.title}">Current Room Information</h2>
                         </header>
                         <div class="room-change-current">
@@ -103,7 +97,7 @@
 
                     <section class="card room-change-card" th:if="${currentRoom != null}" aria-labelledby="room-change-stay-heading">
                         <header class="room-change-card__header">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                             <h2 id="room-change-stay-heading" th:text="#{reservation.roomChange.stay.title}">Stay Information</h2>
                         </header>
                         <dl class="label-value-rows label-value-rows--divided label-value-rows--strong">
@@ -143,7 +137,7 @@
                     <section class="card room-change-card" aria-labelledby="room-change-details-heading"
                              th:unless="${currentRoom != null and !currentRoom.roomChangeOpen}">
                         <header class="room-change-card__header">
-                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('roomChange')}"></span>
                             <h2 id="room-change-details-heading" th:text="#{reservation.roomChange.details.title}">Change Details</h2>
                         </header>
                         <div class="room-change-details">
@@ -169,7 +163,7 @@
                 <section class="card room-change-card room-change-card--rooms" aria-labelledby="room-change-rooms-heading"
                          th:unless="${currentRoom != null and !currentRoom.roomChangeOpen}">
                     <header class="room-change-card__header">
-                        <svg th:replace="~{layout/icons :: bed}"></svg>
+                        <span th:replace="~{layout/card-icons :: title('room')}"></span>
                         <h2 id="room-change-rooms-heading" th:text="#{reservation.roomChange.rooms.title}">Available Rooms</h2>
                         <p class="room-change-card__subtitle" th:text="#{reservation.roomChange.rooms.subtitle}">Select a new room for the guest.</p>
                     </header>

@@ -7,7 +7,12 @@
     <aside th:replace="~{layout/sidebar :: sidebar}"></aside>
 
     <main class="content">
-        <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInReassign(form.reservationId)})}"></nav>
+        <th:block th:if="${returnToReservation}">
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.reassignFromReservation(form.reservationId, form.reservationNumber)})}"></nav>
+        </th:block>
+        <th:block th:unless="${returnToReservation}">
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.checkInReassign(form.reservationId)})}"></nav>
+        </th:block>
 
         <div class="page-header">
             <div>
@@ -29,7 +34,7 @@
         <p class="form-hint" th:text="#{checkin.reassign.rateUnchanged}">The booked rate and dates do not change.</p>
 
         <form class="form-card" method="post"
-              th:action="@{/check-in/reservations/{id}/rooms/{roomId}/reassign(id=${form.reservationId},roomId=${form.currentRoomId})}">
+              th:action="${returnToReservation} ? @{/check-in/reservations/{id}/rooms/{roomId}/reassign(id=${form.reservationId},roomId=${form.currentRoomId},from='reservation')} : @{/check-in/reservations/{id}/rooms/{roomId}/reassign(id=${form.reservationId},roomId=${form.currentRoomId})}">
             <input th:name="${_csrf.parameterName}" th:value="${_csrf.token}" type="hidden" />
             <div class="form-field">
                 <label for="targetRoomId" th:text="#{checkin.reassign.replacementRoom}">Replacement Room</label>
@@ -42,7 +47,7 @@
                 <p class="form-hint" th:unless="${#lists.isEmpty(form.candidates)}" th:text="#{checkin.reassign.availableHint}">Only rooms that are ready and free for the booked dates are listed.</p>
             </div>
             <div class="form-actions">
-                <a class="button button-secondary" th:href="@{/check-in/reservations/{id}(id=${form.reservationId})}" th:text="#{common.action.cancel}">Cancel</a>
+                <a class="button button-secondary" th:href="${returnToReservation} ? @{/reservations/{id}(id=${form.reservationId})} : @{/check-in/reservations/{id}(id=${form.reservationId})}" th:text="#{common.action.cancel}">Cancel</a>
                 <button class="button button-primary" th:disabled="${#lists.isEmpty(form.candidates)}" th:text="#{checkin.reassign.confirm}" type="submit">Confirm Reassignment</button>
             </div>
         </form>

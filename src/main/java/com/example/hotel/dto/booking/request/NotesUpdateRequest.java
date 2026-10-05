@@ -8,4 +8,8 @@ import jakarta.validation.constraints.Size;
  *
  * @param notes replacement internal operational notes
  */
-public record NotesUpdateRequest(@Size(max = 5000) String notes) {}
+public record NotesUpdateRequest(@Size(max = MAX_LENGTH) String notes) {
+
+    /** The maximum number of characters Reservation notes may hold. */
+    public static final int MAX_LENGTH = 5000;
+}

@@ -35,12 +35,12 @@
             <div class="form-grid reservation-details-grid">
                 <div class="form-field">
                     <label for="adultCount" th:text="#{reservation.guests.adults} + ' *'">Adults *</label>
-                    <input autocomplete="off" data-numeric="integer" id="adultCount" inputmode="numeric" required th:field="*{adultCount}" type="text" />
+                    <input autocomplete="off" data-stepper data-stepper-min="1" data-numeric="integer" id="adultCount" inputmode="numeric" required th:field="*{adultCount}" type="text" />
                     <p class="field-error" th:errors="*{adultCount}"></p>
                 </div>
                 <div class="form-field">
                     <label for="childCount" th:text="#{reservation.guests.children} + ' *'">Children *</label>
-                    <input autocomplete="off" data-numeric="integer" id="childCount" inputmode="numeric" required th:field="*{childCount}" type="text" />
+                    <input autocomplete="off" data-stepper data-stepper-min="0" data-numeric="integer" id="childCount" inputmode="numeric" required th:field="*{childCount}" type="text" />
                     <p class="field-error" th:errors="*{childCount}"></p>
                 </div>
             </div>

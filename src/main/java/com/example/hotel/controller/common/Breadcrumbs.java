@@ -211,15 +211,58 @@ public final class Breadcrumbs {
      * @return Reservations / Reservation R... / Change Room
      */
     public List<BreadcrumbItem> roomChange(UUID reservationId, String reservationNumber) {
+        return reservationStep(reservationId, reservationNumber, "reservation.roomChange.title");
+    }
+
+    /**
+     * Extend Stay (select the new check-out date, then review the charges), a step of the Reservation workflow. Without a
+     * known Reservation number the Reservation entry is left out, since it could not be named.
+     *
+     * @param reservationId the Reservation identifier
+     * @param reservationNumber the Reservation number shown in the parent entry, or {@code null} when unknown
+     * @return Reservations / Reservation R... / Extend Stay
+     */
+    public List<BreadcrumbItem> stayExtension(UUID reservationId, String reservationNumber) {
+        return reservationStep(reservationId, reservationNumber, "reservation.stayExtension.title");
+    }
+
+    /**
+     * Change Stay Dates (the planned dates of a CONFIRMED Reservation), a step of the Reservation workflow.
+     *
+     * @param reservationId the Reservation identifier
+     * @param reservationNumber the Reservation number shown in the parent entry, or {@code null} when unknown
+     * @return Reservations / Reservation R... / Change Stay Dates
+     */
+    public List<BreadcrumbItem> changeDates(UUID reservationId, String reservationNumber) {
+        return reservationStep(reservationId, reservationNumber, "reservation.changeDates.title");
+    }
+
+    /** Reservations / Reservation R... / the named workflow step, shared by the pages that act on one Reservation. */
+    private List<BreadcrumbItem> reservationStep(UUID reservationId, String reservationNumber, String currentKey) {
         if (reservationNumber == null) {
-            return trail(reservations(), current("reservation.roomChange.title"));
+            return trail(reservations(), current(currentKey));
         }
         List<BreadcrumbItem> parents = FIND.equals(context) ? trail(reservations()) : reservationParents();
         String detail = RESERVATIONS + "/" + reservationId;
         return trail(parents,
                 new BreadcrumbItem(reservationLabel(reservationNumber),
                         allowed("PERM_VIEW_BOOKING") ? (FIND.equals(context) ? detail : keep(detail)) : null),
-                current("reservation.roomChange.title"));
+                current(currentKey));
+    }
+
+    /**
+     * Reassign Room opened from Reservation Detail (a CONFIRMED Reservation's pre-check-in room reassignment). The
+     * Reservation entry leads back to Reservation Detail, where the user came from.
+     *
+     * @param reservationId the Reservation identifier
+     * @param reservationNumber the Reservation number shown in the parent entry
+     * @return Reservations / Reservation R... / Reassign Room
+     */
+    public List<BreadcrumbItem> reassignFromReservation(UUID reservationId, String reservationNumber) {
+        return trail(reservations(),
+                new BreadcrumbItem(reservationLabel(reservationNumber),
+                        allowed("PERM_VIEW_BOOKING") ? RESERVATIONS + "/" + reservationId : null),
+                current("navigation.crumb.reassignRoom"));
     }
 
     // ---------------------------------------------------------------------------------------------- Guests

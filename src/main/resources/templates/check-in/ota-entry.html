@@ -74,7 +74,7 @@
                     <div class="walk-in-column">
                         <section aria-labelledby="walk-in-guest-heading" class="card walk-in-card walk-in-card--guest" data-guest-verification>
                             <header class="walk-in-card__header walk-in-card__header--action">
-                                <svg th:replace="~{layout/icons :: user}"></svg>
+                                <span th:replace="~{layout/card-icons :: title('guest')}"></span>
                                 <h2 id="walk-in-guest-heading" th:text="#{checkin.walkIn.guest.title}">Guest Information</h2>
                                 <div class="walk-in-card__actions">
                                     <button aria-controls="walk-in-guest-search" aria-expanded="false" class="button button-secondary walk-in-search-toggle"
@@ -135,7 +135,7 @@
                         <section aria-labelledby="walk-in-room-heading" class="card walk-in-card walk-in-card--room walk-in-rooms" id="walk-in-rooms"
                                  th:attr="data-invalid=${#fields.hasErrors('rooms')},data-room-url=${canManageRoom} ? @{/rooms/ROOM_ID},data-availability-url=@{/check-in/ota-entry/available-rooms},data-label-select=#{checkin.walkIn.room.select},data-label-rate=#{checkin.walkIn.room.rateLabel},data-msg-prompt=#{checkin.ota.room.hint.dates},data-msg-empty=#{checkin.ota.room.empty},data-msg-loading=#{checkin.walkIn.room.loading},data-msg-error=#{checkin.ota.room.loadError},data-msg-capacity=#{checkin.walkIn.room.capacitySummary},data-msg-available=#{checkin.walkIn.room.available},data-all-types=#{checkin.walkIn.room.type.all}">
                             <header class="walk-in-card__header">
-                                <svg th:replace="~{layout/icons :: bed}"></svg>
+                                <span th:replace="~{layout/card-icons :: title('room')}"></span>
                                 <h2 id="walk-in-room-heading" th:text="#{checkin.walkIn.room.title}">Room Selection</h2>
                             </header>
 
@@ -209,7 +209,7 @@
                     <div class="walk-in-column">
                         <section aria-labelledby="walk-in-stay-heading" class="card walk-in-card walk-in-card--stay">
                             <header class="walk-in-card__header">
-                                <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                                 <h2 id="walk-in-stay-heading" th:text="#{checkin.walkIn.stay.title}">Stay Details</h2>
                             </header>
 
@@ -244,7 +244,7 @@
                                         <span th:text="#{reservation.guests.adults}">Adults</span>
                                         <span aria-hidden="true" class="walk-in-required">*</span>
                                     </label>
-                                    <input autocomplete="off" data-numeric="integer" id="adultCount" inputmode="numeric" required th:field="*{adultCount}" type="text"
+                                    <input autocomplete="off" data-stepper data-stepper-min="1" data-numeric="integer" id="adultCount" inputmode="numeric" required th:field="*{adultCount}" type="text"
                                            th:attr="aria-invalid=${#fields.hasErrors('adultCount')},aria-describedby=${#fields.hasErrors('adultCount')} ? 'adultCount-error'" />
                                     <p class="field-error" th:classappend="${missingPaths.contains('adultCount')} ? 'visually-hidden'" id="adultCount-error" th:if="${#fields.hasErrors('adultCount')}" th:errors="*{adultCount}"></p>
                                 </div>
@@ -253,7 +253,7 @@
                                         <span th:text="#{reservation.guests.children}">Children</span>
                                         <span aria-hidden="true" class="walk-in-required">*</span>
                                     </label>
-                                    <input autocomplete="off" data-numeric="integer" id="childCount" inputmode="numeric" required th:field="*{childCount}" type="text"
+                                    <input autocomplete="off" data-stepper data-stepper-min="0" data-numeric="integer" id="childCount" inputmode="numeric" required th:field="*{childCount}" type="text"
                                            th:attr="aria-invalid=${#fields.hasErrors('childCount')},aria-describedby=${#fields.hasErrors('childCount')} ? 'childCount-error'" />
                                     <p class="field-error" th:classappend="${missingPaths.contains('childCount')} ? 'visually-hidden'" id="childCount-error" th:if="${#fields.hasErrors('childCount')}" th:errors="*{childCount}"></p>
                                 </div>
@@ -267,7 +267,7 @@
 
                         <section aria-labelledby="walk-in-source-heading" class="card walk-in-card walk-in-card--source">
                             <header class="walk-in-card__header">
-                                <svg th:replace="~{layout/icons :: building}"></svg>
+                                <span th:replace="~{layout/card-icons :: title('source')}"></span>
                                 <h2 id="walk-in-source-heading" th:text="#{checkin.ota.source.title}">Booking Source (OTA)</h2>
                             </header>
                             <!-- One real radio group: only the OTA sources are offered, so DIRECT can be neither chosen nor submitted. -->

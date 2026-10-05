@@ -89,7 +89,7 @@
                     <section aria-labelledby="cop-guest-heading" class="card cor-card" id="guest-information"
                              th:with="nationality=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(summaryGuest?.nationality)}">
                         <div class="cor-card__head">
-                            <h2 id="cop-guest-heading"><svg th:replace="~{layout/icons :: user}"></svg><span th:text="#{checkout.complete.guest.title}">Guest Information</span></h2>
+                            <h2 id="cop-guest-heading"><span th:replace="~{layout/card-icons :: title('guest')}"></span><span th:text="#{checkout.complete.guest.title}">Guest Information</span></h2>
                             <a class="button button-outline-primary button-compact" id="view-guest" th:if="${canManageGuest}"
                                th:href="@{/guests/{id}(id=${complete.guestId})}" th:text="#{checkout.complete.guest.viewGuest}">View Guest</a>
                         </div>
@@ -123,7 +123,7 @@
                     </section>
 
                     <section aria-labelledby="cop-stay-heading" class="card cor-card" id="stay-information">
-                        <h2 id="cop-stay-heading"><svg th:replace="~{layout/icons :: calendar}"></svg><span th:text="#{checkout.complete.stay.title}">Stay Information</span></h2>
+                        <h2 id="cop-stay-heading"><span th:replace="~{layout/card-icons :: title('stay')}"></span><span th:text="#{checkout.complete.stay.title}">Stay Information</span></h2>
                         <dl class="cor-facts cop-facts">
                             <div>
                                 <dt th:text="#{checkout.review.stay.roomNo}">Room No.</dt>
@@ -163,7 +163,7 @@
                 </div>
 
                 <section aria-labelledby="cop-financial-heading" class="card cor-card" id="financial-summary" th:if="${financial != null}">
-                    <h2 id="cop-financial-heading"><svg th:replace="~{layout/icons :: note}"></svg><span th:text="#{checkout.complete.financial.title}">Financial Summary</span></h2>
+                    <h2 id="cop-financial-heading"><span th:replace="~{layout/card-icons :: title('money')}"></span><span th:text="#{checkout.complete.financial.title}">Financial Summary</span></h2>
                     <div class="cop-totals">
                         <div class="cop-total cop-total--charges">
                             <span class="cop-total__icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
@@ -191,7 +191,7 @@
                     <div class="cop-pair cop-pair--tables">
                         <section aria-labelledby="cop-charges-heading" id="charges-summary">
                             <div class="cor-card__head">
-                                <h3 id="cop-charges-heading"><svg th:replace="~{layout/icons :: note}"></svg><span th:text="#{checkout.review.charges.title}">Charges Summary</span></h3>
+                                <h3 id="cop-charges-heading"><span th:replace="~{layout/card-icons :: title('money')}"></span><span th:text="#{checkout.review.charges.title}">Charges Summary</span></h3>
                                 <a class="button button-outline-primary button-compact" th:href="@{/reservations/{id}/folio(id=${complete.reservationId},tab='charges')}"
                                    th:text="#{checkout.review.charges.viewAll}">View All Charges</a>
                             </div>
@@ -238,7 +238,7 @@
 
                         <section aria-labelledby="cop-payments-heading" id="payments-summary">
                             <div class="cor-card__head">
-                                <h3 id="cop-payments-heading"><svg th:replace="~{layout/icons :: creditCard}"></svg><span th:text="#{checkout.review.payments.title}">Payments Summary</span></h3>
+                                <h3 id="cop-payments-heading"><span th:replace="~{layout/card-icons :: title('payments')}"></span><span th:text="#{checkout.review.payments.title}">Payments Summary</span></h3>
                                 <a class="button button-outline-primary button-compact" th:href="@{/reservations/{id}/folio(id=${complete.reservationId},tab='payments')}"
                                    th:text="#{checkout.review.payments.viewAll}">View All Payments</a>
                             </div>
@@ -289,7 +289,7 @@
 
             <aside class="cor-side">
                 <section aria-labelledby="cop-post-heading" class="card cor-card" id="post-checkout-status">
-                    <h2 id="cop-post-heading"><svg th:replace="~{layout/icons :: clipboardCheck}"></svg><span th:text="#{checkout.complete.post.title}">Post-Checkout Status</span></h2>
+                    <h2 id="cop-post-heading"><span th:replace="~{layout/card-icons :: title('checklist')}"></span><span th:text="#{checkout.complete.post.title}">Post-Checkout Status</span></h2>
                     <ul class="cop-post">
                         <li class="cop-post__item" id="post-reservation">
                             <span class="cop-post__icon"><svg th:replace="~{layout/icons :: note}"></svg></span>
@@ -332,7 +332,7 @@
 
                 <section aria-labelledby="cop-actions-heading" class="card cor-card" id="next-actions"
                          th:if="${canManageHousekeeping or canViewBooking or (canManageRoom and roomCount > 0)}">
-                    <h2 id="cop-actions-heading"><svg th:replace="~{layout/icons :: checkCircle}"></svg><span th:text="#{checkout.complete.actions.title}">Next Actions</span></h2>
+                    <h2 id="cop-actions-heading"><span th:replace="~{layout/card-icons :: title('nextActions')}"></span><span th:text="#{checkout.complete.actions.title}">Next Actions</span></h2>
                     <div class="cop-actions">
                         <a class="button button-primary" id="go-to-housekeeping" th:if="${canManageHousekeeping}" th:href="@{/housekeeping}">
                             <svg th:replace="~{layout/icons :: bed}"></svg><span th:text="#{checkout.complete.actions.housekeeping}">Go to Housekeeping</span>

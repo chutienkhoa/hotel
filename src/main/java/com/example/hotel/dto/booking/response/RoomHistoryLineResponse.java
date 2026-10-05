@@ -12,6 +12,9 @@ import java.time.Instant;
  * @param reasonDisplay "Initial Check-in" for the seeded assignment, otherwise the Room Change reason
  * @param changedByUsername the username attributed to this assignment
  * @param roomId the identifier of the physical room, used to link to its Room Detail, or {@code null} when not resolved
+ * @param roomTypeName the physical room's Room Type name, or {@code null} when it is not resolved
+ * @param reasonCode the Room Change reason identifier for localized display, or {@code null} for the initial
+ *     Check-in assignment
  */
 public record RoomHistoryLineResponse(
         String roomNumber,
@@ -19,7 +22,29 @@ public record RoomHistoryLineResponse(
         Instant assignedTo,
         String reasonDisplay,
         String changedByUsername,
-        java.util.UUID roomId) {
+        java.util.UUID roomId,
+        String roomTypeName,
+        String reasonCode) {
+
+    /**
+     * Creates a Room History line without the room type and reason code, for existing fixtures.
+     *
+     * @param roomNumber the physical room occupied during this interval
+     * @param assignedFrom the instant this interval started
+     * @param assignedTo the instant this interval ended, or {@code null} when it is the current room
+     * @param reasonDisplay "Initial Check-in" for the seeded assignment, otherwise the Room Change reason
+     * @param changedByUsername the username attributed to this assignment
+     * @param roomId the identifier of the physical room, or {@code null} when not resolved
+     */
+    public RoomHistoryLineResponse(
+            String roomNumber,
+            Instant assignedFrom,
+            Instant assignedTo,
+            String reasonDisplay,
+            String changedByUsername,
+            java.util.UUID roomId) {
+        this(roomNumber, assignedFrom, assignedTo, reasonDisplay, changedByUsername, roomId, null, null);
+    }
 
     /**
      * Creates a Room History line without the room identifier, for existing fixtures that predate room links.
@@ -32,6 +57,6 @@ public record RoomHistoryLineResponse(
      */
     public RoomHistoryLineResponse(
             String roomNumber, Instant assignedFrom, Instant assignedTo, String reasonDisplay, String changedByUsername) {
-        this(roomNumber, assignedFrom, assignedTo, reasonDisplay, changedByUsername, null);
+        this(roomNumber, assignedFrom, assignedTo, reasonDisplay, changedByUsername, null, null, null);
     }
 }

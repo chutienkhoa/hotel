@@ -107,6 +107,14 @@ public class AuditLog {
      *
      * @return the audit timestamp
      */
+    public String getOldValue() {
+        return oldValue;
+    }
+
+    public String getNewValue() {
+        return newValue;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }

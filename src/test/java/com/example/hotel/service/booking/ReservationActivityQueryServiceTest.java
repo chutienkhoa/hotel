@@ -118,6 +118,76 @@ class ReservationActivityQueryServiceTest {
         assertEquals("—", entries.get(0).actorDisplay());
     }
 
+    /** Confirms each entry carries the status in force at that time, replayed from the audited transitions. */
+    @Test
+    void shouldReportTheReservationStatusAtTheTimeOfEachEntry() {
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        AppUserRepository appUserRepository = mock(AppUserRepository.class);
+        UUID reservationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtAscIdAsc("RESERVATION", reservationId))
+                .thenReturn(List.of(
+                        new AuditLog(userId, "CREATE", reservationId, null, "DRAFT"),
+                        new AuditLog(userId, "UPDATE", reservationId, "DRAFT", "DRAFT"),
+                        new AuditLog(userId, "CONFIRM", reservationId, "DRAFT", "CONFIRMED"),
+                        new AuditLog(userId, "UPDATE_NOTES", reservationId, null, null),
+                        new AuditLog(userId, "CHECK_IN", reservationId, "CONFIRMED", "CHECKED_IN"),
+                        new AuditLog(userId, "RECORD_PAYMENT", reservationId, null, "1000000"),
+                        new AuditLog(userId, "CHECK_OUT", reservationId, "CHECKED_IN", "CHECKED_OUT")));
+        when(appUserRepository.findAllById(Set.of(userId))).thenReturn(List.of(appUser(userId, "staff01")));
+
+        List<ReservationActivityEntry> entries =
+                service(auditLogRepository, appUserRepository).findByReservationId(reservationId);
+
+        assertEquals(
+                List.of("DRAFT", "DRAFT", "CONFIRMED", "CONFIRMED", "CHECKED_IN", "CHECKED_IN", "CHECKED_OUT"),
+                entries.stream().map(ReservationActivityEntry::reservationStatus).toList());
+    }
+
+    /** Confirms a cancelled reservation keeps its earlier rows at their own status, and a status is never invented. */
+    @Test
+    void shouldNotInventAStatusTheAuditTrailDoesNotEstablish() {
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        AppUserRepository appUserRepository = mock(AppUserRepository.class);
+        UUID reservationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtAscIdAsc("RESERVATION", reservationId))
+                .thenReturn(List.of(
+                        new AuditLog(userId, "UPDATE_NOTES", reservationId, null, null),
+                        new AuditLog(userId, "CONFIRM", reservationId, "DRAFT", "CONFIRMED"),
+                        new AuditLog(userId, "CANCEL", reservationId, "CONFIRMED", "CANCELLED")));
+        when(appUserRepository.findAllById(Set.of(userId))).thenReturn(List.of(appUser(userId, "staff01")));
+        AuditLogRepository noTransitions = mock(AuditLogRepository.class);
+        UUID other = UUID.randomUUID();
+        when(noTransitions.findByEntityTypeAndEntityIdOrderByCreatedAtAscIdAsc("RESERVATION", other))
+                .thenReturn(List.of(new AuditLog(userId, "UPDATE_NOTES", other, null, null)));
+
+        List<ReservationActivityEntry> entries =
+                service(auditLogRepository, appUserRepository).findByReservationId(reservationId);
+        List<ReservationActivityEntry> unknown = service(noTransitions, appUserRepository).findByReservationId(other);
+
+        assertEquals(List.of("DRAFT", "CONFIRMED", "CANCELLED"),
+                entries.stream().map(ReservationActivityEntry::reservationStatus).toList());
+        assertEquals(null, unknown.get(0).reservationStatus());
+    }
+
+    /** Confirms a draft edit states its own DRAFT status even when no CREATE row precedes it. */
+    @Test
+    void shouldReportDraftForADraftUpdateWithoutAnEarlierCreateRow() {
+        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+        AppUserRepository appUserRepository = mock(AppUserRepository.class);
+        UUID reservationId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        when(auditLogRepository.findByEntityTypeAndEntityIdOrderByCreatedAtAscIdAsc("RESERVATION", reservationId))
+                .thenReturn(List.of(new AuditLog(userId, "UPDATE", reservationId, "DRAFT", "DRAFT")));
+        when(appUserRepository.findAllById(Set.of(userId))).thenReturn(List.of(appUser(userId, "staff01")));
+
+        List<ReservationActivityEntry> entries =
+                service(auditLogRepository, appUserRepository).findByReservationId(reservationId);
+
+        assertEquals("DRAFT", entries.get(0).reservationStatus());
+    }
+
     private ReservationActivityQueryService service(AuditLogRepository auditLogRepository, AppUserRepository appUsers) {
         return new ReservationActivityQueryService(auditLogRepository, appUsers);
     }

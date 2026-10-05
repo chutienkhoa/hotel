@@ -119,6 +119,9 @@ class ReservationModificationPageTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms detail actions obey status, Stay, source and MANAGE_BOOKING visibility rules. */
@@ -179,10 +182,17 @@ class ReservationModificationPageTest {
 
         mockMvc.perform(get("/reservations/{id}/change-dates", RESERVATION_ID).with(manager()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("name=\"newCheckInDate\"")))
+                .andExpect(content().string(containsString("name=\"newCheckInDate\" type=\"hidden\"")))
                 .andExpect(content().string(containsString("value=\"2026-09-24\"")))
-                .andExpect(content().string(containsString("name=\"newCheckOutDate\"")))
+                .andExpect(content().string(containsString("name=\"newCheckOutDate\" type=\"hidden\"")))
                 .andExpect(content().string(containsString("value=\"2026-09-26\"")))
+                .andExpect(content().string(containsString("data-stay-picker")))
+                .andExpect(content().string(containsString("24/09/2026 → 26/09/2026")))
+                .andExpect(content().string(containsString("New Stay Dates")))
+                .andExpect(content().string(not(containsString("type=\"date\""))))
+                .andExpect(content().string(not(containsString("Back to reservation"))))
+                .andExpect(content().string(containsString("aria-label=\"Breadcrumb\"")))
+                .andExpect(content().string(containsString("aria-current=\"page\" class=\"breadcrumb-current\">Change Stay Dates<")))
                 .andExpect(content().string(not(containsString("nightlyRate"))))
                 .andExpect(content().string(not(containsString("3500000"))))
                 .andExpect(content().string(not(containsString("name=\"source\""))))
@@ -191,7 +201,32 @@ class ReservationModificationPageTest {
         mockMvc.perform(get("/reservations/{id}/change-dates", RESERVATION_ID).with(manager())
                         .cookie(new Cookie("pms-lang", "vi")))
                 .andExpect(content().string(containsString("Đổi ngày đặt phòng")))
-                .andExpect(content().string(containsString("Ngày nhận phòng mới")));
+                .andExpect(content().string(containsString("Ngày lưu trú mới")))
+                .andExpect(content().string(not(containsString("Quay lại đặt phòng"))));
+    }
+
+    /**
+     * Regression: a CONFIRMED Reservation has no Stay, and the real {@code StayQueryService.findByReservationId} throws
+     * 404 for that, so the forms must ask {@code existsByReservationId} instead. Models the production behaviour.
+     */
+    @Test
+    void shouldOpenTheFormsForAConfirmedReservationWhoseStayLookupWould404() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CONFIRMED", BookingSource.AGODA));
+        when(stayQueryService.findByReservationId(RESERVATION_ID)).thenThrow(
+                new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Stay not found"));
+        when(stayQueryService.existsByReservationId(RESERVATION_ID)).thenReturn(false);
+
+        mockMvc.perform(get("/reservations/{id}/change-dates", RESERVATION_ID).with(manager()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("name=\"newCheckInDate\"")));
+        mockMvc.perform(get("/reservations/{id}/correct-ota-reference", RESERVATION_ID).with(manager()))
+                .andExpect(status().isOk());
+
+        when(stayQueryService.existsByReservationId(RESERVATION_ID)).thenReturn(true);
+        mockMvc.perform(get("/reservations/{id}/change-dates", RESERVATION_ID).with(manager()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION_ID));
     }
 
     /** Confirms OTA form exposes only the reference, displays source read-only and localizes EN/VI text. */

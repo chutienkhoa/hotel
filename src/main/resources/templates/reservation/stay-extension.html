@@ -9,10 +9,7 @@
 
     <main class="content stay-extension">
         <div class="stay-extension-page">
-            <a class="back-link back-link--primary stay-extension-back" th:href="@{/reservations/{id}(id=${preview.reservationId})}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{reservation.stayExtension.backToReservation(${preview.reservationNumber})}">Back to Reservation</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.stayExtension(preview.reservationId, preview.reservationNumber)})}"></nav>
 
             <div class="page-header stay-extension-header">
                 <div>
@@ -43,7 +40,7 @@
                      summary on the row below. -->
                     <section class="card stay-extension-card stay-extension-zone--current" aria-labelledby="stay-extension-current-heading">
                         <header class="stay-extension-card__header">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                             <h2 id="stay-extension-current-heading" th:text="#{reservation.stayExtension.current.title}">Current Stay Information</h2>
                         </header>
                         <div class="stay-extension-current">
@@ -102,7 +99,7 @@
 
                     <section class="card stay-extension-card stay-extension-zone--rate" aria-labelledby="stay-extension-rate-heading">
                         <header class="stay-extension-card__header">
-                            <svg th:replace="~{layout/icons :: coins}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('money')}"></span>
                             <h2 id="stay-extension-rate-heading" th:text="#{reservation.stayExtension.rate.title}">Rate Information</h2>
                         </header>
                         <p class="stay-extension-note">
@@ -152,7 +149,7 @@
 
                     <section class="card stay-extension-card stay-extension-card--select stay-extension-zone--select" aria-labelledby="stay-extension-select-heading">
                         <header class="stay-extension-card__header">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                             <h2 id="stay-extension-select-heading" th:text="#{reservation.stayExtension.select.title}">Select New Check-out Date</h2>
                         </header>
 
@@ -264,7 +261,7 @@
 
                     <section class="card stay-extension-card stay-extension-zone--summary" aria-labelledby="stay-extension-summary-heading">
                         <header class="stay-extension-card__header">
-                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                             <h2 id="stay-extension-summary-heading" th:text="#{reservation.stayExtension.summary.title}">New Stay Summary (After Extension)</h2>
                         </header>
                         <div class="stay-extension-live" data-live="summary">

@@ -21,7 +21,10 @@
                 <form class="rc-cancel-form" data-discard-form data-confirm-severity="WARNING" method="get"
                       th:action="@{/reservations}"
                       th:attr="data-confirm-title=#{reservation.create.discard.title},data-confirm-message=#{reservation.create.discard.message},data-confirm-label=#{reservation.create.discard.confirm}">
-                    <button class="button button-secondary" th:text="#{common.action.cancel}" type="submit">Cancel</button>
+                    <button class="button button-primary" type="submit">
+                        <svg th:replace="~{layout/icons :: close}"></svg>
+                        <span th:text="#{common.action.cancel}">Cancel</span>
+                    </button>
                 </form>
                 <button class="button button-primary" data-save-draft form="reservation-create-form" type="submit"
                         th:attr="data-loading-text=#{reservation.create.action.saving}">
@@ -43,7 +46,7 @@
                     <!-- 1. Primary Guest -->
                     <section aria-labelledby="rc-guest-heading" class="card rc-card" id="rc-guest">
                         <header class="rc-card__header">
-                            <svg th:replace="~{layout/icons :: user}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('guest')}"></span>
                             <h2 id="rc-guest-heading" th:text="#{reservation.create.guest.title}">Primary Guest</h2>
                         </header>
 
@@ -170,7 +173,7 @@
                     <!-- 2. Stay Details -->
                     <section aria-labelledby="rc-stay-heading" class="card rc-card" id="rc-stay">
                         <header class="rc-card__header">
-                            <svg th:replace="~{layout/icons :: calendar}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                             <h2 id="rc-stay-heading" th:text="#{reservation.create.stay.title}">Stay Details</h2>
                         </header>
 
@@ -193,7 +196,7 @@
                                               th:classappend="${reservationForm.checkInDate == null or reservationForm.checkOutDate == null} ? 'reservation-stay__summary--empty'"
                                               th:text="${reservationForm.checkInDate != null and reservationForm.checkOutDate != null}
                                                   ? ${T(com.example.hotel.common.DisplayFormats).formatDate(reservationForm.checkInDate) + ' → ' + T(com.example.hotel.common.DisplayFormats).formatDate(reservationForm.checkOutDate)}
-                                                  : #{reservation.create.stay.range.placeholder}">Select check-in and check-out dates</span>
+                                                  : #{reservation.create.stay.range.placeholder}">Select stay dates</span>
                                         <span class="reservation-stay__trail"><svg th:replace="~{layout/icons :: calendar}"></svg></span>
                                     </button>
                                     <div class="reservation-stay__popover" data-stay-popover hidden role="dialog" th:aria-label="#{reservation.list.picker.title}">
@@ -250,14 +253,14 @@
                         <div class="rc-grid rc-grid--guests">
                             <div class="form-field">
                                 <label for="adultCount"><span th:text="#{reservation.create.stay.adults}">Adults</span> <span aria-hidden="true" class="rc-required">*</span></label>
-                                <input aria-describedby="adultCount-error" aria-required="true" autocomplete="off" data-numeric="integer"
+                                <input aria-describedby="adultCount-error" aria-required="true" autocomplete="off" data-stepper data-stepper-min="1" data-numeric="integer"
                                        id="adultCount" inputmode="numeric"
                                        th:attr="aria-invalid=${#fields.hasErrors('adultCount')}" th:field="*{adultCount}" type="text" />
                                 <p class="field-error" id="adultCount-error" th:text="${#fields.hasErrors('adultCount')} ? ${#strings.listJoin(#fields.errors('adultCount'), ' ')} : ''"></p>
                             </div>
                             <div class="form-field">
                                 <label for="childCount" th:text="#{reservation.create.stay.children}">Children</label>
-                                <input aria-describedby="childCount-error" autocomplete="off" data-numeric="integer"
+                                <input aria-describedby="childCount-error" autocomplete="off" data-stepper data-stepper-min="0" data-numeric="integer"
                                        id="childCount" inputmode="numeric"
                                        th:attr="aria-invalid=${#fields.hasErrors('childCount')}" th:field="*{childCount}" type="text" />
                                 <p class="field-error" id="childCount-error" th:text="${#fields.hasErrors('childCount')} ? ${#strings.listJoin(#fields.errors('childCount'), ' ')} : ''"></p>
@@ -277,7 +280,7 @@
                     <!-- 3. Rooms & Rates -->
                     <section aria-labelledby="rc-rooms-heading" class="card rc-card" id="rc-rooms">
                         <header class="rc-card__header">
-                            <svg th:replace="~{layout/icons :: bed}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('room')}"></span>
                             <h2 id="rc-rooms-heading" th:text="#{reservation.create.rooms.title}">Rooms &amp; Rates</h2>
                         </header>
 
@@ -333,7 +336,7 @@
                     <!-- 4. Booking Contact -->
                     <section aria-labelledby="rc-contact-heading" class="card rc-card" id="rc-contact">
                         <header class="rc-card__header">
-                            <svg th:replace="~{layout/icons :: user}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('contact')}"></span>
                             <h2 id="rc-contact-heading" th:text="#{reservation.contact.label}">Booking Contact</h2>
                         </header>
                         <div class="rc-grid rc-grid--contact">
@@ -366,7 +369,7 @@
                     <!-- 5. Notes -->
                     <section aria-labelledby="rc-notes-heading" class="card rc-card" id="rc-notes">
                         <header class="rc-card__header">
-                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('notes')}"></span>
                             <h2 id="rc-notes-heading" th:text="#{reservation.create.notes.title}">Notes</h2>
                         </header>
                         <div class="form-field">
@@ -382,7 +385,7 @@
                 <!-- Reservation Summary: a preview of the DRAFT being created, updated as the form changes. -->
                 <aside aria-labelledby="rc-summary-heading" class="card rc-summary" data-summary>
                     <header class="rc-card__header">
-                        <svg th:replace="~{layout/icons :: note}"></svg>
+                        <span th:replace="~{layout/card-icons :: title('reservation')}"></span>
                         <h2 id="rc-summary-heading" th:text="#{reservation.create.summary.title}">Reservation Summary</h2>
                     </header>
                     <!-- One Label | Value grid for the whole summary: every value starts at the same position. -->

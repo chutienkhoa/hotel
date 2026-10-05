@@ -1,0 +1,15 @@
+/* Prepayments page (Task33): the recorded-prepayments table with its existing Refund and Void operations. The action
+   cell scrolls with the table like any other column; it is never sticky or frozen. */
+.prepayment-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--space-3);
+}
+.prepayment-action-form {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+.prepayment-action-form input[type="text"] {
+  min-width: 11rem;
+}

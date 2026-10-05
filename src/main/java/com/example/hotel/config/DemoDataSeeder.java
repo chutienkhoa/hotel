@@ -95,6 +95,7 @@ public class DemoDataSeeder {
         if (markerCount != null && markerCount > 0) {
             UUID existingAuditUserId = deterministicId(MARKER_USERNAME);
             LocalDate existingToday = LocalDate.now(dashboardClock);
+            seedReservationActivityHistory(jdbcTemplate, existingAuditUserId);
             insertAdditionalRevenues(jdbcTemplate, existingAuditUserId, existingToday);
             List<UUID> existingStaffIds =
                     insertStaff(jdbcTemplate, existingAuditUserId, existingToday, timestamp(dashboardClock.instant()));
@@ -114,12 +115,89 @@ public class DemoDataSeeder {
         List<UUID> roomIds = insertRooms(jdbcTemplate, roomTypes, roomNumbers, auditUserId, nowTimestamp);
         List<UUID> guestIds = insertGuests(jdbcTemplate, auditUserId, nowTimestamp);
         insertReservations(jdbcTemplate, guestIds, roomIds, roomNumbers, auditUserId, today, nowTimestamp);
+        seedReservationActivityHistory(jdbcTemplate, auditUserId);
         setOperationalRoomMix(jdbcTemplate, roomIds, auditUserId, nowTimestamp);
         insertExpenses(jdbcTemplate, auditUserId, today);
         insertAdditionalRevenues(jdbcTemplate, auditUserId, today);
         List<UUID> staffIds = insertStaff(jdbcTemplate, auditUserId, today, nowTimestamp);
         insertDailyWorkRecords(jdbcTemplate, staffIds, auditUserId, today);
         seedOccupancyAndInventoryHistory(jdbcTemplate, auditUserId, today, nowTimestamp);
+    }
+
+    /**
+     * Idempotently gives every demo Reservation the audit history that the production flows would have written to
+     * reach its current status, because seeded Reservations are inserted directly in their final status and would
+     * otherwise have an empty Activity Log. This is DEV-ONLY synthetic data: the seeder is only registered under the
+     * {@code dev} profile, every statement is limited to demo-marked Reservations that have no audit row yet, and the
+     * actor is the demo marker user. Each row records the same action and old/new status values as the matching
+     * {@code ReservationService} operation (CREATE, CONFIRM, CHECK_IN, CHECK_OUT, CANCEL, NO_SHOW), timed
+     * chronologically from the Reservation's reserved time and, where present, its Stay's actual check-in/check-out.
+     *
+     * @param jdbcTemplate JDBC access used to read demo Reservations and insert their audit rows
+     * @param auditUserId demo marker user recorded as the actor of every seeded activity
+     */
+    private void seedReservationActivityHistory(JdbcTemplate jdbcTemplate, UUID auditUserId) {
+        List<Map<String, Object>> reservations = jdbcTemplate.queryForList(
+                "SELECT r.id AS id, r.status AS status, r.reserved_at AS reserved_at, "
+                        + "r.check_in_date AS check_in_date, s.actual_check_in_at AS checked_in_at, "
+                        + "s.actual_check_out_at AS checked_out_at "
+                        + "FROM reservation r LEFT JOIN stay s ON s.reservation_id = r.id "
+                        + "WHERE r.notes = ? AND NOT EXISTS (SELECT 1 FROM audit_log a "
+                        + "WHERE a.entity_type = 'RESERVATION' AND a.entity_id = r.id) "
+                        + "ORDER BY r.reserved_at, r.id",
+                DEMO_RESERVATION_NOTES);
+        for (Map<String, Object> reservation : reservations) {
+            UUID reservationId = (UUID) reservation.get("id");
+            String status = (String) reservation.get("status");
+            Instant reservedAt = ((Timestamp) reservation.get("reserved_at")).toInstant();
+            Instant confirmedAt = reservedAt.plus(java.time.Duration.ofMinutes(5));
+            LocalDate checkInDate = ((java.sql.Date) reservation.get("check_in_date")).toLocalDate();
+            Timestamp checkedInAt = (Timestamp) reservation.get("checked_in_at");
+            Timestamp checkedOutAt = (Timestamp) reservation.get("checked_out_at");
+
+            insertReservationActivity(jdbcTemplate, auditUserId, reservationId, "CREATE", null, "DRAFT", reservedAt);
+            switch (status) {
+                case "CONFIRMED" -> insertReservationActivity(
+                        jdbcTemplate, auditUserId, reservationId, "CONFIRM", "DRAFT", "CONFIRMED", confirmedAt);
+                case "CANCELLED" -> {
+                    insertReservationActivity(
+                            jdbcTemplate, auditUserId, reservationId, "CONFIRM", "DRAFT", "CONFIRMED", confirmedAt);
+                    insertReservationActivity(
+                            jdbcTemplate, auditUserId, reservationId, "CANCEL", "CONFIRMED", "CANCELLED",
+                            reservedAt.plus(java.time.Duration.ofDays(2)));
+                }
+                case "NO_SHOW" -> {
+                    insertReservationActivity(
+                            jdbcTemplate, auditUserId, reservationId, "CONFIRM", "DRAFT", "CONFIRMED", confirmedAt);
+                    insertReservationActivity(
+                            jdbcTemplate, auditUserId, reservationId, "NO_SHOW", "CONFIRMED", "NO_SHOW",
+                            checkInDate.atTime(23, 0).atZone(BUSINESS_ZONE).toInstant());
+                }
+                case "CHECKED_IN", "CHECKED_OUT" -> {
+                    insertReservationActivity(
+                            jdbcTemplate, auditUserId, reservationId, "CONFIRM", "DRAFT", "CONFIRMED", confirmedAt);
+                    insertReservationActivity(
+                            jdbcTemplate, auditUserId, reservationId, "CHECK_IN", "CONFIRMED", "CHECKED_IN",
+                            checkedInAt.toInstant());
+                    if ("CHECKED_OUT".equals(status)) {
+                        insertReservationActivity(
+                                jdbcTemplate, auditUserId, reservationId, "CHECK_OUT", "CHECKED_IN", "CHECKED_OUT",
+                                checkedOutAt.toInstant());
+                    }
+                }
+                default -> { }
+            }
+        }
+    }
+
+    private void insertReservationActivity(
+            JdbcTemplate jdbcTemplate, UUID auditUserId, UUID reservationId, String action, String oldStatus,
+            String newStatus, Instant occurredAt) {
+        jdbcTemplate.update(
+                "INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, old_value, new_value, "
+                        + "ip_address, created_at) VALUES (?, ?, ?, 'RESERVATION', ?, ?, ?, NULL, ?)",
+                deterministicId(PREFIX + "AUDIT-" + action + "-" + reservationId), auditUserId, action,
+                reservationId, oldStatus, newStatus, timestamp(occurredAt));
     }
 
     /**

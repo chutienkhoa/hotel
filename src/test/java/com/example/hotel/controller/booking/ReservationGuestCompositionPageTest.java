@@ -108,6 +108,9 @@ class ReservationGuestCompositionPageTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the Create Reservation form defaults to Adults = 1, Children = 0 with whole-number constraints. */
@@ -189,16 +192,16 @@ class ReservationGuestCompositionPageTest {
                 .andExpect(content().string(containsString("Số người lớn phải từ 1 trở lên.")));
     }
 
-    /** Confirms Reservation Detail shows Adults, Children and the derived Total Guests in English. */
+    /** Confirms Reservation Detail shows Adults and Children (no derived Total Guests row) in English. */
     @Test
     void shouldShowGuestCompositionOnReservationDetail() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail(3, 1));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager()))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Adults: 3")))
-                .andExpect(content().string(containsString("Children: 1")))
-                .andExpect(content().string(containsString("Total Guests: 4")))
+                .andExpect(content().string(containsString("3 adults")))
+                .andExpect(content().string(containsString("1 child")))
+                .andExpect(content().string(not(containsString(">Total Guests<"))))
                 .andExpect(content().string(not(containsString("Occupancy"))));
     }
 
@@ -208,9 +211,9 @@ class ReservationGuestCompositionPageTest {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail(2, 0));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager()).cookie(new Cookie("pms-lang", "vi")))
-                .andExpect(content().string(containsString("Người lớn: 2")))
-                .andExpect(content().string(containsString("Trẻ em: 0")))
-                .andExpect(content().string(containsString("Tổng số khách: 2")));
+                .andExpect(content().string(containsString("2 người lớn")))
+                .andExpect(content().string(containsString("0 trẻ em")))
+                .andExpect(content().string(not(containsString(">Tổng số khách<"))));
     }
 
     /** Confirms the Walk-in review page shows the counts and carries them in the confirm form. */

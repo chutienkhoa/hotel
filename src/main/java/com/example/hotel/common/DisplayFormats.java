@@ -39,6 +39,26 @@ public final class DisplayFormats {
     }
 
     /**
+     * Formats the calendar date of an Instant in the hotel display timezone as {@code dd/MM/yyyy}.
+     *
+     * @param instant the instant to format, or {@code null}
+     * @return the formatted display string, or {@code null} when the instant is {@code null}
+     */
+    public static String formatInstantDate(Instant instant) {
+        return instant == null ? null : DATE_FORMATTER.format(instant.atZone(DISPLAY_ZONE));
+    }
+
+    /**
+     * Formats the time of day of an Instant in the hotel display timezone as {@code HH:mm} (24-hour, no seconds).
+     *
+     * @param instant the instant to format, or {@code null}
+     * @return the formatted display string, or {@code null} when the instant is {@code null}
+     */
+    public static String formatInstantTime(Instant instant) {
+        return instant == null ? null : TIME_FORMATTER.format(instant.atZone(DISPLAY_ZONE));
+    }
+
+    /**
      * Formats a date-only value as {@code dd/MM/yyyy}.
      *
      * @param date the date to format, or {@code null}

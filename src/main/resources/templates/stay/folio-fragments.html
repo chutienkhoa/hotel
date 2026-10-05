@@ -4,7 +4,7 @@
 <section aria-labelledby="folio-activity-heading" class="card folio-section" th:fragment="recentActivity">
     <div class="card-header-row folio-section__head">
         <h2 id="folio-activity-heading">
-            <svg th:replace="~{layout/icons :: clock}"></svg>
+            <span th:replace="~{layout/card-icons :: title('activity')}"></span>
             <span th:text="#{payment.folio.activity.title}">Recent Activity</span>
         </h2>
     </div>

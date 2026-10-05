@@ -18,6 +18,7 @@ import com.example.hotel.repository.common.AppUserRepository;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.security.SessionUserDetailsService;
 import com.example.hotel.service.booking.ReservationActivityQueryService;
+import com.example.hotel.service.booking.ReservationDetailEligibilityService;
 import com.example.hotel.service.customer.GuestQueryService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
@@ -107,6 +108,9 @@ class ReservationDetailRoutingTest {
     private ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private AppUserRepository appUserRepository;
 
     @MockitoBean
@@ -154,13 +158,12 @@ class ReservationDetailRoutingTest {
     }
 
     /**
-     * Confirms the new Void Prepayment action renders correctly for an eligible CONFIRMED
-     * Reservation (no Stay, a PAID prepayment, MANAGE_PAYMENT authority) — the exact branch the Void
-     * Prepayment form lives in, and the one the earlier, now-replaced diagnostic test never actually
-     * exercised (it authenticated with VIEW_BOOKING only, so prepaymentSummary was always null).
+     * Confirms Reservation Detail shows only the prepayment summary and navigation for an eligible CONFIRMED
+     * Reservation (no Stay, a PAID prepayment, MANAGE_PAYMENT authority): Refund and Void are performed on the
+     * Prepayments page, so no prepayment mutation form is rendered on Detail.
      */
     @Test
-    void shouldRenderVoidPrepaymentActionForEligibleConfirmedReservation() throws Exception {
+    void shouldShowPrepaymentSummaryWithoutRefundOrVoidFormsOnDetail() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
         when(stayQueryService.existsByReservationId(RESERVATION_ID)).thenReturn(false);
         when(reservationActivityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of());
@@ -177,9 +180,13 @@ class ReservationDetailRoutingTest {
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
                                 new SimpleGrantedAuthority("PERM_MANAGE_PAYMENT"))))
                 .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"view-prepayments\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
-                        "/reservations/" + RESERVATION_ID + "/prepayments/" + paymentId + "/void")))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("Void Prepayment")));
+                        "/reservations/" + RESERVATION_ID + "/prepayments\"")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString(
+                        "/prepayments/" + paymentId))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Void Prepayment"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Refund Prepayment"))));
     }
 
     /** Confirms a genuinely nonexistent Reservation still produces the existing not-found behavior, not a routing bug. */

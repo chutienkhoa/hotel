@@ -107,6 +107,9 @@ class ReservationGuestCompositionUpdatePageTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the detail action appears only for a CONFIRMED reservation and a booking manager. */
@@ -116,7 +119,7 @@ class ReservationGuestCompositionUpdatePageTest {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail("CONFIRMED", 2, 1, List.of()));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager()))
                 .andExpect(content().string(containsString(href)))
-                .andExpect(content().string(containsString("Edit Guest Composition")));
+                .andExpect(content().string(containsString("Edit Guests")));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer()))
                 .andExpect(content().string(not(containsString(href))));
         for (String status : List.of("DRAFT", "CANCELLED", "NO_SHOW", "CHECKED_IN", "CHECKED_OUT")) {

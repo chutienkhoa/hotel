@@ -29,6 +29,7 @@ import com.example.hotel.service.booking.FolioReconciliationService;
 import com.example.hotel.service.booking.PaymentService;
 import com.example.hotel.service.booking.PrepaymentService;
 import com.example.hotel.service.booking.ReservationActivityQueryService;
+import com.example.hotel.service.booking.ReservationDetailEligibilityService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalanceService;
@@ -108,6 +109,9 @@ class ReservationListPageTest {
 
     @MockitoBean
     private ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
+    private ReservationDetailEligibilityService detailEligibilityService;
 
     @MockitoBean
     private JwtService jwtService;

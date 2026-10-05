@@ -347,7 +347,7 @@ class RoomChangePageControllerTest {
 
     /** Confirms the shared breadcrumb (Reservations / Reservation / Change Room) sits above the Back link, in English. */
     @Test
-    void shouldRenderBreadcrumbAboveBackLinkInEnglish() throws Exception {
+    void shouldRenderBreadcrumbWithoutSeparateBackLinkInEnglish() throws Exception {
         when(roomChangeService.formView(RESERVATION_ID, ROOM_ID)).thenReturn(openFormView(false));
         when(roomChangeService.candidateRooms(RESERVATION_ID, ROOM_ID)).thenReturn(List.of());
 
@@ -363,8 +363,8 @@ class RoomChangePageControllerTest {
         org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("href=\"/reservations/" + RESERVATION_ID + "\""));
         org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains(">Reservation R20260917-000001<"));
         org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("aria-current=\"page\" class=\"breadcrumb-current\">Change Room<"));
-        org.junit.jupiter.api.Assertions.assertTrue(body.indexOf("aria-label=\"Breadcrumb\"") < body.indexOf("room-change-back"));
-        org.junit.jupiter.api.Assertions.assertTrue(body.contains("room-change-back"), "the contextual Back link remains");
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("room-change-back"), "no separate Back link row");
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("Back to Reservation"));
     }
 
     /** Confirms the breadcrumb is translated in Vietnamese. */

@@ -80,7 +80,7 @@
                         <section aria-labelledby="folio-charges-summary-heading" class="card folio-section">
                             <div class="card-header-row folio-section__head">
                                 <h2 id="folio-charges-summary-heading">
-                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:replace="~{layout/card-icons :: title('money')}"></span>
                                     <span th:text="#{payment.folio.charges.title}">Charges</span>
                                 </h2>
                                 <a class="button button-outline-primary button-compact"
@@ -139,7 +139,7 @@
                         <section aria-labelledby="folio-payments-summary-heading" class="card folio-section">
                             <div class="card-header-row folio-section__head">
                                 <h2 id="folio-payments-summary-heading">
-                                    <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                                    <span th:replace="~{layout/card-icons :: title('payments')}"></span>
                                     <span th:text="#{payment.folio.payments.title}">Payments</span>
                                 </h2>
                                 <a class="button button-outline-primary button-compact"
@@ -190,7 +190,7 @@
                         <section aria-labelledby="folio-outstanding-heading" class="card folio-section">
                             <div class="card-header-row folio-section__head">
                                 <h2 id="folio-outstanding-heading">
-                                    <svg th:replace="~{layout/icons :: coins}"></svg>
+                                    <span th:replace="~{layout/card-icons :: title('money')}"></span>
                                     <span th:text="#{payment.folio.outstanding.title}">Outstanding Balance</span>
                                 </h2>
                             </div>
@@ -225,7 +225,7 @@
                         <section aria-labelledby="folio-stay-heading" class="card folio-section">
                             <div class="card-header-row folio-section__head">
                                 <h2 id="folio-stay-heading">
-                                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                                    <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                                     <span th:text="#{payment.folio.stay.title}">Stay Summary</span>
                                 </h2>
                             </div>
@@ -294,7 +294,7 @@
                     <section aria-labelledby="folio-charges-heading" class="card folio-section folio-charges__main">
                         <div class="card-header-row folio-section__head">
                             <h2 id="folio-charges-heading">
-                                <svg th:replace="~{layout/icons :: note}"></svg>
+                                <span th:replace="~{layout/card-icons :: title('money')}"></span>
                                 <span th:text="#{payment.folio.charges.title}">Charges</span>
                             </h2>
                             <button class="button button-outline-primary button-compact" data-dialog-open="folio-add-charge-dialog"
@@ -394,7 +394,7 @@
                         <section aria-labelledby="folio-charge-detail-heading" class="card folio-section">
                             <div class="card-header-row folio-section__head">
                                 <h2 id="folio-charge-detail-heading">
-                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:replace="~{layout/card-icons :: title('money')}"></span>
                                     <span th:text="#{payment.folio.charges.detail.title}">Charge Detail</span>
                                 </h2>
                             </div>
@@ -602,7 +602,7 @@
                                         <span th:text="#{payment.folio.field.quantity}">Quantity</span>
                                         <span class="form-required" aria-hidden="true">*</span>
                                     </label>
-                                    <input autocomplete="off" data-numeric="integer" id="itemized-charge-quantity" inputmode="numeric" required th:field="*{quantity}" type="text"
+                                    <input autocomplete="off" data-stepper data-stepper-min="1" data-numeric="integer" id="itemized-charge-quantity" inputmode="numeric" required th:field="*{quantity}" type="text"
                                            th:attr="data-required-message=#{payment.folio.addCharge.required.quantity}" />
                                     <p class="field-error folio-client-error" data-client-error-for="itemized-charge-quantity" hidden></p>
                                     <p class="field-error" th:errors="*{quantity}"></p>
@@ -653,7 +653,7 @@
                     <section aria-labelledby="folio-payments-heading" class="card folio-section folio-charges__main">
                         <div class="card-header-row folio-section__head">
                             <h2 id="folio-payments-heading">
-                                <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                                <span th:replace="~{layout/card-icons :: title('payments')}"></span>
                                 <span th:text="#{payment.folio.payments.title}">Payments</span>
                             </h2>
                             <button class="button button-outline-primary button-compact" data-dialog-open="folio-record-payment-dialog"
@@ -753,7 +753,7 @@
                         <section aria-labelledby="folio-payment-detail-heading" class="card folio-section">
                             <div class="card-header-row folio-section__head">
                                 <h2 id="folio-payment-detail-heading">
-                                    <svg th:replace="~{layout/icons :: note}"></svg>
+                                    <span th:replace="~{layout/card-icons :: title('payments')}"></span>
                                     <span th:text="#{payment.folio.payments.detail.title}">Payment Detail</span>
                                 </h2>
                             </div>

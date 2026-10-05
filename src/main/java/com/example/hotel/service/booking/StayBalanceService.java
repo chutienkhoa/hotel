@@ -52,6 +52,20 @@ public class StayBalanceService {
      * @param amount aggregate result that can be {@code null}
      * @return the supplied amount, or zero when no matching records exist
      */
+    /**
+     * Splits the Stay's ACTIVE Charges into ROOM Charges and additional (non-ROOM) Charges for presentation. The two
+     * parts use the same ACTIVE filter as {@link #calculate}, so together they equal its Total Charges.
+     *
+     * @param stayId owning Stay identifier
+     * @return the Room Charges and Additional Charges totals
+     */
+    @Transactional(readOnly = true)
+    public StayChargeBreakdown chargeBreakdown(UUID stayId) {
+        return new StayChargeBreakdown(
+                zeroIfNull(chargeRepository.sumRoomAmountByStayId(stayId)),
+                zeroIfNull(chargeRepository.sumAdditionalAmountByStayId(stayId)));
+    }
+
     private BigDecimal zeroIfNull(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount;
     }

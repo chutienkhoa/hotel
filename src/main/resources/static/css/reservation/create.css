@@ -72,13 +72,8 @@
   gap: var(--space-2);
   margin-bottom: var(--space-3);
 }
-.rc-card__header svg {
-  flex: none;
-  height: var(--icon-size-section);
-  width: var(--icon-size-section);
-}
 .rc-card__header h2 {
-  font-size: 1.0625rem;
+  font-size: var(--font-size-card-title);
   margin: 0;
 }
 .rc-subheading {

@@ -91,6 +91,9 @@ class ReservationDetailLifecycleTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms a DRAFT reservation still shows the booked-room presentation. */
@@ -100,7 +103,7 @@ class ReservationDetailLifecycleTest {
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(user("admin").authorities(allAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"assigned-rooms-heading\"")))
+                .andExpect(content().string(containsString("id=\"booked-rooms-heading\"")))
                 .andExpect(content().string(not(containsString("id=\"current-rooms-heading\""))))
                 .andExpect(content().string(not(containsString("id=\"room-history-heading\""))));
     }
@@ -118,12 +121,13 @@ class ReservationDetailLifecycleTest {
                 List.of(new CurrentRoomResponse(UUID.randomUUID(), ROOM_ID, "305", Instant.parse("2026-09-17T03:00:00Z"))));
         when(stayRoomAssignmentQueryService.findHistory(RESERVATION_ID)).thenReturn(List.of(
                 new RoomHistoryLineResponse("201", Instant.parse("2026-09-16T14:00:00Z"), Instant.parse("2026-09-17T03:00:00Z"), "Initial Check-in", "staff01"),
-                new RoomHistoryLineResponse("305", Instant.parse("2026-09-17T03:00:00Z"), null, "Guest request", "manager01")));
+                new RoomHistoryLineResponse("305", Instant.parse("2026-09-17T03:00:00Z"), null, "Guest request", "manager01",
+                        null, "Double Room", "GUEST_REQUEST")));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("staff").authorities(allAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(not(containsString("id=\"assigned-rooms-heading\""))))
+                .andExpect(content().string(not(containsString("id=\"booked-rooms-heading\""))))
                 .andExpect(content().string(containsString("id=\"current-rooms-heading\"")))
                 .andExpect(content().string(containsString(">305<")))
                 .andExpect(content().string(containsString("id=\"room-history-heading\"")))
@@ -171,9 +175,9 @@ class ReservationDetailLifecycleTest {
         }
     }
 
-    /** Confirms an extended stay shows Original Booking Total, Extension Amount and Current Accommodation Total. */
+    /** Confirms an extended stay keeps its Stay Extensions card but no longer repeats the totals in Stay Information. */
     @Test
-    void shouldShowDerivedAccommodationTotalsForAnExtendedStay() throws Exception {
+    void shouldNotRepeatAccommodationTotalsInStayInformationForAnExtendedStay() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
         when(stayExtensionService.summary(RESERVATION_ID)).thenReturn(
                 new com.example.hotel.dto.booking.response.StayExtensionSummaryResponse(
@@ -184,9 +188,9 @@ class ReservationDetailLifecycleTest {
                                         "305", new BigDecimal("1000000"), 2, new BigDecimal("2000000")))))));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
-                .andExpect(content().string(containsString("Original Booking Total")))
-                .andExpect(content().string(containsString("Extension Amount")))
-                .andExpect(content().string(containsString("Current Accommodation Total")))
+                .andExpect(content().string(not(containsString("id=\"original-booking-total\""))))
+                .andExpect(content().string(not(containsString("id=\"extension-amount\""))))
+                .andExpect(content().string(not(containsString("id=\"current-accommodation-total\""))))
                 .andExpect(content().string(containsString("id=\"stay-extensions\"")));
     }
 
@@ -202,10 +206,11 @@ class ReservationDetailLifecycleTest {
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(payer))
                 .andExpect(content().string(containsString("id=\"prepayments\"")))
-                .andExpect(content().string(containsString("id=\"record-prepayment\"")));
+                .andExpect(content().string(containsString("id=\"view-prepayments\"")))
+                .andExpect(content().string(not(containsString("/prepayments/"))));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer))
                 .andExpect(content().string(not(containsString("id=\"prepayments\""))))
-                .andExpect(content().string(not(containsString("id=\"record-prepayment\""))));
+                .andExpect(content().string(not(containsString("id=\"view-prepayments\""))));
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_IN"));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(payer))
                 .andExpect(content().string(not(containsString("id=\"prepayments\""))));
@@ -223,7 +228,7 @@ class ReservationDetailLifecycleTest {
                         .with(user("admin").authorities(allAuthorities())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(containsString("id=\"current-rooms-heading\""))))
-                .andExpect(content().string(not(containsString("id=\"assigned-rooms-heading\""))))
+                .andExpect(content().string(not(containsString("id=\"booked-rooms-heading\""))))
                 .andExpect(content().string(containsString("id=\"room-history-heading\"")))
                 .andExpect(content().string(not(containsString("id=\"actions-heading\""))))
                 .andExpect(content().string(not(containsString("No state-changing actions are available."))));
@@ -236,9 +241,7 @@ class ReservationDetailLifecycleTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("admin").authorities(allAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("(3 days overdue)")))
-                .andExpect(content().string(containsString("date-value--check-out")))
-                .andExpect(content().string(containsString("date-value--check-in")));
+                .andExpect(content().string(containsString("(3 days overdue)")));
 
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CHECKED_OUT"));
         when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(List.of());
@@ -278,6 +281,11 @@ class ReservationDetailLifecycleTest {
     @Test
     void shouldStillOfferCancelAndNoShowForConfirmed() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
+        when(detailEligibilityService.evaluate(
+                org.mockito.ArgumentMatchers.eq(RESERVATION_ID),
+                org.mockito.ArgumentMatchers.eq(com.example.hotel.entity.booking.ReservationStatus.CONFIRMED),
+                org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.example.hotel.dto.booking.response.ReservationDetailEligibility(false, true));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("manager").authorities(allAuthorities())))

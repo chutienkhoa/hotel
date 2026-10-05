@@ -63,6 +63,7 @@ class ReservationCreateDraftIntegrityServiceTest {
     private final RoomRepository rooms = mock(RoomRepository.class);
     private final RoomAvailabilityService availability = mock(RoomAvailabilityService.class);
     private final ReservationNumberGenerator numbers = mock(ReservationNumberGenerator.class);
+    private final AuditLogRepository audits = mock(AuditLogRepository.class);
     private final ReservationService service = new ReservationService(
             reservations,
             guests,
@@ -70,7 +71,7 @@ class ReservationCreateDraftIntegrityServiceTest {
             mock(StayRepository.class),
             mock(StayRoomAssignmentRepository.class),
             mock(ChargeRepository.class),
-            mock(AuditLogRepository.class),
+            audits,
             new ReservationMapper(),
             numbers,
             mock(StayBalanceService.class),
@@ -94,6 +95,34 @@ class ReservationCreateDraftIntegrityServiceTest {
     @AfterEach
     void clearContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** Confirms creating a DRAFT persists a CREATE activity whose resulting status is DRAFT. */
+    @Test
+    void shouldAuditCreateWithTheResultingDraftStatus() {
+        Room room = room("401", 2);
+        when(rooms.findAllById(any())).thenReturn(List.of(room));
+
+        service.create(request(2, new RoomRequest(room.getId(), new BigDecimal("1000000"))));
+
+        org.mockito.ArgumentCaptor<com.example.hotel.entity.common.AuditLog> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.hotel.entity.common.AuditLog.class);
+        org.mockito.Mockito.verify(audits).save(captor.capture());
+        assertEquals("CREATE", captor.getValue().getAction());
+        assertEquals(null, captor.getValue().getOldValue());
+        assertEquals("DRAFT", captor.getValue().getNewValue());
+    }
+
+    /** Confirms a rejected create persists no activity. */
+    @Test
+    void shouldNotAuditARejectedCreate() {
+        Room room = room("402", 2);
+        ReflectionTestUtils.setField(room, "active", false);
+
+        assertNotBookable(room);
+
+        org.mockito.Mockito.verify(audits, org.mockito.Mockito.never())
+                .save(any(com.example.hotel.entity.common.AuditLog.class));
     }
 
     /** Confirms a Room that is inactive cannot be attached to a new DRAFT, even by a crafted request. */

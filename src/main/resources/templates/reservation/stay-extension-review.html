@@ -9,10 +9,7 @@
 
     <main class="content stay-extension">
         <div class="stay-extension-page">
-            <a class="back-link back-link--primary stay-extension-back" th:href="@{/reservations/{id}(id=${preview.reservationId})}">
-                <svg th:replace="~{layout/icons :: arrowLeft}"></svg>
-                <span th:text="#{reservation.stayExtension.backToReservation(${preview.reservationNumber})}">Back to Reservation</span>
-            </a>
+            <nav th:replace="~{layout/breadcrumb :: crumbs(${crumbs.stayExtension(preview.reservationId, preview.reservationNumber)})}"></nav>
 
             <div class="page-header stay-extension-header">
                 <div>
@@ -43,7 +40,7 @@
                 <div class="stay-extension-review-top">
                     <section class="card stay-extension-card" aria-labelledby="stay-extension-reservation-heading">
                         <header class="stay-extension-card__header">
-                            <svg th:replace="~{layout/icons :: note}"></svg>
+                            <span th:replace="~{layout/card-icons :: title('reservation')}"></span>
                             <h2 id="stay-extension-reservation-heading" th:text="#{reservation.stayExtension.review.reservation.title}">Reservation Information</h2>
                         </header>
                         <dl class="label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--strong">
@@ -105,7 +102,7 @@
                 <div class="stay-extension-review-side">
                 <section class="card stay-extension-card" aria-labelledby="stay-extension-updated-heading">
                     <header class="stay-extension-card__header">
-                        <svg th:replace="~{layout/icons :: calendar}"></svg>
+                        <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                         <h2 id="stay-extension-updated-heading" th:text="#{reservation.stayExtension.review.stay.title}">Updated Stay Information</h2>
                     </header>
                     <div class="stay-extension-table-scroll">
@@ -162,7 +159,7 @@
                 </section>
                 <section class="card stay-extension-card stay-extension-summary" aria-labelledby="stay-extension-summary-heading">
                     <header class="stay-extension-card__header">
-                        <svg th:replace="~{layout/icons :: coins}"></svg>
+                        <span th:replace="~{layout/card-icons :: title('money')}"></span>
                         <h2 id="stay-extension-summary-heading" th:text="#{reservation.stayExtension.review.summary.title}">Extension Summary</h2>
                     </header>
                     <p class="stay-extension-summary__nights" th:text="#{reservation.stayExtension.addedNights(${preview.additionalNights})}">+1 night</p>
@@ -182,7 +179,7 @@
                 <!-- Folio Impact: full width, the financial result last. -->
                 <section class="card stay-extension-card" th:if="${preview.folio != null}" aria-labelledby="stay-extension-folio-heading">
                     <header class="stay-extension-card__header">
-                        <svg th:replace="~{layout/icons :: creditCard}"></svg>
+                        <span th:replace="~{layout/card-icons :: title('money')}"></span>
                         <h2 id="stay-extension-folio-heading" th:text="#{reservation.stayExtension.review.folio.title}">Folio Impact</h2>
                     </header>
                     <p class="stay-extension-note">

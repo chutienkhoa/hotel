@@ -88,6 +88,38 @@ public class ReservationMapper {
     }
 
     /**
+     * Maps a Reservation to its detail representation without the "last updated by" username, for callers that do not
+     * present it.
+     *
+     * @param reservation the Reservation to map
+     * @param accompanyingGuests the Accompanying Guests
+     * @param effectiveContactName the effective Booking Contact name
+     * @param effectiveContactPhone the effective Booking Contact phone
+     * @param effectiveContactEmail the effective Booking Contact email
+     * @param bookingContactFromPrimaryGuest whether the effective contact is the Primary Guest fallback
+     * @param createdByUsername the creator's username, or {@code null}
+     * @return the reservation detail representation
+     */
+    public ReservationDetailResponse toDetailResponse(
+            Reservation reservation,
+            List<AccompanyingGuestResponse> accompanyingGuests,
+            String effectiveContactName,
+            String effectiveContactPhone,
+            String effectiveContactEmail,
+            boolean bookingContactFromPrimaryGuest,
+            String createdByUsername) {
+        return toDetailResponse(
+                reservation,
+                accompanyingGuests,
+                effectiveContactName,
+                effectiveContactPhone,
+                effectiveContactEmail,
+                bookingContactFromPrimaryGuest,
+                createdByUsername,
+                null);
+    }
+
+    /**
      * Converts a reservation entity and its assigned rooms into the detail representation.
      *
      * @param reservation the reservation entity to convert
@@ -100,6 +132,8 @@ public class ReservationMapper {
      *     fallback rather than the Reservation's own Booking Contact snapshot
      * @param createdByUsername the username of the Reservation's creator, already resolved by the caller from the
      *     audit {@code createdBy} identifier, or {@code null} when it cannot be resolved
+     * @param updatedByUsername the username of the user who most recently changed the Reservation, resolved from the
+     *     audit {@code updatedBy} identifier, or {@code null} when it cannot be resolved
      * @return the reservation detail representation
      */
     public ReservationDetailResponse toDetailResponse(
@@ -109,7 +143,8 @@ public class ReservationMapper {
             String effectiveContactPhone,
             String effectiveContactEmail,
             boolean bookingContactFromPrimaryGuest,
-            String createdByUsername) {
+            String createdByUsername,
+            String updatedByUsername) {
         return new ReservationDetailResponse(
                 reservation.getId(),
                 reservation.getReservationNumber(),
@@ -136,7 +171,8 @@ public class ReservationMapper {
                 reservation.getNoShowReason(),
                 reservation.getReservedAt(),
                 createdByUsername,
-                reservation.getUpdatedAt());
+                reservation.getUpdatedAt(),
+                updatedByUsername);
     }
 
     /**
@@ -201,6 +237,12 @@ public class ReservationMapper {
                 reservationRoom.getCheckInDate(),
                 reservationRoom.getCheckOutDate(),
                 reservationRoom.getNightlyRate(),
-                reservationRoom.getTotalAmount());
+                reservationRoom.getTotalAmount(),
+                reservationRoom.getRoom().getRoomType() == null
+                        ? null
+                        : reservationRoom.getRoom().getRoomType().getName(),
+                reservationRoom.getRoom().getRoomType() == null
+                        ? null
+                        : reservationRoom.getRoom().getRoomType().getCapacity());
     }
 }

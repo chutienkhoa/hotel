@@ -281,6 +281,33 @@ class FolioRevenueReconciliationIntegrationTest {
         assertEquals(0, report1.additionalRevenue().compareTo(financialReport.report(month).additionalRevenue()));
     }
 
+    /**
+     * Confirms the Reservation Detail Financial Summary split reads the real ACTIVE Charges: ROOM Charges (check-in and
+     * Stay Extension) and manual additional Charges add up to the canonical Total Charges, and a voided Charge leaves
+     * the split.
+     */
+    @Test
+    void shouldSplitRoomAndAdditionalChargesConsistentlyWithTotalCharges() {
+        UUID a = room("SP-A", "AVAILABLE");
+        UUID reservation = confirmed(today, today.plusDays(1), new Line(a, "1000000"));
+        reservationService.checkIn(reservation);
+        UUID stay = stayOf(reservation);
+        extensionService.extend(reservation, new StayExtensionRequest(today.plusDays(1), today.plusDays(2)));
+        chargeService.create(stay, new ChargeCreateRequest(ChargeType.MINIBAR, "cola", null, null, new BigDecimal("50000")));
+        var laundry = chargeService.create(stay, new ChargeCreateRequest(ChargeType.LAUNDRY, "shirts", null, null, new BigDecimal("30000")));
+
+        var split = balances.chargeBreakdown(stay);
+        assertEquals(0, new BigDecimal("2000000").compareTo(split.roomCharges()));
+        assertEquals(0, new BigDecimal("80000").compareTo(split.additionalCharges()));
+        assertEquals(0, balances.calculate(stay).totalCharges().compareTo(split.roomCharges().add(split.additionalCharges())));
+
+        chargeService.voidCharge(laundry.id(), new com.example.hotel.dto.booking.request.ChargeVoidRequest("entered twice"));
+
+        var afterVoid = balances.chargeBreakdown(stay);
+        assertEquals(0, new BigDecimal("50000").compareTo(afterVoid.additionalCharges()));
+        assertEquals(0, new BigDecimal("2000000").compareTo(afterVoid.roomCharges()));
+    }
+
     // ------------------------------------------------------------ reconciliation
 
     /** Confirms normal original charges and original plus extension reconcile as MATCHED. */

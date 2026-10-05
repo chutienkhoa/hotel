@@ -1,0 +1,10 @@
+/* Change Stay Dates: the shared Stay range picker keeps the comfortable width it has on Create Reservation instead of
+   stretching across the whole card. */
+.change-dates-stay {
+  max-width: 28rem;
+}
+/* Same trigger padding as Create Reservation's Stay field (no leading icon, calendar icon on the right). */
+.change-dates-stay .reservation-stay__trigger {
+  padding-left: var(--space-3);
+  padding-right: 2.5rem;
+}

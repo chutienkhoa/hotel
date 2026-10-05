@@ -8,7 +8,7 @@
 | Task | Task 33 — Final UI / UX Polish |
 | Scope | Full-system UI/UX redesign, standardization, interaction completion, and regression |
 | Status | Approved / specification baseline |
-| Last updated | 2026-10-02 |
+| Last updated | 2026-10-05 |
 | Target release | V1 unless an item is explicitly marked V2/deferred |
 
 ## 2. Purpose
@@ -192,7 +192,7 @@ Clicking a record identifier or row opens its detail page. The row action menu e
 
 - Show record identity, status, key metadata, contextual actions, and tabs/sections.
 - Related identifiers are links to their corresponding detail pages.
-- Terminal states use a prominent banner and read-only presentation.
+- Terminal states are visibly identified and read-only: for Reservation Detail this is the closed-state subtitle, the state-toned badge, and the Cancellation/No-show Information card with no edit controls (§9.3.4.9), which replaces an earlier separate-banner wording.
 - A generic `Edit` action is available only when the approved business state permits it.
 - Post-confirmation lifecycle changes use dedicated operations rather than generic editing.
 
@@ -455,7 +455,7 @@ Check-in Review (§9.2.1) shows only the approved read-only guest/reservation/ro
 
 - **No generic "Edit Guest" action** without a backing route. Guest profile editing remains the existing `MANAGE_GUEST`-only Guest Edit flow (§9.4.1), reached from Guest Detail, not from Check-in Review.
 - **No direct "Upload Passport" action** without a backing route from Check-in Review. Passport upload/replace/delete remain the existing `MANAGE_GUEST`-only Documents flow (§9.4.2) on Guest Detail; Check-in Review may link to secure View Passport (read-only) but does not add its own upload control.
-- **No generic "Change Room" action.** Before check-in, the only backed room-reassignment capability is the existing per-blocker **Reassign Room** action, surfaced next to the specific room that is actually blocking Arrival Readiness (not as a standalone, always-available button), restricted to the real eligibility rules already enforced server-side for pre-check-in room reassignment. "Room Change" as a named operation applies only after check-in, to a `CHECKED_IN` Stay (§9.5), and is a different capability from this pre-check-in Reassign Room.
+- **No generic "Change Room" action.** Before check-in, the only backed room-reassignment capability is the existing per-blocker **Reassign Room** action, surfaced next to the specific room that is actually blocking Arrival Readiness (not as a standalone, always-available button), restricted to the real eligibility rules already enforced server-side for pre-check-in room reassignment. This restriction describes the Check-in Review surface only: Reservation Detail for a `CONFIRMED` Reservation with no Stay has its own, separately approved `Reassign Room` entry in the `More` menu (§9.3.4.4), which invokes the same backend operation under the same `CHECK_IN` permission and eligibility and is not a generic edit. "Room Change" as a named operation applies only after check-in, to a `CHECKED_IN` Stay (§9.5), and is a different capability from this pre-check-in Reassign Room.
 
 #### 9.2.7 Front Desk / Check-in implementation boundary (Batch 3)
 
@@ -528,33 +528,240 @@ This contract applies to Create Reservation and every other multi-step wizard:
 
 Confirmed current issue: in the Walk-in flow, using `Back` from the Review step currently loses previously entered wizard state, which does not yet meet the contract in §9.3.3. This reconciliation records the gap but does not fix it here. It is assigned to Batch 3B (Front Desk, §14), where the Walk-in flow's final implementation must follow the §9.3.3 state-preservation contract in full: `Back`/`Next` preserve entered state, validation failure preserves entered state, and business/system errors preserve entered state. `Cancel` still explicitly discards only after confirmation. Batch 3B also covers the related New-Guest round trip: returning from Guest creation must preserve the rest of the wizard's entered state and auto-select the newly created Guest via `createdGuestId` (§9.2.5), not only the `Back`-button case. As with the rest of §9.3.3, V1 does not require state recovery across a browser refresh, a closed tab, or reopening the URL.
 
-#### 9.3.4 Reservation Detail and action matrix — GAP-02 closed
+#### 9.3.4 Reservation Detail — one state-aware system (GAP-02 closed; reconciled 2026-10-05)
 
-Use one consistent detail layout with state-aware actions and tabs for overview, stay/rooms, guests, financial/folio, notes, and activity/history as approved by the mockups.
+Reservation Detail is **one shared, state-aware page system**, not six unrelated screens. `DRAFT`, `CONFIRMED`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`, and `NO_SHOW` are configurations of the same shell (§9.3.4.1): the same header, summary strip, tabs, Overview card grid, right-hand support column, Recent Activity, and Audit Log. The state changes **which actions, tabs, cards, and room semantics** are shown — never the visual language.
 
-| Reservation state | Available actions |
+**Approved visual evidence** (canonical per §3; `docs/specs/evidence/task33/reservations/`):
+
+| State | Evidence file |
 | --- | --- |
-| `DRAFT` | Edit, Confirm, Cancel |
-| `CONFIRMED` | Change Dates, Correct OTA Reference (non-`DIRECT` only), Cancel, No-show when date-eligible, Check-in when eligible |
-| `CHECKED_IN` | Change Room, Extend Stay, Open Folio, Checkout |
-| `CHECKED_OUT` | Open Folio read-only |
-| `CANCELLED` | Read-only |
-| `NO_SHOW` | Read-only |
+| `DRAFT` | `reservation-detail-draft-final.png` |
+| `CONFIRMED` | `reservation-detail-confirmed-final.png` |
+| `CHECKED_IN` | `reservation-detail-checked-in-final.png` |
+| `CHECKED_OUT` | `reservation-detail-checked-out-final.png` |
+| `CANCELLED` | `reservation-detail-cancelled-final.png` |
+| `NO_SHOW` | `reservation-detail-no-show-final.png` |
 
-Rules:
+The earlier Front Desk evidence `docs/specs/evidence/task33/front-desk/reservation-detail-checked-in-final.png` (Slice 3D) is **superseded** for Reservation Detail by `reservations/reservation-detail-checked-in-final.png`, which extends the same visual language (summary strip, tabs, three-card row, two-column body) into the shared shell. The older file stays in the archive as history; it must not be used as a second CHECKED_IN design. Controls that appeared only in the older image — "Special Requests", "ID / Passport Number" (also barred by §9.2.5), "Add Note" (§9.3.4a), "Add Adjustment", "Add Additional Revenue", "Add Payment" on the cards (§9.6.1), a "Direct (Walk-in)" source value (the source set is `DIRECT`, `AGODA`, `BOOKING_COM`, `AIRBNB`), and the Created By strip item — are not part of the shell.
 
-- Every action also requires its existing permission.
-- `Edit` is a generic action for `DRAFT` only.
-- Post-confirmation changes use dedicated actions and validations.
-- Direct URLs must be rejected server-side when the state or permission does not allow the action.
-- `CHECKED_OUT`, `CANCELLED`, and `NO_SHOW` show a clear terminal-state banner.
-- Destructive actions use confirmation dialogs.
-- No-show appears only when the existing date/business condition is met.
-- Correct OTA Reference appears only for non-`DIRECT` reservations.
+**Precedence for this section.** Business and capability: current backend/domain rules → later explicit Task 33 product decisions → this document → mockup evidence. Visual: the approved evidence is the visual contract, except where it depicts a capability that is unsupported by the backend or explicitly rejected here. Names, dates, amounts, rooms, reasons, and actors in the evidence are sample data. A sample value in an image (for example "Confirmed At", "Remaining", "Nights (Current)") becomes a requirement only where §9.3.4.11 classifies it as supported.
+
+##### 9.3.4.1 Shared visual shell
+
+1. **Breadcrumb** — the standard Task 33 breadcrumb: `Reservations / Reservation #<number>`, or the Front Desk workflow trail when opened from Front Desk or Find Reservation (existing `Breadcrumbs.reservationDetail`). The current entry is not a link.
+2. **Title row** — `Reservation #<number>` plus the status badge (§9.3.4.2).
+3. **Lifecycle/state subtitle** — one or two short lines under the title describing the state (§9.3.4.2). Terminal states end with "This reservation is closed."
+4. **Contextual header actions** — right-aligned: at most one primary action (or, for `CHECKED_IN`, the operational action set) plus a `More` menu for secondary narrow operations. The menu lists only actions that are valid for the state, the user's permission, and business eligibility; destructive actions sit last, after a divider, in the destructive treatment. The menu closes on selection, Escape, or outside click and is keyboard accessible (§12). A menu with no visible item is not rendered.
+5. **Summary strip** — Primary Guest (name, guest code beneath), Room (room code, room type beneath), Source, Check-in (date, weekday beneath), Check-out, Nights, Guests (adults, children). Nights is one value computed from the Reservation's current planned check-in and check-out dates (Stay Extension already moves the planned check-out). With one room the Room item shows that room's code and room type; with two or more it lists the room codes (each a link where permitted) and shows the room count beneath instead of a single type.
+6. **State-aware tabs** — §9.3.4.3. Every rendered tab has a real target; a tab the user cannot open is not rendered (§6.3, §5 principle 7).
+7. **Overview** — a three-card row (Guest Information, Stay or Booking Information, Reservation Information), then a two-column body: main column (state information card, room section, financial/prepayment card) and a right-hand support column (Booking Contact, Notes, Recent Activity). Cards size to their content: the card grid aligns to the top and must not stretch shorter cards to match taller neighbours or leave empty vertical space (this applies in particular to the `DRAFT` Guest Information and Stay Information cards). Guest Information carries **no Edit control**: the Guest Code link is the navigation path to Guest Detail, and editing the Guest profile belongs to the Guests module (§9.4.1).
+8. **Recent Activity** — compact preview (§9.3.4.8). **Audit Log** — the full history, reached from the tab or from `View All`.
+
+**Links.** Guest Code and Room Code are navigation links to Guest Detail and Room Detail only when the user holds the existing `MANAGE_GUEST` / `MANAGE_ROOM` permission; otherwise they render as plain text. Link text uses the blue/light-blue link colour with **no underline by default**; hover and keyboard focus must make the interactivity apparent (colour change and underline, plus the standard focus ring). These are ordinary in-app navigation — they do not open a new browser tab. This convention supersedes the underlined links drawn in the evidence images.
+
+**Buttons.** `Edit` on a card (Booking Contact and Notes only; Guest Information has none) is a secondary button: white background, light-blue text and border, edit icon on the **left**. `Open Folio` is a primary button: blue background, white text, icon on the left. `View All` and `View Prepayments` are secondary buttons: white background, light-blue border and text, icon on the left (the trailing "external link" glyph drawn on `View Prepayments` is not used — it suggests a new tab, and the navigation is in-app).
+
+##### 9.3.4.2 Status badges and lifecycle subtitle
+
+Badges use the localized display label (the `enum.reservationStatus.<VALUE>` convention through the shared enum/badge fragment, technical-spec-v1 §60.3), never the raw enum string.
+
+| State | Badge tone | Subtitle |
+| --- | --- | --- |
+| `DRAFT` | neutral grey | "Created on {date time} by {user}" and "This is a draft reservation. You can edit the details or confirm it later." |
+| `CONFIRMED` | blue | "Confirmed reservation. Ready for pre-arrival management." and "Confirmed on {date time} by {user}" |
+| `CHECKED_IN` | green | "Checked in on {date} at {time} by {user}." |
+| `CHECKED_OUT` | neutral/slate | "Stay completed on {date} at {time} by {user}." and "This reservation is closed." |
+| `CANCELLED` | soft red | "Reservation cancelled on {date} at {time} by {user}." and "This reservation is closed." |
+| `NO_SHOW` | amber/orange (not the cancellation red) | "Reservation marked as no-show on {date} at {time} by {user}." and "This reservation is closed." |
+
+Subtitle times and actors come from the sources in §9.3.4.6. When a source is absent (for example a legacy Reservation with no audit row), the "on … by …" clause is omitted rather than invented. The `CONFIRMED` evidence renders the badge in a green tint that reads close to `CHECKED_IN`; the written decision (blue for `CONFIRMED`, green for `CHECKED_IN`) governs, and matches the existing `status-badge--confirmed` treatment.
+
+##### 9.3.4.3 State configuration matrix
+
+| | `DRAFT` | `CONFIRMED` | `CHECKED_IN` | `CHECKED_OUT` | `CANCELLED` | `NO_SHOW` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Tabs | Overview · Notes · Audit Log | Overview · Notes · Audit Log | Overview · Folio¹ · Payments¹ · Room History · Notes · Audit Log | Overview · Folio¹ · Payments¹ · Room History · Notes · Audit Log | Overview · Notes · Audit Log | Overview · Notes · Audit Log |
+| Second card title | Stay Information | Stay Information | Stay Information | Stay Information | Booking Information | Booking Information |
+| State information card | — | — | — | — | Cancellation Information (soft red) | No-show Information (amber) |
+| Room section | Booked Rooms | Booked Rooms | Current Room Assignment | Stay / Room History | Booked Rooms | Booked Rooms |
+| Room semantics | `ReservationRoom` booking snapshot | `ReservationRoom` booking snapshot | current/open `StayRoomAssignment` | actual/final `StayRoomAssignment` history | `ReservationRoom` booking snapshot | `ReservationRoom` booking snapshot |
+| Room row action (two or more rooms)⁴ | — | `Reassign` on each Booked Rooms row | `Change Room` on each Current Room Assignment row | none | none | none |
+| Money card | — | Prepayment Summary² | Financial Summary¹ | Financial Summary¹ | — | — |
+| Header primary | Confirm Reservation | Check In | Check Out · Change Room⁴ · Extend Stay | Open Folio¹ | none | none |
+| `More` menu | Edit Reservation · Edit Booking Contact · Edit Notes · — · Cancel Reservation | Change Dates · Reassign Room⁴ · Edit Booking Contact · Edit Guest Composition · Edit Notes · Correct OTA Reference · — · Mark as No-show · Cancel Reservation | Edit Booking Contact · Edit Notes³ | none | none | none |
+| Editable cards | Booking Contact, Notes | Booking Contact, Notes | none (operations above) | none | none | none |
+
+¹ Rendered only for a user with `MANAGE_PAYMENT`; `Folio` and `Payments` also require a Stay. A user without it sees neither the tabs nor the card nor the button — never a tab that leads to 403 (§9.3.4.7).
+² Rendered only for a user with `MANAGE_PAYMENT`.
+³ Booking Contact and Notes remain editable through `CHECKED_IN` (technical-spec-v1 §74; §9.3.4a). The `CHECKED_IN` evidence draws no Edit on those cards; the capability is kept in the `More` menu rather than dropped (see §9.3.4.11, "Edit in `CHECKED_IN`").
+⁴ Exactly one booked room (`CONFIRMED`) or exactly one open room assignment (`CHECKED_IN`): the `More` entry / header action targets that room. Two or more: the generic action is omitted and each room row carries its own action (§9.3.4.5). No room-selection dialog is used.
+
+There is no tab or card for `Prepayments`, `Room History` before check-in, `Folio`/`Payments` before check-in or after cancellation/no-show.
+
+##### 9.3.4.4 Action matrix — permission and eligibility
+
+Action visibility must respect **both** the user's permission **and** business eligibility. An action that the backend would reject in every case for the current state is not offered. Hiding an action is usability only; every operation stays server-authorized and state-validated (§5 principle 4, §11), and direct URLs are rejected server-side.
+
+| Action | States | Permission | Eligibility (UI offers only when true) | Existing operation |
+| --- | --- | --- | --- | --- |
+| Confirm Reservation | `DRAFT` | `MANAGE_BOOKING` | state is `DRAFT` | `POST /reservations/{id}/confirm`, confirmation dialog. Room-overlap and adult-capacity failures return as a business-error dialog. |
+| Edit Reservation | `DRAFT` | `MANAGE_BOOKING` | state is `DRAFT` | `GET/POST /reservations/{id}/edit` — the only generic edit; full replacement of draft data. |
+| Cancel Reservation | `DRAFT`, `CONFIRMED` | `MANAGE_BOOKING` | state is `DRAFT` or `CONFIRMED`. It is **not** hidden or disabled because an active paid prepayment exists; the backend stays authoritative. | `POST /reservations/{id}/cancel`; reason code required, detail required for `OTHER`. If the backend rejects it because of an active prepayment, the shared error dialog explains that the prepayment must be refunded or voided first and offers `View Prepayments` (to a user holding `MANAGE_PAYMENT`); closing the dialog returns focus to the workflow (§9.3.4.10). |
+| Edit Booking Contact | `DRAFT`, `CONFIRMED`, `CHECKED_IN` | `MANAGE_BOOKING` | state is not terminal | `GET/POST /reservations/{id}/booking-contact` |
+| Edit Notes | `DRAFT`, `CONFIRMED`, `CHECKED_IN` | `MANAGE_BOOKING` | state is not terminal | `GET/POST /reservations/{id}/notes` (§9.3.4a) |
+| Change Dates | `CONFIRMED` | `MANAGE_BOOKING` | no Stay exists | `GET/POST /reservations/{id}/change-dates` |
+| Edit Guest Composition | `CONFIRMED` | `MANAGE_BOOKING` | no Stay exists | `GET/POST /reservations/{id}/guest-composition` |
+| Correct OTA Reference | `CONFIRMED` | `MANAGE_BOOKING` | no Stay exists and source is not `DIRECT` | `GET/POST /reservations/{id}/correct-ota-reference` |
+| Reassign Room | `CONFIRMED` | `CHECK_IN` (not `MANAGE_BOOKING`) | no Stay exists. **One booked room:** `More → Reassign Room` targets that room directly. **Two or more booked rooms:** the `More` entry is omitted and each Booked Rooms row carries its own `Reassign` action. | `GET/POST /check-in/reservations/{id}/rooms/{roomId}/reassign` — the existing `(reservationId, roomId)` route; pre-check-in reassignment, not Room Change. No room-selection dialog and no new workflow. Entered from Reservation Detail it **returns to Reservation Detail** (and carries the Detail breadcrumb) using a fixed, whitelisted return context, never an arbitrary return URL; entered from Check-in Review it still returns to the Review. |
+| Mark as No-show | `CONFIRMED` | `MANAGE_BOOKING` | **check-in date is before the hotel business date** | `POST /reservations/{id}/no-show`; reason required. The rule lives in `ReservationService.noShow`; the page must not carry a second copy of it (§9.3.4.12). A rejection caused by an active prepayment uses the same prepayment error dialog as Cancel. |
+| Check In | `CONFIRMED` | `CHECK_IN` | no Stay exists and the hotel business date is on or after the check-in date | opens Check-in Review `GET /check-in/reservations/{id}`; confirmation is `POST /check-in/reservations/{id}/confirm`. Room readiness blockers are shown on Check-in Review (§9.2.6), not hidden here. |
+| Check Out | `CHECKED_IN` | `CHECK_OUT` | state is `CHECKED_IN` | opens Checkout Review `GET /check-out/{id}`; outstanding and overdue rules are enforced and explained there (§9.2.2). |
+| Change Room | `CHECKED_IN` | `CHANGE_ROOM` | the Stay has a current/open room assignment. **One open assignment:** the header `Change Room` targets it. **Two or more:** the header action is omitted and each Current Room Assignment row carries its own `Change Room`. | `GET /reservations/{id}/rooms/{roomId}/change` — the existing `(reservationId, roomId)` route; the source room is fixed by the route and the form offers no source selector. Adult-capacity validation for Change Room is unchanged by Task 33 (§9.3.4.12, backlog). |
+| Extend Stay | `CHECKED_IN` | `EXTEND_STAY` | state is `CHECKED_IN` | `GET /reservations/{id}/stay-extension` (§9.3.4b) |
+| Open Folio | `CHECKED_IN`, `CHECKED_OUT` | `MANAGE_PAYMENT` | a Stay exists | `GET /reservations/{id}/folio`. Exactly **one** Open Folio call-to-action per Overview: inside Financial Summary for `CHECKED_IN`, in the header for `CHECKED_OUT`. |
+| View Prepayments | `CONFIRMED` | `MANAGE_PAYMENT` | state is `CONFIRMED` | `GET /reservations/{id}/prepayments` — the Prepayments page lists the Reservation's prepayments and hosts Record, Refund, and Void (existing operations, rules, and permissions). |
+
+Not offered in any state: cancel or no-show after check-in, editing a terminal Reservation, reopening or reinstating a cancelled/no-show Reservation, hard delete, and any Reservation-level financial mutation. `Reassign Room` before check-in and `Change Room` after check-in are different operations (§9.2.6, §9.5).
+
+##### 9.3.4.5 Room semantics
+
+The Reservation's booking snapshot and the Stay's operational room state are different facts and are never mixed in one table or labelled as one another.
+
+- `DRAFT`, `CONFIRMED`, `CANCELLED`, `NO_SHOW` → **Booked Rooms**, from the immutable `ReservationRoom` snapshot (room, room type, adult capacity, nightly rate, nights, total, plus the Reservation Total). For `CANCELLED` and `NO_SHOW` the snapshot is the historical record of what was booked; the page uses "Booking Information" and never implies that a Stay occurred. Pre-check-in Reassign Room changes the snapshot's room only (rate, total, and dates unchanged).
+- `CHECKED_IN` → **Current Room Assignment**, from the current/open `StayRoomAssignment` rows: room, room type, adult capacity, nightly rate, assigned-from, expected check-out (the Reservation's current planned check-out, which Stay Extension moves), and a `Current` badge. The nightly rate is the rate of the originally booked `ReservationRoom` line that the assignment descends from (the lineage the backend keeps through Room Change and Stay Extension). It must **not** be looked up by matching the current Room ID against the booked rooms: after a Room Change that match fails and would show no rate. The assigned-from value is the start of the current assignment, which after a Room Change is the change instant, so the column is labelled "Assigned From" rather than "Check-in" (§9.3.4.11).
+- `CHECKED_OUT` → **Stay / Room History**, from the actual/final `StayRoomAssignment` history (**Room, Room Type, Assigned From, Assigned To**; no calculated per-segment Nights column, which would invent room-night semantics for mid-stay room changes). The Room History tab carries the full history including reason and changed-by. Final rooms come from the existing final-rooms read model, not from the (now closed) current-room query.
+- The original booking snapshot stays immutable and retrievable in the backend after Room Change. After check-in the Detail does not render a second "Booked Rooms" table (the evidence shows none); where a booking figure matters it appears as a labelled booking value (for example Original Booking Total once a Stay has been extended).
+- Room Code links to Room Detail where the user holds `MANAGE_ROOM`.
+- **Multi-room contextual actions.** The room being replaced is always identified by the existing `(reservationId, roomId)` route: a room appears at most once per Reservation, and at most one open assignment exists per room. Pre-check-in `Reassign` (Booked Rooms rows) and post-check-in `Change Room` (Current Room Assignment rows) therefore act on exactly the row they sit in. A generic action that is not tied to a row exists only when there is exactly one room. The row-action column scrolls with the table on small screens and is never frozen or sticky. No room-selection dialog or new backend workflow is introduced.
+
+##### 9.3.4.6 Information cards and data sources
+
+All values below come from existing backend data. **No persistence field is added** to reproduce a timestamp or actor drawn in the evidence.
+
+| Card / row | Source |
+| --- | --- |
+| Guest Information — Guest Code, Full Name, Phone, Email, Nationality | Primary Guest profile via the existing guest lookup, loaded for every state (not only `CHECKED_IN`). Date of birth and any ID/passport number are not shown (§9.2.5). Guest Code is the navigation link to Guest Detail; the card has no Edit control. |
+| Stay / Booking Information — dates, Nights, Adults, Children | Reservation planned dates and guest counts. Nights is a single value from the current planned dates (Stay Extension already moves the planned check-out); there is no separate "planned" and "current" Nights. `CHECKED_IN` and `CHECKED_OUT` add the Stay's actual check-in and actual check-out (Planned vs Actual) from the Stay; Actual Check-out shows "—" while `CHECKED_IN`. After a Stay Extension the extension totals (Original Booking Total, Extension Amount, Current Accommodation Total) remain shown, as today. |
+| Reservation Information — Status, Source, OTA Booking Reference, Reserved At, Created By, Last Updated At | Reservation fields (`reservedAt`, created-by username, `updatedAt`). OTA reference is "—" for `DIRECT`. |
+| Reservation Information — Last Updated By | The existing audit `updatedBy`, resolved to a username like Created By (bounded read-model addition, §9.3.4.12). |
+| Reservation Information — Confirmed At / Confirmed By; Checked In By; Checked Out By; Cancelled At/By; Marked No-show At/By | Time and actor of the corresponding lifecycle event read from the existing Reservation audit history (action code, time, actor only — never old/new values). Check-in At and Checked Out At come from the Stay's actual timestamps. Absent for legacy Reservations with no audit row: show "—". |
+| Cancellation Information — Cancelled At, Cancelled By, Reason | Time/actor as above; Reason is the stored cancellation reason code label plus the optional detail. A legacy Reservation shows the neutral "No reason recorded". |
+| No-show Information — Marked No-show At, Marked No-show By, Reason | Time/actor as above; Reason is the stored free-text no-show reason, or "No reason recorded" for legacy rows. |
+| Booking Contact — Name, Phone, Email | The effective Booking Contact. When none is stored and the Primary Guest is used as the read fallback, a visible fallback notice stays (technical-spec-v1 §74). |
+| Notes | The single `Reservation.notes` value, read-only text. `DRAFT` and `CONFIRMED` show the existing `used / 5000` length as a non-interactive caption. |
+
+##### 9.3.4.7 Financial boundary
+
+Reservation Detail is **not** a replacement for Folio. It shows a state-appropriate summary and navigation; detailed Charge and Payment lists and every Charge/Payment operation stay in the existing Folio workflow (§9.6) under the existing permissions.
+
+- Money cards, the Folio and Payments tabs, `Open Folio`, and prepayment figures require `MANAGE_PAYMENT`. A user without it sees none of them (no dead or 403-bound navigation). `CHECK_OUT` alone never grants detailed financial data.
+- Reservation Total and the booking-snapshot room figures remain visible to any user who can view the Reservation (existing behaviour); the Activity timeline shows that a financial event happened but never its amount.
+- `CONFIRMED` — **Prepayment Summary**: **Prepaid** (the existing active-prepayment total) and **Reservation Total**, plus `View Prepayments`. No "Remaining" or any other derived amount is shown; Task 33 introduces no new financial calculation.
+- `CHECKED_IN` — **Financial Summary**: Room Charges, Additional Charges (non-`ROOM` Charges), Payments, Outstanding, the note "For detailed charges and payments, please open Folio.", and the single `Open Folio` button. Outstanding follows the existing canonical balance calculation.
+- `CHECKED_OUT` — **Financial Summary**: Room Charges, Additional Charges, Total Charges, Payments, Outstanding, and the staff-friendly folio indicator below. No `Open Folio` inside the card (the header carries it). No post-checkout Charge/Payment mutation is offered: the V1 folio is closed (§9.6.1, §9.6.2).
+- `Folio` and `Payments` tabs are **navigation tabs** to the matching sections of the existing Folio page (`/reservations/{id}/folio?tab=charges` and `?tab=payments`); they leave Detail and do not duplicate the Folio lists on Detail.
+- **Prepayment Refund and Void are not on Reservation Detail.** Detail holds only the prepayment summary and `View Prepayments`. Refund and Void are performed on the Prepayments page (`/reservations/{id}/prepayments`), which Task 33 extends to list the Reservation's prepayments and offer the existing Refund and Void operations (an approved, bounded enhancement). All existing prepayment business rules and permissions are preserved; the financial domain is not redesigned.
+- **Folio indicator** (replaces the technical "Financial Integrity" presentation). Inside Financial Summary, for `MANAGE_PAYMENT` users, a small plain-language indicator is shown only where it is meaningful: "✓ Folio settled" when Outstanding is zero and the existing reconciliation reports no problem (the normal `CHECKED_OUT` state, and `CHECKED_IN` when the balance is zero); "Folio needs review" when the existing reconciliation reports a problem, with the folio reached through `Open Folio`. Nothing else is shown: no "integrity" terminology, issue types, or implementation detail. During a stay with an Outstanding balance no indicator is shown (the Outstanding tile already says it). It is diagnostic only and never gates check-out.
+
+##### 9.3.4.8 Recent Activity and Audit Log
+
+- **Recent Activity** is a compact preview in the right-hand column: the most recent entries (limit 5, matching the Folio preview), **newest first**, each with the localized action label, date-time, and actor. The newest entry's marker uses the state tone (green, blue, red, amber); older entries use a neutral marker. `View All` (secondary button, icon left) opens the Audit Log tab.
+- **Audit Log** is a tab of the same page listing the complete history (Time / By / Activity) from the same Reservation audit source, **newest first**, like the preview. Newest-first is a presentation order only: the audit source query and its stored order are unchanged (technical-spec-v1 §79) and the page reverses that order deterministically. Recent Activity is shown in every state, including `DRAFT`, so the Created/Updated history is always visible.
+- Both show only the time, the actor's username, and the localized action label from the `reservation.activity.action.*` keys, with the generic fallback label for an unknown action. **Raw audit `oldValue`/`newValue` payloads, financial amounts, notes content, contact content, and reasons are never shown or parsed** (technical-spec-v1 §79). Sub-lines such as "Rooms: 101" drawn in the older evidence are not supported. Sample wording in the evidence ("Guest checked in", "Payment received") is not a requirement; the existing localized labels apply.
+- Permission is `VIEW_BOOKING`, the same as the page. The tab is rendered in every state.
+
+##### 9.3.4.9 Terminal-state immutability
+
+`CHECKED_OUT`, `CANCELLED`, and `NO_SHOW` visibly communicate read-only history: the closed subtitle line (§9.3.4.2), the state-toned status badge, the Cancellation/No-show Information card, no `More` menu, and no Edit buttons on any card. Edit controls are never rendered "for visual consistency". The only header action is `Open Folio` for `CHECKED_OUT` with `MANAGE_PAYMENT`. This is the approved terminal-state presentation and replaces the earlier requirement for a separate "prominent banner" element: the subtitle plus the state card are the banner.
+
+##### 9.3.4.10 Validation, dialogs, and responsive behaviour
+
+- Actions that collect input (Cancel Reservation: reason code and detail; Mark as No-show: reason) open a dialog from the `More` menu. Destructive actions confirm before executing (§5 principle 5).
+- Form validation failure follows the Task 33 convention: **shared error-dialog summary → inline field errors → close the dialog → focus and scroll to the first invalid field**, with all entered data preserved. The legacy full-width validation-error banner above the page content is not used. Business-rule failures (for example an active prepayment blocking cancellation or no-show, or a no-show attempted too early) use the global business-error dialog (§10). Server-side validation remains authoritative.
+- **Cancel rejected because of an active prepayment:** the global business-error dialog states, in plain language, that the prepayment must be refunded or voided first, offers `View Prepayments` to a user holding `MANAGE_PAYMENT`, and on close returns focus to the workflow (the Cancel dialog or the `More` control). Cancel Reservation is never hidden in anticipation of this rejection.
+- Tables (Booked Rooms, Current Room Assignment, Stay / Room History, Audit Log) scroll horizontally inside their container when the viewport is narrow. Row-action columns (`Reassign`, `Change Room`) scroll with the table like any other column on narrow screens; the final Action column is **not** frozen, sticky, or fixed; columns never overlap; identifiers and monetary values stay readable (§7.2).
+- The summary strip wraps; the three-card row and the two-column body collapse to one column on narrow viewports; header actions wrap beneath the title without dropping any action.
+
+##### 9.3.4.11 Capability reconciliation of the evidence
+
+Classes: `SUPPORTED`, `SUPPORTED_WITH_UI_WORK`, `BACKEND_GAP` (a bounded read-model addition, §9.3.4.12), `SPEC_CONFLICT` (resolved as stated), `REMOVE_FROM_UI`, `NEEDS_PRODUCT_DECISION` (none remain open for Reservation Detail; §9.3.4.12).
+
+| Element in the evidence | Class | Resolution |
+| --- | --- | --- |
+| Header actions per state (§9.3.4.4) | SUPPORTED / SUPPORTED_WITH_UI_WORK | Each maps to an existing operation. Eligibility-gated visibility needs the read-model flags in §9.3.4.12. |
+| Primary Guest name/phone/email/nationality in every state | SUPPORTED_WITH_UI_WORK | Guest lookup is currently loaded for `CHECKED_IN` only. |
+| Guest Information "Edit" (`DRAFT`, `CONFIRMED`) | REMOVE_FROM_UI | Decision 1. No reservation operation changes the Primary Guest after Confirm, and Guest profile editing belongs to the Guests module. Guest Code is the navigation link to Guest Detail. |
+| Room Type under the room code, Room Type column | SUPPORTED_WITH_UI_WORK | Booked-room DTO has no room type; enrich through the existing room lookup, as already done for current rooms. |
+| Capacity column ("2 adults") | BACKEND_GAP | The room-type adult capacity exists (and may be unconfigured, shown as "—") but is not on the booked-room read model. |
+| Confirmed At/By, Checked In By, Checked Out By, Cancelled At/By, No-show At/By | SUPPORTED_WITH_UI_WORK | Derived from the existing audit history (§9.3.4.6). No new column. |
+| Last Updated By | BACKEND_GAP | `updatedBy` exists on the audited entity but is not in the detail read model. |
+| Check-in At / Check-out At / Planned vs Actual | SUPPORTED_WITH_UI_WORK | `Stay.actualCheckInAt/actualCheckOutAt` are already in the page model and unused. |
+| "Nights (Planned)" and "Nights (Current)" (`CHECKED_IN`) | REMOVE_FROM_UI | Decision 2. One "Nights" value from the current planned stay dates (Stay Extension already moves the planned check-out). |
+| Per-segment "Nights" in Stay / Room History | REMOVE_FROM_UI | Decision 7. The table is Room, Room Type, Assigned From, Assigned To; no calculated per-segment Nights. |
+| Stay / Room History Assigned From / Assigned To | SUPPORTED | Assignment `assignedFrom` / `assignedTo`. Reason and Changed-by stay in the Room History tab. |
+| Current Room Assignment "Check-in" column | SPEC_CONFLICT (resolved) | Decision 10. The value is the current assignment's start, which differs from the stay's check-in after a Room Change, so the column is "Assigned From". |
+| Rate in Current Room Assignment | SUPPORTED_WITH_UI_WORK | Use the lineage rate (§9.3.4.5), not a Room-ID match. |
+| Prepayment Summary: Prepaid, Reservation Total | SUPPORTED_WITH_UI_WORK | From the existing prepayment summary ("Prepaid" is the existing active-prepayment total). |
+| Prepayment Summary: "Remaining" | REMOVE_FROM_UI | Decision 3. Not a defined business figure; no new calculation is introduced. |
+| `View Prepayments` destination and prepayment Refund/Void | SUPPORTED_WITH_UI_WORK | Decision 11. The Prepayments page is extended to list prepayments and host the existing Refund and Void operations; Detail keeps only the summary. |
+| Financial Summary: Room Charges vs Additional Charges | BACKEND_GAP | Total Charges/Payments/Outstanding exist; the ROOM vs non-ROOM split does not. "Additional Charges" means non-`ROOM` Charges and is unrelated to the Additional Revenue module. |
+| Financial Summary: Payments, Outstanding, "✓ Folio settled" | SUPPORTED | Existing balance calculation (§9.3.4.7). |
+| Financial Integrity (technical) | SPEC_CONFLICT (resolved) | Decision 8. technical-spec-v1 requires the diagnostic on Detail; it is shown only as the small staff-friendly folio indicator ("✓ Folio settled" / "Folio needs review"), SUPPORTED_WITH_UI_WORK from the existing reconciliation and balance. No technical terminology. |
+| Folio / Payments tabs | SUPPORTED_WITH_UI_WORK | Navigation to Folio page sections; `MANAGE_PAYMENT` only (§9.3.4.7). |
+| Recent Activity newest-first, limited, `View All`; Audit Log newest-first | SUPPORTED_WITH_UI_WORK | Decision 6. Presentation reversal and limit of the existing chronological audit source. |
+| Recent Activity absent from the `DRAFT` evidence | SPEC_CONFLICT (resolved) | Decision 9. Shown in every state, including `DRAFT`, for shell consistency and the Created/Updated history. |
+| Activity sub-lines ("Rooms: 101", "Source: Direct") | REMOVE_FROM_UI | Would require reading raw audit values (technical-spec-v1 §79). |
+| Reassign Room (`CONFIRMED`) | SPEC_CONFLICT (resolved) / SUPPORTED_WITH_UI_WORK | Decision 5. One booked room: `More → Reassign Room`. Two or more: no `More` entry; a `Reassign` action on each Booked Rooms row. §9.2.6 limits the Check-in Review surface only. Uses the existing `(reservationId, roomId)` route; returns to Detail through a whitelisted fixed return context (bounded controller work, no service change). |
+| Mark as No-show only when date-eligible; Check In only when eligible | SUPPORTED_WITH_UI_WORK / BACKEND_GAP | Eligibility is evaluated by the backend rules, not re-implemented in the page (§9.3.4.12). |
+| Edit on Booking Contact / Notes cards in `CHECKED_IN` | SPEC_CONFLICT | Evidence omits it; backend and §9.3.4a allow editing through `CHECKED_IN`. Kept in the `More` menu (§9.3.4.3 note 3). |
+| Terminal "prominent banner" (earlier §8.2 / §9.3.4 wording) | SPEC_CONFLICT | Superseded by the subtitle plus state card (§9.3.4.9); §8.2 corrected in place. |
+| Underlined Guest/Room links; trailing external-link glyph on `View Prepayments` | SPEC_CONFLICT | Superseded by the link and button conventions in §9.3.4.1. |
+| "Special Requests", "ID / Passport Number", "Add Note", "Add Adjustment", "Add Additional Revenue", "Add Payment", "Direct (Walk-in)" | REMOVE_FROM_UI | No backing capability or explicitly rejected (§9.2.5, §9.3.4a, §9.6.1). |
+| Notes length caption "n / 5000" | SUPPORTED_WITH_UI_WORK | Display only, from the existing limit; the Notes card is never inline-editable. |
+| Change Room (`CHECKED_IN`) with several rooms | SUPPORTED | Decision 5. One open assignment: header `Change Room`. Two or more: no header action; a `Change Room` action on each Current Room Assignment row (existing per-room behaviour). Existing route; no selection dialog. |
+| Cancel Reservation when an active paid prepayment exists | SUPPORTED_WITH_UI_WORK | Decision 4. Stays visible; the backend rejection opens the shared error dialog with `View Prepayments` (§9.3.4.10). |
+| Summary-strip Room item with several rooms | SUPPORTED_WITH_UI_WORK | Room codes listed as links (where permitted) with the room count beneath; follows the per-room principle of decision 5. |
+| Adult-capacity validation on post-check-in Change Room | not changed by Task 33 | Decision 12. technical-spec-v1 §66.2 deliberately defers it; it remains separate product/domain backlog. |
+| Language flag in the top bar | not a Detail element | Global header (§6.2); unchanged by this section. |
+
+##### 9.3.4.12 Bounded backend work and locked product decisions
+
+**Bounded backend / read-model work implied by this section.** No schema migration, no new persisted field, no new permission, no new lifecycle transition, no change to any business rule.
+
+1. Add `updatedBy` (username) and per-booked-room room type and adult capacity to the Reservation Detail read model. (BACKEND_GAP)
+2. Expose the latest time/actor per lifecycle action (confirm, check-in, check-out, cancel, no-show) from the existing audit history through the existing activity query service, without exposing old/new values. (SUPPORTED_WITH_UI_WORK)
+3. Expose No-show eligibility and Check-in eligibility to the page by reusing the **same rule** the mutating operation enforces (hotel business clock), so each rule has one source. (BACKEND_GAP)
+4. Provide the ROOM vs non-ROOM Charge split inside the canonical stay-balance calculation. (BACKEND_GAP)
+5. Add room type to the Room History read model; use the existing lineage-rate and final-rooms read models for Current Room Assignment and Stay / Room History. (BACKEND_GAP for room type; the others SUPPORTED_WITH_UI_WORK)
+6. Make Reassign Room return to Reservation Detail, with the Detail breadcrumb, when launched from Detail, using a fixed whitelisted return context (never an arbitrary URL); behaviour from Check-in Review is unchanged. (SUPPORTED_WITH_UI_WORK; controller only)
+7. Extend the existing Prepayments page to list a Reservation's prepayments and host the existing Refund and Void operations, so Detail shows a summary only. (SUPPORTED_WITH_UI_WORK; existing endpoints, rules, and permissions)
+8. Support the dialog → inline-errors → focus validation flow for Cancel and No-show using the existing server-side validation, and the prepayment-rejection dialog with `View Prepayments` (§9.3.4.10). (SUPPORTED_WITH_UI_WORK)
+9. Drive the folio indicator from the existing reconciliation and balance results (§9.3.4.7). (SUPPORTED_WITH_UI_WORK)
+
+**Locked product decisions.** All Reservation Detail product decisions are resolved; none is open.
+
+| # | Decision | Resolution |
+| --- | --- | --- |
+| 1 | Guest Information Edit | Removed. Guest Code links to Guest Detail; Guest profile editing belongs to the Guests module. |
+| 2 | Nights | One value from the Reservation's current planned stay dates. No "Planned"/"Current" pair. |
+| 3 | Pre-stay Remaining | Not shown. Only Reservation Total and Prepaid; no new financial calculation. |
+| 4 | Cancel with active prepayment | Cancel stays visible when lifecycle and permission allow. On backend rejection: shared error dialog, "refund or void the prepayment first", `View Prepayments` where appropriate, focus returns to the workflow. |
+| 5 | Multi-room Reassign / Change Room | One room: `More → Reassign Room` (CONFIRMED) / header `Change Room` (CHECKED_IN) targets it. Two or more: generic action omitted; per-row `Reassign` on Booked Rooms and per-row `Change Room` on Current Room Assignment. Existing `(reservationId, roomId)` routes; no selection dialog; row-action column scrolls, never frozen. CONFIRMED Reassign returns to Detail through a whitelisted fixed return context. |
+| 6 | Ordering | Audit Log and Recent Activity are newest first. |
+| 7 | Room History segment Nights | No per-segment Nights. Columns: Room, Room Type, Assigned From, Assigned To. |
+| 8 | Financial integrity | A small plain-language indicator ("✓ Folio settled" / "Folio needs review") only where meaningful; no technical terminology. |
+| 9 | Recent Activity on DRAFT | Shown. |
+| 10 | Assignment start label | "Assigned From", not "Check-in". |
+| 11 | Prepayment Refund / Void | On the Prepayments page only; Detail keeps the summary and navigation. Existing prepayment rules and permissions preserved. |
+| 12 | Change Room adult capacity | Not changed by Task 33; deliberately deferred by technical-spec-v1 §66.2 and kept as separate product/domain backlog. |
+| 13 | Summary-strip Room item with several rooms | Room codes listed as links where permitted, room count beneath (follows decision 5's per-room principle). |
+
+**Backlog outside Task 33 (not blockers):** adult-capacity validation for post-check-in Room Change (decision 12).
 
 #### 9.3.4a Reservation Notes (evidence override)
 
-`Reservation.notes` is a single mutable free-text field (existing backend field, edited through the existing dedicated `GET/POST /reservations/{id}/notes` controlled operation) — it is not a comment thread, not a set of multiple timestamped entries, and not a staff-messaging feature. Reservation Detail's Notes tab/section shows the current value of this one field and, when the Reservation is `DRAFT`, `CONFIRMED`, or `CHECKED_IN` and the user holds the existing notes-edit permission, an Edit action that replaces the whole field value in one controlled update. It is read-only once the Reservation is `CHECKED_OUT`, `CANCELLED`, or `NO_SHOW`, consistent with the rest of this matrix.
+`Reservation.notes` is a single mutable free-text field (existing backend field, edited through the existing dedicated `GET/POST /reservations/{id}/notes` controlled operation) — it is not a comment thread, not a set of multiple timestamped entries, and not a staff-messaging feature. Reservation Detail's Notes tab/section shows the current value of this one field and, when the Reservation is `DRAFT`, `CONFIRMED`, or `CHECKED_IN` and the user holds the existing notes-edit permission, an Edit action that replaces the whole field value in one controlled update. It is read-only once the Reservation is `CHECKED_OUT`, `CANCELLED`, or `NO_SHOW`, consistent with the rest of this matrix. In the shared Detail shell (§9.3.4) the Edit action appears on the Notes card for `DRAFT` and `CONFIRMED` and in the `More` menu for `DRAFT`, `CONFIRMED`, and `CHECKED_IN`.
 
 **Evidence override**: where a mockup/evidence image shows Notes as a multi-entry thread, a list of separately timestamped notes, or an "add note" affordance that appends rather than replaces, that illustration is incorrect — this section's single-field, replace-in-place behavior is authoritative. The separate Activity/History tab (audit timeline) remains the correct place for a chronological record of actions; it is not merged with Notes.
 
@@ -831,7 +1038,7 @@ Batch 3 (Front Desk) is implemented in the following sequence of slices, per the
 | 3A | Front Desk query/read-model enhancements — pagination, sort, filter (§9.2.3) |
 | 3B | Check-in Guest + Walk-in/OTA orchestration + wizard state (§9.2.5, §9.3.3a) |
 | 3C | Check-in Review (§9.2.6) |
-| 3D | Reservation Detail / active Stay (§9.3.4, §9.3.4a) |
+| 3D | Reservation Detail / active Stay (§9.3.4, §9.3.4a) — `CHECKED_IN` configuration only; the shared state-aware Detail for all six states (§9.3.4.1–§9.3.4.12) is a Batch 4 (Reservations) item and extends this slice rather than replacing it |
 | 3E | Room Change (§9.5) |
 | 3F | Stay Extension (§9.3.4b) |
 | 3G | Folio / Charges / Payments (§9.6) |

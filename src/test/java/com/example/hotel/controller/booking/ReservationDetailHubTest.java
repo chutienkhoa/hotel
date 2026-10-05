@@ -100,6 +100,9 @@ class ReservationDetailHubTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the Guest/Stay/Reservation Information cards render operationally useful data for CHECKED_IN. */
@@ -121,13 +124,13 @@ class ReservationDetailHubTest {
                 .andExpect(content().string(containsString("+84912345678")))
                 .andExpect(content().string(containsString("nguyenvana@example.com")))
                 .andExpect(content().string(containsString("id=\"stay-info-heading\"")))
-                .andExpect(content().string(containsString("id=\"reservation-summary-info-heading\"")))
-                .andExpect(content().string(containsString("id=\"hub-notes-heading\"")));
+                .andExpect(content().string(containsString("id=\"reservation-info-heading\"")))
+                .andExpect(content().string(containsString("id=\"notes-heading\"")));
     }
 
-    /** Confirms the hub cards never render for a non-CHECKED_IN status (no regression to the legacy layout). */
+    /** Confirms stay-only sections never render for CONFIRMED: it shows booked rooms, not a current assignment. */
     @Test
-    void shouldNotRenderHubCardsForConfirmed() throws Exception {
+    void shouldNotRenderStayOnlySectionsForConfirmed() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(
                 new ReservationDetailResponse(
                         RESERVATION_ID, "R20261002-000001", GUEST_ID, "GUEST-001", "CONFIRMED",
@@ -137,26 +140,27 @@ class ReservationDetailHubTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(not(containsString("id=\"guest-info-heading\""))))
-                .andExpect(content().string(not(containsString("id=\"stay-info-heading\""))))
-                .andExpect(content().string(containsString("id=\"reservation-info-heading\"")));
+                .andExpect(content().string(containsString("id=\"guest-info-heading\"")))
+                .andExpect(content().string(containsString("id=\"booked-rooms\"")))
+                .andExpect(content().string(not(containsString("id=\"current-rooms\""))))
+                .andExpect(content().string(not(containsString("id=\"financial-summary\""))))
+                .andExpect(content().string(not(containsString("id=\"tab-room-history\""))));
     }
 
-    /** Confirms Room Details shows Room Type and current status sourced from the active StayRoomAssignment room. */
+    /** Confirms Current Room Assignment shows Room Type, capacity and the Current badge from the open assignment. */
     @Test
     void shouldShowRoomTypeAndStatusFromActiveAssignmentRoom() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
         when(stayRoomAssignmentQueryService.findCurrentRooms(RESERVATION_ID)).thenReturn(
-                List.of(new CurrentRoomResponse(UUID.randomUUID(), ROOM_ID, "305", Instant.parse("2026-10-02T03:00:00Z"))));
-        when(roomQueryService.findAllByIds(List.of(ROOM_ID))).thenReturn(
-                List.of(new RoomResponse(ROOM_ID, "305", new RoomTypeResponse(UUID.randomUUID(), "DBL", "Double Room"),
-                        "3", "OCCUPIED", true)));
+                List.of(new CurrentRoomResponse(UUID.randomUUID(), ROOM_ID, "305", Instant.parse("2026-10-02T03:00:00Z"),
+                        "Double Room", 2)));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Double Room")))
-                .andExpect(content().string(containsString("status-badge--occupied")));
+                .andExpect(content().string(containsString("2 adults")))
+                .andExpect(content().string(containsString("status-badge--current")));
     }
 
     /**
@@ -198,7 +202,7 @@ class ReservationDetailHubTest {
                 new RoomHistoryLineResponse("DEMO-201", Instant.parse("2026-10-02T03:00:00Z"),
                         Instant.parse("2026-10-03T03:00:00Z"), "Initial Check-in", "staff01", historicalRoomId),
                 new RoomHistoryLineResponse("DEMO-404", Instant.parse("2026-10-03T03:00:00Z"), null,
-                        "Guest request", "manager01", ROOM_ID)));
+                        "Guest request", "manager01", ROOM_ID, "Double Room", "GUEST_REQUEST")));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("v").authorities(
@@ -217,6 +221,8 @@ class ReservationDetailHubTest {
                 new StayResponse(STAY_ID, "CHECKED_IN", Instant.parse("2026-10-02T03:00:00Z"), null));
         when(stayBalanceService.calculate(STAY_ID)).thenReturn(
                 new StayBalance(new BigDecimal("3600000"), new BigDecimal("2000000"), new BigDecimal("1600000")));
+        when(stayBalanceService.chargeBreakdown(STAY_ID)).thenReturn(
+                new com.example.hotel.service.booking.StayChargeBreakdown(new BigDecimal("3600000"), BigDecimal.ZERO));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("payer").authorities(
@@ -290,10 +296,10 @@ class ReservationDetailHubTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        int firstOccurrence = body.indexOf("Walk-in guest. Requested high floor if possible.");
-        int lastOccurrence = body.lastIndexOf("Walk-in guest. Requested high floor if possible.");
-        org.junit.jupiter.api.Assertions.assertTrue(firstOccurrence > 0);
-        org.junit.jupiter.api.Assertions.assertEquals(firstOccurrence, lastOccurrence);
+        // One value, shown on the Overview Notes card and again as the whole value of the Notes tab: never an entry list.
+        int occurrences = body.split(java.util.regex.Pattern.quote("Walk-in guest. Requested high floor if possible."), -1).length - 1;
+        org.junit.jupiter.api.Assertions.assertEquals(2, occurrences);
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("Add Note"));
     }
 
     /** Builds a CHECKED_IN Reservation Detail response with one booked room. */
@@ -314,13 +320,13 @@ class ReservationDetailHubTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("href=\"/guests/" + GUEST_ID + "\"")))
                 .andExpect(content().string(not(containsString("adults, "))))
+                .andExpect(content().string(containsString("class=\"record-link\"")))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        assertTrue(body.indexOf(">Guest</p>") < body.indexOf(">Room</p>"));
+        assertTrue(body.indexOf(">Primary Guest</p>") < body.indexOf(">Room</p>"));
         assertTrue(body.indexOf(">Room</p>") < body.indexOf(">Source</p>"));
         assertTrue(body.indexOf(">Source</p>") < body.indexOf(">Check-in</p>"));
-        assertTrue(!body.contains("reservation-info-label\">Created By</p>"));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))

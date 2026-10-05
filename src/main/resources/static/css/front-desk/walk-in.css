@@ -133,13 +133,8 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
 }
-.walk-in-card__header > svg {
-  color: var(--color-primary);
-  height: 1.375rem;
-  width: 1.375rem;
-}
 .walk-in-card__header h2 {
-  font-size: 1.0625rem;
+  font-size: var(--font-size-card-title);
   margin: 0;
 }
 .walk-in-required {

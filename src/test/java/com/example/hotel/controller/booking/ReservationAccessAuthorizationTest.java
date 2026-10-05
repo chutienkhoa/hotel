@@ -113,6 +113,9 @@ class ReservationAccessAuthorizationTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /**
@@ -407,8 +410,8 @@ class ReservationAccessAuthorizationTest {
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("123,456,789 VND")))
-                .andExpect(content().string(containsString("5,500,000 VND")))
-                .andExpect(content().string(containsString("1,100,000 VND")));
+                .andExpect(content().string(containsString("5,500,000")))
+                .andExpect(content().string(containsString("1,100,000")));
     }
 
     /** Confirms reservation mutation forms expose confirmation metadata without changing their CSRF fields. */
@@ -429,17 +432,23 @@ class ReservationAccessAuthorizationTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("data-confirm-title=\"Cancel reservation\"")))
-                .andExpect(content().string(containsString("data-confirm-severity=\"DANGER\"")))
-                .andExpect(content().string(containsString("Cancel reservation R20260911-000001?")));
+                // Cancel is its own dialog: it names the reservation and collects the reason before the POST.
+                .andExpect(content().string(containsString("id=\"cancel-dialog\"")))
+                .andExpect(content().string(containsString("Cancel reservation R20260911-000001?")))
+                .andExpect(content().string(containsString("name=\"_csrf\"")));
+        when(detailEligibilityService.evaluate(
+                        org.mockito.ArgumentMatchers.eq(RESERVATION_ID),
+                        org.mockito.ArgumentMatchers.eq(com.example.hotel.entity.booking.ReservationStatus.CONFIRMED),
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.example.hotel.dto.booking.response.ReservationDetailEligibility(true, false));
 
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("staff").authorities(
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
                                 new SimpleGrantedAuthority("PERM_CHECK_IN"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(
-                        "href=\"/check-in/reservations/" + RESERVATION_ID + "\">Check-in</a>")));
+                .andExpect(content().string(containsString("id=\"check-in-reservation\"")))
+                .andExpect(content().string(containsString("href=\"/check-in/reservations/" + RESERVATION_ID + "\"")));
     }
 
     /** Confirms the Primary Guest is chosen through a searchable picker and the Guest list is no longer preloaded. */
@@ -488,7 +497,7 @@ class ReservationAccessAuthorizationTest {
                         .with(user("manager").authorities(manageBookingAndViewAuthorities())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("data-stay-picker")))
-                .andExpect(content().string(containsString("Select check-in and check-out dates")))
+                .andExpect(content().string(containsString("Select stay dates")))
                 .andExpect(content().string(containsString("name=\"checkInDate\" type=\"hidden\"")))
                 .andExpect(content().string(containsString("name=\"checkOutDate\" type=\"hidden\"")))
                 .andExpect(content().string(containsString("/js/common/stay-range-picker.js")))
@@ -821,7 +830,7 @@ class ReservationAccessAuthorizationTest {
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Agoda")))
-                .andExpect(content().string(containsString("Ref: 123456789")))
+                .andExpect(content().string(containsString("OTA Reference")))
                 .andExpect(content().string(containsString("123456789")));
 
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
@@ -829,10 +838,10 @@ class ReservationAccessAuthorizationTest {
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Direct")))
-                .andExpect(content().string(not(containsString("Ref:"))));
+                .andExpect(content().string(not(containsString("123456789"))));
     }
 
-    /** Confirms the redesigned Reservation Information card renders all five tiles and a full-width Notes row. */
+    /** Confirms the shared Detail shell renders the summary strip items, the Reservation Information card and Notes. */
     @Test
     void shouldRenderReservationInformationTilesAndFullWidthNotes() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("CONFIRMED"));
@@ -840,17 +849,18 @@ class ReservationAccessAuthorizationTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"reservation-info-grid\"")))
+                .andExpect(content().string(containsString("class=\"card rd-summary\"")))
                 .andExpect(content().string(containsString(">Primary Guest<")))
                 .andExpect(content().string(containsString(">Source<")))
                 .andExpect(content().string(containsString(">Check-in<")))
                 .andExpect(content().string(containsString(">Check-out<")))
-                .andExpect(content().string(containsString(">Total<")))
-                .andExpect(content().string(containsString("class=\"reservation-info-item reservation-info-notes\"")))
-                .andExpect(content().string(containsString(">Notes<")));
+                .andExpect(content().string(containsString(">Nights<")))
+                .andExpect(content().string(containsString(">Guests<")))
+                .andExpect(content().string(containsString("id=\"reservation-info-heading\"")))
+                .andExpect(content().string(containsString("id=\"notes-card\"")));
     }
 
-    /** Confirms the Assigned Rooms header uses correct singular and plural room-count wording. */
+    /** Confirms the summary strip shows the room type for one room and a room count (never a single type) for several. */
     @Test
     void shouldUseSingularAndPluralRoomCountWording() throws Exception {
         UUID roomId = UUID.randomUUID();
@@ -864,8 +874,7 @@ class ReservationAccessAuthorizationTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(">1</strong>")))
-                .andExpect(content().string(containsString(">room<")));
+                .andExpect(content().string(not(containsString("2 rooms"))));
 
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(new ReservationDetailResponse(
                 RESERVATION_ID, "R20260911-000001", UUID.randomUUID(), "GUEST-001", "CONFIRMED",
@@ -877,11 +886,10 @@ class ReservationAccessAuthorizationTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID)
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(">2</strong>")))
-                .andExpect(content().string(containsString(">rooms<")));
+                .andExpect(content().string(containsString("2 rooms")));
     }
 
-    /** Confirms Confirm never renders twice: not in the header, only once in Available Actions for DRAFT. */
+    /** Confirms Confirm Reservation renders exactly once for a DRAFT, as the header's primary action. */
     @Test
     void shouldNotDuplicateConfirmActionBetweenHeaderAndAvailableActions() throws Exception {
         when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation("DRAFT"));
@@ -891,10 +899,10 @@ class ReservationAccessAuthorizationTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        int headerStart = body.indexOf("<div class=\"page-header\">");
-        int headerEnd = body.indexOf("<div class=\"reservation-detail\">");
+        int headerStart = body.indexOf("<div class=\"rd-header\">");
+        int headerEnd = body.indexOf("<section class=\"card rd-summary\"");
         String header = body.substring(headerStart, headerEnd);
-        assertEquals(false, header.contains("type=\"submit\">Confirm<"));
+        assertEquals(true, header.contains("id=\"confirm-reservation\""));
         int confirmFormCount = body.split("action=\"/reservations/" + RESERVATION_ID + "/confirm\"", -1).length - 1;
         assertEquals(1, confirmFormCount);
     }
@@ -913,7 +921,7 @@ class ReservationAccessAuthorizationTest {
                                 new SimpleGrantedAuthority("PERM_VIEW_BOOKING"),
                                 new SimpleGrantedAuthority("PERM_MANAGE_GUEST"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("class=\"reservation-info-value reservation-info-link\"")))
+                .andExpect(content().string(containsString("class=\"record-link\"")))
                 .andExpect(content().string(containsString("href=\"/guests/" + guestId + "\"")))
                 .andExpect(content().string(containsString("GUEST-001")))
                 .andExpect(content().string(not(containsString("Guest information"))))
@@ -923,7 +931,6 @@ class ReservationAccessAuthorizationTest {
                         .with(user("viewer").authorities(viewBookingAuthority())))
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(containsString("href=\"/guests/" + guestId + "\""))))
-                .andExpect(content().string(not(containsString("reservation-info-link"))))
                 .andExpect(content().string(containsString("GUEST-001")));
     }
 

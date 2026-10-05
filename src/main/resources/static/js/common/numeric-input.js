@@ -217,11 +217,17 @@
         });
     }
 
+    /** Whether text is a clean number for this particular input (its mode: whole count, money, decimal). */
+    function isCleanNumberFor(input, text) {
+        return isCleanNumber(text, modeOf(input));
+    }
+
     root.PmsNumericInput = {
         accepts: accepts,
         cleanDigits: cleanDigits,
         initialize: initialize,
         isCleanNumber: isCleanNumber,
+        isCleanNumberFor: isCleanNumberFor,
         render: render
     };
 

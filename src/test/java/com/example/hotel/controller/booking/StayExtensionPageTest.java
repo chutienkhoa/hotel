@@ -113,6 +113,32 @@ class StayExtensionPageTest {
                 .andExpect(content().string(not(containsString("outstanding balance"))));
     }
 
+    /** Confirms Select and Review show the Reservation breadcrumb and no separate Back link row. */
+    @Test
+    void shouldShowTheReservationBreadcrumbInsteadOfABackLink() throws Exception {
+        when(service.preview(eq(ID), eq(null), eq(false))).thenReturn(preview(State.NOT_SELECTED, null, null));
+        when(service.review(eq(ID), any(), eq(false))).thenReturn(preview(State.AVAILABLE, NEW_OUT, null));
+
+        var viewer = user("staff").authorities(new SimpleGrantedAuthority("PERM_EXTEND_STAY"),
+                new SimpleGrantedAuthority("PERM_VIEW_BOOKING"));
+
+        for (String body : List.of(
+                mockMvc.perform(get("/reservations/{id}/stay-extension", ID).with(viewer))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(),
+                mockMvc.perform(get("/reservations/{id}/stay-extension/review", ID).with(viewer)
+                                .param("expectedCurrentCheckOutDate", "2026-09-22").param("newCheckOutDate", "2026-09-24"))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())) {
+            String crumb = body.substring(body.indexOf("aria-label=\"Breadcrumb\""));
+            crumb = crumb.substring(0, crumb.indexOf("</nav>"));
+            org.junit.jupiter.api.Assertions.assertTrue(crumb.contains("href=\"/reservations\"") && crumb.contains(">Reservations<"));
+            org.junit.jupiter.api.Assertions.assertTrue(crumb.contains("href=\"/reservations/" + ID + "\"")
+                    && crumb.contains(">Reservation R20260920-000001<"));
+            org.junit.jupiter.api.Assertions.assertTrue(crumb.contains("aria-current=\"page\" class=\"breadcrumb-current\">Extend Stay<"));
+            org.junit.jupiter.api.Assertions.assertFalse(body.contains("stay-extension-back\" href"), "no Back link row");
+            org.junit.jupiter.api.Assertions.assertFalse(body.contains("Back to Reservation"));
+        }
+    }
+
     /** Confirms the current stay's dates follow the PMS date convention and overdue shows on its own line, whatever date is proposed. */
     @Test
     void shouldShowDateConventionAndOverdueForTheCurrentStayOnly() throws Exception {

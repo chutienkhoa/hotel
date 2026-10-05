@@ -119,6 +119,68 @@ class RoomReassignmentPageControllerTest {
                 .andExpect(flash().attribute("errorMessage", "Room is no longer available."));
     }
 
+    /** Confirms a reassignment opened from Reservation Detail returns there, through the fixed whitelisted context. */
+    @Test
+    void shouldReturnToReservationDetailWhenOpenedFromThere() throws Exception {
+        mockMvc.perform(post(URL, RESERVATION, ROOM).param("targetRoomId", TARGET.toString()).param("from", "reservation")
+                        .with(checkIn()).with(csrf()))
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION))
+                .andExpect(flash().attribute("successMessage", "Room reassigned successfully."));
+        verify(service).reassign(RESERVATION, ROOM, TARGET);
+    }
+
+    /** Confirms a retryable failure from Detail goes back to the form and keeps the Detail return context. */
+    @Test
+    void shouldKeepTheDetailContextWhenTheFormIsShownAgain() throws Exception {
+        doThrow(new RoomReassignmentException(Reason.ROOM_UNAVAILABLE, "x")).when(service)
+                .reassign(RESERVATION, ROOM, TARGET);
+
+        mockMvc.perform(post(URL, RESERVATION, ROOM).param("targetRoomId", TARGET.toString()).param("from", "reservation")
+                        .with(checkIn()).with(csrf()))
+                .andExpect(redirectedUrl("/check-in/reservations/" + RESERVATION + "/rooms/" + ROOM
+                        + "/reassign?from=reservation"));
+    }
+
+    /** Confirms a state change detected from Detail returns to Detail rather than the Check-in Review. */
+    @Test
+    void shouldReturnToDetailWhenTheReservationStateChangedUnderneath() throws Exception {
+        doThrow(new RoomReassignmentException(Reason.RESERVATION_STATE_CHANGED, "x")).when(service)
+                .reassign(RESERVATION, ROOM, TARGET);
+
+        mockMvc.perform(post(URL, RESERVATION, ROOM).param("targetRoomId", TARGET.toString()).param("from", "reservation")
+                        .with(checkIn()).with(csrf()))
+                .andExpect(redirectedUrl("/reservations/" + RESERVATION));
+    }
+
+    /** Confirms only the fixed context is honoured: any other value, including a URL, returns to the Check-in Review. */
+    @Test
+    void shouldNeverAcceptAnArbitraryReturnTarget() throws Exception {
+        for (String value : List.of("https://evil.example/", "/reservations/other", "RESERVATION", "")) {
+            mockMvc.perform(post(URL, RESERVATION, ROOM).param("targetRoomId", TARGET.toString()).param("from", value)
+                            .with(checkIn()).with(csrf()))
+                    .andExpect(redirectedUrl("/check-in/reservations/" + RESERVATION));
+        }
+    }
+
+    /** Confirms the form opened from Detail posts with the context, cancels to Detail and shows the Detail breadcrumb. */
+    @Test
+    void shouldRenderTheFormWithTheDetailContext() throws Exception {
+        when(service.form(RESERVATION, ROOM)).thenReturn(form(List.of(
+                new RoomReassignmentCandidateResponse(TARGET, "203", "Double"))));
+
+        String body = mockMvc.perform(get(URL, RESERVATION, ROOM).param("from", "reservation").with(checkIn()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("/reassign?from=reservation"));
+        org.junit.jupiter.api.Assertions.assertTrue(body.contains("href=\"/reservations/" + RESERVATION + "\""));
+        String breadcrumb = body.substring(body.indexOf("class=\"breadcrumb\""));
+        breadcrumb = breadcrumb.substring(0, breadcrumb.indexOf("</nav>"));
+        org.junit.jupiter.api.Assertions.assertFalse(breadcrumb.contains("Front Desk"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains(">Reservations<"));
+        org.junit.jupiter.api.Assertions.assertTrue(breadcrumb.contains("Reassign Room"));
+    }
+
     /** Confirms a changed reservation state returns to the review with a state-changed message. */
     @Test
     void shouldReturnToReviewWhenReservationStateChanged() throws Exception {

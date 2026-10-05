@@ -89,7 +89,7 @@
                 <!-- Guest Information: the same supported fields and order as the Check-in Review (no avatar, no passport image). -->
                 <section aria-labelledby="cor-guest-heading" class="card cor-card" id="guest-information"
                          th:with="nationality=${T(com.example.hotel.dto.customer.response.GuestNationalityDisplay).from(summaryGuest?.nationality)}">
-                    <h2 id="cor-guest-heading"><svg th:replace="~{layout/icons :: user}"></svg><span th:text="#{checkout.review.guest.title}">Guest Information</span></h2>
+                    <h2 id="cor-guest-heading"><span th:replace="~{layout/card-icons :: title('guest')}"></span><span th:text="#{checkout.review.guest.title}">Guest Information</span></h2>
                     <div class="cor-cols">
                         <dl class="label-value-rows label-value-rows--divided label-value-rows--fit">
                             <div th:if="${summaryGuest != null and !#strings.isEmpty(summaryGuest.fullName)}">
@@ -135,7 +135,7 @@
                 </section>
 
                 <section aria-labelledby="cor-stay-heading" class="card cor-card">
-                    <h2 id="cor-stay-heading"><svg th:replace="~{layout/icons :: calendar}"></svg><span th:text="#{checkout.review.stay.title}">Stay Information</span></h2>
+                    <h2 id="cor-stay-heading"><span th:replace="~{layout/card-icons :: title('stay')}"></span><span th:text="#{checkout.review.stay.title}">Stay Information</span></h2>
                     <div class="cor-stay">
                         <dl class="label-value-rows label-value-rows--divided label-value-rows--fit">
                             <div>
@@ -200,7 +200,7 @@
 
                 <section aria-labelledby="cor-charges-heading" class="card cor-card" id="charges-summary" th:if="${financial != null}">
                     <div class="cor-card__head">
-                        <h2 id="cor-charges-heading"><svg th:replace="~{layout/icons :: note}"></svg><span th:text="#{checkout.review.charges.title}">Charges Summary</span></h2>
+                        <h2 id="cor-charges-heading"><span th:replace="~{layout/card-icons :: title('money')}"></span><span th:text="#{checkout.review.charges.title}">Charges Summary</span></h2>
                         <a class="button button-outline-primary button-compact" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='charges')}"
                            th:text="#{checkout.review.charges.viewAll}">View All Charges</a>
                     </div>
@@ -247,7 +247,7 @@
 
                 <section aria-labelledby="cor-payments-heading" class="card cor-card" id="payments-summary" th:if="${financial != null}">
                     <div class="cor-card__head">
-                        <h2 id="cor-payments-heading"><svg th:replace="~{layout/icons :: creditCard}"></svg><span th:text="#{checkout.review.payments.title}">Payments Summary</span></h2>
+                        <h2 id="cor-payments-heading"><span th:replace="~{layout/card-icons :: title('payments')}"></span><span th:text="#{checkout.review.payments.title}">Payments Summary</span></h2>
                         <a class="button button-outline-primary button-compact" th:href="@{/reservations/{id}/folio(id=${review.reservationId},tab='payments')}"
                            th:text="#{checkout.review.payments.viewAll}">View All Payments</a>
                     </div>
@@ -328,7 +328,7 @@
 
                 <!-- Checklist: only the real checkout gates, each decided by the server. -->
                 <section aria-labelledby="cor-checklist-heading" class="card cor-card">
-                    <h2 id="cor-checklist-heading"><svg th:replace="~{layout/icons :: clipboardCheck}"></svg><span th:text="#{checkout.review.checklist.title}">Checkout Checklist</span></h2>
+                    <h2 id="cor-checklist-heading"><span th:replace="~{layout/card-icons :: title('checklist')}"></span><span th:text="#{checkout.review.checklist.title}">Checkout Checklist</span></h2>
                     <ul class="cor-checklist">
                         <li th:classappend="${isCheckedIn} ? 'cor-check--ok' : 'cor-check--fail'">
                             <span class="cor-check__icon"><th:block th:if="${isCheckedIn}"><svg th:replace="~{layout/icons :: check}"></svg></th:block><th:block th:unless="${isCheckedIn}"><svg th:replace="~{layout/icons :: exclamation}"></svg></th:block></span>

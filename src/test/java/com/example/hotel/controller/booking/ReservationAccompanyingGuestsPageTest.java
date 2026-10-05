@@ -121,6 +121,9 @@ class ReservationAccompanyingGuestsPageTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     /** Confirms the create form offers the optional, searchable Accompanying Guests area (EN and VI). */
@@ -221,8 +224,8 @@ class ReservationAccompanyingGuestsPageTest {
                 .andExpect(content().string(containsString(">G-2<")))
                 .andExpect(content().string(not(containsString("id=\"accompanying-empty\""))))
                 .andExpect(content().string(containsString("Known guest profiles; the full party may be larger.")))
-                .andExpect(content().string(containsString("Adults: 3")))
-                .andExpect(content().string(containsString("Total Guests: 4")))
+                .andExpect(content().string(containsString("3 adults")))
+                .andExpect(content().string(not(containsString(">Total Guests<"))))
                 .andExpect(content().string(not(containsString("href=\"/guests/" + COMPANION_ID))));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer()).cookie(new Cookie("pms-lang", "vi")))
                 .andExpect(content().string(containsString("Khách chính")))

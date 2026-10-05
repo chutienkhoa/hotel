@@ -25,9 +25,7 @@
                     <div>
                         <h2 id="guest-profile-heading">Personal Information</h2>
                     </div>
-                    <span class="reservation-info-icon reservation-info-icon--blue">
-                        <svg th:replace="~{layout/icons :: user}"></svg>
-                    </span>
+                    <span th:replace="~{layout/card-icons :: title('guest')}"></span>
                 </div>
 
                 <div class="profile-info-grid">
@@ -80,9 +78,7 @@
                             <span th:text="${#lists.size(passportDocuments)}">0</span>
                             <span th:text="${#lists.size(passportDocuments) == 1 ? 'image' : 'images'}">images</span>
                         </span>
-                        <span class="reservation-info-icon reservation-info-icon--purple">
-                            <svg th:replace="~{layout/icons :: note}"></svg>
-                        </span>
+                        <span th:replace="~{layout/card-icons :: title('notes')}"></span>
                     </div>
                 </div>
 

@@ -34,6 +34,7 @@ import com.example.hotel.service.booking.FolioReconciliationService;
 import com.example.hotel.service.booking.PaymentService;
 import com.example.hotel.service.booking.PrepaymentService;
 import com.example.hotel.service.booking.ReservationActivityQueryService;
+import com.example.hotel.service.booking.ReservationDetailEligibilityService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalanceService;
@@ -121,6 +122,9 @@ class ReservationCreatePageTest {
 
     @MockitoBean
     private ReservationActivityQueryService reservationActivityQueryService;
+
+    @MockitoBean
+    private ReservationDetailEligibilityService detailEligibilityService;
 
     @MockitoBean
     private JwtService jwtService;
@@ -213,6 +217,16 @@ class ReservationCreatePageTest {
                 .andExpect(content().string(containsString("data-numeric=\"vnd\" data-rate")))
                 .andExpect(content().string(not(containsString("type=\"number\""))))
                 .andExpect(content().string(not(containsString("js-money-input"))));
+    }
+
+    /** Confirms Adults (min 1) and Children (min 0) use the shared Number Stepper with no invented maximum. */
+    @Test
+    void shouldRenderAdultsAndChildrenAsSharedNumberStepperWithoutAMaximum() throws Exception {
+        mockMvc.perform(get("/reservations/new").with(manager()))
+                .andExpect(content().string(containsString("/js/common/number-stepper.js")))
+                .andExpect(content().string(containsString("data-stepper data-stepper-min=\"1\"")))
+                .andExpect(content().string(containsString("data-stepper data-stepper-min=\"0\"")))
+                .andExpect(content().string(not(containsString("data-stepper-max"))));
     }
 
     /** Confirms a non-numeric, decimal or negative count or rate never reaches the service (the server still validates). */

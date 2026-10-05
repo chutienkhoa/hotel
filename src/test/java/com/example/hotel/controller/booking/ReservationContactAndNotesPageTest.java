@@ -115,19 +115,41 @@ class ReservationContactAndNotesPageTest {
     private com.example.hotel.service.booking.ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private com.example.hotel.service.booking.ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
-    /** Confirms both actions appear for MANAGE_BOOKING in DRAFT, CONFIRMED and CHECKED_IN, never for a viewer. */
+    /** Confirms CONFIRMED edits both from its cards, never from the Edit menu, and a viewer sees neither. */
     @Test
     void shouldShowActionsOnlyWhenEditableAndAuthorized() throws Exception {
-        for (String status : List.of("DRAFT", "CONFIRMED", "CHECKED_IN")) {
+        for (String status : List.of("CONFIRMED")) {
             when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail(status, null, null, null, false));
             mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager()))
-                    .andExpect(content().string(containsString("id=\"edit-booking-contact\"")))
-                    .andExpect(content().string(containsString("id=\"edit-notes\"")));
-            mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer()))
+                    .andExpect(content().string(containsString("id=\"edit-booking-contact-card\"")))
+                    .andExpect(content().string(containsString("id=\"edit-notes-card\"")))
                     .andExpect(content().string(not(containsString("id=\"edit-booking-contact\""))))
                     .andExpect(content().string(not(containsString("id=\"edit-notes\""))));
+            mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer()))
+                    .andExpect(content().string(not(containsString("id=\"edit-booking-contact-card\""))))
+                    .andExpect(content().string(not(containsString("id=\"edit-notes-card\""))));
+        }
+    }
+
+    /** Confirms DRAFT and CHECKED_IN edit both from their own cards (no More menu) for MANAGE_BOOKING, never for a viewer. */
+    @Test
+    void shouldEditContactAndNotesFromTheirCardsWhileDraftOrCheckedIn() throws Exception {
+        for (String status : List.of("DRAFT", "CHECKED_IN")) {
+            when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(detail(status, null, null, null, false));
+            mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(manager()))
+                    .andExpect(content().string(containsString("id=\"edit-booking-contact-card\"")))
+                    .andExpect(content().string(containsString("id=\"edit-notes-card\"")))
+                    .andExpect(content().string(not(containsString("id=\"edit-booking-contact\""))))
+                    .andExpect(content().string(not(containsString("id=\"edit-notes\""))))
+                    .andExpect(content().string(not(containsString("id=\"reservation-more\""))));
+            mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).with(viewer()))
+                    .andExpect(content().string(not(containsString("id=\"edit-booking-contact-card\""))))
+                    .andExpect(content().string(not(containsString("id=\"edit-notes-card\""))));
         }
     }
 

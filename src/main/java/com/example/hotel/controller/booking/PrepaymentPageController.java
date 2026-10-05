@@ -25,8 +25,8 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
- * Serves the narrow Prepayment operations of a CONFIRMED Reservation: record money received before check-in and refund
- * a prepayment in full. Owned by {@code MANAGE_PAYMENT}; every rule lives in {@link PrepaymentService}.
+ * Serves the narrow Prepayment operations of a CONFIRMED Reservation: list its prepayments, record money received
+ * before check-in, and refund or void a prepayment. Owned by {@code MANAGE_PAYMENT}; every rule lives in {@link PrepaymentService}.
  */
 @Controller
 public class PrepaymentPageController {
@@ -99,13 +99,13 @@ public class PrepaymentPageController {
     }
 
     /**
-     * Refunds one prepayment in full and returns to the Reservation Detail.
+     * Refunds one prepayment in full and returns to the Prepayments page.
      *
      * @param id reservation identifier
      * @param paymentId prepayment identifier
      * @param reason required refund reason
      * @param redirectAttributes post-redirect feedback
-     * @return redirect to the detail page
+     * @return redirect to the Prepayments page
      */
     @PostMapping("/reservations/{id}/prepayments/{paymentId}/refund")
     @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
@@ -120,18 +120,18 @@ public class PrepaymentPageController {
         } catch (ResponseStatusException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", messages.error(exception));
         }
-        return "redirect:/reservations/" + id;
+        return "redirect:/reservations/" + id + "/prepayments";
     }
 
     /**
-     * Voids one prepayment recorded in error and returns to the Reservation Detail. Distinct from
+     * Voids one prepayment recorded in error and returns to the Prepayments page. Distinct from
      * {@link #refund}: no money is claimed to have moved.
      *
      * @param id reservation identifier
      * @param paymentId prepayment identifier
      * @param reason required void reason
      * @param redirectAttributes post-redirect feedback
-     * @return redirect to the detail page
+     * @return redirect to the Prepayments page
      */
     @PostMapping("/reservations/{id}/prepayments/{paymentId}/void")
     @PreAuthorize("hasAuthority('PERM_MANAGE_PAYMENT')")
@@ -146,12 +146,13 @@ public class PrepaymentPageController {
         } catch (ResponseStatusException exception) {
             redirectAttributes.addFlashAttribute("errorMessage", messages.error(exception));
         }
-        return "redirect:/reservations/" + id;
+        return "redirect:/reservations/" + id + "/prepayments";
     }
 
     private void addFormAttributes(Model model, UUID id, PaymentCreateRequest form) {
         ReservationDetailResponse reservation = reservationQueryService.findById(id);
         model.addAttribute("reservation", reservation);
+        model.addAttribute("prepaymentSummary", prepaymentService.summary(id));
         model.addAttribute("prepaymentForm", form);
         model.addAttribute("paymentCurrencies", PaymentCurrency.values());
         model.addAttribute("paymentMethods", PaymentMethod.values());

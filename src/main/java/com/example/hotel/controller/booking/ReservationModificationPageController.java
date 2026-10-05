@@ -205,7 +205,7 @@ public class ReservationModificationPageController {
     /** Returns whether the read model is within the same pre-check-in lifecycle boundary as the services. */
     private boolean eligible(ReservationDetailResponse reservation) {
         return "CONFIRMED".equals(reservation.status())
-                && stayQueryService.findByReservationId(reservation.id()) == null;
+                && !stayQueryService.existsByReservationId(reservation.id());
     }
 
     /** Redirects a stale form request to detail with the approved lifecycle message. */

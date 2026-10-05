@@ -15,6 +15,7 @@ import com.example.hotel.dto.booking.response.ReservationRoomResponse;
 import com.example.hotel.entity.booking.BookingSource;
 import com.example.hotel.security.JwtService;
 import com.example.hotel.service.booking.ReservationActivityQueryService;
+import com.example.hotel.service.booking.ReservationDetailEligibilityService;
 import com.example.hotel.service.booking.ReservationQueryService;
 import com.example.hotel.service.booking.ReservationService;
 import com.example.hotel.service.booking.StayBalanceService;
@@ -94,10 +95,88 @@ class ReservationActivityPageTest {
     private ReservationActivityQueryService reservationActivityQueryService;
 
     @MockitoBean
+    private ReservationDetailEligibilityService detailEligibilityService;
+
+    @MockitoBean
     private JwtService jwtService;
 
     private static Cookie language(String value) {
         return new Cookie("pms-lang", value);
+    }
+
+    /** Confirms the Status column shows each entry's own status as the shared status badge, and a dash when unknown. */
+    @Test
+    void shouldRenderTheStatusAtTheTimeOfEachActivityAsABadge() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(reservationActivityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of(
+                new ReservationActivityEntry(Instant.parse("2026-09-16T02:00:00Z"), "admin", "CREATE", "DRAFT"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T03:00:00Z"), "admin", "CONFIRM", "CONFIRMED"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T04:00:00Z"), "admin", "CHECK_IN", "CHECKED_IN"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T05:00:00Z"), "admin", "UPDATE_NOTES", null)));
+
+        String en = mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("en"))
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(">Status<")))
+                .andReturn().getResponse().getContentAsString();
+        String audit = en.substring(en.indexOf("id=\"audit-log\""));
+
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("rd-status--draft"));
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("rd-status--confirmed"));
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains("rd-status--checked_in"));
+        org.junit.jupiter.api.Assertions.assertTrue(audit.contains(">DRAFT<") || audit.contains(">Draft<"));
+        mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("vi"))
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(content().string(containsString(">Trạng thái<")));
+    }
+
+    /**
+     * Confirms every Activity Log header is a sort control (Time active and descending by default, the others neutral),
+     * the sort script is loaded, and each row carries the underlying values to sort by rather than display text.
+     */
+    @Test
+    void shouldRenderSortableHeadersAndUnderlyingSortValues() throws Exception {
+        when(reservationQueryService.findById(RESERVATION_ID)).thenReturn(reservation());
+        when(reservationActivityQueryService.findByReservationId(RESERVATION_ID)).thenReturn(List.of(
+                new ReservationActivityEntry(Instant.parse("2026-09-16T02:00:00Z"), "admin", "CREATE", "DRAFT"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T03:00:00Z"), "front01", "CONFIRM", "CONFIRMED"),
+                new ReservationActivityEntry(Instant.parse("2026-09-16T04:00:00Z"), "front01", "UPDATE_NOTES", null)));
+
+        String html = mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("vi"))
+                        .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("/js/reservation/detail-activity-sort.js")))
+                .andReturn().getResponse().getContentAsString();
+        String table = html.substring(html.indexOf("data-activity-sortable"));
+        table = table.substring(0, table.indexOf("</table>"));
+
+        for (String key : List.of("time", "actor", "action", "status")) {
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    table.contains("data-sort-key=\"" + key + "\""), "sortable header " + key);
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(4, countOf(table, "<th "));
+        org.junit.jupiter.api.Assertions.assertEquals(1, countOf(table, "aria-sort=\"descending\""));
+        org.junit.jupiter.api.Assertions.assertEquals(3, countOf(table, "aria-sort=\"none\""));
+        org.junit.jupiter.api.Assertions.assertTrue(table.contains("Sắp xếp theo Trạng thái"));
+        // Newest first by default, and sort values are epoch milliseconds / status codes, not formatted text.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                table.indexOf("data-sort-time=\"" + Instant.parse("2026-09-16T04:00:00Z").toEpochMilli() + "\"")
+                        < table.indexOf("data-sort-time=\"" + Instant.parse("2026-09-16T02:00:00Z").toEpochMilli() + "\""));
+        org.junit.jupiter.api.Assertions.assertTrue(table.contains("data-sort-status=\"CONFIRMED\""));
+        // The newest entry has no established status, so its row carries no status code and therefore sorts last.
+        String newestRow = table.substring(table.indexOf("<tr data-sort-time"));
+        newestRow = newestRow.substring(0, newestRow.indexOf(">"));
+        org.junit.jupiter.api.Assertions.assertFalse(newestRow.contains("data-sort-status"));
+        org.junit.jupiter.api.Assertions.assertTrue(table.contains("data-sort-actor=\"front01\""));
+        org.junit.jupiter.api.Assertions.assertTrue(table.contains("data-sort-action=\"Đã xác nhận đặt phòng\""));
+    }
+
+    private static int countOf(String text, String needle) {
+        int count = 0;
+        for (int at = text.indexOf(needle); at >= 0; at = text.indexOf(needle, at + needle.length())) {
+            count++;
+        }
+        return count;
     }
 
     /** Confirms known actions render their localized label in both languages, actor included. */
@@ -111,13 +190,13 @@ class ReservationActivityPageTest {
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("en"))
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("id=\"activity-heading\"")))
+                .andExpect(content().string(containsString("id=\"audit-log-heading\"")))
                 .andExpect(content().string(containsString("Reservation created")))
                 .andExpect(content().string(containsString("Payment recorded")))
                 .andExpect(content().string(containsString("admin")))
                 .andExpect(content().string(containsString("reception01")))
                 .andExpect(content().string(containsString(">Time<")))
-                .andExpect(content().string(containsString(">By<")))
+                .andExpect(content().string(containsString(">Performed By<")))
                 .andExpect(content().string(containsString(">Activity<")));
         mockMvc.perform(get("/reservations/{id}", RESERVATION_ID).cookie(language("vi"))
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
@@ -164,7 +243,7 @@ class ReservationActivityPageTest {
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        String activitySection = html.substring(html.indexOf("id=\"activity\""), html.indexOf("id=\"actions-heading\""));
+        String activitySection = html.substring(html.indexOf("id=\"audit-log\""), html.indexOf("</section>", html.indexOf("id=\"audit-log\"")));
 
         org.junit.jupiter.api.Assertions.assertTrue(activitySection.contains("Charge voided"));
         org.junit.jupiter.api.Assertions.assertTrue(activitySection.contains("Payment voided"));
@@ -216,7 +295,7 @@ class ReservationActivityPageTest {
                         .with(user("v").authorities(new SimpleGrantedAuthority("PERM_VIEW_BOOKING"))))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        String activitySection = html.substring(html.indexOf("id=\"activity\""), html.indexOf("id=\"actions-heading\""));
+        String activitySection = html.substring(html.indexOf("id=\"audit-log\""), html.indexOf("</section>", html.indexOf("id=\"audit-log\"")));
 
         org.junit.jupiter.api.Assertions.assertTrue(activitySection.contains("Payment recorded"));
         org.junit.jupiter.api.Assertions.assertTrue(activitySection.contains("Charge recorded"));

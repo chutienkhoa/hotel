@@ -42,7 +42,7 @@
         <!-- A. Primary focus: current room to new room, each side showing its room and the status it will get. -->
         <section class="card room-change-card room-change-card--compare" aria-labelledby="room-change-compare-heading">
             <header class="room-change-card__header">
-                <svg th:replace="~{layout/icons :: bed}"></svg>
+                <span th:replace="~{layout/card-icons :: title('roomChange')}"></span>
                 <h2 id="room-change-compare-heading" th:text="#{reservation.roomChange.review.card.title}">Review Room Change</h2>
             </header>
             <div class="room-change-compare">
@@ -112,7 +112,7 @@
         <div class="room-change-review-pair">
             <section class="card room-change-card" aria-labelledby="room-change-stay-heading">
                 <header class="room-change-card__header">
-                    <svg th:replace="~{layout/icons :: calendar}"></svg>
+                    <span th:replace="~{layout/card-icons :: title('stay')}"></span>
                     <h2 id="room-change-stay-heading" th:text="#{reservation.roomChange.stay.title}">Stay Information</h2>
                 </header>
                 <dl class="label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--strong">
@@ -141,7 +141,7 @@
 
             <section class="card room-change-card" aria-labelledby="room-change-details-heading">
                 <header class="room-change-card__header">
-                    <svg th:replace="~{layout/icons :: note}"></svg>
+                    <span th:replace="~{layout/card-icons :: title('roomChange')}"></span>
                     <h2 id="room-change-details-heading" th:text="#{reservation.roomChange.details.title}">Change Details</h2>
                 </header>
                 <dl class="label-value-rows label-value-rows--divided label-value-rows--fit label-value-rows--strong">
@@ -160,7 +160,7 @@
         <!-- C. What the confirmation does. Informational only: it describes existing Room Change effects. -->
         <section class="card room-change-card room-change-card--effects" aria-labelledby="room-change-effects-heading">
             <header class="room-change-card__header">
-                <svg th:replace="~{layout/icons :: info}"></svg>
+                <span th:replace="~{layout/card-icons :: title('info')}"></span>
                 <h2 id="room-change-effects-heading" th:text="#{reservation.roomChange.effects.title}">What will happen</h2>
             </header>
             <ul class="room-change-effects">

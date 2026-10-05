@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="https://www.thymeleaf.org">
+<body>
+<!-- The ONE place that decides which icon a card/section title uses. A business concept maps to exactly one icon, so
+     the same concept looks the same on every screen. Templates never pick a title icon themselves: they call
+     title('<concept>') and static/css/common/layout.css (.card-title-icon) owns size, stroke and colour.
+
+     Concept            Icon           Used for
+     guest              user           Guest Information, Primary Guest, Personal Information
+     contact            user           Booking Contact
+     stay               calendar       Stay Information / Stay Details / Current, Updated or New Stay, New Check-out Date
+     stayExtension      calendarPlus   Stay extensions
+     reservation        clipboardList  Reservation Information, Reservation Summary
+     room               bed            Room Details, Current Room Information, Room Selection, Available Rooms, Rooms & Rates
+     roomChange         swap           Change Room Details, Review Room Change
+     money              coins          Folio / Charges, Charges Summary, Rate Information, Financial Summary, Outstanding, Extension Summary
+     payments           creditCard     Payments, Payments Summary, Payment detail
+     notes              note           Notes, Passport Images (documents)
+     activity           clock          Recent Activity, Audit Log, Room history
+     checklist          clipboardCheck Checkout Checklist, Post-Checkout Status
+     source             building       Booking Source
+     info               info           Informational card
+     nextActions        checkCircle    Next Actions
+
+     Status icons, action-button icons and navigation icons are NOT title icons and keep using layout/icons directly. -->
+<span aria-hidden="true" class="card-title-icon" th:fragment="title(concept)" th:switch="${concept}">
+    <th:block th:case="'guest'"><svg th:replace="~{layout/icons :: user}"></svg></th:block>
+    <th:block th:case="'contact'"><svg th:replace="~{layout/icons :: user}"></svg></th:block>
+    <th:block th:case="'stay'"><svg th:replace="~{layout/icons :: calendar}"></svg></th:block>
+    <th:block th:case="'stayExtension'"><svg th:replace="~{layout/icons :: calendarPlus}"></svg></th:block>
+    <th:block th:case="'reservation'"><svg th:replace="~{layout/icons :: clipboardList}"></svg></th:block>
+    <th:block th:case="'room'"><svg th:replace="~{layout/icons :: bed}"></svg></th:block>
+    <th:block th:case="'roomChange'"><svg th:replace="~{layout/icons :: swap}"></svg></th:block>
+    <th:block th:case="'money'"><svg th:replace="~{layout/icons :: coins}"></svg></th:block>
+    <th:block th:case="'payments'"><svg th:replace="~{layout/icons :: creditCard}"></svg></th:block>
+    <th:block th:case="'notes'"><svg th:replace="~{layout/icons :: note}"></svg></th:block>
+    <th:block th:case="'activity'"><svg th:replace="~{layout/icons :: clock}"></svg></th:block>
+    <th:block th:case="'checklist'"><svg th:replace="~{layout/icons :: clipboardCheck}"></svg></th:block>
+    <th:block th:case="'source'"><svg th:replace="~{layout/icons :: building}"></svg></th:block>
+    <th:block th:case="'info'"><svg th:replace="~{layout/icons :: info}"></svg></th:block>
+    <th:block th:case="'nextActions'"><svg th:replace="~{layout/icons :: checkCircle}"></svg></th:block>
+</span>
+</body>
+</html>

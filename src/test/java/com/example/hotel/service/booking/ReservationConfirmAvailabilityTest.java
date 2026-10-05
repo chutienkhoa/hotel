@@ -47,9 +47,10 @@ class ReservationConfirmAvailabilityTest {
     private final RoomRepository rooms = mock(RoomRepository.class);
     private final com.example.hotel.service.room.RoomAvailabilityService roomAvailability =
             mock(com.example.hotel.service.room.RoomAvailabilityService.class);
+    private final AuditLogRepository audits = mock(AuditLogRepository.class);
     private final ReservationService service = new ReservationService(
             reservations, mock(GuestRepository.class), rooms, mock(StayRepository.class),
-            mock(StayRoomAssignmentRepository.class), mock(ChargeRepository.class), mock(AuditLogRepository.class),
+            mock(StayRoomAssignmentRepository.class), mock(ChargeRepository.class), audits,
             new ReservationMapper(), mock(ReservationNumberGenerator.class), mock(StayBalanceService.class), roomAvailability, mock(com.example.hotel.service.booking.PrepaymentService.class),
             Clock.systemDefaultZone());
 
@@ -104,6 +105,23 @@ class ReservationConfirmAvailabilityTest {
         verify(rooms).lockAllByIdIn(List.of(room.getId()));
     }
 
+    /** Confirms a successful confirmation persists a CONFIRM activity whose resulting status is CONFIRMED. */
+    @Test
+    void shouldAuditConfirmWithTheResultingConfirmedStatus() {
+        Room room = roomWithStatus(RoomStatus.AVAILABLE);
+        Reservation reservation = draft(room);
+        arrange(reservation, room, false);
+
+        service.confirm(reservation.getId());
+
+        org.mockito.ArgumentCaptor<com.example.hotel.entity.common.AuditLog> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.hotel.entity.common.AuditLog.class);
+        verify(audits).save(captor.capture());
+        assertEquals("CONFIRM", captor.getValue().getAction());
+        assertEquals("DRAFT", captor.getValue().getOldValue());
+        assertEquals("CONFIRMED", captor.getValue().getNewValue());
+    }
+
     /** Confirms an overlapping CONFIRMED/CHECKED_IN reservation still rejects confirmation under the room lock. */
     @Test
     void shouldRejectConfirmationWhenTheRequestedPeriodOverlaps() {
@@ -118,6 +136,7 @@ class ReservationConfirmAvailabilityTest {
         assertEquals(ReservationStatus.DRAFT, reservation.getStatus());
         verify(rooms).lockAllByIdIn(List.of(room.getId()));
         verify(reservations, org.mockito.Mockito.never()).save(any());
+        verify(audits, org.mockito.Mockito.never()).save(any());
     }
 
     private static com.example.hotel.entity.room.RoomType capacityTwo() {

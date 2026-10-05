@@ -22,6 +22,9 @@
   --color-date-check-out: #cc5a52;
   --color-purple: #6b3fa0;
   --color-purple-surface: #f1e7fb;
+  --color-indigo: #3f4fa8;
+  --color-indigo-surface: #e8ebfa;
+  --color-checkout-surface: #fdecea;
   --shadow-card: 0 1px 2px rgb(16 42 67 / 6%);
   /* Task33 Batch 1A foundation additions: reusing the existing scale rather than inventing a parallel one
      (one more radius/shadow step, and the z-index steps components.css needs for the mobile drawer
@@ -57,6 +60,18 @@
   --icon-size-sm: 1rem; /* compact/metadata icons, e.g. the inline Guest link chevron */
   --icon-size-action: 1.125rem; /* buttons, tabs, the Back to Reservations link */
   --icon-size-section: 1.25rem; /* card/section heading icons (Guest Information, Room Details, ...) */
+  /* Typography levels: the one place a semantic text level gets its size, so no page invents its own. Table BODY text has
+     no token on purpose: it is the root 1rem, inherited by the shared td rule. */
+  --font-size-page-title: clamp(1.5rem, 2vw, 2rem); /* h1 */
+  --font-size-card-title: 1.0625rem; /* card / section headings */
+  --font-size-summary-label: 0.8125rem; /* label of a summary strip item (Primary Guest, Room, Check-in ...) */
+  --font-size-summary-value: 1rem; /* primary value of a summary strip item */
+  --font-size-secondary: 0.8125rem; /* secondary values and helper text: room type, guest code, weekday, timeline meta */
+  --font-size-field-label: 0.875rem; /* label column of a label / value row */
+  --font-size-field-value: 1rem; /* value column of a label / value row */
+  --font-size-table-head: 0.75rem; /* data-table column header (uppercase, see th) */
+  --font-size-badge: 0.75rem; /* status chips */
+  --color-card-title-icon: var(--color-primary); /* the one subtle blue every card/section title icon uses */
   --icon-size-nav: 1.25rem; /* sidebar navigation, header utilities, summary-strip, dropdown rows */
   color: var(--color-text);
   font-family:
@@ -95,7 +110,7 @@ p {
   margin-top: 0;
 }
 h1 {
-  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-size: var(--font-size-page-title);
   letter-spacing: -0.025em;
   line-height: 1.2;
   margin-bottom: var(--space-2);
@@ -302,20 +317,6 @@ p {
 }
 .page-description {
   font-size: 0.9375rem;
-}
-.reservation-detail-heading {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-.reservation-detail-heading-meta {
-  align-items: center;
-  color: var(--color-muted);
-  display: flex;
-  flex-wrap: wrap;
-  font-weight: 600;
-  gap: var(--space-3);
 }
 .back-link {
   background: none;
@@ -959,7 +960,7 @@ td {
 th {
   background: var(--color-surface-muted);
   color: var(--color-muted);
-  font-size: 0.75rem;
+  font-size: var(--font-size-table-head);
   font-weight: 750;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1060,7 +1061,7 @@ tbody tr:last-child td {
   border-radius: 999px;
   color: #334e68;
   display: inline-flex;
-  font-size: 0.75rem;
+  font-size: var(--font-size-badge);
   font-weight: 750;
   height: var(--control-height);
   justify-content: center;
@@ -1174,7 +1175,7 @@ dt {
 .label-value-rows dt {
   background: var(--color-surface-muted);
   color: var(--color-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-size-field-label);
   font-weight: 600;
   line-height: 1.4;
 }
@@ -1472,60 +1473,28 @@ legend {
 .reservation-detail-section > .table-wrap {
   box-shadow: none;
 }
-.reservation-info-grid {
-  display: grid;
-  gap: var(--space-4);
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-.reservation-info-item {
-  align-items: flex-start;
-  background: var(--color-surface-muted);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  display: flex;
-  gap: var(--space-3);
-  min-height: 6rem;
-  padding: var(--space-4);
-}
-.reservation-info-icon {
+/* Card/section title icon, emitted by templates/layout/card-icons.html. The single source of truth for how a title icon
+   looks on every screen: transparent background (no coloured tile), one blue, one size, one stroke weight (set on the
+   shared SVGs in layout/icons.html). Per-page stylesheets must not restyle it. */
+.card-title-icon {
   align-items: center;
-  border-radius: var(--radius-sm);
-  display: flex;
+  background: transparent;
+  color: var(--color-card-title-icon);
+  display: inline-flex;
   flex: none;
-  height: 2.25rem;
+  height: var(--icon-size-section);
   justify-content: center;
-  width: 2.25rem;
+  width: var(--icon-size-section);
 }
-.reservation-info-icon svg {
-  height: var(--icon-size-nav);
-  width: var(--icon-size-nav);
+.card-title-icon svg {
+  height: 100%;
+  width: 100%;
 }
-.reservation-info-icon--blue {
-  background: var(--color-info-surface);
-  color: var(--color-info);
-}
-.reservation-info-icon--green {
-  background: var(--color-success-surface);
-  color: var(--color-success);
-}
-.reservation-info-icon--amber {
-  background: var(--color-warning-surface);
-  color: var(--color-warning);
-}
-.reservation-info-icon--purple {
-  background: var(--color-purple-surface);
-  color: var(--color-purple);
-}
-.reservation-info-content {
-  min-width: 0;
-}
-.reservation-info-label {
-  color: var(--color-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+/* A heading that carries its title icon inline (icon, then text on one centred line). */
+.card-title-heading {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
 }
 .reservation-info-value {
   color: var(--color-navy);
@@ -1540,108 +1509,6 @@ legend {
   font-weight: 600;
   margin: var(--space-1) 0 0;
   overflow-wrap: anywhere;
-}
-.reservation-info-notes {
-  grid-column: 1 / -1;
-}
-/* Task33 CHECKED_IN Reservation Detail hub (spec sec. 9.3.4), pixel-close to
-   docs/specs/evidence/task33/front-desk/reservation-detail-checked-in-final.png: a compact
-   top summary strip, a two-column (main + side) body, and dense label/value field rows instead of
-   the sparse icon-tile component used by the full-width legacy Reservation information card. */
-.hub-summary-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-5) var(--space-6);
-}
-.hub-summary-item {
-  align-items: flex-start;
-  display: flex;
-  gap: var(--space-2);
-  min-width: 9rem;
-}
-.hub-summary-item .reservation-info-icon {
-  height: 1.75rem;
-  width: 1.75rem;
-}
-.hub-summary-item .reservation-info-icon svg {
-  height: var(--icon-size-action);
-  width: var(--icon-size-action);
-}
-.hub-summary-item .reservation-info-label {
-  font-size: 0.6875rem;
-}
-.hub-summary-item .reservation-info-value {
-  font-size: 0.875rem;
-  margin-top: 0.125rem;
-}
-.hub-layout {
-  align-items: start;
-  display: grid;
-  gap: var(--space-5);
-  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
-}
-.hub-main,
-.hub-side {
-  display: grid;
-  gap: var(--space-5);
-  min-width: 0;
-}
-.hub-info-row {
-  display: grid;
-  gap: var(--space-4);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-bottom: var(--space-5);
-}
-.hub-card-header {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  justify-content: space-between;
-  margin-bottom: var(--space-3);
-}
-.hub-card-header-title {
-  align-items: center;
-  display: flex;
-  gap: var(--space-2);
-}
-.hub-card-header-title svg {
-  color: var(--color-muted);
-  flex: none;
-  height: var(--icon-size-section);
-  width: var(--icon-size-section);
-}
-.hub-card-header h2 {
-  font-size: 0.9375rem;
-  margin-bottom: 0;
-}
-.hub-fields dd {
-  color: var(--color-navy);
-  font-size: 0.8125rem;
-  font-weight: 700;
-  margin: 0;
-  overflow-wrap: anywhere;
-  text-align: right;
-}
-.hub-fields dd.text-muted {
-  color: var(--color-muted);
-  font-weight: 600;
-}
-.hub-note-text {
-  font-size: 0.875rem;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-.hub-note-entry {
-  display: grid;
-  gap: var(--space-1);
-}
-.hub-note-meta {
-  color: var(--color-muted);
-  display: flex;
-  font-size: 0.75rem;
-  gap: var(--space-2);
-  margin: 0;
 }
 /* Vertical timeline: spacing between events lives on .hub-timeline-content's own margin-bottom (not
    on .hub-timeline's gap), because a flex item's margin contributes to its row's auto height, which
@@ -1703,22 +1570,8 @@ legend {
   font-size: 0.75rem;
   margin: var(--space-1) 0 0;
 }
-.hub-main .card,
-.hub-side .card {
-  min-width: 0;
-  padding: var(--space-4);
-}
-/* The Folio/Charges + Payments wrapper is itself a hub-main grid row; without min-width: 0 its two
-   cards' table content could still bubble up and widen the hub-main track. */
-#financial-summary {
-  display: grid;
-  gap: var(--space-5);
-  min-width: 0;
-}
-/* Task33 Batch 3D: the CHECKED_IN Reservation Detail section tab bar. Folio/Payments/Notes stay on
-   the single Overview panel already shown below (a quick-jump anchor scroll via data-tab-scroll);
-   Room History and Audit Log are genuinely separate panels, hidden until their tab is activated, so
-   the default (Overview) view matches the approved mockup with no extra always-visible section. */
+/* Section tab bar of the Folio and Check-out Review pages (links between sections of the same workflow).
+   Reservation Detail has its own tab bar in css/reservation/detail.css. */
 .detail-tabs {
   border-bottom: 1px solid var(--color-border);
   display: flex;
@@ -1739,11 +1592,16 @@ legend {
   font-weight: 700;
   gap: 0.4rem;
   padding: var(--space-3) 0;
+  text-decoration: none;
 }
 .detail-tab svg {
   flex: none;
   height: var(--icon-size-action);
   width: var(--icon-size-action);
+}
+.detail-tab:hover,
+.detail-tab:focus-visible {
+  text-decoration: none;
 }
 .detail-tab:hover {
   color: var(--color-navy);
@@ -1751,9 +1609,6 @@ legend {
 .detail-tab--active {
   border-bottom-color: var(--color-primary);
   color: var(--color-primary);
-}
-.detail-tab-panel[hidden] {
-  display: none;
 }
 .table-total-row td {
   background: var(--color-surface-muted);
@@ -1764,16 +1619,6 @@ legend {
   color: var(--color-success);
 }
 @media (max-width: 64rem) {
-  .hub-layout {
-    grid-template-columns: 1fr;
-  }
-  .hub-info-row {
-    grid-template-columns: 1fr;
-  }
-}
-.reservation-info-notes .reservation-info-value {
-  font-weight: 500;
-  white-space: pre-line;
 }
 .profile-info-grid {
   display: grid;
@@ -1907,27 +1752,6 @@ legend {
   flex: none;
   height: var(--icon-size-action);
   width: var(--icon-size-action);
-}
-.assigned-rooms-header {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  justify-content: space-between;
-}
-.assigned-rooms-header-copy > :last-child {
-  margin-bottom: 0;
-}
-.assigned-rooms-meta {
-  align-items: center;
-  color: var(--color-muted);
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.875rem;
-  gap: var(--space-3);
-}
-.assigned-rooms-meta strong {
-  color: var(--color-navy);
 }
 .reservation-secondary-grid {
   display: grid;
@@ -2207,6 +2031,55 @@ textarea:disabled {
   border-color: var(--color-border);
   color: var(--color-muted);
   cursor: not-allowed;
+}
+/* Number Stepper (static/js/common/number-stepper.js): [ - ] [ editable whole number ] [ + ] for quantity / count fields.
+   The input stays the bordered control, so every existing focus / invalid / disabled style still applies to it; the two
+   compact buttons sit inside its left and right edges. */
+.number-stepper {
+  position: relative;
+  width: 100%;
+}
+.number-stepper > .number-stepper__input[data-stepper] {
+  padding-inline: 2.5rem;
+  text-align: center;
+}
+.number-stepper__button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--color-primary);
+  cursor: pointer;
+  display: inline-flex;
+  height: calc(100% - 2px);
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  position: absolute;
+  top: 1px;
+  width: 2.25rem;
+}
+.number-stepper__button--decrease {
+  border-radius: calc(var(--radius-sm) - 1px) 0 0 calc(var(--radius-sm) - 1px);
+  border-right: 1px solid var(--color-border);
+  left: 1px;
+}
+.number-stepper__button--increase {
+  border-left: 1px solid var(--color-border);
+  border-radius: 0 calc(var(--radius-sm) - 1px) calc(var(--radius-sm) - 1px) 0;
+  right: 1px;
+}
+.number-stepper__button:hover:not(:disabled) {
+  background: var(--color-info-surface);
+}
+.number-stepper__button:focus-visible {
+  background: var(--color-info-surface);
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+.number-stepper__button:disabled {
+  color: var(--color-muted);
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 .exchange-rate-inline {
   align-items: center;
@@ -2525,12 +2398,6 @@ span.flatpickr-weekday {
   .guest-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .reservation-info-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .reservation-info-notes {
-    grid-column: 1 / -1;
-  }
   .reservation-secondary-grid {
     grid-template-columns: 1fr;
   }
@@ -2642,18 +2509,11 @@ span.flatpickr-weekday {
     align-items: flex-start;
     flex-direction: column;
   }
-  .reservation-info-grid {
-    grid-template-columns: 1fr;
-  }
   .profile-info-grid {
     grid-template-columns: 1fr;
   }
   .passport-document-item {
     flex-wrap: wrap;
-  }
-  .assigned-rooms-header {
-    align-items: flex-start;
-    flex-direction: column;
   }
 }
 
@@ -2727,28 +2587,69 @@ span.flatpickr-weekday {
   gap: var(--space-2);
 }
 
+/* Semantic summary icon (the Review Check-in fact icon, made shared): one soft pastel circle per business concept, the
+   icon in a darker shade of the same hue. Size and glyph size are identical for every concept, so a summary strip reads
+   as one family; the concept alone picks the colour. Use with a concept modifier. */
+.semantic-icon {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: none;
+  height: 2.25rem;
+  justify-content: center;
+  width: 2.25rem;
+}
+.semantic-icon svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+.semantic-icon--guest,
+.semantic-icon--nights {
+  background: var(--color-purple-surface);
+  color: var(--color-purple);
+}
+.semantic-icon--room {
+  background: var(--color-indigo-surface);
+  color: var(--color-indigo);
+}
+.semantic-icon--source {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.semantic-icon--checkin {
+  background: var(--color-info-surface);
+  color: var(--color-info);
+}
+.semantic-icon--checkout {
+  background: var(--color-checkout-surface);
+  color: var(--color-date-check-out);
+}
+.semantic-icon--guests {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+
 /* Reservation Detail date convention: check-in value light blue, check-out value (and any overdue text) light red. */
-.hub-summary-item .reservation-info-value.date-value--check-in,
 .label-value-rows dd.date-value--check-in,
 .stay-extension-table td.date-value--check-in,
 .folio-facts dd.date-value--check-in,
 .cor-facts dd.date-value--check-in,
-.walk-in-summary-table td.date-value--check-in {
+.walk-in-summary-table td.date-value--check-in,
+.rd-summary__value.date-value--check-in {
   color: var(--color-date-check-in);
 }
 
-.hub-summary-item .reservation-info-value.date-value--check-out,
 .label-value-rows dd.date-value--check-out,
 .stay-extension-table td.date-value--check-out,
 .stay-extension-summary__range .date-value--check-out,
 .folio-facts dd.date-value--check-out,
 .cor-facts dd.date-value--check-out,
-.walk-in-summary-table td.date-value--check-out {
+.walk-in-summary-table td.date-value--check-out,
+.rd-summary__value.date-value--check-out {
   color: var(--color-date-check-out);
 }
 
 /* Summary bar: the overdue text sits on its own compact line under the check-out date, slightly smaller. */
-.hub-summary-item .reservation-overdue--below,
 .folio-facts .reservation-overdue--below,
 .label-value-rows .reservation-overdue--below {
   display: block;

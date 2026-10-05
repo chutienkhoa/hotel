@@ -834,7 +834,7 @@ public class ReservationService {
                         "reservation.noShow.error.reasonRequired", "No-show reason is required");
             }
             LocalDate hotelToday = LocalDate.now(clock);
-            if (!reservation.getCheckInDate().isBefore(hotelToday)) {
+            if (!ReservationActionRules.noShowDateReached(reservation.getCheckInDate(), hotelToday)) {
                 throw new LocalizedResponseStatusException(HttpStatus.CONFLICT,
                         "reservation.noShow.error.notEligible",
                         "No-show is only allowed once the check-in date has passed");
